@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Divian-HUB | Céges modulplatform</title>
+    <meta
+      name="description"
+      content="A Divian-HUB a céges mini programok közös, egységes felülete. Itt érhető el a számla fordítás, a beszerzés és az ellenőrzés."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+      <div class="grid-overlay"></div>
+
+      <header class="topbar">
+        <a class="brand" href="#hero" aria-label="Divian-HUB kezdőoldal">
+          <span class="brand-mark"></span>
+          <span class="brand-text">
+            <strong>Divian-HUB</strong>
+            <small>Céges modulplatform</small>
+          </span>
+        </a>
+
+        <nav class="nav">
+          <a href="#hero">Főoldal</a>
+          <a href="#modules">Modulok</a>
+        </nav>
+
+        <a class="nav-cta" href="#divian-ai">Divian-AI</a>
+      </header>
+
+      <main class="home-shell">
+        <section class="ai-section" id="divian-ai">
+          <article class="ai-card reveal">
+            <div class="ai-head">
+              <div>
+                <p class="section-label">Divian-AI</p>
+                <h2>Kérdezz a Divianról</h2>
+                <p>Termékekről, konyhákról, színekről és alapinformációkról válaszol a tudástár alapján.</p>
+              </div>
+
+              <div class="ai-ready-badge" id="divian-ai-ready-badge">
+                Tudástár ellenőrzése...
+              </div>
+            </div>
+
+            <div class="ai-grid">
+              <div class="ai-panel ai-chat-panel">
+                <div class="ai-thread" id="divian-ai-thread" aria-live="polite"></div>
+
+                <form class="ai-form ai-chat-form" id="divian-ai-form">
+                  <label class="ai-label" for="divian-ai-question">Kérdés</label>
+                  <textarea
+                    id="divian-ai-question"
+                    name="question"
+                    placeholder="Például: Milyen bútorlap színeink vannak?"
+                    maxlength="1000"
+                  ></textarea>
+
+                  <div class="ai-actions">
+                    <button class="button button-primary" id="divian-ai-submit" type="submit">
+                      Küldés
+                    </button>
+                    <div class="ai-status" id="divian-ai-status">
+                      A Divian-AI a céges tudástárra vár.
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="landing-grid" id="hero">
+          <article class="landing-card reveal">
+            <div class="landing-inner">
+              <div class="landing-copy">
+                <div class="eyebrow">
+                  <span class="eyebrow-dot"></span>
+                  Egységes belépési pont
+                </div>
+
+                <h1>
+                  Divian-HUB
+                  <span>minden fontos feladat egy helyen</span>
+                </h1>
+
+                <p class="home-text">
+                  Válaszd ki a modult, töltsd fel a szükséges fájlt, és a rendszer
+                  elvégzi a munkát.
+                </p>
+
+                <div class="home-actions">
+                  <a class="button button-primary" href="#divian-ai">Divian-AI</a>
+                  <a class="button button-secondary" href="#modules">Feladat választás</a>
+                </div>
+
+                <div class="home-tags" aria-label="Elérhető műveletek">
+                  <span>Fordítás</span>
+                  <span>Naptár</span>
+                  <span>Beszerzés</span>
+                  <span>Rendelés</span>
+                  <span>Ellenőrzés</span>
+                  <span>AI-tudásbázis</span>
+                </div>
+              </div>
+
+              <div class="hub-visual" aria-hidden="true">
+                <div class="hub-orbit orbit-one"></div>
+                <div class="hub-orbit orbit-two"></div>
+                <div class="hub-line line-one"></div>
+                <div class="hub-line line-two"></div>
+                <div class="hub-core">
+                  <strong>Divian-HUB</strong>
+                </div>
+                <div class="hub-node node-one">PDF</div>
+                <div class="hub-node node-two">CSV</div>
+                <div class="hub-node node-three">XLSX</div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="module-section" id="modules">
+          <div class="section-head reveal">
+            <p class="section-label">Feladat választó</p>
+            <h2>Válassz modult</h2>
+            <p>Mindegyik modul ugyanabban az egyszerű, közös felületben indul.</p>
+          </div>
+
+          <div class="module-grid">
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">01</div>
+              </div>
+              <h3>Számla magyarító</h3>
+              <p>PDF számlából nyomtatható magyar kivonat készül.</p>
+              <div class="module-meta">PDF -> fordított nézet</div>
+              <a class="button button-secondary" href="/apps/szamla-magyarito">Megnyitás</a>
+            </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">02</div>
+              </div>
+              <h3>NettFront beszerzés</h3>
+              <p>NettFront számlából beszerzési csomag készül.</p>
+              <div class="module-meta">PDF -> beszerzési csomag</div>
+              <a class="button button-secondary" href="/apps/nettfront-beszerzes">Megnyitás</a>
+            </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">03</div>
+              </div>
+              <h3>NettFront ellenőrzés</h3>
+              <p>Meglévő beszerzés és számla összehasonlítása, Excel riporttal.</p>
+              <div class="module-meta">PDF + rendelés -> ellenőrzés</div>
+              <a class="button button-secondary" href="/apps/nettfront-ellenorzes">Megnyitás</a>
+            </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">04</div>
+              </div>
+              <h3>Szabadságnaptár</h3>
+              <p>Szabadságok, részleglimitek és kollégák kezelése egy helyen.</p>
+              <div class="module-meta">naptár -> terhelés -> kezelés</div>
+              <a class="button button-secondary" href="/apps/szabadsag-naptar">Megnyitás</a>
+            </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">05</div>
+              </div>
+              <h3>AI-tudásbázis</h3>
+              <p>PDF, Excel, Word és képek feltöltése a Divian-AI számára.</p>
+              <div class="module-meta">feltöltés -> kereshető tudás</div>
+              <a class="button button-secondary" href="/apps/ai-tudasbazis">Megnyitás</a>
+            </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">06</div>
+              </div>
+              <h3>NettFront rendelési javaslat</h3>
+              <p>Raktár Excelből rendelési javaslat készül, amit jóváhagyás előtt át lehet írni.</p>
+              <div class="module-meta">Excel -> javaslat -> kész rendelés</div>
+              <a class="button button-secondary" href="/apps/nettfront-rendeles">Megnyitás</a>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/script.js"></script>
+  </body>
+</html>

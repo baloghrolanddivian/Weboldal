@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.log
+.env
+.venv/
+venv/
+.vscode/
+.idea/
+Thumbs.db
+
+runtime/
+data/divian-ai/uploads/
