@@ -45,6 +45,7 @@ from nettfront_order_module import (
 from procurement_helper import (
     get_procurement_helper_state,
     launch_procurement_helper,
+    stop_procurement_helper,
 )
 
 try:
@@ -87,6 +88,7 @@ NETTFRONT_PROCUREMENT_ROUTE = "/apps/nettfront-beszerzes"
 NETTFRONT_PROCUREMENT_PROCESS_ROUTE = f"{NETTFRONT_PROCUREMENT_ROUTE}/process"
 NETTFRONT_PROCUREMENT_DOWNLOAD_PREFIX = f"{NETTFRONT_PROCUREMENT_ROUTE}/download"
 NETTFRONT_PROCUREMENT_LAUNCH_PREFIX = f"{NETTFRONT_PROCUREMENT_ROUTE}/launch"
+NETTFRONT_PROCUREMENT_STOP_PREFIX = f"{NETTFRONT_PROCUREMENT_ROUTE}/stop"
 NETTFRONT_PROCUREMENT_PARTS_PREFIX = f"{NETTFRONT_PROCUREMENT_ROUTE}/alkatreszlista"
 NETTFRONT_COMPARE_ROUTE = "/apps/nettfront-ellenorzes"
 NETTFRONT_COMPARE_PROCESS_ROUTE = f"{NETTFRONT_COMPARE_ROUTE}/process"
@@ -5267,6 +5269,9 @@ def _render_nettfront_layout(
       gap: 12px;
       align-items: center;
     }}
+    .procurement-launch-row form {{
+      margin: 0;
+    }}
     .procurement-launch-row .button {{
       min-width: 240px;
     }}
@@ -7712,6 +7717,34 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
                 <span class="procurement-file-state" id="nettfront-procurement-invoice-state">Támogatott formátum: PDF</span>
               </label>
 
+              <input
+                class="procurement-file-input"
+                id="nettfront-procurement-parts"
+                type="file"
+                name="parts_file"
+                accept=".xlsx,.xlsm,.csv,text/csv"
+              />
+
+              <label class="procurement-upload-surface" for="nettfront-procurement-parts">
+                <div class="procurement-upload-top">
+                  <div class="procurement-upload-badge">XLSX</div>
+                  <div class="procurement-upload-copy">
+                    <strong>Friss alkatrészlista</strong>
+                    <p>Opcionális. Ha most feltöltöd, már ebből építjük a Beszerzést.</p>
+                  </div>
+                </div>
+
+                <div class="procurement-upload-rail" aria-hidden="true">
+                  <span>Alkatrészlista</span>
+                  <i></i>
+                  <span>Kódfrissítés</span>
+                  <i></i>
+                  <span>Pontosabb Beszerzés</span>
+                </div>
+
+                <span class="procurement-file-state" id="nettfront-procurement-parts-state">Támogatott formátum: XLSX, XLSM, CSV</span>
+              </label>
+
               <div class="procurement-action-row">
                 <button class="button button-primary" type="submit" id="nettfront-procurement-submit">Beszerzés készítése</button>
                 <span class="inline-note">Az eredmény külön oldalon nyílik meg.</span>
@@ -7732,17 +7765,19 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
     extra_script = """
 <script>
   (() => {
-    const input = document.getElementById("nettfront-procurement-invoice");
-    const state = document.getElementById("nettfront-procurement-invoice-state");
+    const invoiceInput = document.getElementById("nettfront-procurement-invoice");
+    const invoiceState = document.getElementById("nettfront-procurement-invoice-state");
+    const partsInput = document.getElementById("nettfront-procurement-parts");
+    const partsState = document.getElementById("nettfront-procurement-parts-state");
     const shell = document.getElementById("nettfront-procurement-shell");
     const form = document.getElementById("nettfront-procurement-form");
     const submitButton = document.getElementById("nettfront-procurement-submit");
-    if (!input || !state || !shell || !form || !submitButton) return;
+    if (!invoiceInput || !invoiceState || !partsInput || !partsState || !shell || !form || !submitButton) return;
 
-    const updateState = () => {
+    const updateState = (input, state, emptyText) => {
       const file = input.files && input.files[0];
       if (!file) {
-        state.textContent = "Támogatott formátum: PDF";
+        state.textContent = emptyText;
         return;
       }
       state.textContent = `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)} MB`;
@@ -7762,7 +7797,8 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
       });
     });
 
-    input.addEventListener("change", updateState);
+    invoiceInput.addEventListener("change", () => updateState(invoiceInput, invoiceState, "Támogatott formátum: PDF"));
+    partsInput.addEventListener("change", () => updateState(partsInput, partsState, "Támogatott formátum: XLSX, XLSM, CSV"));
 
     form.addEventListener("submit", () => {
       submitButton.textContent = "Beszerzés készül...";
@@ -7783,7 +7819,7 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
     )
 
 
-def _read_procurement_preview_rows(job_id: str, limit: int = 12) -> tuple[list[list[str]], int]:
+def _read_procurement_preview_rows(job_id: str, limit: int | None = None) -> tuple[list[list[str]], int]:
     job_dir, _ = _read_nettfront_job("procurement", job_id)
     if job_dir is None:
         return [], 0
@@ -7802,7 +7838,7 @@ def _read_procurement_preview_rows(job_id: str, limit: int = 12) -> tuple[list[l
         if not any(clean_row):
             continue
         total_rows += 1
-        if len(rows) < limit:
+        if limit is None or len(rows) < limit:
             rows.append(clean_row)
     return rows, total_rows
 
@@ -7897,9 +7933,12 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
         """
     elif helper_running:
         helper_status_pill = '<span class="procurement-result-pill">Import-segéd fut</span>'
-        helper_status_copy = "A segéd fut. Shift + Space indítja az importot, ESC azonnal leállítja."
+        helper_status_copy = "A segéd fut. Shift + Space indítja az importot, a Leállítás gomb azonnal megszakítja."
         action_html = f"""
           <div class="procurement-launch-row">
+            <form method="post" action="{NETTFRONT_PROCUREMENT_STOP_PREFIX}/{job_id}">
+              <button class="button button-primary" type="submit">Leállítás</button>
+            </form>
             <a class="button button-secondary" href="{NETTFRONT_PROCUREMENT_ROUTE}">Új feldolgozás</a>
           </div>
         """
@@ -7908,7 +7947,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
     if missing_codes:
         lead_copy = "Hiányzó kódokat találtunk. Tölts fel alkatrészlistát, és újraépítjük a Beszerzést."
     elif helper_running:
-        lead_copy = "A segéd fut: Shift + Space indítja az importot, ESC leállítja."
+        lead_copy = "A segéd fut: Shift + Space indítja az importot, a Leállítás gomb azonnal megállítja."
     elif message and "automatikus indítása nem sikerült" in message:
         lead_copy = "Az automatikus indítás most nem sikerült. Nyomd meg a Beszerzés indítása gombot."
 
@@ -7922,7 +7961,8 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
               <p>
                 A beszerzést a gép billentyűkkel fogja kezelni az InSight-ban. Csak akkor indítsd el,
                 ha biztosan tudod mit csinálsz. Nyiss egy üres beszerzést az InSight-ban, majd nyomd meg a
-                <strong>Shift + Space</strong> billentyűkombinációt.
+                <strong>Shift + Space</strong> billentyűkombinációt. Ha baj van, a <strong>Leállítás</strong>
+                gomb azonnal megszakítja a segédet.
               </p>
               <div class="procurement-warning-actions">
                 <button class="button button-primary" type="button" id="procurement-warning-close">Értem</button>
@@ -7987,7 +8027,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
               <strong>Beszerzés</strong>
               <p>Előnézet a kész beszerzési listából.</p>
             </div>
-            <p>{min(preview_total, len(preview_rows)) if preview_rows else 0} / {preview_total} sor látszik</p>
+            <p>{preview_total} / {preview_total} sor látszik</p>
           </div>
           {preview_html}
         </article>
@@ -7997,11 +8037,11 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
       {warning_modal_html}
     """
 
-    layout_lead = "A kész Beszerzésnél a segéd automatikusan indul. ESC bármikor kilép."
+    layout_lead = "A kész Beszerzésnél a segéd automatikusan indul. Ha baj van, a Leállítás gombbal azonnal megállítható."
     if missing_codes:
         layout_lead = "Hiányzó kódoknál tölts fel alkatrészlistát, és a rendszer újraépíti a Beszerzést."
     elif helper_running:
-        layout_lead = "A segéd fut. Shift + Space indítja az importot, ESC leállítja."
+        layout_lead = "A segéd fut. Shift + Space indítja az importot, a Leállítás gomb azonnal megállítja."
 
     return _render_nettfront_layout(
         heading="Beszerzés kész",
@@ -12330,7 +12370,13 @@ def _persist_procurement_job(job_dir: Path, metadata: dict, artifacts, uploaded_
     return updated_metadata
 
 
-def _write_procurement_job(artifacts, source_invoice_name: str, source_invoice_bytes: bytes) -> tuple[str, dict]:
+def _write_procurement_job(
+    artifacts,
+    source_invoice_name: str,
+    source_invoice_bytes: bytes,
+    uploaded_parts_name: str = "",
+    uploaded_parts_bytes: bytes | None = None,
+) -> tuple[str, dict]:
     job_id = uuid.uuid4().hex[:12]
     job_dir = _job_runtime_dir("procurement") / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -12345,7 +12391,13 @@ def _write_procurement_job(artifacts, source_invoice_name: str, source_invoice_b
         "source_invoice_name": source_invoice_name,
         "source_invoice_file": source_invoice_file,
     }
-    metadata = _persist_procurement_job(job_dir, metadata, artifacts)
+    metadata = _persist_procurement_job(
+        job_dir,
+        metadata,
+        artifacts,
+        uploaded_parts_name=uploaded_parts_name,
+        uploaded_parts_bytes=uploaded_parts_bytes,
+    )
     return job_id, metadata
 
 
@@ -13003,6 +13055,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             raw_body = self.rfile.read(content_length)
             files = _extract_uploaded_files(self.headers, raw_body)
             invoice_file = files.get("invoice_pdf")
+            parts_file = files.get("parts_file")
 
             if invoice_file is None:
                 self.respond_nettfront_procurement_form("A NettFront számla PDF feltöltése kötelező.")
@@ -13013,9 +13066,30 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_nettfront_procurement_form("Csak PDF számla tölthető fel.")
                 return
 
+            uploaded_parts_name = ""
+            uploaded_parts_bytes: bytes | None = None
+            merged_map = None
+            if parts_file is not None:
+                uploaded_parts_name, uploaded_parts_bytes = parts_file
+                if not uploaded_parts_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
+                    self.respond_nettfront_procurement_form("Az alkatrészlista csak XLSX, XLSM vagy CSV fájl lehet.")
+                    return
+                try:
+                    merged_map = load_alkatresz_map()
+                    merged_map.update(load_alkatresz_map_from_bytes(uploaded_parts_bytes, uploaded_parts_name))
+                except Exception as exc:
+                    self.respond_nettfront_procurement_form(f"Az alkatrészlista feldolgozása nem sikerült: {exc}")
+                    return
+
             try:
-                artifacts = build_procurement_artifacts(invoice_bytes)
-                job_id, metadata = _write_procurement_job(artifacts, invoice_name, invoice_bytes)
+                artifacts = build_procurement_artifacts(invoice_bytes, alkatresz_map=merged_map)
+                job_id, metadata = _write_procurement_job(
+                    artifacts,
+                    invoice_name,
+                    invoice_bytes,
+                    uploaded_parts_name=uploaded_parts_name,
+                    uploaded_parts_bytes=uploaded_parts_bytes,
+                )
             except Exception as exc:
                 self.respond_nettfront_procurement_form(f"Hiba a feldolgozás során: {exc}")
                 return
@@ -13184,6 +13258,29 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 except Exception as exc:
                     body = render_nettfront_procurement_result(job_id, metadata, message=f"A launch nem sikerült: {exc}")
                     status_code = 500
+
+            self.send_response(status_code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_PROCUREMENT_STOP_PREFIX + "/"):
+            job_id = path[len(NETTFRONT_PROCUREMENT_STOP_PREFIX) + 1 :]
+            job_dir, metadata = _read_nettfront_job("procurement", job_id)
+            if job_dir is None or metadata is None:
+                self.send_error(404)
+                return
+
+            try:
+                success, messages = stop_procurement_helper(job_dir)
+                body = render_nettfront_procurement_result(job_id, metadata, message=" ".join(messages), success=success)
+                status_code = 200 if success else 400
+            except Exception as exc:
+                body = render_nettfront_procurement_result(job_id, metadata, message=f"A leállítás nem sikerült: {exc}")
+                status_code = 500
 
             self.send_response(status_code)
             self.send_header("Content-Type", "text/html; charset=utf-8")

@@ -420,6 +420,50 @@ def build_invoice_csv(rows: list[dict[str, str]]) -> bytes:
     return buffer.getvalue().encode("utf-8-sig")
 
 
+COLOR_FALLBACK_CODES = {
+    "PRA": "PRAS",
+    "PRAS": "PRA",
+    "KAF": "KAFS",
+    "KAFS": "KAF",
+    "BGA": "BGAS",
+    "BGAS": "BGA",
+    "GFA": "GFAS",
+    "GFAS": "GFA",
+    "FEA": "FEAS",
+    "FEAS": "FEA",
+}
+
+
+def _procurement_code_fallbacks(kod: str) -> list[str]:
+    candidates: list[str] = []
+
+    if kod.startswith("NFAY_"):
+        candidates.append("NFA_" + kod[len("NFAY_") :])
+    elif kod.startswith("NFA_"):
+        candidates.append("NFAY_" + kod[len("NFA_") :])
+
+    parts = kod.split("_")
+    if len(parts) >= 4:
+        color_code = parts[2]
+        fallback_color = COLOR_FALLBACK_CODES.get(color_code)
+        if fallback_color:
+            swapped_parts = parts[:]
+            swapped_parts[2] = fallback_color
+            swapped_kod = "_".join(swapped_parts)
+            candidates.append(swapped_kod)
+
+            if swapped_kod.startswith("NFAY_"):
+                candidates.append("NFA_" + swapped_kod[len("NFAY_") :])
+            elif swapped_kod.startswith("NFA_"):
+                candidates.append("NFAY_" + swapped_kod[len("NFA_") :])
+
+    unique_candidates: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate != kod and candidate not in unique_candidates:
+            unique_candidates.append(candidate)
+    return unique_candidates
+
+
 def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, str] | None = None) -> tuple[bytes, list[str]]:
     mapping = alkatresz_map or load_alkatresz_map()
     missing: list[str] = []
@@ -430,19 +474,18 @@ def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, s
         kod = row.get("kod", "")
         mennyiseg = row.get("db", "")
         resolved = mapping.get(kod)
-        fallback_kod = ""
+        fallback_candidates = _procurement_code_fallbacks(kod)
 
-        if not resolved and kod.startswith("NFAY_"):
-            fallback_kod = "NFA_" + kod[len("NFAY_") :]
+        for fallback_kod in fallback_candidates:
             resolved = mapping.get(fallback_kod)
+            if resolved:
+                break
+
         if not resolved and kod == "NFAY_ANT_PRA_357x197":
             resolved = "NFAY_ANT_PRA_357x197_KA_NO_U_NFA"
         if not resolved:
-            if fallback_kod:
-                resolved = fallback_kod
-            else:
-                missing.append(kod)
-                resolved = kod
+            missing.append(kod)
+            resolved = kod
 
         writer.writerow([resolved, mennyiseg])
 
