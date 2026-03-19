@@ -474,12 +474,12 @@ def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, s
         kod = row.get("kod", "")
         mennyiseg = row.get("db", "")
         resolved = mapping.get(kod)
-        fallback_candidates = _procurement_code_fallbacks(kod)
-
-        for fallback_kod in fallback_candidates:
-            resolved = mapping.get(fallback_kod)
-            if resolved:
-                break
+        if not resolved:
+            fallback_candidates = _procurement_code_fallbacks(kod)
+            for fallback_kod in fallback_candidates:
+                resolved = mapping.get(fallback_kod)
+                if resolved:
+                    break
 
         if not resolved and kod == "NFAY_ANT_PRA_357x197":
             resolved = "NFAY_ANT_PRA_357x197_KA_NO_U_NFA"
