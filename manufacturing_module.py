@@ -1,0 +1,461 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+try:
+    from pypdf import PdfReader
+except Exception:  # pragma: no cover - optional dependency handling
+    PdfReader = None
+
+
+MANUFACTURING_ROOT = Path(os.getenv("DIVIAN_MANUFACTURING_ROOT", r"V:\Output\Gyartasi_papirok"))
+
+
+@dataclass(frozen=True)
+class ManufacturingRow:
+    row_id: str
+    name: str
+    detail: str
+    size: str
+    color: str
+    edge: str
+    quantity: int
+    code: str
+    doc_key: str
+    section_key: str
+    section_label: str
+    page_number: int
+
+
+@dataclass(frozen=True)
+class ManufacturingSection:
+    key: str
+    label: str
+    rows: tuple[ManufacturingRow, ...]
+
+
+@dataclass(frozen=True)
+class ManufacturingDocument:
+    key: str
+    label: str
+    file_name: str
+    sections: tuple[ManufacturingSection, ...]
+    row_count: int
+
+
+def _clean_text(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _slugify(value: str) -> str:
+    cleaned = _clean_text(value).lower()
+    cleaned = re.sub(r"[^a-z0-9]+", "-", cleaned).strip("-")
+    return cleaned or "szakasz"
+
+
+def _row_hash(*parts: str) -> str:
+    payload = "||".join(_clean_text(part) for part in parts)
+    return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _pdf_lines(path: Path) -> list[list[str]]:
+    if PdfReader is None:
+        raise RuntimeError("A gyártási PDF-ek olvasásához a pypdf csomag szükséges.")
+
+    reader = PdfReader(str(path))
+    pages: list[list[str]] = []
+    for page in reader.pages:
+        raw_text = page.extract_text() or ""
+        lines = [_clean_text(line) for line in raw_text.splitlines()]
+        lines = [line for line in lines if line]
+        pages.append(lines)
+    return pages
+
+
+def _find_osszekeszito_path(folder: Path) -> Path | None:
+    if not folder.exists():
+        return None
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file():
+            continue
+        name = path.name.lower()
+        if "sszek" in name and "front" not in name and "hettich" not in name:
+            return path
+    return None
+
+
+def _find_alkatresz_kesz_path(folder: Path) -> Path | None:
+    candidate = folder / "Alkatresz_kesz.pdf"
+    if candidate.exists():
+        return candidate
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if path.is_file() and path.name.lower() == "alkatresz_kesz.pdf":
+            return path
+    return None
+
+
+def has_required_manufacturing_pdfs(folder: Path) -> bool:
+    return _find_osszekeszito_path(folder) is not None and _find_alkatresz_kesz_path(folder) is not None
+
+
+def available_production_numbers(limit: int = 60, ready_only: bool = False) -> list[str]:
+    if not MANUFACTURING_ROOT.exists():
+        return []
+    candidates = [path for path in MANUFACTURING_ROOT.iterdir() if path.is_dir() and path.name.isdigit()]
+    candidates.sort(key=lambda path: int(path.name), reverse=True)
+
+    numbers: list[str] = []
+    for path in candidates:
+        if ready_only and not has_required_manufacturing_pdfs(path):
+            continue
+        numbers.append(path.name)
+        if len(numbers) >= limit:
+            break
+    return numbers
+
+
+def latest_production_number() -> str:
+    numbers = available_production_numbers(limit=1, ready_only=True)
+    return numbers[0] if numbers else ""
+
+
+def production_folder(production_number: str) -> Path:
+    return MANUFACTURING_ROOT / production_number.strip()
+
+
+def _footer_index(lines: list[str]) -> int:
+    for index, line in enumerate(lines):
+        if line.startswith("Oldal "):
+            return index
+    return len(lines)
+
+
+def _looks_like_dimension_start(tokens: list[str], index: int) -> bool:
+    if index + 4 >= len(tokens):
+        return False
+    return (
+        re.fullmatch(r"\d{1,4}", tokens[index]) is not None
+        and tokens[index + 1].lower() == "x"
+        and re.fullmatch(r"\d{1,4}", tokens[index + 2]) is not None
+        and tokens[index + 3].lower() == "x"
+        and re.fullmatch(r"\d{1,4}", tokens[index + 4]) is not None
+    )
+
+
+def _consume_dimension(tokens: list[str], index: int) -> tuple[str, int]:
+    if not _looks_like_dimension_start(tokens, index):
+        return "", index
+    return f"{tokens[index]} x {tokens[index + 2]} x {tokens[index + 4]}", index + 5
+
+
+def _looks_like_edge(token: str) -> bool:
+    return re.fullmatch(r"(?:N|\d+[HR](?:\d+[HR])*)", token) is not None
+
+
+def _is_final_code(token: str) -> bool:
+    return re.fullmatch(r"CON\d{6,}", token) is not None
+
+
+def _looks_like_code_fragment(token: str) -> bool:
+    if not re.fullmatch(r"[A-Za-z0-9_/-]+", token):
+        return False
+    return "_" in token or any(character.isalpha() for character in token)
+
+
+def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number: int) -> list[ManufacturingRow]:
+    rows: list[ManufacturingRow] = []
+    section_key = _slugify(section_label)
+    index = 0
+    row_index = 0
+
+    while index < len(tokens):
+        while index < len(tokens) and tokens[index] in {"-", ","}:
+            index += 1
+        if index >= len(tokens):
+            break
+
+        name_parts: list[str] = []
+        while index < len(tokens) and tokens[index] != ",":
+            name_parts.append(tokens[index])
+            index += 1
+        if index >= len(tokens):
+            break
+        name = _clean_text(" ".join(name_parts))
+        index += 1
+
+        detail_parts: list[str] = []
+        while index < len(tokens) and not _looks_like_dimension_start(tokens, index):
+            detail_parts.append(tokens[index])
+            index += 1
+        size, index = _consume_dimension(tokens, index)
+        if not size:
+            break
+
+        color_parts: list[str] = []
+        while index < len(tokens) and not _looks_like_edge(tokens[index]):
+            color_parts.append(tokens[index])
+            index += 1
+        if index >= len(tokens):
+            break
+        edge = tokens[index]
+        index += 1
+
+        if index >= len(tokens) or re.fullmatch(r"\d+", tokens[index]) is None:
+            break
+        quantity = int(tokens[index])
+        index += 1
+
+        code = ""
+        while index < len(tokens):
+            token = tokens[index]
+            index += 1
+            if _is_final_code(token):
+                code = token
+                break
+
+        row_index += 1
+        row = ManufacturingRow(
+            row_id=_row_hash("osszekeszito", section_label, code, name, size, str(row_index)),
+            name=name,
+            detail=_clean_text(" ".join(detail_parts)),
+            size=size,
+            color=_clean_text(" ".join(color_parts)),
+            edge=edge,
+            quantity=quantity,
+            code=code,
+            doc_key="osszekeszito",
+            section_key=section_key,
+            section_label=section_label,
+            page_number=page_number,
+        )
+        rows.append(row)
+
+    return rows
+
+
+def parse_osszekeszito(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    sections: list[ManufacturingSection] = []
+    current_label = "Összes"
+    current_rows: list[ManufacturingRow] = []
+    current_key = _slugify(current_label)
+
+    for page_number, lines in enumerate(pages, start=1):
+        footer_index = _footer_index(lines)
+        content_lines = lines[:footer_index]
+        if not content_lines:
+            continue
+
+        if content_lines[0] == "Alkatrész kivételezés":
+            try:
+                header_end = content_lines.index("Menny.")
+            except ValueError:
+                header_end = 17
+            tokens = content_lines[header_end + 1 :]
+            if len(tokens) >= 3 and tokens[1] == "-":
+                next_label = f"{tokens[0]} - {tokens[2]}"
+                if current_rows:
+                    sections.append(
+                        ManufacturingSection(
+                            key=current_key,
+                            label=current_label,
+                            rows=tuple(current_rows),
+                        )
+                    )
+                current_label = next_label
+                current_key = _slugify(current_label)
+                current_rows = []
+                tokens = tokens[3:]
+            rows = _parse_osszekeszito_rows(tokens, current_label, page_number)
+        else:
+            rows = _parse_osszekeszito_rows(content_lines, current_label, page_number)
+
+        current_rows.extend(rows)
+
+    if current_rows:
+        sections.append(ManufacturingSection(key=current_key, label=current_label, rows=tuple(current_rows)))
+
+    return ManufacturingDocument(
+        key="osszekeszito",
+        label="Összekészítő",
+        file_name=path.name,
+        sections=tuple(section for section in sections if section.rows),
+        row_count=sum(len(section.rows) for section in sections),
+    )
+
+
+def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[ManufacturingRow]:
+    rows: list[ManufacturingRow] = []
+    row_index = 0
+
+    start_index = 0
+    while start_index < len(tokens) and not _looks_like_code_fragment(tokens[start_index]):
+        start_index += 1
+    working_tokens = tokens[start_index:]
+
+    segments: list[list[str]] = []
+    current_segment: list[str] = []
+    for token in working_tokens:
+        current_segment.append(token)
+        if _is_final_code(token):
+            segments.append(current_segment)
+            current_segment = []
+
+    for segment in segments:
+        if len(segment) < 8:
+            continue
+        intake_code = segment[-1]
+        quantity_index = -1
+        edge_index = -1
+        for index in range(len(segment) - 2, -1, -1):
+            token = segment[index]
+            if quantity_index == -1 and re.fullmatch(r"\d+", token):
+                quantity_index = index
+                continue
+            if quantity_index != -1 and edge_index == -1 and _looks_like_edge(token):
+                edge_index = index
+                break
+        if quantity_index == -1 or edge_index == -1:
+            continue
+
+        dimension_index = -1
+        for index in range(0, edge_index):
+            if _looks_like_dimension_start(segment, index):
+                dimension_index = index
+                break
+        if dimension_index == -1:
+            continue
+
+        code_parts: list[str] = []
+        name_start_index = 0
+        while name_start_index < dimension_index and _looks_like_code_fragment(segment[name_start_index]):
+            code_parts.append(segment[name_start_index])
+            name_start_index += 1
+        if not code_parts:
+            continue
+        raw_code = "".join(code_parts)
+
+        name_parts = segment[name_start_index:dimension_index]
+        size, _ = _consume_dimension(segment, dimension_index)
+        if not size:
+            continue
+
+        color_parts = segment[dimension_index + 5 : edge_index]
+        section_label = _clean_text(" ".join(name_parts))
+        if not section_label:
+            continue
+
+        row_index += 1
+        rows.append(
+            ManufacturingRow(
+                row_id=_row_hash("alkatresz", section_label, raw_code, size, str(row_index)),
+                name=section_label,
+                detail=raw_code,
+                size=size,
+                color=_clean_text(" ".join(color_parts)),
+                edge=segment[edge_index],
+                quantity=int(segment[quantity_index]),
+                code=intake_code or raw_code,
+                doc_key="alkatresz_kesz",
+                section_key=_slugify(section_label),
+                section_label=section_label,
+                page_number=page_number,
+            )
+        )
+
+    return rows
+
+
+def parse_alkatresz_kesz(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    section_map: dict[str, list[ManufacturingRow]] = {}
+
+    for page_number, lines in enumerate(pages, start=1):
+        footer_index = _footer_index(lines)
+        content_lines = lines[:footer_index]
+        if not content_lines:
+            continue
+
+        if content_lines[0] == "Alkatrész bevételezés":
+            try:
+                header_end = content_lines.index("ME")
+            except ValueError:
+                header_end = 17
+            tokens = content_lines[header_end + 1 :]
+        else:
+            tokens = content_lines
+
+        for row in _parse_alkatresz_rows(tokens, page_number):
+            section_map.setdefault(row.section_label, []).append(row)
+
+    sections = [
+        ManufacturingSection(
+            key=_slugify(section_label),
+            label=section_label,
+            rows=tuple(rows),
+        )
+        for section_label, rows in sorted(section_map.items(), key=lambda item: item[0].lower())
+    ]
+    return ManufacturingDocument(
+        key="alkatresz_kesz",
+        label="Alkatrész kész",
+        file_name=path.name,
+        sections=tuple(section for section in sections if section.rows),
+        row_count=sum(len(section.rows) for section in sections),
+    )
+
+
+def load_production_bundle(production_number: str) -> dict:
+    folder = production_folder(production_number)
+    if not folder.exists():
+        raise FileNotFoundError(f"A gyártási mappa nem található: {folder}")
+
+    osszek_path = _find_osszekeszito_path(folder)
+    alkatresz_path = _find_alkatresz_kesz_path(folder)
+    if osszek_path is None or alkatresz_path is None:
+        raise FileNotFoundError("Az Összekészítő vagy az Alkatresz_kesz PDF hiányzik a gyártási mappából.")
+
+    osszek_doc = parse_osszekeszito(osszek_path)
+    alkatresz_doc = parse_alkatresz_kesz(alkatresz_path)
+
+    return {
+        "production_number": production_number,
+        "folder": str(folder),
+        "documents": [asdict(osszek_doc), asdict(alkatresz_doc)],
+    }
+
+
+def selection_state_path(runtime_root: Path, production_number: str) -> Path:
+    target_dir = runtime_root / production_number
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir / "state.json"
+
+
+def load_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
+    path = selection_state_path(runtime_root, production_number)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): str(value) for key, value in payload.items() if str(value) in {"green", "red"}}
+
+
+def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
+    current = load_selection_state(runtime_root, production_number)
+    normalized_state = str(state or "").strip().lower()
+    if normalized_state in {"", "none", "clear"}:
+        current.pop(row_id, None)
+    elif normalized_state in {"green", "red"}:
+        current[row_id] = normalized_state
+    path = selection_state_path(runtime_root, production_number)
+    path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    return current

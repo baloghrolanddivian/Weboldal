@@ -1,0 +1,17 @@
+{
+  "job_id": "d656c4b694d4",
+  "job_type": "order",
+  "bundle_name": "nettfront-rendeles-output.zip",
+  "source_stock_name": "aktualis-raktar.xlsx",
+  "source_stock_file": "source-stock.xlsx",
+  "suggestion_row_count": 11,
+  "merged_variant_count": 130,
+  "filtered_stock_count": 7,
+  "added_super_matt_count": 4,
+  "total_m2": 7.850963,
+  "avg_row_count": 1522,
+  "approved_row_count": 0,
+  "approved_total_m2": 0.0,
+  "approved_file": "",
+  "approved_generated_at": ""
+}

@@ -1,0 +1,11 @@
+{
+  "job_id": "b1129a8afd94",
+  "job_type": "procurement",
+  "bundle_name": "procurement-output.zip",
+  "source_invoice_name": "NF2026-30791.pdf",
+  "source_invoice_file": "source-invoice.pdf",
+  "invoice_row_count": 35,
+  "missing_codes": [],
+  "uploaded_parts_name": "alkatreszek.xlsx",
+  "uploaded_parts_file": "alkatreszlista.xlsx"
+}

@@ -1,0 +1,871 @@
+Divian nyilvános webforrás: Divian hivatalos - Adatkezelés
+Web extract version: 6
+Forrás URL: https://divian.hu/adatkezeles
+Oldal címe: Adatvédelmi Nyilatkozat | Divian konyhabútor és étkező
+Frissítve: 2026-03-20T10:30:11
+
+Adatvédelmi Nyilatkozat | Divian konyhabútor és étkező
+Garancia regisztráció
+Konyhaműhelyek
+Akciók
+Konyha
+Konyhabútor
+Konyhai gépek
+Étkező
+Tárolás
+Kiegészítők
+Katalógus
+Rólunk
+Viszonteladók
+Beépítők
+Karrier
+Blog
+GYIK
+Adatvédelmi Nyilatkozat
+Az adatkezelő megnevezése,adatai:
+CÉGNÉV :
+Divian - Mega Bútoripari Szolgáltató Korlátolt Felelősségű Társaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+DIVIAN - MEGA Kft.
+SZÉKHELY:
+HU-6724 Szeged, Trafó köz 3.
+A CÉG TELEPHELYEI:
+HU-6724 Szeged, Bakay Nándor utca 52.
+HU-6724 Szeged, Trafó köz 6.
+HU 6724 Szeged, Vértói út 18/A
+STATISZTIKAI SZÁMJELE:
+12809404-3102-113-06
+CÉGJEGYZÉKSZÁM:
+06-09-007850
+ADÓSZÁM:
+12809404-2-06
+HONLAPOK:
+https://www.divian.hu és aloldalai
+E-MAIL CÍM:
+divian@divian.hu
+SZÁMLAVEZETŐ BANK:
+CIB Bank Zrt. Szeged IV. Fiók
+(6720 Szeged, Széchenyi tér 2.)
+KÉPVISELETRE JOGOSULTAK NEVE:
+Varga Zoltán ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 3102 Konyhabútorgyártás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+I. BEVEZETÉS
+Az adatkezelő kötelezettséget vállal arra, hogy tevékenységét a mindenkor hatályos jogszabályok szerint végzi, melyek a jelen tájékoztató kiadásakor az alábbiak:
+az EURÓPAI PARLAMENT ÉS A TANÁCS (EU) 2016/679 RENDELETE(2016. április 27.) a természetes személyeknek a személyes adatok kezelése tekintetében történő védelméről és az ilyen adatok szabad áramlásáról, valamint a 95/46/EK rendelet hatályon kívül helyezéséről (általános adatvédelmi rendelet, angol rövidítéssel GDPR / General Data Protection Regulation) (EGT- vonatkozású szöveg),
+2011. évi CXII. törvény az információs önrendelkezési jogról és az információszabadságról (Infotv),
+A polgári törvénykönyvről szóló 2013. évi V.törvény (Ptk.),
+A gazdasági reklámtevékenység alapvető feltételeiről és egyes korlátairól szóló 2008. évi XLVIII.törvény (Grtv.),
+Az elektronikus kereskedelmi szolgáltatások, az információs társadalommal összefüggő szolgáltatások egyes kérdéseiről szóló 2001. évi CVIII.törvény (Ektv.),
+1995. évi CXIX. törvény a kutatás és a közvetlen üzletszerzés célját szolgáló név- és lakcímadatok kezeléséről,
+Számvitelről szóló 2000. évi C.törvény,
+A munka törvénykönyvéről szóló 2012. évi I.törvény (Mt.)
+A természetes személyeknek a személyes adatok kezelése tekintetében az Adatkezelő megfelelő intézkedéseket hoz annak érdekében, hogy az érintett részére a személyes adatok kezelésére vonatkozó, minden egyes tájékoztatást tömör, átlátható, érthető és könnyen hozzáférhető formában, világosan és közérthetően megfogalmazva nyújtsa, továbbá hogy az ADATKEZELŐ elősegíti az érintett jogainak a gyakorlását.
+Az EU Rendelet figyelemmel a tagállamok korábbi adatvédelmi gyakorlatára és a korábbi irányelvi szabályozásra az adatvédelmet magasabb szintre emeli. A szabályozás alapvetően az adatkezelés megvalósításával kapcsolatban adatkezelési elveket határoz meg, amelyekhez további, az elveket kibontó szabályokat állapít meg.
+Az Adatkezelő kötelezettséget vállal arra, hogy a tudomány és technológia állása és a megvalósítás költségei, továbbá az adatkezelés jellege, hatóköre, körülményei és céljai, valamint a természetes személyek jogaira és szabadságaira jelentett, változó valószínűségű és súlyosságú kockázat figyelembevételével megfelelő technikai és szervezési intézkedéseket alkalmaz az adatkezelési tevékenységének teljes terjedelmére kiterjedően.
+A Társaság tájékoztatja az érintettet, hogy személyes adatainak kezelése körében ADATKEZELŐNEK minősül.
+Az Adatvédelmi-kezelési szabályzata tartalmazza a Társaság adatkezelési tevékenységére vonatkozó szabályokat, az alkalmazásukat segítő formanyomtatványokat, szerződési kikötéseket, továbbá az adatbiztonsági előírásokat.
+A személyes adatokat a Társaság a vonatkozó adatkezelési célhoz kapcsolódó hozzáférési jogosultságokkal rendelkező munkavállalói, illetve a Társaság részére szolgáltatási szerződések alapján adatfeldolgozási tevékenységet végző személyek ismerhetik meg, a Társaság által meghatározott terjedelemben és a tevékenységük végzéséhez szükséges mértékben.
+AZ ADATKEZELÉS CÉLHOZ KÖTÖTTSÉG
+Személyes adat kizárólag meghatározott célból, jog gyakorlása és kötelezettség teljesítése érdekében kezelhető. Az adatkezelő adatkezelésének minden szakaszában meg kell felelnie az adatkezelés céljának, az adatok felvételének és kezelésének tisztességesnek és törvényesnek kell lennie.
+Csak olyan személyes adat kezelhető, amely az adatkezelés céljának megvalósulásához elengedhetetlen, a cél elérésére alkalmas. A személyes adat csak a cél megvalósulásához szükséges mértékben és ideig kezelhető.
+A részletes Adatvédelmi - Kezelési szabályzat elérhető a Társaság székhelyén, megismerésre elérhető minden érintett számára.
+II. TÁJÉKOZTATÁS EGYES ADATKEZELÉSEKRŐL, ADATFELDOLGOZÁSRÓL
+Az alábbi tájékoztatás az Adatkezelő főbb adatkezelési tevékenységeit mutatja be, adatkezelési célok szerint.
+1.AZ ADATKEZELŐ MEGNEVEZÉSE:
+CÉGNÉV:
+Divian - Mega Bútoripari Szolgáltató Korlátolt Felelősségű Társaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+DIVIAN - MEGA Kft.
+SZÉKHELY:
+HU-6724 Szeged, Trafó köz 3.
+A CÉG TELEPHELYEI:
+HU-6724 Szeged, Bakay Nándor utca 52.
+HU-6724 Szeged, Trafó köz 6.
+HU 6724 Szeged, Vértói út 18/A
+STATISZTIKAI SZÁMJELE:
+12809404-3102-113-06
+CÉGJEGYZÉKSZÁM:
+06-09-007850
+ADÓSZÁM:
+12809404-2-06
+HONLAP:
+https://www.divian.hu és aloldalai
+E-MAIL CÍM:
+divian@divian.hu
+SZÁMLAVEZETŐ BANK:
+CIB Bank Zrt. Szeged IV. Fiók
+(6720 Szeged, Széchenyi tér 2.)
+KÉPVISELETRE JOGOSULTAK NEVE:
+Varga Zoltán ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 3102 Konyhabútorgyártás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+2. MINT ÖNÁLLÓ ADATKEZELŐK (CÍZETTEK) MEGNEVEZÉSE:
+2.1. Foglalkozás-egészségügyi (orvos) megbízott megnevezése:
+CÉGNÉV:
+DR. BEN-REDOUANE GABRIELLA E.V.
+SZÉKHELY:
+6727 Szeged, Pápai utca 58.
+NYILVÁNTARTÁSISZÁM:
+5665055
+ADÓSZÁM:
+45993109-1-26
+KÉPVISELŐ NEVE:
+DR. BEN-REDOUANE GABRIELLA
+ORVOS NEVE:
+DR. BEN-REDOUANE GABRIELLA
+RENDELŐ CÍME:
+6724 SZEGED VASAS SZENT PÉTER UTCA 15.
+TELEFONSZÁMA:
+62/ 451-872
+E-MAIL CÍME:
+benrendelo 15@gmail.com
+2.2. Tűz, Baleset, Munkavédelmi megbízott megnevezése:
+CÉGNÉV:
+Gálfi Róbert egyéni vállalkozó
+SZÉKHELY:
+HU-6727 Szeged, Május 1 utca 78.
+NYILVÁNTARTÁSI SZÁM:
+50451384
+ADÓSZÁM:
+67587740-1-26
+HONLAP:
+NINCS
+STATISZTIKAI SZÁMJELE:
+67587740 7490 231 06
+E-MAIL CÍM:
+rm.robertgalfi@gmail.com
+TELEFONSZÁM:
+Telefon: +36 (30) 332-7258
+FŐTEVÉKENYSÉGE:
+ÖVTJ szerinti megnevezés: 749001
+M.n.s. egyéb szakmai, tudományos, műszaki tevékenység
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+2.3. Könyvvizsgáló megnevezése:
+CÉGNÉV:
+GYULA-AUDIT Kft.
+SZÉKHELY:
+5700 Gyula, Károly Róbert utca 11/3
+.
+CÉGJEGYZÉKSZÁM:
+04-09-005401
+ADÓSZÁM:
+12742839-2-04
+A KÖNYVVIZSGÁLATÉRT FELELŐS SZEMÉLY:
+Megyebiró Anikó Erzsébe
+KÉPVISELETRE JOGOSULT NEVE:
+Megyebiró Anikó Erzsébe (vezető tisztségviselő)
+A képviselet módja: önálló
+HONLAP:
+https://gyulaaudit.hu/
+KAMARAI AZONOSÍTÓSZÁM:
+0-01-936
+E-MAIL CÍM:
+aniko@gyulaaudit.hu
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 6920 Számviteli, könyvvizsgálói, adószakértői tevékenység
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3. ADATFELDOLGOZÓK MEGNEVEZÉSE:
+3.1. Könyvviteli, adózási, bérszámfejtési adatfeldolgozó megnevezése:
+CÉGNÉV:
+DIVIAN - MEGA Kft.
+SZÉKHELY:
+HU-6724 Szeged, Trafó köz 3.
+TELEPHELY:
+HU-6724 Szeged, Bakay Nándor utca 52.
+HU-6724 Szeged, Trafó köz 6.
+HU 6724 Szeged, Vértói út 18/A
+CÉGJEGYZÉK SZÁM:
+06-09-007850
+ADÓSZÁM:
+12809404-2-06
+STATISZTIKAI SZÁMJELE:
+12809404-3102-113-06
+HONLAP:
+https://www.divian.hu és aloldalai
+E-MAIL CÍM:
+divian@divian.hu
+KÉPVISELETRE JOGOSULTAK NEVE:
+Varga Zoltán ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 3102 Konyhabútorgyártás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.2. Elektronikus megfigyelő és biztonságtechnikai rendszert üzemeltető, adatfeldolgozó megnevezése (székhelyen):
+CÉGNÉV:
+Divian - Mega Bútoripari Szolgáltató Korlátolt Felelősségű Társaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+DIVIAN - MEGA Kft.
+SZÉKHELY:
+HU-6724 Szeged, Trafó köz 3.
+A CÉG TELEPHELYEI:
+HU-6724 Szeged, Bakay Nándor utca 52.
+HU-6724 Szeged, Trafó köz 6.
+HU 6724 Szeged, Vértói út 18/A
+STATISZTIKAI SZÁMJELE:
+12809404-3102-113-06
+CÉGJEGYZÉKSZÁM:
+06-09-007850
+ADÓSZÁM:
+12809404-2-06
+HONLAP:
+https://www.divian.hu és aloldalai
+E-MAIL CÍM:
+divian@divian.hu
+SZÁMLAVEZETŐ BANK:
+CIB Bank Zrt. Szeged IV. Fiók
+(6720 Szeged, Széchenyi tér 2.)
+KÉPVISELETRE JOGOSULTAK NEVE:
+Varga Zoltán ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 3102 Konyhabútorgyártás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.3 Vagyonvédelmi szolgáltató adatfeldolgozó megnevezése (telephelyen):
+CÉGNÉV:
+LOCHNER Vagyonvédelmi, Kereskedelmi és Szolgáltató Korlátolt Felelősségű Társaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+LOCHNER Kft.
+SZÉKHELY:
+HU-6760 Kistelek, Kossuth u. 6-8.sz.
+STATISZTIKAI SZÁMJELE:
+10644278-8020-113-06
+CÉGJEGYZÉKSZÁM:
+06-09-001430
+ADÓSZÁM:
+10644278-2-06
+HONLAP:
+http://www.lochner.hu
+E-MAIL CÍM:
+info@lochner.hu
+TELEFONSZÁM:
+Telefon:+ 36-30/436-5844
+KÉPVISELETRE JOGOSUL NEVE:
+Tóth Sándor ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 8020 Biztonsági rendszerszolgáltatás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.4. IT szolgáltató adatfeldolgozó megnevezése:
+3.4.1.
+CÉGNÉV:
+NLG-SYSTEM Kereskedelmi és Szolgáltató Betéti Társaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+NLG-SYSTEM Bt.
+SZÉKHELY:
+HU-2135 Csörög, Homokbánya u. 26.
+STATISZTIKAI SZÁMJELE:
+21880106-6311-117-13
+CÉGJEGYZÉKSZÁM:
+13-06-063659
+ADÓSZÁM:
+21880106-2-13
+HONLAP:
+http://www.nlgsys.net
+E-MAIL CÍM:
+info@nlgsys.net
+TELEFONSZÁM:
+Telefon:+ 36-27-502-450
+KÉPVISELETRE JOGOSUL NEVE:
+László Gábor ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’:6311 Adatfeldolgozás, web-hoszting szolgáltatás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.4.2.
+CÉGNÉV:
+Via Com Informatikai Kereskedelmi és Szolgáltató Korlátolt Felelősségű Társaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+Via Com Informatikai Kft..
+SZÉKHELY:
+2360 Gyál, Deák Ferenc utca 17.
+STATISZTIKAI SZÁMJELE:
+13810359-5819-113-13
+CÉGJEGYZÉKSZÁM:
+13-09-109794
+ADÓSZÁM:
+13810359-2-13
+HONLAP:
+http://viacomkft.hu
+E-MAIL CÍM:
+info@viacomkft.hu
+TELEFONSZÁM:
+Telefon:+ 36-1-348-500
+KÉPVISELETRE JOGOSUL NEVE:
+Hidasi József Zoltán ügyvezető (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 5819 Egyéb kiadói tevékenység
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.4.3.
+CÉGNÉV:
+GOOGLE IRELAND LIMITED
+SZÉKHELY:
+3 RD FLOOR, GORDON HOUSE, BARROW STREET, DUBLIN 4.
+ADÓSZÁM:
+IE 6388047 V
+HONLAP:
+google.com
+KAPCSOLAT:
+kapcsolati űrlap kitöltésével
+3.4.4.
+CÉGNÉV:
+FACEBOOK IRELAND LIMITED
+SZÉKHELY:
+4 GRAND CANAL SQUARE, GRAND CANAL HARBOUR, DUBLIN 2
+ADÓSZÁM:
+IE 9692928 F
+HONLAP:
+facebook.com
+KAPCSOLAT:
+kapcsolati űrlap kitöltésével
+3.4.5.
+CÉGNÉV:
+TYPEFORM S.L.
+SZÉKHELY:
+BAC DE ROAD, 163 BARCELONA 08018 SPAIN
+ADÓSZÁM:
+ES B65831836
+HONLAP:
+www.typeform.com
+E-MAIL CÍM:
+support@typeform.com
+3.5. IT Felhőalapú, ügyfélkezelő rendszert szolgáltató adatfeldolgozó megnevezése:
+CÉGNÉV:
+Mini CRM Szolgáltató és Kereskedelmi Zártkörűen Működő Részvénytársaság
+A CÉG RÖVIDÍTETT ELNEVEZÉSE:
+Mini CRM Zrt.
+SZÉKHELY:
+HU-1075 Budapest, Madách Imre út 13-14.
+CÉGJEGYZÉKSZÁM:
+01-10-047449
+EU ADÓSZÁM:
+HU 23982273
+HONLAP:
+https://www.minicrm.hu/
+E-MAIL CÍM:
+help@minicrm.hu
+TELEFONSZÁM:
+Telefon:+ 36 (1) 999 - 0402
+KÉPVISELETRE JOGOSUL NEVE:
+Leskó Norbert vezérigazgató
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.6.Fuvarszolgáltatók megnevezése:
+3.6.1.
+CÉGNÉV:
+S-PRINT LOGISTIC Szolgáltató Betéti Társaság
+SZÉKHELY:
+HU-4400 Nyíregyháza, Tüzér út 16.
+ADÓSZÁM:
+21866142-2-15
+CÉGJEGYZÉKSZÁM:
+15 06 092293
+HONLAP:
+https://www.csomagfutar.hu
+E-MAIL CÍM:
+s-print@csomagfutar.hu
+TELEFONSZÁM:
++36 (30) 903 2105
+KÉPVISELŐ NEVE:
+Nagy Imre Mihály üzletvezetésre jogosult tag (vezető tisztségviselő)
+A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 4941 Közúti áruszállítás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.6.2.
+CÉGNÉV:
+Kühne + Nagel Szállítmányozási Korlátolt Felelősségű Társaság
+SZÉKHELY:
+2071 Páty, Szent József út 4.
+ADÓSZÁM:
+10539868-2-44
+CÉGJEGYZÉKSZÁM:
+13-09-084530
+HONLAP:
+https://hu.kuehne-nagel.com/
+E-MAIL CÍM:
+marton.lanyi@kuehne-nagel.com
+TELEFONSZÁM:
++36 (23) 889 000
+KÉPVISELŐ NEVE:
+Lányi Márton, Kiss Péter vezető tisztségviselők. A képviselet módja: együttes
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 5229 Egyéb szállítást kiegészítő szolgáltatás
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+3.6.3.
+CÉGNÉV:
+R & Roland Fa-, Építőanyag Kereskedelmi és Szolgáltató Korlátolt Felelősségű Társaság
+SZÉKHELY:
+4400 Nyíregyháza, Komondor utca 14.
+ADÓSZÁM:
+24369747-2-15
+CÉGJEGYZÉKSZÁM:
+15-09-080753
+HONLAP:
+NINCS
+E-MAIL CÍM:
+rrkft 2013@gmail.com
+TELEFONSZÁM:
++36 (30) 457 2669
+KÉPVISELŐ NEVE:
+Pomian György János üzletvezetésre jogosult tag (vezető tisztségviselő) A képviselet módja: önálló
+FŐTEVÉKENYSÉGE:
+TEAOR 08’: 4673 Fa-, építőanyag-, szaniteráru-nagykereskedelem
+ADATVÉDELMI TISZTVISELŐ:
+NINCS
+Az egyéni vállalkozók nyilvántartásának (EVNY) jogszabály által meghatározott adatai közérdekből nyilvános adatok, így a további adatok minden érintett számára elérhetőek.
+3.6.4.
+CÉGNÉV:
+Nagy Imre
+SZÉKHELY:
+HU-5700 Gyula, Kolozsvári u. 25.
+ADÓSZÁM:
+44555647-2-24
+3.6.5.
+CÉGNÉV:
+Szabó Árpád
+SZÉKHELY:
+HU-6791 Szeged, Basahíd u. 25.
+ADÓSZÁM:
+71886176-2-26
+3.6.6.
+CÉGNÉV:
+Szabó Attila
+SZÉKHELY:
+HU-6791 Szeged, Basahíd u. 25.
+ADÓSZÁM:
+68117591-1-26
+3.6.7.
+CÉGNÉV:
+Dékány Zoltán
+SZÉKHELY:
+HU-6900 Makó, Balogh Á. u. 1.
+ADÓSZÁM:
+45419593-1-26
+3.6.8.
+CÉGNÉV:
+Hevér Zoltán
+SZÉKHELY:
+HU-6100 Kiskunfélegyháza, Dayka u. 11.
+ADÓSZÁM:
+43642199-1-23
+3.6.9.
+CÉGNÉV:
+Gárgyán Tibor
+SZÉKHELY:
+6794 ÜLLÉS MÓRA FERENC UTCA 37.
+ADÓSZÁM:
+76093078-1-51
+3.7. Postai szolgáltatások, kézbesítés, csomagküldés
+CÉGNÉV:
+Magyar Posta Zrt.
+SZÉKHELY:
+HU-1138 Budapest, Dunavirág utca 2-6.
+CÉGJEGYZÉKSZÁM:
+01-10-042463
+ADÓSZÁM:
+10901232-2-44
+HONLAP:
+www.posta.hu
+E-MAIL CÍM:
+ugyfelszolgalat@posta.hu
+TELEFONSZÁM:
+06-1-767-8282
+ADATVÉDELMI TISZTVISELŐ E-MAIL CÍME:
+adatvedelem@posta.hu
+Az adatkezelő a toborzás kezdeti szakaszaiban kezelt adatok:
+• A jelentkezésben / önéletrajzban / motivációs levélben foglalt információk, beleértve a nevet, megnevezést, elérhetőségi adatokat, fényképet, korábbi munkahelyeket, tapasztalatot, képességeket, iskolázottságot / végzettségeket, beleértve az oktatást, szakmai oktatást, jogosítványt adott esetben, referenciát adók nevei és elérhetőségei, stb.
+• Nyilvánosan elérhető információk, mint pl. az üzleti közösségi oldalon (pl. Linked In, Facebook) feltüntetett adatok
+• Kiválasztással kapcsolatos információk, beleértve a levelezést, interjú feljegyzéseket, belső feljegyzéseket, írásos vagy online kiválasztási feladatok eredményeit
+Ha valamely pozícióra már átjutott a Jelentkező több szűrőn vagy feltételes ajánlatot kap a munkaviszonyra, úgy a kezelt adatok köre az alábbiakkal bővülhet:
+• Munkaviszony előtti ellenőrzés információi, beleértve a referenciákat és a végzettségek igazolását
+• Munkavállalási jogosultság ellenőrzése és kapcsolódó dokumentumok
+Felhívjuk a figyelmét, hogy szükséges lehet a következők személyes adatok különleges kategóriáinak a kezelése is:
+1. Egészségügyi adatok a foglalkoztatás előtti egészségügyi kérdőívek / foglalkozás-egészségügyi vizsgálatok során Ezek alapján mérhető fel, hogy alkalmas-e a munkára a Jelentkező.
+2. Információ a bűnügyi nyilvántartásból Erkölcsi bizonyítvány beszerzését kérhetjük, hogy ellenőrizzük a feladatra való megfelelést és az megadott információkat. Az erkölcsi bizonyítvány biztosításával a Jelentkező kifejezetten hozzájárul ennek a kezeléséhez a munkajogviszony létrehozása céljára.
+Személyes adatok kezelésének célja: jelentkezés feldolgozás, kapcsolat tartás, informált döntéshozatal, információk ellenőrzése.
+A személyes adatokat a toborzás során kezeli a Divian-Mega Kft. Ha a jelentkezés sikeres, a munka megkezdésekor a Jelentkező megkapja a Munkavállalói Adatvédelmi tájékoztatót és a munkaviszony fenntartásához nem szükséges toborzási adatai törlésre kerülnek. Ha a jelentkezés sikertelen, úgy a személyes adatokat legfeljebb 1 évig őrizzük esetleges jogi igények elleni védekezés céljára (jogos érdek alapján).
+A jelentkező a jogiról jelen tájékoztató további részleteiben tájékozódhat.
+Az Adatkezelő a vele fennálló jog (munka) viszonnyal összefüggésben az alábbi, főbb adatkezeléseket végzi.
+Munkaügyi, személyzeti nyilvántartás
+Tagok, tulajdonosok, tisztségviselők adatainak kezelése
+A munkavállalói alkalmassági vizsgálatokkal kapcsolatos adatkezelés
+Felvételre jelentkező munkavállalók adatainak kezelése, pályázatok, önéletrajzok.
+A munkabalesetek nyilvántartásával kapcsolatos adatkezelés
+Munkahelyi kamerás megfigyeléssel kapcsolatos adatkezelés
+A Divian-Mega Kft. a Munkavállalók munkaviszonnyal összefüggő személyes adatait – jogszabály eltérő rendelkezése, a Munkáltató jogos érdeke illetve az érintett Munkavállalók kifejezett engedélye hiányában – nem továbbítja, nem adja át, illetőleg nem teszi hozzáférhetővé harmadik személyek részére.
+A Divian-Mega Kft. megteszi a megfelelő jogi, szervezeti és technikai intézkedéseket, hogy a vonatkozó adatvédelmi és adatbiztonsági előírásoknak megfelelően megóvja a személyes adatok biztonságát. Amennyiben a Divian-Mega Kft. külső adatfeldolgozót alkalmaz, az adott adatfeldolgozót gondosan választja ki, és megköveteli tőle, hogy megfelelő intézkedések meghozatalával szintén megóvja a személyes adatok bizalmas jellegét és biztonságát.
+Az Adatkezelő a vele fennálló polgári jogi szerződésekkel és szerződő partnereivel összefüggésben az alábbi főbb adatkezeléseket végzi.
+Ügyféladatok: szerződő partnerek, kapcsolattartók adatainak kezelése – vevők, szállítók nyilvántartása
+Az Adatkezelő jogi kötelezettség teljesítése jogcímén az alábbi főbb adatkezeléseket végzi.
+Adatkezelés adó- és számviteli kötelezettségek teljesítése céljából
+Kifizetői adatkezelés
+A Levéltári törvény szerint maradandó értékű iratokra vonatkozó adatkezelés
+Adatkezelés pénzmosás elleni kötelezettségek teljesítése céljából
+MUNKAHELYI KAMERÁS MEGFIGYELÉSSEL KAPCSOLATOS ADATKEZELÉS, TÁJÉKOZTATÁS
+A Társaság adatkezelőként gondoskodik az általa kezelt adatok biztonságáról és megteszi mindazon intézkedéseket, amelyek az adatvédelmi előírások érvényesüléséhez szükségesek.
+Társaságunk a székhelyén/telephelyén elektronikus megfigyelőrendszert alkalmaz (napi 24 órás időtartamban), amely képrögzítést (hangot nem) is lehetővé tesz, az emberi élet, testi épség, személyi szabadság, az üzleti titok védelme, jogsértések megelőzése, jogsértések észlelése, és a vagyonvédelem céljából ez alapján személyes adatnak tekinthető az érintett képmása (magatartása) is, amit a kamera rögzít.
+Ezen adatkezelés jogalapja:a munkáltató jogos érdekeinek érvényesítése, és csak másodlagosan az érintett hozzájárulása.
+A jogos érdek fenn álltának bemutatása az adatkezelő jogos érdeke, melyet érdekmérlegelési teszt elvégzésével az elektronikus megfigyelőrendszer üzemeltetésével kapcsolatban a jogos érdeken alapuló adat kezelésre tekintettel a GDPR 6. Cikk (1) bekezdés alapján mutatott be.
+Vállalkozásunk jogos érdeke a kamerák működtetése és adatainak rögzítése. Az emberi élet, testi épség, a jogsértések bizonyítása más módszerrel nem érhető el, továbbá e technikai eszközök alkalmazása elengedhetetlenül szükséges mértékű, és az információs önrendelkezési jog aránytalan korlátozásával nem jár.
+Adatkezelés megfelel a célhoz kötöttség és tisztességes adatkezelés elvének, nem jár az emberi méltóság megsértésével.
+Társaságunk a területen (székhelyen) megjelenni kívánó személyek tájékoztatásának elősegítése érdekében jól látható helyeken, jól olvasható figyelemfelhívó információs jelzéseket helyezett el arról, hogy az adott területen elektronikus megfigyelőrendszert alkalmaz, amely közvetlen megfigyelést képrögzítést is lehetővé tesz.
+A vevők, ügyfelek, látogatók, vendégek a megfigyeléssel érintett területekre való belépéssel elismerik és tudomásul veszik a kamerás megfigyelés tényét és egyben hozzájárulnak ahhoz, hogy róluk felvétel készüljön.
+Társaság a TÁJÉKOZTATÓT kifüggeszti annak érdekében, hogy a belépők még a megfigyelt területre való belépés előtt tudomást szerezhessenek a kamerák alkalmazásáról, valamint a részletesebb TÁJÉKOZTATÓT (9 számú melléklet) elérhetővé teszi minden érintett számlára.
+Egyik kamera látószöge sem irányul közvetlenül a munkavállalók, vendégek magánjellegű tevékenységének vagy viselkedésének ellenőrzésére, megfigyelésére. A tájékoztatás minden egyes kamera vonatkozásában megadásra került. A részletes„TÁJÉKOZTATÓ”a Társaság székhelyén/Telephelyén, az irodában kerül elhelyezésre kifüggesztésre és így kerül az ügyfelekkel illetve látogatókkal (érintettekkel) közlésre.
+Kamerák pontos elhelyezkedését, azok megfigyelési területével és látószögével együtt a tájékoztató 1. sz. mellékletét képező leírás rögzíti azzal, hogy a kamera és annak látószöge közterületre nem irányul.Fent említett 1. számú melléklet a Társaság hatályos Adatvédelmi-kezelési szabályzatának, illetve a munkahelyi kamerás megfigyelőrendszer alkalmazásáról szóló „Tájékoztató”elválaszthatatlan mellékletét képezi.
+Ez „TÁJÉKOZTATÓ” (1.sz. melléklet) tartalmazza az elektronikai vagyonvédelmi rendszer által folytatott megfigyelés tényét, valamint a rendszer által rögzített, személyes adatokat tartalmazó képfelvétel készítésének, tárolásának céljáról, az adatkezelés jogalapjáról, a felvétel tárolásának helyéről, a tárolás időtartamáról, a kihelyezett kamerák helyéről, célterületéről, a rendszert alkalmazó (üzemeltető) személyéről, az adatok megismerésére jogosult személyek köréről, továbbá az érintettek jogaira és érvényesítésük rendjére vonatkozó rendelkezéseiről szóló tájékoztatást is.
+Az érintett önrendelkezési jogának sérelme esetén a 2011. évi CXII. tv. 22.§, valamint az EURÓPAI PARLAMENT ÉS A TANÁCS (EU) 2016/679 RENDELETE (2016. április 27.) a természetes személyeknek a személyes adatok kezelése tekintetében történő védelméről és az ilyen adatok szabad áramlásáról, valamint a 95/46/EK rendelet hatályon kívül helyezéséről (általános adatvédelmi rendelet) (EGT - vonatkozású szöveg) (a továbbiakban: EU Rendelet) alapján bírósághoz fordulhat. Továbbá a Nemzeti Adatvédelmi és Információszabadság Hatóságnál bejelentéssel élhet, arra történő hivatkozással, hogy a személyes adatok kezelésével kapcsolatban jogsérelem érte, vagy annak közvetlen veszélye áll fenn.
+Az adatkezelő honlapján végzett adatkezelésről jelen tájékoztatóban adunk tájékoztatást.
+III. AZ ADATVÉDELMI-KEZELÉSI SZABÁLYZATBAN MEGHATÁROZOTT FŐBB ALAPFOGALMAK:
+Szabályzat alkalmazására irányadó fogalom meghatározásokat a hivatkozott EU Rendelet 4. cikke tartalmazza.
+Ennek megfelelően emeljük ki a főbb fogalmakat:
+1)személyes adat:azonosított vagy azonosítható természetes személyre („érintett”) vonatkozó bármely információ; azonosítható az a természetes személy, aki közvetlen vagy közvetett módon, különösen valamely azonosító, például név, szám, helymeghatározó adat, online azonosító vagy a természetes személy testi, fiziológiai, genetikai, szellemi, gazdasági, kulturális vagy szociális azonosságára vonatkozó egy vagy több tényező alapján azonosítható.
+2)adatkezelés:a személyes adatokon vagy adatállományokon automatizált vagy nem automatizált módon végzett bármely művelet vagy műveletek összessége, így a gyűjtés, rögzítés, rendszerezés, tagolás, tárolás, átalakítás vagy megváltoztatás, lekérdezés, betekintés, felhasználás, közléstovábbítás, terjesztés vagy egyéb módon történő hozzáférhetővé tétel útján, összehangolás vagy összekapcsolás, korlátozás, törlés, illetve megsemmisítés;
+3)adatkezelő:az a természetes vagy jogi személy, közhatalmi szerv, ügynökség vagy bármely egyéb szerv, amely a személyes adatok kezelésének céljait és eszközeit önállóan vagy másokkal együtt meghatározza; ha az adatkezelés céljait és eszközeit az uniós vagy a tagállami jog határozza meg, az adatkezelőt vagy az adatkezelő kijelölésére vonatkozó különös szempontokat az uniós vagy a tagállami jog is meghatározhatja;
+4)adatfeldolgozó:az a természetes vagy jogi személy, közhatalmi szerv, ügynökség vagy bármely egyéb szerv, amely az adatkezelő nevében személyes adatokat kezel;
+5)az érintett hozzájárulása:az érintett akaratának önkéntes, konkrét és megfelelő tájékoztatáson alapuló és egyértelmű kinyilvánítása, amellyel az érintett nyilatkozat vagy a megerősítést félreérthetetlenül kifejező cselekedet útján jelzi, hogy beleegyezését adja az őt érintő személyes adatok kezeléséhez;
+6)adatvédelmi incidens:a biztonság olyan sérülése, amely a továbbított, tárolt vagy más módon kezelt személyes adatok véletlen vagy jogellenes megsemmisítését, elvesztését, megváltoztatását, jogosulatlan közlését vagy az azokhoz való jogosulatlan hozzáférést eredményezi.
+7)Előzetes tájékozódáshoz való jog:Az érintett jogosult arra, hogy az adatkezeléssel összefüggő tényekről és információkról az adatkezelés megkezdését megelőzően tájékoztatást kapjon
+8)Az érintett hozzáférési joga: Az érintett jogosult arra, hogy az Adatkezelőtől visszajelzést kapjon arra vonatkozóan, hogy személyes adatainak kezelése folyamatban van-e, és ha ilyen adatkezelés folyamatban van, jogosult arra, hogy a személyes adatokhoz és a Rendeletben meghatározott kapcsolódó információkhoz hozzáférést kapjon.
+9)A helyesbítéshez való jog:Az érintett jogosult arra, hogy kérésére az Adatkezelő indokolatlan késedelem nélkül helyesbítse a rá vonatkozó pontatlan személyes adatokat. Figyelembe véve az adatkezelés célját, az érintett jogosult arra, hogy kérje a hiányos személyes adatok – egyebek mellett kiegészítő nyilatkozat útján történő – kiegészítését
+10)A törléshez való jog („az elfeledtetéshez való jog”):Az érintett jogosult arra, hogy kérésére az Adatkezelő indokolatlan késedelem nélkül törölje a rá vonatkozó személyes adatokat, az Adatkezelő pedig köteles arra, hogy az érintettre vonatkozó személyes adatokat indokolatlan késedelem nélkül törölje, ha a Rendeltben meghatározott indokok valamelyike fennáll.
+11)Az adathordozhatósághoz való jog: A Rendeletben írt feltételekkel az érintett jogosult arra, hogy a rá vonatkozó, általa egy Adatkezelő rendelkezésére bocsátott személyes adatokat tagolt, széles körben használt, géppel olvasható formátumban megkapja, továbbá jogosult arra, hogy ezeket az adatokat egy másik Adatkezelőnek továbbítsa anélkül, hogy ezt akadályozná az az Adatkezelő, amelynek a személyes adatokat a rendelkezésére bocsátotta.
+12)Az érintett tájékoztatása az adatvédelmi incidensről: Ha az adatvédelmi incidens valószínűsíthetően magas kockázattal jár a természetes személyek jogaira és szabadságaira nézve, az Adatkezelő indokolatlan késedelem nélkül tájékoztatja az érintettet az adatvédelmi incidensről.
+13)A felügyeleti hatóságnál történő panasztételhez való jog(hatósági jogorvoslathoz való jog):Az érintett jogosult arra, hogy panaszt tegyen egy felügyeleti hatóságnál – különösen a szokásos tartózkodási helye, a munkahelye vagy a feltételezett jogsértés helye szerinti tagállamban –, ha az érintett megítélése szerint a rá vonatkozó személyes adatok kezelése megsérti a Rendeletet.
+2011. ÉVI CXII. TÖRVÉNY AZ INFORMÁCIÓS ÖNRENDELKEZÉSI JOGRÓL ÉS AZ INFORMÁCIÓSZABADSÁGRÓL 3. §. ALAPJÁN MEGHATÁROZOTT FOGALMAK A MAGYAR JOGGYAKORLATBAN:
+1)érintett:bármely információ alapján azonosított vagy azonosítható természetes személy;
+2)azonosítható természetes személy:az a természetes személy, aki közvetlen vagy közvetett módon, különösen valamely azonosító, például név, azonosító szám, helymeghatározó adat, online azonosító vagy a természetes személy fizikai, fiziológiai, genetikai, szellemi, gazdasági, kulturális vagy szociális azonosságára vonatkozó egy vagy több tényező alapján azonosítható;
+3)személyes adat:az érintettre vonatkozó bármely információ;
+4)különleges adat:a személyes adatok különleges kategóriáiba tartozó minden adat, azaz a faji vagy etnikai származásra, politikai véleményre, vallási vagy világnézeti meggyőződésre vagy szakszervezeti tagságra utaló személyes adatok, valamint a genetikai adatok, a természetes személyek egyedi azonosítását célzó biometrikus adatok, az egészségügyi adatok és a természetes személyek szexuális életére vagy szexuális irányultságára vonatkozó személyes adatok,
+5)bűnügyi személyes adat:a büntetőeljárás során vagy azt megelőzően a bűncselekménnyel vagy a büntetőeljárással összefüggésben, a büntetőeljárás lefolytatására, illetve a bűncselekmények felderítésére jogosult szerveknél, továbbá a büntetés-végrehajtás szervezeténél keletkezett, az érintettel kapcsolatba hozható, valamint a büntetett előéletre vonatkozó személyes adat;
+6)közérdekből nyilvános adat:a közérdekű adat fogalma alá nem tartozó minden olyan adat, amelynek nyilvánosságra hozatalát, megismerhetőségét vagy hozzáférhetővé tételét törvény közérdekből elrendeli;
+7)adattovábbítás:az adat meghatározott harmadik személy számára történő hozzáférhetővé tétele;
+8)nyilvánosságra hozatal:az adat bárki számára történő hozzáférhetővé tétele;
+9)adattörlés:az adat felismerhetetlenné tétele oly módon, hogy a helyreállítása többé nem lehetséges;
+10)adatállomány:az egy nyilvántartásban kezelt adatok összessége;
+11)EGT-állam:az Európai Unió tagállama és az Európai Gazdasági Térségről szóló megállapodásban részes más állam, továbbá az az állam, amelynek állampolgára az Európai Unió és tagállamai, valamint az Európai Gazdasági Térségről szóló megállapodásban nem részes állam között létrejött nemzetközi szerződés alapján az Európai Gazdasági Térségről szóló megállapodásban részes állam állampolgárával azonos jogállást élvez;
+12)harmadik ország:minden olyan állam, amely nem EGT-állam;
+IV. SZERZŐDÉSHEZ KAPCSOLÓDÓ ADATKEZELÉSEK
+1. Szerződő partnerek adatainak kezelése – vevők, szállítók nyilvántartása
+A Társaság szerződés teljesítése jogcímén a szerződés megkötése, teljesítése, megszűnése, szerződési kedvezmény nyújtása céljából kezeli (kezelheti) a vele vevőként, szállítóként szerződött természetes személy nevét, születési nevét, születési idejét, anyja nevét, lakcímét, személyi igazolvány számát, adóazonosító jelét, adószámát, vállalkozói igazolvány számát, lakcímét, székhely, telephely címét, telefonszámát, e-mail címét, honlap-címét, bankszámlaszámát, vevőszámát (ügyfélszámát).
+Ezen adatkezelés jogszerűnek minősül akkor is, ha az adatkezelés a szerződés megkötését megelőzően az érintett kérésére történő lépések megtételéhez szükséges.
+Szerződéses kapcsolattartók adatainak kezelése szerződés és kapcsolattartás céljából
+A Társaság a vele kötött szerződésben kapcsolattartóként megjelölt – nem aláíró - természetes személy nevét, címét, telefonszámát, e-mail címét, online azonosítóját kapcsolattartás, szerződésből eredő jogok és kötelezettségek gyakorlása céljából jogos érdek jogcímén kezeli.
+Az e pontban foglalt szabályokat kell alkalmazni akkor is, ha a felek között nem jött létre írásba foglalt szerződés, de a jogviszonyban kapcsolattartás, vagy a szerződési jogok és kötelezettségek gyakorlása során – a partner által megnevezett más személyek is eljárnak.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:a Társaság vezetője, ügyfélkiszolgálással kapcsolatos feladatokat ellátó munkavállalói, könyvelési, adózási feladatokat ellátó munkavállalói, és vagy adatfeldolgozói.
+A személyes adatok tárolásának időtartama:a szerződés vagy a kapcsolattartói minőség megszűnését követő 5 év.
+Az érintett természetes személlyel az adatkezelés megkezdése előtt (az első kapcsolatfelvételkor) közölni kell, hogy az adatkezelés a szerződés teljesítése jogcímén alapul, a tájékoztatás történhet a szerződésben is.
+2. Jogi személy ügyfelek, vevők, szállítók természetes személy képviselőinek elérhetőségi adatai
+Az Adatkezelő a vele szerződő jogi személy képviseletében eljáró – a szerződést aláíró – természetes személy a szerződésben megadott személyes adatait, továbbá lakcímét, e-mail címét és telefonszámát, online azonosítóját, kapcsolattartás, a szerződésből eredő jogok és kötelezettségek gyakorlása, kapcsolattartás céljából jogos érdek jogcímén kezeli.
+A kezelhető személyes adatok köre:a természetes személy neve, címe, telefonszáma, e-mail címe, azonosítója.
+A személyes adatok kezelésének célja:a Társaság jogi személy partnerével kötött szerződés teljesítése, üzleti kapcsolattartás,
+Jogalapja:jogos érdek jogcíme, az érintett hozzájárulása.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:a Társaság ügyfélszolgálattal kapcsolatos feladatokat ellátó munkavállalói és adatfeldolgozói.
+A személyes adatok tárolásának időtartama:az üzleti kapcsolat, illetve az érintett képviselői minőségének fennállását követő 5 évig.
+3. Egyéb kapcsolatfelvétel
+Amennyiben szolgáltatásaink igénybevétele során kérdése, problémája van, kapcsolatba léphet az adatkezelővel.
+Az adatkezelő az általa feltüntetett e-mail címre beérkezett leveleket, a küldő nevével és e-mail címével, valamint más, önként megadott személyes adatával együtt, az ügy elintézésétől számított legfeljebb 1 év elteltével törli.
+Amikor Ön a Társaság ügyvezetőjével vagy munkatársaival folytat kommunikációt e-mailben, telefonon vagy személyesen, akkor mi személyes adatokat gyűjthetünk be Öntől, amilyen pl. neve, telefonszáma, e-mail címe és a kapcsolat felvételi adatai. Ezeket az adatokat arra használjuk fel, hogy segítséget nyújtsunk az érintett számára.
+Az adatkezelés célja:A nevének, címének, e-mail címének, telefonszámának kezelése azért szükséges, hogy személyes kapcsolatot tudjunk létesíteni, illetve a szerződés teljesítése és a számlázás nehézségek, problémák vagy késedelem nélküli legyen. Az érintett személyes adatai kezelésének a célja az, hogy miután érintett felvette a kapcsolatot Társaságunkkal, mi az érintett megkeresésére válaszolhassunk. A kapcsolatfelvétel történhet egy már megkötött szerződés teljesítéséhez kapcsolódóan, valamint szerződéskötést megelőzően.
+Az adatkezelés jogalapja:az érintett hozzájárulása.
+A kezelt adatok köre:név, telefonszáma, email cím, valamint más, önként megadott személyes adat és a kapcsolatfelvétel adatai.
+Az adatok törlésének határideje:Az ajánlatadás esetén (amennyiben szerződés nem jön létre) az adatkezelés ideje az ajánlat érvényességét követő 1 év.
+V. AZ ADATKEZELÉS JOGALAPJA
+A szerződött fél kapcsolattartójának/érintettjének hozzájárulása, amelyet a vele történő kapcsolattartás érdekében megismer és elfogad.
+A hozzájárulás az Infotv. 5. § (1) bekezdésének a) pontján alapul, illetve az EURÓPAI PARLAMENT ÉS A TANÁCS (EU) 2016/679 RENDELET 6. cikk (1) bekezdés c) és f) pontjain alapul.
+VI. AZ ADATKEZELÉS IDŐTARTAMA
+Az adatkezelésre érintettek önkéntes hozzájárulásával kerül sor. A hozzájárulás megadása magában foglalja az adatkezelési tájékoztatóban leírtak elfogadását. GDPR 7. cikk (3) bekezdése alapján az érintett jogosult a személyes adatainak kezeléséhez adott hozzájárulást bármely időpontban visszavonni az alábbiak szerint:
+Az érintett jogosult arra, hogy hozzájárulását bármikor visszavonja. A hozzájárulás visszavonása nem érinti a hozzájáruláson alapuló, a visszavonás előtti adatkezelés jogszerűségét. A hozzájárulás visszavonását ugyanolyan egyszerű módon jogosult megtenni, mint annak megadását.
+A szerződött fél természetes személy érintettjének/kapcsolattartójának adatait addig kezeljük, ameddig az érintett személy önkéntes törlési kérelme nem érkezik meg, vagy az adatainak törlését nem kéri, illetve az elévülés idejéig.
+VII. LÁTOGATÓI ADATKEZELÉS A VÁLLALKOZÁS HONLAPJÁN ÉS TÁJÉKOZTATÁS SÜTIK (COOKIE) ALKALMAZÁSÁRÓL
+Az Adatkezelő biztosítja, hogy a honlapos adatkezelés technikailag is megfeleljen e szabályoknak.
+Az érintett honlapok megnevezése:
+https://www.divian.hu és aloldalai
+Fogalom meghatározások:
+Látogató:az a természetes személy, aki böngészés során a honlapra lép.
+Felhasználó:az a természetes személy, aki a honlapon feltüntetett elérhetőségek valamelyikével kapcsolatba lép a vállalkozással, megadja a személyes adatait, igénybe veszi a honlap szolgáltatásait.
+Tájékoztatás sütik (cookie) alkalmazásáról
+Az általános elterjedt internetes gyakorlatnak megfelelően Társaságunk is használ sütiket (cookie) a weboldalán. A cookie egy kis fájl, amely egy sor karaktert tartalmaz, és amely akkor kerül a látogató számítógépére, amikor az egy webhelyet keres fel. Amikor ismét felkeresi az adott webhelyet, a cookie-nak köszönhetően a webhely képes felismerni a látogató böngészőjét. A cookie-k tárolhatnak felhasználói beállításokat (pl. választott nyelv) és egyéb információkat is. Többek között információt gyűjtenek a látogatóról és eszközéről, megjegyzik a látogató egyéni beállításait, felhasználásra kerülhetnek pl. az online bevásárlókosarak használatakor. A sütik általánosságban megkönnyítik a weboldal használatát, elősegítik, hogy a weboldal a felhasználók számára igazi webes élményt nyújtson, és hatékony információforrást jelentsen, továbbá biztosítják a weboldal üzemeltetője részére az oldal működésének ellenőrzését, visszaélések megakadályozását és a weboldalon nyújtott szolgáltatások zavartalan és megfelelő színvonalú biztosítását.
+Társaságunk honlapja a weboldal használata során a látogatóról, illetve az általa böngészésre használt eszközről az alábbi adatokat rögzíti és kezeli:
+az látogató által használt IP cím,
+a böngésző típusa,
+a böngészésre használt eszköz operációs rendszerének jellemzői (beállított nyelv),
+látogatás időpontja,
+a meglátogatott (al)oldal, funkció vagy szolgáltatás.
+A sütik használatának elfogadása, engedélyezése nem kötelező. Visszaállíthatja böngészője beállításait, hogy az utasítsa el az összes cookie-t, vagy hogy jelezze, ha a rendszer éppen egy cookie-t küld. A legtöbb böngésző ugyan alapértelmezettként automatikusan elfogadja a sütiket, de ezek általában megváltoztathatóak annak érdekében, hogy megakadályozható legyen az automatikus elfogadás és minden alkalommal felajánlja a választás lehetőségét.
+A legnépszerűbb böngészők süti beállításairól az alábbi linkeken tájékozódhat
+Google Chrome: https://support.google.com/accounts/answer/61416?hl=hu
+Firefox: https://support.mozilla.org/hu/kb/sutik-engedelyezese-es-tiltasa-amit-weboldak-haszn
+Microsoft Internet Explorer 11: http://windows.microsoft.com/hu-hu/internet-explorer/delete-manage-cookies#ie=ie-11
+Microsoft Internet Explorer 10: http://windows.microsoft.com/hu-hu/internet-explorer/delete-manage-cookies#ie=ie-10-win-7
+Microsoft Internet Explorer 9: http://windows.microsoft.com/hu-hu/internet-explorer/delete-manage-cookies#ie=ie-9
+Microsoft Internet Explorer 8: http://windows.microsoft.com/hu-hu/internet-explorer/delete-manage-cookies#ie=ie-8
+Microsoft Edge: http://windows.microsoft.com/hu-hu/windows-10/edge-privacy-faq
+Safari: https://support.apple.com/hu-hu/HT201265
+Mindezek mellett azonban felhívjuk a figyelmet arra, hogy előfordulhat, hogy bizonyos webhely funkciók vagy - szolgáltatások nem fognak megfelelően működni cookie-k nélkül.
+Weboldalon használt sütik önmagukban nem alkalmasak a felhasználó személyének beazonosítására.
+Társaság honlapján alkalmazott sütik:
+Technikailag elengedhetetlenül szükséges munkamenet (session) sütik:
+Ezek a sütik ahhoz szükségesek, hogy a látogatók böngészhessék a weboldalt, zökkenőmentesen és teljes körűen használhassák annak funkcióit, a weboldalon keresztül elérhető szolgáltatásokat, így - többek között- különösen a látogató által az adott oldalakon végzett műveletek megjegyzését egy látogatás során. Ezen sütik adatkezelésének időtartama kizárólag a látogató aktuális látogatására vonatkozik, a munkamenet végeztével, illetve a böngésző bezárásával a sütik e fajtája automatikusan törlődik a számítógépéről.
+A kezelt adatkör:AVChat User Id, JSESSIONID, portal_referer.
+Ezen adatkezelés jogalapja az elektronikus kereskedelmi szolgáltatások, valamint az információs társadalmi szolgáltatások egyes kérdéseiről szóló 2001. CVIII. törvény (Elkertv.) 13/A. § (3) bekezdése.
+Az adatkezelés célja: a honlap megfelelő működésének biztosítása.
+Hozzájárulást igénylő sütik:
+Ezek lehetőséget biztosítanak, hogy a Társaság megjegyezhesse a felhasználó honlappal kapcsolatos választásait. A látogató a szolgáltatás igénybevételét megelőzően és a szolgáltatás igénybevétele során ezen adatkezelést bármikor megtilthatja. Ezek az adatok nem kapcsolhatók össze az igénybe vevő azonosító adataival és az igénybe vevő hozzájárulása nélkül nem adhatók át harmadik személy számára.
+Használatot elősegítő sütik:
+Az adatkezelés jogalapja a látogató hozzájárulása.
+Az adatkezelés célja: A szolgáltatás hatékonyságának növelése, felhasználói élmény növelése, a honlap használatának kényelmesebbé tétele.
+Az adatkezelés időtartama 6 hónap.
+Teljesítményt biztosító sütik:
+Google Analytics sütik – erről itt tájékozódhat:
+https://developers.google.com/analytics/devguides/collection/analyticsjs/cookie-usage
+Google Ad Words sütik - erről itt tájékozódhat:
+https://support.google.com/adwords/answer/2407785?hl=hu
+E tájékoztatóval a Társaság biztosítja, hogy a látogató a honlap információs társadalommal összefüggő szolgáltatásainak igénybevétele előtt és az igénybevétel során bármikor megismerhesse, hogy a Társaság, mely adatkezelési célokból mely adatfajtákat kezel, ideértve az igénybe vevővel közvetlenül kapcsolatba nem hozható adatok kezelését is.
+De, tájékoztatjuk, hogy lehetősége van a cookie-k/sütik használatának mindenkori ellenőrzésére, tiltására a saját felhasználói eszközeik beállításaiban. Ez a beállítás általában az eszköz böngészőjének beállításai között az Adatvédelem és Biztonság menü alatt érhető el.
+Weboldalra történő bejelentkezés
+Felhasználó a https://www.divian.hu weboldalra viszonteladóként, a regisztrációt követően, bejelentkezhet.
+Az érintettek köre:Minden természetes személy, aki az Adatkezelő weboldalára korábban regisztrált, és oda önkéntesen, személyes adatainak megadásával belép.
+Az adatkezelés célja:a weboldalra bejelentkező érintettek azonosítása, jogosultságainak biztosítása, ellenőrzése, korábban megadott adatinak – szükség szerinti – módosítása, valamint kapcsolattartás.
+Az adatkezelés jogalapja:a bejelentkező önkéntes hozzájárulása az EU rendelet 6. cikk (1) bekezdés a) pontja alapján
+A kezelt adatok köre és célja:
+Személyes adat
+Az adatkezelés célja
+Regisztráció során megadott e-mail cím
+azonosítás bejelentkezéshez
+Jelszó
+azonosítás bejelentkezéshez
+Az adatkezeléssel érintett tevékenység és folyamat:
+Érintett a weboldal egy meghatározott felületén keresztül a fent meghatározott adatait megadhatja, és azokat eljuttathatja az Adatkezelő részére.
+A megadott adatok a weboldalt kiszolgáló szerverre titkosított csatornán keresztül jutnak el.
+Amennyiben az e-mail cím és jelszó páros létezik, úgy a szerver a felhasználót beengedi az oldalra.
+Amennyiben az érintett a jelszavát elfelejtette, úgy lehetősége van a jelszavát új jelszóra cserélni, ha a weboldal erre a célra létrehozott funkcióját használva egy új, véletlenszerűen generált jelszót küldet az e-mail címére.
+Érintett, amennyiben korábban adataiban módosulás történt, úgy a bejelentkezést követően, adatait módosíthatja a weboldal erre a célra kialakított felületén. A módosított adatok titkosított csatornán jutnak el az Adatkezelő erre a célra rendszeresített rendszerébe.
+Adatkezelés időtartama:érintett kérésére törlésig.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:a Társaság ügyfélszolgálattal, marketing tevékenységével kapcsolatos feladatokat ellátó munkavállalói, adatfeldolgozóként a Társaság IT szolgáltatója tárhely szolgáltatást végző munkavállalói.
+Adattovábbítás:A személyes adatait nem továbbítjuk. Csak törvényi kötelezettségeink miatt, illetve a hatóság vagy hivatalos szerv megfelelő jogalappal rendelkező hivatalos megkeresésére adjuk ki.
+Regisztráció a Társaság honlapján
+A https://www.divian.hu honlapon, a regisztráló viszonteladók nevében regisztráló természetes személy az erre vonatkozó négyzet bejelölésével adhatja meg hozzájárulását személyes adatai kezeléséhez. Tilos a négyzet előre bejelölése.
+Regisztráció szükséges a megfelelő kapcsolattartáshoz, számla szabályszerű kiállításához, a szerződések létrehozásához, házhoz szállításhoz, technikai műveletek végrehajtásához.
+Regisztráció során üzleti fiókot (céges profilt) hoz létre a viszonteladó, és fogad el a Divian-Mega Kft. Az elfogadott regisztráció által létrejött céges fiók személyes adatokat tartalmaz.
+Csak ellenőrzött viszonteladók regisztrációját fogadja el és teszi aktívvá, élővé a Társaság, azaz regisztráció során még nem élő a felhasználó céges fiókja a regisztrációt kezdeményező viszont eladónak.
+A regisztráció abban az esetben kerül elutasításra, ha végfelhasználó kezdeményezi, illetve ha tevékenységi körében nem szerepel a bútorértékesítési tevékenység. Elutasítás esetén a regisztrált adatok archiválásra, a felhasználó pedig ínaktivizálásra kerül.
+A kezelhető személyes adatok köre:a természetes személy neve (vezetéknév, keresztnév), címe, telefonszáma, e-mail címe.
+A személyes adatok kezelésének célja:
+A honlapon nyújtott szolgáltatások teljesítése.
+Kapcsolatfelvétel, elektronikus, telefonos, SMS, és postai megkereséssel.
+Tájékoztatás a Társaság termékeiről, szolgáltatásairól, szerződési feltételeiről, akcióiról.
+Reklám-küldemény a tájékoztatás során elektronikusan és postai úton küldhető.
+A honlap használatának elemzése.
+Az adatkezelés jogalapja:az érintett hozzájárulása.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:a Társaság ügyfélszolgálattal, marketing tevékenységével kapcsolatos feladatokat ellátó munkavállalói, adatfeldolgozóként a Társaság IT szolgáltatója tárhely szolgáltatást végző munkavállalói.
+A személyes adatok tárolásának időtartama:
+Vásárlás hiányában a regisztrációs adatokat egy év után kerülnek törlésre.
+Egyéb esetben a regisztráció / szolgáltatás fennállásáig, vagy az érintett hozzájárulása visszavonásáig (törlési kérelméig).
+Regisztrációs adatok törlését kérhetik postai úton HU-6724 Szeged, Trafó köz 3 címen, vagy HU-6706 Szeged, PF.: 14., vagy e-mailben a divian@divian.hu címen.
+Törlési kérés beérkezését követően a Társaság visszaigazoló e-mailben tájékoztatja az ügyfelet a kérelem befogadásáról, az archiválásról / törlésről.
+A személyes adatok köre, a céges adatok, valamint a leadott megrendelések folyamatosan archiválásra kerülnek, bejelentkezések során az aktív felhasználó bármikor megtekintheti őket.
+A honlapon történő regisztráció katalógus letöltéséhez
+A honlapon a regisztráló természetes személy az erre vonatkozó négyzet bejelölésével adhatja meg hozzájárulását személyes adatai kezeléséhez. Tilos a négyzet előre bejelölése.
+Az adatkezelés célja:a Társasággal történő kapcsolatfelvétel elősegítése; hogy szerződéses jogviszony nélkül is elküldhessük Önnek, illetve az Ön által képviselt cégnek vagy szervezetnek a Divian INGYENES konyhabútor katalógusát!
+A kezelt adatok köre:név, e-mail cím, telefonszám, üzenet tartalma (megjegyzés).
+Az adatkezelés jogalapja:érintett önkéntes hozzájárulása a EU rendelet 6. cikk (1) a) pontja alapján; Személyes adatainak kezelése jogos érdekünk érvényesítéséhez szükséges. Ennek lényege, hogy az üzleti tevékenységünkhöz szükséges kommunikáció bonyolításával kapcsolatos érdekünk elsőbbséget élvez, és érdemben nem korlátozza az érintett érdekeit vagy alapvető jogait és szabadságait.
+Az adatkezelés időtartama:Adatkezelő az adatokat az érintett hozzájárulása visszavonásáig kezeli, amennyiben az érintett a Társaság ügyfelévé válik, úgy ügyfélkapcsolat tartás esetén addig, ameddig az érintett a Társaság ügyfele.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:a Társaság ügyfélszolgálattal, marketing tevékenységével kapcsolatos feladatokat ellátó munkavállalói, adatfeldolgozóként a Társaság IT szolgáltatója tárhely szolgáltatást végző munkavállalói.
+Hírlevél, Direkt Marketing, szolgáltatáshoz kapcsolódó adatkezelés
+A honlapon a hírlevél szolgáltatásra regisztráló személy az erre vonatkozó négyzet bejelölésével adhatja meg hozzájárulását személyes adatai kezeléséhez. Tilos a négyzet előre bejelölése.
+A gazdasági reklámtevékenység alapvető feltételeiről és egyes korlátairól szóló 2008. évi XLVIII. törvény 6. §-a értelmében Felhasználó előzetesen és kifejezetten hozzájárulhat ahhoz, hogy a Szolgáltató reklámajánlataival, egyéb küldeményeivel a regisztrációkor megadott elérhetőségein megkeresse. Továbbá az érintett hozzájárulhat ahhoz, hogy a reklámajánlatok küldéséhez szükséges személyes adatait kezelje.
+Az érintettek köre:Minden természetes személy, aki az Adatkezelő híreiről, akcióiról, kedvezményeiről rendszeresen értesülni kíván, ezért személyes adatainak megadásával a hírlevél szolgáltatásra feliratkozik.
+A személyes adatok kezelésének célja:az Adatkezelő tevékenységéhez kapcsolódó direkt marketing tevékenység folytatása, azaz reklámkiadványok, hírlevelek, aktuális ajánlatok nyomtatott (postai) vagy elektronikus formában (e-mail) történő rendszeres vagy időszakonkénti megküldése a regisztrációkor megadott elérhetőségekre. Az érintett részére, tájékoztatás nyújtása az aktuális információkról, termékekről, akciókról, új funkciókról stb.
+Az adatkezelés jogalapja:a hírlevélre feliratkozó önkéntes hozzájárulása az EU rendelet 6. cikk (1) bekezdés a) pontja alapján. Amennyiben az Ön adatait öntől vagy harmadik személytől olyan kontextusban szerezzük meg, amely alapján Ön számíthat megkeresésünkre (pl. korábbi ügyfélkapcsolat állt fenn köztünk, szakmai rendezvényen átadta névjegyét munkatársunknak), úgy adatainak kezelése az EU rendelet 6. cikk (1) bekezdés b) pontja alapján, a jogos érdekünkön alapszik, azonban ez esetben is törekszünk a hozzájárulás megszerzésére. Jogos érdekünk lényege, hogy az érintett vagy az érintett által képviselt cég vagy szervezet megkeresésével, kapcsolatos érdekünkkel összefüggésben végzett adatkezelés elsőbbséget élvez, és érdemben nem korlátozza az Ön érdekeit vagy alapvető jogait és szabadságait (érdekmérlegelés).
+A Szükségesség – arányosság szempontrendszere:
+A GDPR Preambulum (47) bekezdése szerint a személyes adatok közvetlen üzletszerzési célú kezelése jogos érdeken alapulónak tekinthető. Az Adatkezelő jogos gazdasági érdeke, hogy jogszerű reklámtevékenységgel is eredményesebbé tegye működését, növelje bevételeit. Ezen adatkezelés az érintett személyek, jellemzően fogyasztók személyes adatok védelméhez való jogát korlátozza.
+A magánszemélyek nem szívesen adják meg másoknak személyes adataikat, és igaz az ez a reklámcélú küldeményekre is. Ugyanakkor egy jövőbeni szerződéses, értékesítési kapcsolat megalapozása érdekében a kapcsolatfelvételhez szükséges az érintettek elérhetőségi adatainak kezelésére. Ezeket mérlegelve az Adatkezelő a GDPR felhatalmazása alapján is kezelhetőnek látja az érintett elérhetőségi adatait.
+Ez a jogkorlátozás arányos, mert a minimálisan szükséges adatkörre vonatkozik, és üzleti életben általánosan elterjedt gyakorlat a fogyasztókat célzó direkt marketing küldemények alkalmazása.
+A kezelt adatok köre és az adatkezelés célja:
+Személyes adat
+Az adatkezelés célja
+Név, e-mail cím.
+Azonosítás, a hírlevélre való feliratkozás lehetővé tétele.
+A feliratkozás időpontja
+Technikai művelet végrehajtása.
+A feliratkozás kori IP cím
+Technikai művelet végrehajtása.
+Az adatkezelés időtartama:Adatkezelő a személyes adatokat a hírlevélre feliratkozó hozzájárulásának visszavonásáig, azaz a leiratkozásig, illetve jogos érdek alapján kezelt adatok vonatkozásában az érintett tiltakozásáig kezeli.
+Az érintettek adatkezeléssel kapcsolatos jogainak ismertetése:Társaságunk nem küld kéretlen reklámüzenetet, és a Felhasználó a hírlevélről korlátozás és indokolás nélkül, ingyenesen bármikor leiratkozhat az elektronikus levelek alján, HU-6724 Szeged, Trafó köz 3. címen, vagy HU 6706 Szeged, PF.:14., vagy e-mailben a divian@divian.hu címen. Ebben az esetben Társaságunk minden – a reklámüzenetek küldéséhez szükséges – személyes adatát törli nyilvántartásából és további reklámajánlataival nem keresi meg a Felhasználót.
+Hírlevélre újabb feliratkozás bármikor újra lehetséges, ezért az a nyilatkozat érvényes az Felhasználó részéről, melyet utoljára tett.
+Az érintettet az első kapcsolatfelvételkor tájékoztatni kell adatkezelési jogairól.
+Adattovábbítás:A személyes adatait nem továbbítjuk. Csak törvényi kötelezettségeink miatt, illetve a hatóság vagy hivatalos szerv megfelelő jogalappal rendelkező hivatalos megkeresésére adjuk ki.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:az Adatkezelő ügyfélszolgálattal kapcsolatos feladatokat ellátó munkavállalói, adatfeldolgozóként a Társaság IT szolgáltatója szerverszolgáltatást végző munkavállalói, postai kézbesítés esetén a Posta munkavállalói.
+A személyes adatok tárolásának időtartama:a hírlevél-szolgáltatás fennállásáig, vagy az érintett hozzájárulása visszavonásáig (törlési kérelméig), illetve jogos érdek alapján kezelt adatok vonatkozásában az érintett tiltakozásáig kezeli.
+Az adatok törlését kérhetik postai úton, HU-6724 Szeged, Trafó köz 3. címen, vagy HU-6706 Szeged, Pf.: 14., vagy e-mailben a divian@divian.hu címen.
+Törlési kérés beérkezését követően a Társaság visszaigazoló e-mailben tájékoztatja az ügyfelet a kérelem befogadásáról, az archiválásról/törlésről. Ebben az esetben Társaságunk minden – a reklámüzenetek küldéséhez szükséges – személyes adatát törli nyilvántartásából és további reklámajánlataival nem keresi meg a Felhasználót.
+Adatkezelés a Társaság web áruházában
+A Társaság által viszonteladók részére elérhető és működtetett web áruházban történő vásárlás szerződéskötésnek minősül, figyelemmel az elektronikus kereskedelmi szolgáltatások, valamint az információs társadalommal összefüggő szolgáltatások egyes kérdéseiről szóló 2001. évi CVIII. törvény 13/A.§-ára, és a fogyasztó és a vállalkozás közötti szerződések részletes szabályairól szóló 45/2014. (II. 26.) Korm. rendeletre is. Web áruházban történő vásárlás esetén az adatkezelés jogcíme a szerződés teljesítése.
+Amennyiben Ön a Viszonteladói Partner programunkhoz nem kíván csatlakozni, árakat látni és rendelést leadni, csak látogatója a web áruháznak, akkor a marketing célú adatkezelésnél leírtak vonatkozhatnak Önre, amennyiben marketing célú hozzájárulást ad részünkre.
+A Társaság a szolgáltató az információs társadalommal összefüggő szolgáltatás nyújtására irányuló szerződés létrehozása, tartalmának meghatározása, módosítása, teljesítésének figyelemmel kísérése, az abból származó díjak számlázása, valamint az azzal kapcsolatos követelések érvényesítése céljából kezelheti a web áruházban regisztráló, vásárló azonosításához szükséges természetes személyazonosító adatokat és lakcímet a 2001. évi CVIII. törvény 13/A.§(1) bekezdés jogcímén, továbbá hozzájárulás jogcímén a telefonszámát, e-mail címét, bankszámlaszámát, online azonosítóját.
+A Társaság számlázás céljából kezelheti az információs társadalommal összefüggő szolgáltatás igénybevételével kapcsolatos természetes személyazonosító adatokat, lakcímet, valamint a szolgáltatás igénybevételének időpontjára, időtartamára és helyére vonatkozó adatokat, a 2001. évi CVIII. törvény 13/A.§(2) bekezdés jogcímén.
+A személyes adatok címzettjei, illetve a címzettek kategóriái:a Társaság ügyfélszolgálattal, marketing tevékenységével kapcsolatos feladatokat ellátó munkavállalói, adatfeldolgozóként, a Társaságadózási, könyvelési, adózási feladatokat ellátó munkavállalói, és vagy adatfeldolgozói, az adó és számviteli kötelezettségek teljesítése céljából, a Társaság IT szolgáltatója munkavállalói a tárhely szolgáltatás teljesítése céljából, a futárszolgálat munkavállalói a szállítási adatok (név, cím, telefonszám) vonatkozásában.
+A személyes adatok kezelésének időtartama:a regisztráció / szolgáltatás fennállásáig, vagy az érintett hozzájárulása visszavonásáig (törlési kérelméig), vásárlás esetén a vásárlás évét követő 8 évig.
+Chat szolgáltatás
+A regisztrált és bejelentkezett felhasználónak amennyiben a honlap használata, rendelés stb. során az érintettnek kérdése lenne, vagy esetleg problémája merülne fel, kapcsolatba léphet a Társaság munkatársával chaten keresztül is. A honlapon keresztül a chaten folyatatott kommunikáció ügyfélkapcsolati céllal történik, és személyes adatokat tartalmazhat. Társaságunk a chaten keresztül általános felvilágosítást ad.
+Az adatszolgáltatás önkéntes, chat szolgáltatás igénybe vételével Ön a Divian-Mega Kft. munkatársával beszélgetést kezdeményez, ezzel Ön megadja hozzájárulását az adatkezeléshez. Az ügyfél tudomásul veszi, hogy a Chat szolgáltatás „Elküld” gombjára kattintással hozzájárul a neve, e-mail címe, mobiltelefonszáma és IP címe adatkezeléséhez. A Társaság az adatot üzleti célból kezeli.
+A chat szolgáltatás során egyéb személyes adat megadása nem szükséges, ezért kérjük, hogy a „chat ablakban” a munkatársunkkal folytatott beszélgetés során semmilyen személyes adatot, információt ne gépeljen be.
+A chaten keresztül folytatott kommunikációs tartalmat a társaságunk 3 évig őrzi meg. Az adatok törlését kérhetik postai úton HU-6724 Szeged, Trafó köz 3 címen, vagy HU-6706 Szeged, Pf.: 14. vagy e-mailben a divian@divian.hu címen. Törlési kérés beérkezését követően a Társaság visszaigazoló e-mailben tájékoztatja az ügyfelet a kérelem befogadásáról, az archiválásról / törlésről.
+TOVÁBBI ADATKEZELÉSEK
+A Társaság nem végez
+Telefonos ügyfélszolgálati feladatokat, hangrögzítéseket,
+Ajándéksorsolás szervezésével kapcsolatos adatkezelést,
+Profilalkotási tevékenységet,
+Automatizált döntéshozatali feladatokat,
+Külföldre történő adattovábbítást.
+Amennyiben az Adatkezelő további adatkezelést kíván végezni, akkor előzetes tájékoztatatást nyújt az adatkezelés lényeges körülményeiről (adatkezelés jogszabályi háttere és jogalapja, az adatkezelés célja, a kezelt adatok köre, az adatkezelés időtartama).
+E tájékoztatóban fel nem sorolt adatkezelésekről az adat felvételekor adunk tájékoztatást.
+Tájékoztatjuk ügyfeleinket, hogy a bíróság, az ügyész, a nyomozó hatóság, szabálysértési hatóság, a közigazgatási hatóság, a Nemzeti Adatvédelmi és Információszabadság Hatóság, illetőleg jogszabály felhatalmazása alapján más szervek tájékoztatás adása, adatok közlése, átadása, illetőleg iratok rendelkezésre bocsátása végett megkeresheti az adatkezelőt.
+Adatkezelő a hatóságok részére – amennyiben a hatóság a pontos célt és az adatok körét megjelölte – személyes adatot csak annyit és olyan mértékben ad ki, amely a megkeresés céljának megvalósításához elengedhetetlenül szükséges.
+Közösségi irányelvek / Adatkezelés
+A Társaság termékei, szolgáltatásai megismertetése, népszerűsítése céljából Facebook, Instagram, You Tube, Google+ (a továbbiakban: közösségi oldalak) oldalakon van jelen.
+A Facebook oldal elérhetősége:
+https://www.facebook.com/diviankonyhabutor/
+Az Instagram oldal elérhetősége:
+https://www.instagram.com/divian_szeged/
+Az érintettek köre:Valamennyi érintett, aki regisztrált a közösségi oldalakon.
+Az adatkezelés célja:A közösségi oldalakon, a weboldal egyes tartalmi elemeinek, termékeinek, akcióinak vagy magának a weboldalnak a megosztása, népszerűsítése.
+Kezelt adatok köre:A közösségi oldalakon regisztrált neve, illetve a felhasználó nyilvános profilképe.
+Az adatkezelés jogalapja:az érintett önkéntes hozzájárulása a személyes adatai kezeléséhez a közösségi oldalakon a EU rendelet 6. cikk (1) a) pontja alapján.
+Adatkezelő közösségi oldalán, különösen Facebook oldalán képeket/videó felvételeket is közzé tehet, különböző eseményekről, az Adatkezelő szolgáltatásairól, egyebekről.
+Amennyiben nem tömegfelvételről, vagy közéleti szereplésről készült felvételről van szó (Ptk. 2:48.§), Adatkezelő mindig kikéri az érintett írásbeli hozzájárulását a képek közzététele előtt.
+Az adatkezelés időtartama:az adatok törlésének határideje, az adatok megismerésére jogosult lehetséges adatkezelők személye és az érintettek adatkezeléssel kapcsolatos jogainak ismertetése: Az adatok forrásáról, azok kezeléséről, illetve az átadás módjáról, és jogalapjáról az adott közösségi oldalon tájékozódhat az érintett. Az adatkezelés a közösségi oldalakon valósul meg, így az adatkezelés időtartamára, módjára, illetve az adatok törlési és módosítási lehetőségeire az adott közösségi oldal szabályozása vonatkozik.
+Tájékoztatjuk továbbá az érintetteket, hogy a szolgáltatási tevékenység területén készült nem a Társaság által készített fényképfelvétel(ek) megjelenhetnek más nem a vállalkozás által kezelt közösségi oldalakon, de ezek további felhasználásért Adatkezelő nem vállal felelősséget.
+Adatkezelő tájékoztatást ad:
+Az adatkezelése nem terjed ki azon szolgáltatók, weboldalak adatkezelésére, melyekhez a Honlapokon található hivatkozás vezet.
+A Társasághoz kapcsolható közösségi oldalak, bármely oldalán feltett kérdés nem minősül hivatalosan benyújtott panasznak.
+A Társasághoz kapcsolható közösségi oldalak bármely oldalán a látogatók által önként közzétett személyes adatokat a vállalkozás nem kezeli.
+Jogellenes, vagy sértő tartalom publikálása esetén a vállalkozás előzetes értesítés nélkül kizárhatja az érintettet a tagok közül, vagy törölheti hozzászólását.
+A Társaság nem felel a közösségi oldalakon a felhasználók által közzétett jogszabályt sértő adattartalmakért, hozzászólásokért.
+A Társasághoz nem felel semmilyen, a közösségi oldalak működéséből adódó hibáért, üzemzavarért vagy a rendszer működésének megváltoztatásából fakadó problémáért.
+A Facebook, Instagram látogatókra a Facebook Adatvédelmi- és Szolgáltatási Feltételei irányadók. A szabályzat azon információkat határozza meg, amelyeket a Facebook, az Instagram, a Messenger és a Facebook által kínált egyéb termékek és funkciók támogatása céljából kezelnek.
+Adatkezelési tájékoztató elérhető:
+https://www.facebook.com/about/privacy/update
+Kapcsolatfelvétel a Facebook adatvédelmi tisztviselőjével:
+https://www.facebook.com/help/contact/540977946302...
+Instagram adatkezelési tájékoztató elérhető:
+https://help.instagram.com/519522125107875
+Google Adatvédelmi Általános Szerződési Feltételei elérhető:
+https://policies.google.com/privacy?gl=hu
+Adatvédelmi irányelvek tájékoztatást adnak arról, hogy milyen adatokat gyűjtenek, miért, illetve az érintett hogyan frissítheti, kezelheti, exportálhatja és törölheti adatait.
+VIII. TECHNIKAI INTÉZKEDÉSEK
+Az adatokat megfelelő intézkedésekkel védjük a jogosulatlan hozzáférés, megváltoztatás, nyilvánosságra hozatal, továbbítás, törlés vagy megsemmisítés, valamint a véletlen megsemmisülés ellen.
+Olyan műszaki, szervezési és szervezeti intézkedésekkel gondoskodunk az adatkezelés biztonságának védelméről, amely az adatkezeléssel kapcsolatban jelentkező kockázatoknak megfelelő védelmi szintet nyújt.
+A tárolt adatokat papír alapon vagy/és elektronikus formában kezeljük, az elektronikus adatállományt nem kapcsoljuk össze más adatállományokkal, nincs automatizált döntéshozatalra lehetőség és profilalkotást sem végzünk a tárolt adatok alapján.
+IX. AZ ADATKEZELÉS SORÁN MEGŐRIZZÜK
+a rendelkezésre állást:gondoskodunk arról, hogy amikor az arra jogosult használónak szüksége van rá, valóban hozzá tudjon férni a kívánt információhoz, és rendelkezésre álljanak az ezzel kapcsolatos eszközök.
+a titkosságot:megvédjük az információt, hogy csak az férhessen hozzá, aki erre jogosult;
+a sértetlenséget:megvédjük az információnak és a feldolgozás módszerének a pontosságát és teljességét;
+X. A TÁROLT ADATOKHOZ HOZZÁFÉRŐK KÖRE
+Az adatokat az adatkezelő, annak munkatársai jogosultak megismerni, az adatokat nem tesszük közzé, harmadik személyek számára, harmadik országnak és nemzetközi szervezetnek nem adjuk át.
+Az érintett munkavállalók megfelelő Titoktartási nyilatkozattal rendelkeznek.
+XI. AZ ADATKEZELÉSSEL KAPCSOLATOS JOGOK
+A TÁJÉKOZTATÁS KÉRÉSÉHEZ VALÓ JOG (EU Rendelet 15. cikk)
+A HELYESBÍTÉSHEZ VALÓ JOG (EU Rendelet 16. cikk)
+A HOZZÁJÁRULÁS VISSZAVONÁSA (EU Rendelet 7. cikk (3) bekezdés)
+A TÖRLÉSHEZ VALÓ JOG (EU Rendelet 17. cikk)
+A ZÁROLÁSHOZ VALÓ JOG (EU Rendelet 18. cikk)
+AZ ADATOK HORDOZHATÓSÁGA (EU Rendelet 20. cikk)
+A TILTAKOZÁSHOZ VALÓ JOG (EU Rendelet 21. cikk)
+Az érintett kérelmezheti az Adatkezelőnél, hogy az adjon tájékoztatását személyes adatai kezeléséről, kérheti személyes adatainak helyesbítését, valamint kérheti személyes adatainak – a kötelező adatkezelés kivételével – törlését vagy zárolását.
+Az érintett kérelmére az adatkezelő tájékoztatást ad az érintett általa kezelt, illetve az általa vagy rendelkezése szerint megbízott adatfeldolgozó által feldolgozott adatairól, azok forrásáról, az adatkezelés céljáról, jogalapjáról, időtartamáról, az adatfeldolgozó nevéről, címéről és az adatkezeléssel összefüggő tevékenységéről, az adatvédelmi incidens körülményeiről, hatásairól és az elhárítására megtett intézkedésekről, továbbá – az érintett személyes adatainak továbbítása esetén – az adattovábbítás jogalapjáról és címzettjéről.
+Az adatkezelő az adatvédelmi incidenssel kapcsolatos intézkedések ellenőrzése, valamint az érintett tájékoztatása céljából nyilvántartást vezet, amely tartalmazza az érintett személyes adatok körét, az adatvédelmi incidenssel érintettek körét és számát, az adatvédelmi incidens időpontját, körülményeit, hatásait és az elhárítására megtett intézkedéseket, valamint az adatkezelést előíró jogszabályban meghatározott egyéb adatokat.
+Az érintett (felhasználó) kérelmére Adatkezelő tájékoztatást ad az általa kezelt adatokról, azok forrásáról, az adatkezelés céljáról, jogalapjáról, időtartamáról, az esetleges adatfeldolgozó nevéről, címéről és az adatkezeléssel összefüggő tevékenységéről, továbbá – az érintett személyes adatainak továbbítása esetén – az adattovábbítás jogalapjáról és címzettjéről.
+Adatkezelő a kérelem benyújtásától számított legrövidebb idő alatt, legfeljebb azonban 30 napon belül írásban, közérthető formában adja meg a tájékoztatást.
+A tájékoztatás ingyenes. Adatkezelő, amennyiben a személyes adat a valóságnak nem felel meg, és a valóságnak megfelelő személyes adat az adatkezelő rendelkezésére áll, a személyes adatot helyesbíti.
+Törlés helyett Adatkezelő zárolja a személyes adatot, ha a Felhasználó ezt kéri, vagy ha a rendelkezésére álló információk alapján feltételezhető, hogy a törlés sértené a Felhasználó jogos érdekeit. A zárolt személyes adat kizárólag addig kezelhető, ameddig fennáll az az adatkezelési cél, amely a személyes adat törlését kizárta.
+Adatkezelő törli a személyes adatot, ha kezelése jogellenes, a Felhasználó kéri, a kezelt adat hiányos vagy téves – és ez az állapot jogszerűen nem orvosolható – feltéve, hogy a törlést törvény nem zárja ki, az adatkezelés célja megszűnt, vagy az adatok tárolásának törvényben meghatározott határideje lejárt, azt a bíróság vagy a Nemzeti Adatvédelmi és Információszabadság Hatóság elrendelte.
+Az adatkezelő megjelöli az általa kezelt személyes adatot, ha az érintett vitatja annak helyességét vagy pontosságát, de a vitatott személyes adat helytelensége vagy pontatlansága nem állapítható meg egyértelműen.
+A helyesbítésről, a zárolásról, a megjelölésről és a törlésről az érintettet, továbbá mindazokat értesíteni kell, akiknek korábban az adatot adatkezelés céljára továbbították. Az értesítés mellőzhető, ha ez az adatkezelés céljára való tekintettel az érintett jogos érdekét nem sérti.
+Ha az adatkezelő az érintett helyesbítés, zárolás vagy törlés iránti kérelmét nem teljesíti, a kérelem kézhezvételét követő 30 napon belül írásban közli a helyesbítés, zárolás vagy törlés iránti kérelem elutasításának ténybeli és jogi indokait.
+A helyesbítés, törlés vagy zárolás iránti kérelem elutasítása esetén az adatkezelő tájékoztatja az érintettet a bírósági jogorvoslat, továbbá a Hatósághoz fordulás lehetőségéről.
+XII. ADATVÉDELMI TISZTVISELŐ
+Az adatvédelmi tisztviselő kijelölése, feladatai
+A Társaság adatvédelmi tisztviselőt jelöl ki a Rendelet 37. cikkében meghatározott esetekben.
+Erre figyelemmel jelenleg a Társaság nem köteles adatvédelmi tisztviselő kijelölésére.
+Az adatvédelmi tisztviselő kijelölése az ügyvezető hatáskörébe tartozik.
+XIII. AZ ADATKEZELÉSSEL KAPCSOLATOS JOGÉRVÉNYESÍTŐ LEHETŐSÉGE
+Amennyiben Ön az Adatkezelő felé helyesbítés, törlés vagy zárolás iránti kérelmet terjesztett elő vagy tiltakozott az adatkezelés ellen, azonban mi az Ön (érintett) kérelmét nem teljesítettük, jogosult Ön a felügyeleti hatósághoz fordulni.
+Ha bármilyen problémája merül fel, vagy jogainak megsértését tapasztalja, forduljon az adatkezelőhöz fent megadott e-mail címen vagy telefonon.
+A Nemzeti Adatvédelmi és Információszabadság Hatóság(NAIH)eljárását abban az esetben is kezdeményezheti, ha adatvédelmi jogsértést tapasztal.
+XIV. A FELÜGYELETI HATÓSÁG ELÉRHETŐSÉGEI:
+A felügyeleti hatóság elérhetőségei:
+Nemzeti Adatvédelmi és Információszabadság Hatóság,
+Székhely: 1125 Budapest Szilágyi Erzsébet fasor 22/c.
+Postacím: 1530 Budapest, Pf.: 5.,
+E-mail:ugyfelszolgalat@naih.hu,
+Honlap: https://naih.hu,
+Telefonszám: +36 (1) 391-1400
+Fax: +36 (1) 391-1410
+Szeged, 2020. október 01.
+Divian - Mega Bútoripari Szolgáltató Korlátolt Felelősségű Társaság
+Adatkezelő
+Visszaélés-bejelentésről szóló adatvédelmi tájékoztató
+A DIVIAN MEGA Bútoripari Szolgáltató Korlátolt Felelősségű Társaság(képv.: Varga Zoltán ügyvezető) az Ön(ök) adatainak kezelésével összefüggésben a személyes adatai kezeléséről a jelen tájékoztatóban foglaltak szerint tájékoztatja Önt (Önöket)a panaszokról, a közérdekű bejelentésekről, valamint a visszaélések bejelentésével összefüggő szabályokról szóló 2023. évi XXV. törvény elvárásának értelmében az Európai Parlament és a Tanács (EU) 2016/679 Rendelete(általános adatvédelmi rendelet; ismertebb nevén GDPR) rendeletével összhangban.
+Bejelentésével bejelentővédelmi ügyvédhez fordulhat. A bejelentővédelmi ügyvéd szigorú összeférhetetlenségi szabályoknak megfelelő, pártatlan harmadik fél, aki a bejelentés megoldását segíti a bejelentő oldalán. Amennyiben a bejelentés büntetőeljárás kezdeményezését indokolja, akkor a bejelentővédelmi ügyvéd a feljelentést megteszi. A bejelentővédelmi ügyvéd a foglalkoztató és a bejelentő közötti kommunikációt és problémamegoldást segíti elő, kivizsgálásban közreműködik.
+Ügyintézési határidő:Legkésőbb a kérés beérkezésétől számított 1 hónapon belül tájékoztatjuk Önt a kérése nyomán hozott intézkedésekről.Szükség esetén – a kérelem bonyolultságára tekintettel – ezen határidő további 2 hónappal meghosszabbítható, amelyről még az 1 hónapos határidőn belül tájékoztatjuk Önt. Kötelesek vagyunk az intézkedés elmaradásáról is tájékoztatni az 1 hónapos határidőn belül, mely ellen panaszt nyújthat be a NAIH-nál, illetve bírósági jogorvoslati jogával is élhet. A kért tájékoztatás és intézkedés díjmentes.
+Kezelt adatok köre:A bejelentő neve és a kapcsolattartás érdekében elérhetősége;azon személynek a neve, akinek a magastartása vagy mulasztása a bejelentésre okot adott;illetve annak a személynek a neve és elérhetősége, aki a bejelentésben foglaltakról érdemi információval rendelkezhet.Tehát mindazon adatok, melyek a bejelentés kivizsgálásához elengedhetetlenül szükségesek.
+Adatkezelés célja:A belső visszaélés-bejelentési rendszer működtetésével kapcsolatos feladatok ellátása a Panasztörvény szerint. A visszaélés-bejelentési rendszerben jogellenes vagy jogellenesnek feltételezett cselekményre vagy mulasztásra,illetve egyéb visszaélésre vonatkozó információt lehet bejelenteni a foglalkoztatónál, ezen bejelentésre pedig az adatvédelmi szabályok az irányadók. Fontos, hogy bejelenthető magatartások alatt nemcsak a jogszabályba ütköző magatartások értendők, hanem a munkáltató belső szabályzatában jogellenesnek minősített magatartások is (ilyen lehet például üzleti ajándék elfogadása, bértitok megszegése).
+Adatkezelés jogalapja:Az adatkezelés jogalapja egyrészt az érintett kifejezett hozzájárulásán alapul, másrészt az adatkezelés továbbá az adatkezelőre vonatkozó jogi kötelezettség teljesítéséhez is szükséges. (6. cikk (1) a, c és f))A törvény értelmében a bejelentéseket kötelesek vagyunk kivizsgálni, ezáltal adatait kezelni.
+Amennyiben az adatkezeléshez nem járul hozzá, akkor anonim bejelentés lehetséges, azonban ebben az esetben a bejelentésnek a kivizsgálása mellőzhető a bejelentést kezelő által.A bejelentést a kivizsgálás mellőzéséről függetlenül rögzíteni kell az adatvédelmi előírásoknak megfelelően a belső visszaélés-bejelentési rendszerben.
+Adattovábbítás:A bejelentés kivizsgálása érdekében – annak bonyolultságára vagy jogi jellegére tekintettel – történhet bejelentővédelmi ügyvédhez. Természetes személyek adatainak harmadik országba vagy nemzetközi szervezet részére történő továbbítására nem kerül sor.A bejelentő személyes adatai csak a bejelentés alapján kezdeményezett eljárás lefolytatására hatáskörrel rendelkező állami szerv és hatóság részére adhatók át, ha ezen állami szerv és hatóság annak kezelésére törvény alapján jogosult, vagy az adatai továbbításához a bejelentő hozzájárult.A bejelentő személyes adatai hozzájárulása nélkül nem hozhatóak nyilvánosságra.Ha nyilvánvalóvá vált, hogy a bejelentő rosszhiszeműen, valótlan adatot vagy információt közölt, a személyes adatait az erre vonatkozó eljárás kezdeményezésére, illetve lefolytatására jogosult szervnek vagy személynek kérelmére át kell adni.
+Azonosítás:A kérelem teljesítése előtt minden esetben azonosítanunk kell a Bejelentő személyazonosságát. Amennyiben nem tudjuk beazonosítani és megállapítani, hogy bejelentésre jogosult, akkor kérését nem tudjuk teljesíteni.
+Bejelentővédelmi ügyvéd adatai:
+Zádori Ügyvédi Iroda
+Dr. Zádori Szabolcs ügyvéd
+6722 Szeged, Kálvária sgt. 14.
+zadoriestarsa@gmail.com
++3630-456-6762
+Adatkezelés időtartama:A bejelentéshez és annak kivizsgálásához nem kapcsolódó és nem szükséges személyes adatokat haladéktalanul törölni kell a rendszerből.
+A folytatott vizsgálattal és a megtett intézkedésekkel kapcsolatos adatokat az utolsó vizsgálati cselekmény vagy intézkedés befejezésétől számított öt évig meg kell őrizni, azt követően pedig törölni kell.
+Bejelentő jogai:Jogaival kapcsolatosan a bejelentő kérelemmel élhet a bejelentést kezelő felé, aki legkésőbb 30 napon belül teljesíti az kérelmét, amennyiben az megalapozott, egyéb esetben tájékoztatást nyújt a bejelentő felé.
+Jogosult arra, hogy visszajelzés t – 7 napon belül – kapjon az adatkezelésről jelen tájékoztatóban meghatározott postai, elektronikus és telefonos elérhetőségeken.
+Kérheti az adat helyesbítés ét, ezen felül figyelembe véve az adatkezelés célját, kérheti az adatai kiegészítését.
+Jogosult arra, hogy kérje az adatai indokolatlan késedelem nélküli törlés ét. (pl.: személyes adatai kezelésére már nincsen szükség abból a célból, amiért kezelték)
+Jogosult arra, hogy kérje az adatkezelés korlátozás át. (pl.: ha vitatja személyes adatai pontosságát, akkor arra az időre vonatkozik, amely lehetővé teszi, hogy az adatkezelő ellenőrizze az adatai pontosságát.)
+Jogosult továbbá arra, hogy a rendelkezésére bocsátott adatokat megkapja. Szóban tett bejelentés esetén például a felvett bejelentés jegyzőkönyvének másolati példányát átadja bejelentést felvevő a bejelentő részére. (adathordozhatósághoz való jog)
+Jogosult arra, hogy hozzájáruljon az adatkezeléshez, ennek értelmében arra is, hogy ezt a hozzájárulást visszavonja. (tiltakozáshoz való jog)
+A bejelentésre vonatkozó részletszabályok az adatvédelmi tájékoztató mellékletét képező visszaélés-bejelentési szabályzat ban találhatók.
+Jogorvoslati lehetőségek:
+Panasztétel a NAIH-nál
+Elnök: dr. Péterfalvi Attila
+Levelezési cím: 1363 Budapest, Pf. 9.
+Cím: 1055 Budapest, Falk Miksa utca 9-11.
+Telefon: +36 (1) 391-1400
+Fax: +36 (1) 391-1410
+Web: http://naih.hu
+E-mail:ugyfelszolgalat@naih.hu
+Bírósághoz fordulhat:Amennyiben Ön szerint az Önre vonatkozó személyes adatok kezelése ellentétes az Adatvédelmi Rendelet előírásaival és ezzel megsértették az Ön Adatvédelmi Rendeletben foglalt jogait, úgy Ön jogosult bírósághoz fordulni.
+Divian konyha, a családi élmények központja.
+Viszonteladóink elérhetősége
+ugyfelszolgalat@divian.hu
+Kérjük a fenti email címen vegye fel kollegáinkkal a kapcsolatot!
+Gyártás nyitvatartás: H - P: 7.00- 16.00
+A weboldalon látható termékek nem minősülnek ajánlattételnek!
+Adatvédelem
+Visszaélés-bejelentés
+Copyright (c) 2023. Divian.
+Minden jog fenntartva!

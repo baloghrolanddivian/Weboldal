@@ -1,0 +1,9 @@
+{
+  "job_id": "a4830d3cdb26",
+  "job_type": "procurement",
+  "bundle_name": "procurement-output.zip",
+  "source_invoice_name": "NF2026-30174 (1).pdf",
+  "source_invoice_file": "source-invoice.pdf",
+  "invoice_row_count": 14,
+  "missing_codes": []
+}

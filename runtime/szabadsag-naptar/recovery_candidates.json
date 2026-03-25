@@ -1,0 +1,46 @@
+{
+  "status": "partial_recovery_only",
+  "source": "raw_sqlite_string_and_cell_recovery",
+  "notes": [
+    "A lista a torolt SQLite rekordok nyers maradvanyaibol lett osszerakva.",
+    "A reszlegek es kollegak egy resze biztosan olvashato vissza.",
+    "A reszleg-kollega kapcsolatok es a szabadsagok egy resze serult, ezek nem allithatok vissza teljes bizonyossaggal."
+  ],
+  "recovered_departments": [
+    "Csomagolo",
+    "Felso ajtozo",
+    "Also ajtozo",
+    "Fiokozo",
+    "Korpusz osszekeszito",
+    "Elfoliazo",
+    "Lapszabasz",
+    "Kisszabasz",
+    "Front osszekeszito",
+    "Felso osszerako",
+    "Also osszerako"
+  ],
+  "recovered_employees": [
+    "Debera Istvan",
+    "Bodo Tibor"
+  ],
+  "recovered_leave_traces": [
+    {
+      "employee_id": 2,
+      "start_date": "2026-03-14",
+      "end_date": "2026-03-14",
+      "note": "",
+      "created_at": "2026-03-17T15:02:36",
+      "updated_at": "2026-03-17T15:02:36",
+      "confidence": "high"
+    },
+    {
+      "employee_id": null,
+      "start_date": "2026-03-15",
+      "end_date": "2026-03-15",
+      "note": "",
+      "created_at": "2026-03-11T14:01:07",
+      "updated_at": null,
+      "confidence": "medium"
+    }
+  ]
+}

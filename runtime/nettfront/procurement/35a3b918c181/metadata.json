@@ -1,0 +1,11 @@
+{
+  "job_id": "35a3b918c181",
+  "job_type": "procurement",
+  "bundle_name": "procurement-output.zip",
+  "source_invoice_name": "NF2026-30791.pdf",
+  "source_invoice_file": "source-invoice.pdf",
+  "invoice_row_count": 35,
+  "missing_codes": [
+    "NFAH_LU_KAFS_718x197"
+  ]
+}

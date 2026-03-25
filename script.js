@@ -96,6 +96,40 @@ const initDivianAI = () => {
     });
   };
 
+  const formatSources = (sources) => {
+    const unique = [];
+    const seen = new Set();
+
+    sources.forEach((source) => {
+      const normalized = String(source || "").replace(/\s+/g, " ").trim();
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+
+      const parts = normalized.split(/\s+[·•|]\s+/u).filter(Boolean);
+      let label = normalized;
+      if (parts.length >= 3) {
+        label = `${parts[parts.length - 2]} · ${parts[parts.length - 1]}`;
+      } else if (parts.length === 2) {
+        label = `${parts[0]} · ${parts[1]}`;
+      }
+
+      label = label.replace(/\.(pdf|txt|xlsx|xlsm|csv|docx?)\b/gi, "");
+
+      if (label.length > 56) {
+        label = `${label.slice(0, 53)}...`;
+      }
+
+      unique.push(label);
+    });
+
+    return {
+      visible: unique.slice(0, 3),
+      hiddenCount: Math.max(0, unique.length - 3),
+    };
+  };
+
   const renderThread = () => {
     threadNode.replaceChildren();
 
@@ -111,25 +145,48 @@ const initDivianAI = () => {
       bubble.className = "ai-bubble";
       bubble.textContent = message.text;
 
-      item.append(meta, bubble);
-
       if (message.role === "assistant" && Array.isArray(message.sources) && message.sources.length) {
-        const sourcesNode = document.createElement("div");
-        sourcesNode.className = "ai-message-sources";
+        const { visible, hiddenCount } = formatSources(message.sources);
+        if (visible.length) {
+          bubble.classList.add("has-sources");
 
-        message.sources.forEach((source) => {
-          const chip = source === "AI-tudásbázis" ? document.createElement("a") : document.createElement("span");
-          chip.className = "ai-source";
-          chip.textContent = source;
-          if (source === "AI-tudásbázis") {
-            chip.href = "/apps/ai-tudasbazis";
+          const hint = document.createElement("div");
+          hint.className = "ai-source-hint";
+
+          const icon = document.createElement("button");
+          icon.className = "ai-source-info";
+          icon.type = "button";
+          icon.setAttribute("aria-label", "Források");
+          icon.title = "Források";
+          icon.textContent = "i";
+
+          const tooltip = document.createElement("div");
+          tooltip.className = "ai-source-tooltip";
+
+          const tooltipTitle = document.createElement("strong");
+          tooltipTitle.textContent = "Források";
+          tooltip.appendChild(tooltipTitle);
+
+          visible.forEach((source) => {
+            const line = document.createElement("span");
+            line.className = "ai-source-line";
+            line.textContent = source;
+            tooltip.appendChild(line);
+          });
+
+          if (hiddenCount > 0) {
+            const more = document.createElement("span");
+            more.className = "ai-source-more";
+            more.textContent = `+${hiddenCount} további`;
+            tooltip.appendChild(more);
           }
-          sourcesNode.appendChild(chip);
-        });
 
-        item.appendChild(sourcesNode);
+          hint.append(icon, tooltip);
+          bubble.appendChild(hint);
+        }
       }
 
+      item.append(meta, bubble);
       threadNode.appendChild(item);
     });
 
@@ -265,7 +322,7 @@ const initDivianAI = () => {
     messages.push({
       id: pendingId,
       role: "assistant",
-      text: "Keresem a választ a tudástárban...",
+      text: "Keresem a választ a webes forrásokban...",
       sources: [],
       pending: true,
     });

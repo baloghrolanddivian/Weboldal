@@ -1,0 +1,1644 @@
+{
+  "version": 6,
+  "generated_at": 1773999019.709986,
+  "entries": [
+    {
+      "slug": "partner-divian-hu-adatvedelmi-nyilatkozat",
+      "name": "Divian partner - Oldal - Adatvédelmi nyilatkozat",
+      "url": "https://partner.divian.hu/adatvedelmi-nyilatkozat",
+      "section": "akcio|partner|uj",
+      "page_type": "page"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-1",
+      "name": "Divian partner - Akciók - 1. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=1",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-2",
+      "name": "Divian partner - Akciók - 2. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=2",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-3",
+      "name": "Divian partner - Akciók - 3. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=3",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-4",
+      "name": "Divian partner - Akciók - 4. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=4",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-5",
+      "name": "Divian partner - Akciók - 5. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=5",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-6",
+      "name": "Divian partner - Akciók - 6. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=6",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-7",
+      "name": "Divian partner - Akciók - 7. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=7",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-akcios-termekek-page-8",
+      "name": "Divian partner - Akciók - 8. oldal",
+      "url": "https://partner.divian.hu/akcios-termekek?page=8",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-garanciabejelento",
+      "name": "Divian partner - Garancia bejelentő - Garancia bejelentő",
+      "url": "https://partner.divian.hu/garanciabejelento",
+      "section": "akcio|partner|uj",
+      "page_type": "page"
+    },
+    {
+      "slug": "partner-divian-hu-kapcsolat",
+      "name": "Divian partner - Kapcsolat - Kapcsolat",
+      "url": "https://partner.divian.hu/kapcsolat",
+      "section": "akcio|partner|uj",
+      "page_type": "page"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-adam-konyhai-sarok",
+      "name": "Divian partner - Akciós termék - Ádám konyhai sarok",
+      "url": "https://partner.divian.hu/kategoria/adam-konyhai-sarok",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-aktivszen-szuro-evido-forte-es-line-modellekhez",
+      "name": "Divian partner - Új termék - Aktívszén szűrő Evido Forte és Line modellekhez",
+      "url": "https://partner.divian.hu/kategoria/aktivszen-szuro-evido-forte-es-line-modellekhez",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-aktivszen-szuro-evido-slimbox-es-tricol-modellekhez",
+      "name": "Divian partner - Új termék - Aktívszén szűrő Evido Slimbox és Tricol modellekhez",
+      "url": "https://partner.divian.hu/kategoria/aktivszen-szuro-evido-slimbox-es-tricol-modellekhez",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-alaepitheto-paraelszivo",
+      "name": "Divian partner - Akciós termék - Aláépíthető páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/alaepitheto-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-alina-szek",
+      "name": "Divian partner - Akciós termék - Alina szék",
+      "url": "https://partner.divian.hu/kategoria/alina-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-alkatreszek",
+      "name": "Divian partner - Akciós termék - Alkatrészek",
+      "url": "https://partner.divian.hu/kategoria/alkatreszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-asztal",
+      "name": "Divian partner - Termék - Asztalok",
+      "url": "https://partner.divian.hu/kategoria/asztal",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-atlas-asztallab",
+      "name": "Divian partner - Akciós termék - Atlas asztalláb",
+      "url": "https://partner.divian.hu/kategoria/atlas-asztallab",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-atos-asztal-160cm210x90cm",
+      "name": "Divian partner - Új termék - Atos asztal 160cm(210)x90cm",
+      "url": "https://partner.divian.hu/kategoria/atos-asztal-160cm210x90cm",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-atos-asztal-180cm230x90cm",
+      "name": "Divian partner - Új termék - Atos asztal 180cm(230)x90cm",
+      "url": "https://partner.divian.hu/kategoria/atos-asztal-180cm230x90cm",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-atos-asztal-90x90-fix",
+      "name": "Divian partner - Új termék - Atos asztal 90x90 Fix",
+      "url": "https://partner.divian.hu/kategoria/atos-asztal-90x90-fix",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-attila-sarok",
+      "name": "Divian partner - Akciós termék - Attila sarok",
+      "url": "https://partner.divian.hu/kategoria/attila-sarok",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-aura-szek-fekete",
+      "name": "Divian partner - Akciós termék - Aura szék",
+      "url": "https://partner.divian.hu/kategoria/aura-szek-fekete",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-aurel-asztal",
+      "name": "Divian partner - Akciós termék - Aurél asztal",
+      "url": "https://partner.divian.hu/kategoria/aurel-asztal",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-borhuto",
+      "name": "Divian partner - Akciós termék - Beépíthető borhűtő",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-borhuto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-huto",
+      "name": "Divian partner - Akciós termék - Beépíthető hűtő",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-huto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-mikrohullamu-suto",
+      "name": "Divian partner - Akciós termék - Beépíthető mikrohullámú sütő",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-mikrohullamu-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-mosogatogep-45-cm",
+      "name": "Divian partner - Akciós termék - Beépíthető mosogatógép 45 cm",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-mosogatogep-45-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-mosogatogep-60-cm",
+      "name": "Divian partner - Akciós termék - Beépíthető mosogatógép 60 cm",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-mosogatogep-60-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-beepitheto-teleszkopos-paraelszivo",
+      "name": "Divian partner - Akciós termék - Beépíthető teleszkópos páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/beepitheto-teleszkopos-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-berlin-asztal-160-cm",
+      "name": "Divian partner - Új termék - Berlin asztal 160 cm",
+      "url": "https://partner.divian.hu/kategoria/berlin-asztal-160-cm",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-berta-szek-piros",
+      "name": "Divian partner - Akciós termék - Berta szék piros",
+      "url": "https://partner.divian.hu/kategoria/berta-szek-piros",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-blanco-naya-5-mosogatotalca",
+      "name": "Divian partner - Új termék - Blanco Naya 5 mosogatótálca",
+      "url": "https://partner.divian.hu/kategoria/blanco-naya-5-mosogatotalca",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-blanco-naya-6-mosogatotalca",
+      "name": "Divian partner - Új termék - Blanco Naya 6 mosogatótálca",
+      "url": "https://partner.divian.hu/kategoria/blanco-naya-6-mosogatotalca",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-blanco-tipo-45s-mini-mosogatotalca-rozsdamentes-acel",
+      "name": "Divian partner - Új termék - Blanco Tipo 45S Mini mosogatótálca Rozsdamentes acél",
+      "url": "https://partner.divian.hu/kategoria/blanco-tipo-45s-mini-mosogatotalca-rozsdamentes-acel",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-blend-fotel",
+      "name": "Divian partner - Akciós termék - Blend fotel",
+      "url": "https://partner.divian.hu/kategoria/blend-fotel",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-blokk-konyha",
+      "name": "Divian partner - Termék - Blokk konyha",
+      "url": "https://partner.divian.hu/kategoria/blokk-konyha",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-bfl623mb4-beep-mikrohullamu-suto",
+      "name": "Divian partner - Új termék - Bosch BFL623MB4 Beép. mikrohullámú sütő",
+      "url": "https://partner.divian.hu/kategoria/bosch-bfl623mb4-beep-mikrohullamu-suto",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-hba372eb4-beep-suto",
+      "name": "Divian partner - Új termék - Bosch HBA372EB4 Beép. sütő",
+      "url": "https://partner.divian.hu/kategoria/bosch-hba372eb4-beep-suto",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-hba571bb4-beep-suto",
+      "name": "Divian partner - Termék - Bosch HBA571BB4 Beép. sütő",
+      "url": "https://partner.divian.hu/kategoria/bosch-hba571bb4-beep-suto",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-hbg7321b1-beep-suto",
+      "name": "Divian partner - Akciós termék - Bosch HBG7321B1 Beép. sütő",
+      "url": "https://partner.divian.hu/kategoria/bosch-hbg7321b1-beep-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-konyhai-gep-szett-1",
+      "name": "Divian partner - Akciós termék - Bosch konyhai gép szett #1",
+      "url": "https://partner.divian.hu/kategoria/bosch-konyhai-gep-szett-1",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-konyhai-gep-szett-3",
+      "name": "Divian partner - Akciós termék - Bosch konyhai gép szett #3",
+      "url": "https://partner.divian.hu/kategoria/bosch-konyhai-gep-szett-3",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-pif651hc1e-ind-fozolap",
+      "name": "Divian partner - Akciós termék - Bosch PIF651HC1E Ind. főzőlap",
+      "url": "https://partner.divian.hu/kategoria/bosch-pif651hc1e-ind-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-pke645ba2e-serie-4-uvegkeramia-fozolap-fekete",
+      "name": "Divian partner - Akciós termék - Bosch PKE645BA2E Serie 4 Üvegkerámia főzőlap Fekete (Szett része)",
+      "url": "https://partner.divian.hu/kategoria/bosch-pke645ba2e-serie-4-uvegkeramia-fozolap-fekete",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-pkf631bb2e-serie-4-uvegkeramia-fozolap-fekete",
+      "name": "Divian partner - Akciós termék - Bosch PKF631BB2E Serie 4 Üvegkerámia főzőlap Fekete",
+      "url": "https://partner.divian.hu/kategoria/bosch-pkf631bb2e-serie-4-uvegkeramia-fozolap-fekete",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-pkn645fp2e-serie-6-uvegkeramia-fozolap-fekete",
+      "name": "Divian partner - Akciós termék - Bosch PKN645FP2E Serie 6 Üvegkerámia főzőlap Fekete",
+      "url": "https://partner.divian.hu/kategoria/bosch-pkn645fp2e-serie-6-uvegkeramia-fozolap-fekete",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-poh6b6k30-gazfozolap",
+      "name": "Divian partner - Új termék - Bosch POH6B6K30 Gázfőzőlap",
+      "url": "https://partner.divian.hu/kategoria/bosch-poh6b6k30-gazfozolap",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-pvq61chb1e-uvegk-fozolap",
+      "name": "Divian partner - Új termék - Bosch PVQ61CHB1E Üvegk. főzőlap",
+      "url": "https://partner.divian.hu/kategoria/bosch-pvq61chb1e-uvegk-fozolap",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-pvq631hc1e-ind-fozolap",
+      "name": "Divian partner - Új termék - Bosch PVQ631HC1E Ind. főzőlap",
+      "url": "https://partner.divian.hu/kategoria/bosch-pvq631hc1e-ind-fozolap",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-smv25ax06e-beep-mosogatogep",
+      "name": "Divian partner - Új termék - Bosch SMV25AX06E Beép. mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/bosch-smv25ax06e-beep-mosogatogep",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-smv2hvx06e-beep-mosogatogep",
+      "name": "Divian partner - Új termék - Bosch SMV2HVX06E Beép. mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/bosch-smv2hvx06e-beep-mosogatogep",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-smv4hvx14e-beep-mosogatogep",
+      "name": "Divian partner - Termék - Bosch SMV4HVX14E Beép. mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/bosch-smv4hvx14e-beep-mosogatogep",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-spv4emx17e-beep-mosogatogep",
+      "name": "Divian partner - Új termék - Bosch SPV4EMX17E Beép. mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/bosch-spv4emx17e-beep-mosogatogep",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-bosch-spv4hmx10e-beep-mosogatogep",
+      "name": "Divian partner - Akciós termék - Bosch SPV4HMX10E Beép. Mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/bosch-spv4hmx10e-beep-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-boston-asztallab",
+      "name": "Divian partner - Akciós termék - Boston asztalláb",
+      "url": "https://partner.divian.hu/kategoria/boston-asztallab",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-boston-szek",
+      "name": "Divian partner - Akciós termék - Boston szék",
+      "url": "https://partner.divian.hu/kategoria/boston-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-cados-csaptelep",
+      "name": "Divian partner - Akciós termék - CADOS csaptelep",
+      "url": "https://partner.divian.hu/kategoria/cados-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-club-dohanyzo",
+      "name": "Divian partner - Akciós termék - Club Dohányzó",
+      "url": "https://partner.divian.hu/kategoria/club-dohanyzo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-csaptelepek",
+      "name": "Divian partner - Termék - Csaptelepek",
+      "url": "https://partner.divian.hu/kategoria/csaptelepek",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-csepegteto",
+      "name": "Divian partner - Akciós termék - Csepegtető",
+      "url": "https://partner.divian.hu/kategoria/csepegteto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-asztallap-150x85-cm",
+      "name": "Divian partner - Akciós termék - Divian asztallap 150x85 cm",
+      "url": "https://partner.divian.hu/kategoria/divian-asztallap-150x85-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-asztallap-180x90-cm",
+      "name": "Divian partner - Új termék - Divian asztallap 180x90 cm",
+      "url": "https://partner.divian.hu/kategoria/divian-asztallap-180x90-cm",
+      "section": "partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k40h-400",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K40H 400 - Króm teli tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k40h-400",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k40h-400-szurke-racs-talcaval",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K40H 400 - Szürke rács tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k40h-400-szurke-racs-talcaval",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k40h-400-szurke-teli-talcaval",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K40H 400 - Szürke teli tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k40h-400-szurke-teli-talcaval",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k60n-6001700",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K60N 600/1700 - Króm teli tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k60n-6001700",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k60n-6001700-szurke-teli-talcaval",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K60N 600/1700 - Szürke teli tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k60n-6001700-szurke-teli-talcaval",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k60n-solo-600",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K60N Solo 600 - Szürke teli tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k60n-solo-600",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kamravasalat-k60n-solo-600-krom-teli-talcaval",
+      "name": "Divian partner - Akciós termék - Divian Kamravasalat K60N Solo 600 - Króm teli tálcával",
+      "url": "https://partner.divian.hu/kategoria/divian-kamravasalat-k60n-solo-600-krom-teli-talcaval",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kihuzhato-forgopolc",
+      "name": "Divian partner - Akciós termék - Divian kihúzható forgópolc",
+      "url": "https://partner.divian.hu/kategoria/divian-kihuzhato-forgopolc",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kor-asztallap-110-cm",
+      "name": "Divian partner - Akciós termék - Divian kör asztallap 110 cm",
+      "url": "https://partner.divian.hu/kategoria/divian-kor-asztallap-110-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-kor-asztallap-90-cm",
+      "name": "Divian partner - Akciós termék - Divian kör asztallap 90 cm",
+      "url": "https://partner.divian.hu/kategoria/divian-kor-asztallap-90-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-sarokvasalat-lm450-balos",
+      "name": "Divian partner - Akciós termék - Divian sarokvasalat LM450 balos",
+      "url": "https://partner.divian.hu/kategoria/divian-sarokvasalat-lm450-balos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-divian-sarokvasalat-lm450-jobbos",
+      "name": "Divian partner - Akciós termék - Divian sarokvasalat LM450 jobbos",
+      "url": "https://partner.divian.hu/kategoria/divian-sarokvasalat-lm450-jobbos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-domi-szek",
+      "name": "Divian partner - Akciós termék - Domi szék",
+      "url": "https://partner.divian.hu/kategoria/domi-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-dontott-paraelszivo",
+      "name": "Divian partner - Akciós termék - Döntött páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/dontott-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-ervin-szek-31-kedvezmeny",
+      "name": "Divian partner - Akciós termék - Ervin szék (3+1 kedvezmény)",
+      "url": "https://partner.divian.hu/kategoria/ervin-szek-31-kedvezmeny",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-estell-csaptelep",
+      "name": "Divian partner - Akciós termék - ESTELL csaptelep",
+      "url": "https://partner.divian.hu/kategoria/estell-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-evido-vetro-60cb-uvegkeramia-fozolap60cmfekete",
+      "name": "Divian partner - Akciós termék - EVIDO VETRO 60CB üvegkerámia főzőlap ,60 cm, fekete",
+      "url": "https://partner.divian.hu/kategoria/evido-vetro-60cb-uvegkeramia-fozolap60cmfekete",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-fali-kurtos-paraelszivo",
+      "name": "Divian partner - Akciós termék - Fali kürtős páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/fali-kurtos-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-fleximerin-csaptelep",
+      "name": "Divian partner - Termék - FlexiMerin csaptelep",
+      "url": "https://partner.divian.hu/kategoria/fleximerin-csaptelep",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-fozolap",
+      "name": "Divian partner - Akciós termék - Főzőlap",
+      "url": "https://partner.divian.hu/kategoria/fozolap",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-garniturak",
+      "name": "Divian partner - Termék - Étkezőgarnitúrák",
+      "url": "https://partner.divian.hu/kategoria/garniturak",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-gaz-fozolap",
+      "name": "Divian partner - Akciós termék - Gáz főzőlap",
+      "url": "https://partner.divian.hu/kategoria/gaz-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-geri-szek-muboros-31-akcio",
+      "name": "Divian partner - Akciós termék - Geri szék műbőrös (3+1 akció)",
+      "url": "https://partner.divian.hu/kategoria/geri-szek-muboros-31-akcio",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-geri-szek-szovetes-31-akcio",
+      "name": "Divian partner - Akciós termék - Geri szék szövetes (3+1 akció)",
+      "url": "https://partner.divian.hu/kategoria/geri-szek-szovetes-31-akcio",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-gold-ives-csaptelep",
+      "name": "Divian partner - Akciós termék - Gold íves csaptelep",
+      "url": "https://partner.divian.hu/kategoria/gold-ives-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-granit-ives-csaptelep",
+      "name": "Divian partner - Akciós termék - Gránit íves csaptelep",
+      "url": "https://partner.divian.hu/kategoria/granit-ives-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-granit-ives-csaptelep-szurke",
+      "name": "Divian partner - Termék - Gránit íves csaptelep szürke",
+      "url": "https://partner.divian.hu/kategoria/granit-ives-csaptelep-szurke",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-granit-mosogatotalca-1-mely-beige",
+      "name": "Divian partner - Akciós termék - Gránit mosogatótálca 1 mély",
+      "url": "https://partner.divian.hu/kategoria/granit-mosogatotalca-1-mely-beige",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-granit-mosogatotalca-1-mely-csepegtetos-beige",
+      "name": "Divian partner - Akciós termék - Gránit mosogatótálca 1 mély csepegtetős",
+      "url": "https://partner.divian.hu/kategoria/granit-mosogatotalca-1-mely-csepegtetos-beige",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-granit-mosogatotalca-1-mely-kor-alaku-beige",
+      "name": "Divian partner - Akciós termék - Gránit mosogatótálca 1 mély kör alakú",
+      "url": "https://partner.divian.hu/kategoria/granit-mosogatotalca-1-mely-kor-alaku-beige",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-granit-mosogatotalca-2-mely-beige",
+      "name": "Divian partner - Akciós termék - Gránit mosogatótálca 2 mély",
+      "url": "https://partner.divian.hu/kategoria/granit-mosogatotalca-2-mely-beige",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hektor-asztal-160-as",
+      "name": "Divian partner - Akciós termék - Hektor asztal 160-as",
+      "url": "https://partner.divian.hu/kategoria/hektor-asztal-160-as",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hektor-barszek",
+      "name": "Divian partner - Akciós termék - Hektor bárszék",
+      "url": "https://partner.divian.hu/kategoria/hektor-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hektor-barszek-szovetes",
+      "name": "Divian partner - Akciós termék - Hektor bárszék szövetes",
+      "url": "https://partner.divian.hu/kategoria/hektor-barszek-szovetes",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hektor-karfas-szek",
+      "name": "Divian partner - Akciós termék - Hektor karfás szék",
+      "url": "https://partner.divian.hu/kategoria/hektor-karfas-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hektor-karfas-szek-szovetes",
+      "name": "Divian partner - Akciós termék - Hektor karfás szék szövetes",
+      "url": "https://partner.divian.hu/kategoria/hektor-karfas-szek-szovetes",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hettich-fiokrendezo-400-meretpontos",
+      "name": "Divian partner - Akciós termék - Hettich fiókrendező 400-as elemhez (Méretpontos)",
+      "url": "https://partner.divian.hu/kategoria/hettich-fiokrendezo-400-meretpontos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hettich-fiokrendezo-450-meretpontos",
+      "name": "Divian partner - Akciós termék - Hettich fiókrendező 450-es elemhez (Méretpontos)",
+      "url": "https://partner.divian.hu/kategoria/hettich-fiokrendezo-450-meretpontos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hettich-fiokrendezo-600-meretpontos",
+      "name": "Divian partner - Akciós termék - Hettich fiókrendező 600-as elemhez (Méretpontos)",
+      "url": "https://partner.divian.hu/kategoria/hettich-fiokrendezo-600-meretpontos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hettich-fiokrendezo-800-meretpontos",
+      "name": "Divian partner - Akciós termék - Hettich fiókrendező 800-as elemhez (Méretpontos)",
+      "url": "https://partner.divian.hu/kategoria/hettich-fiokrendezo-800-meretpontos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-hettich-fiokrendezo-900-meretpontos",
+      "name": "Divian partner - Akciós termék - Hettich fiókrendező 900-as elemhez (Méretpontos)",
+      "url": "https://partner.divian.hu/kategoria/hettich-fiokrendezo-900-meretpontos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-huto",
+      "name": "Divian partner - Akciós termék - Hűtő",
+      "url": "https://partner.divian.hu/kategoria/huto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-indiana-system-i-1-ak",
+      "name": "Divian partner - Akciós termék - Indiana system I-1 Akasztós Szekrény",
+      "url": "https://partner.divian.hu/kategoria/indiana-system-i-1-ak",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-indiana-system-i-2-komod",
+      "name": "Divian partner - Akciós termék - Indiana system I-2 Komód",
+      "url": "https://partner.divian.hu/kategoria/indiana-system-i-2-komod",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-indiana-system-i-25-at",
+      "name": "Divian partner - Akciós termék - Indiana system I-25 Ágyneműtartó",
+      "url": "https://partner.divian.hu/kategoria/indiana-system-i-25-at",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-indukcios-fozolap",
+      "name": "Divian partner - Akciós termék - Indukciós főzőlap",
+      "url": "https://partner.divian.hu/kategoria/indukcios-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-inox-kuka-12-literes",
+      "name": "Divian partner - Akciós termék - INOX kuka 12 literes",
+      "url": "https://partner.divian.hu/kategoria/inox-kuka-12-literes",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-inox-kuka-32-literes-2-reszes",
+      "name": "Divian partner - Akciós termék - INOX kuka 32 literes 2 részes",
+      "url": "https://partner.divian.hu/kategoria/inox-kuka-32-literes-2-reszes",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-inox-kuka-5-literes",
+      "name": "Divian partner - Akciós termék - INOX kuka 5 literes",
+      "url": "https://partner.divian.hu/kategoria/inox-kuka-5-literes",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-irish-barszek",
+      "name": "Divian partner - Akciós termék - Irish bárszék",
+      "url": "https://partner.divian.hu/kategoria/irish-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-irish-plusz-szek",
+      "name": "Divian partner - Akciós termék - Irish Plusz szék",
+      "url": "https://partner.divian.hu/kategoria/irish-plusz-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-irish-szek",
+      "name": "Divian partner - Akciós termék - Irish szék",
+      "url": "https://partner.divian.hu/kategoria/irish-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-keramia-fozolap",
+      "name": "Divian partner - Akciós termék - Kerámia főzőlap",
+      "url": "https://partner.divian.hu/kategoria/keramia-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-kevin-asztal-160cm210x90cm",
+      "name": "Divian partner - Akciós termék - Kevin asztal 160cm(210)x90cm",
+      "url": "https://partner.divian.hu/kategoria/kevin-asztal-160cm210x90cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-kiegeszitok",
+      "name": "Divian partner - Termék - Kiegészítők",
+      "url": "https://partner.divian.hu/kategoria/kiegeszitok",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-kira-szek",
+      "name": "Divian partner - Akciós termék - Kira szék",
+      "url": "https://partner.divian.hu/kategoria/kira-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-kisopres",
+      "name": "Divian partner - Termék - Készletkisöprés",
+      "url": "https://partner.divian.hu/kategoria/kisopres",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-knez-fotel",
+      "name": "Divian partner - Akciós termék - Knez fotel",
+      "url": "https://partner.divian.hu/kategoria/knez-fotel",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-konyha-gepek",
+      "name": "Divian partner - Termék - Konyhagépek",
+      "url": "https://partner.divian.hu/kategoria/konyha-gepek",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-konyhagep-kiegeszitok",
+      "name": "Divian partner - Akciós termék - Kiegészítők",
+      "url": "https://partner.divian.hu/kategoria/konyhagep-kiegeszitok",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-konyhai-kisgepek",
+      "name": "Divian partner - Termék - Konyhai kisgépek",
+      "url": "https://partner.divian.hu/kategoria/konyhai-kisgepek",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-korfu-asztallab",
+      "name": "Divian partner - Akciós termék - Korfu asztalláb",
+      "url": "https://partner.divian.hu/kategoria/korfu-asztallab",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-kreta-asztallab",
+      "name": "Divian partner - Akciós termék - Kréta asztalláb",
+      "url": "https://partner.divian.hu/kategoria/kreta-asztallab",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-kris-szek-31-kedvezmeny",
+      "name": "Divian partner - Akciós termék - Kris szék (3+1 kedvezmény)",
+      "url": "https://partner.divian.hu/kategoria/kris-szek-31-kedvezmeny",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-ives-csaptelep",
+      "name": "Divian partner - Akciós termék - Króm íves csaptelep",
+      "url": "https://partner.divian.hu/kategoria/krom-ives-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 1 mély",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-55-os",
+      "name": "Divian partner - Termék - Króm mosogatótálca 1 mély 55-ös",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-55-os",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-65-os-ives",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 1 mély 65-ös íves",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-65-os-ives",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-csepegtetos",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 1 mély csepegtetős lekerekített",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-csepegtetos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-csepegtetos-szogletes",
+      "name": "Divian partner - Termék - Króm mosogatótálca 1 mély csepegtetős szögletes",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-csepegtetos-szogletes",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-csepegtetos-szogletes-compact",
+      "name": "Divian partner - Termék - Króm mosogatótálca 1 mély csepegtetős szögletes compact",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-csepegtetos-szogletes-compact",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-gyumolcsmosos",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 1 mély gyümölcsmosós",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-gyumolcsmosos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-kor-alaku",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 1 mély kör alakú",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-kor-alaku",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-1-mely-sarok",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 1 mély sarok",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-1-mely-sarok",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-2-mely",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 2 mély",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-2-mely",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-krom-mosogatotalca-2-mely-belevagas-nelkuli-modell",
+      "name": "Divian partner - Akciós termék - Króm mosogatótálca 2 mély (A TÁLCA HELYE NEM KERÜL KIVÁGÁSRA!)",
+      "url": "https://partner.divian.hu/kategoria/krom-mosogatotalca-2-mely-belevagas-nelkuli-modell",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-laredo-system-l11-doh",
+      "name": "Divian partner - Akciós termék - Laredo system L-11 Dohányzóasztal",
+      "url": "https://partner.divian.hu/kategoria/laredo-system-l11-doh",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-leon-asztal-160-as",
+      "name": "Divian partner - Akciós termék - Leon asztal 160-as",
+      "url": "https://partner.divian.hu/kategoria/leon-asztal-160-as",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-linea-granit-zuhanyfejes-csaptelep",
+      "name": "Divian partner - Akciós termék - Linea gránit zuhanyfejes csaptelep",
+      "url": "https://partner.divian.hu/kategoria/linea-granit-zuhanyfejes-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-linea-krom-zuhanyfejes-csaptelep",
+      "name": "Divian partner - Akciós termék - Linea króm zuhanyfejes csaptelep",
+      "url": "https://partner.divian.hu/kategoria/linea-krom-zuhanyfejes-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-lora-szek-beige-szovet-51-kedvezmeny",
+      "name": "Divian partner - Akciós termék - Lora szék Beige szövet (5+1 kedvezmény)",
+      "url": "https://partner.divian.hu/kategoria/lora-szek-beige-szovet-51-kedvezmeny",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-marko-asztal-160-as",
+      "name": "Divian partner - Akciós termék - Marko asztal 160-as",
+      "url": "https://partner.divian.hu/kategoria/marko-asztal-160-as",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-marko-asztal-uveglappal-120-as",
+      "name": "Divian partner - Akciós termék - Marko asztal Edzett üveggel 120-as",
+      "url": "https://partner.divian.hu/kategoria/marko-asztal-uveglappal-120-as",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-maya-asztal-etkezo-asztal",
+      "name": "Divian partner - Akciós termék - Maya asztal Étkezõ asztal",
+      "url": "https://partner.divian.hu/kategoria/maya-asztal-etkezo-asztal",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-mikrohullamu-suto",
+      "name": "Divian partner - Akciós termék - Mikrohullámú sütő",
+      "url": "https://partner.divian.hu/kategoria/mikrohullamu-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-mosogatogep",
+      "name": "Divian partner - Akciós termék - Mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-mosogatotalcak",
+      "name": "Divian partner - Termék - Mosogatótálcák",
+      "url": "https://partner.divian.hu/kategoria/mosogatotalcak",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-nook-granit-csaptelep",
+      "name": "Divian partner - Akciós termék - Nook gránit csaptelep",
+      "url": "https://partner.divian.hu/kategoria/nook-granit-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-nook-krom-csaptelep",
+      "name": "Divian partner - Akciós termék - Nook króm csaptelep",
+      "url": "https://partner.divian.hu/kategoria/nook-krom-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-onyx-szek-beige-barsony-szovet-51-kedvezmeny",
+      "name": "Divian partner - Akciós termék - Onyx szék Beige bársony szövet (5+1 kedvezmény)",
+      "url": "https://partner.divian.hu/kategoria/onyx-szek-beige-barsony-szovet-51-kedvezmeny",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-paraelszivo",
+      "name": "Divian partner - Akciós termék - Páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-petra-asztallab",
+      "name": "Divian partner - Akciós termék - Petra asztalláb",
+      "url": "https://partner.divian.hu/kategoria/petra-asztallab",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-rio-barszek",
+      "name": "Divian partner - Akciós termék - Rio bárszék",
+      "url": "https://partner.divian.hu/kategoria/rio-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-rio-szek",
+      "name": "Divian partner - Akciós termék - Rio szék",
+      "url": "https://partner.divian.hu/kategoria/rio-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-rob-barszek",
+      "name": "Divian partner - Akciós termék - Rob bárszék",
+      "url": "https://partner.divian.hu/kategoria/rob-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-rob-szek",
+      "name": "Divian partner - Akciós termék - Rob szék",
+      "url": "https://partner.divian.hu/kategoria/rob-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-rodosz-asztallab",
+      "name": "Divian partner - Akciós termék - Rodosz asztalláb",
+      "url": "https://partner.divian.hu/kategoria/rodosz-asztallab",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-silverline-lykia-1200-feher-szabadonallo-50-cm",
+      "name": "Divian partner - Akciós termék - SILVERLINE LYKIA 1200 fehér szabadonálló, 50 cm",
+      "url": "https://partner.divian.hu/kategoria/silverline-lykia-1200-feher-szabadonallo-50-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-silverline-lykia-1200-feher-szabadonallo-60-cm",
+      "name": "Divian partner - Akciós termék - SILVERLINE LYKIA 1200 fehér szabadonálló, 60 cm",
+      "url": "https://partner.divian.hu/kategoria/silverline-lykia-1200-feher-szabadonallo-60-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-silverline-lykia-1200-inox-szabadonallo-50-cm",
+      "name": "Divian partner - Akciós termék - SILVERLINE LYKIA 1200 inox szabadonálló, 50 cm",
+      "url": "https://partner.divian.hu/kategoria/silverline-lykia-1200-inox-szabadonallo-50-cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-slim-mosogatotalca-1-mely-csepegtetos-balos-medencevel",
+      "name": "Divian partner - Akciós termék - SLIM mosogatótálca 1 mély csepegtetős balos medencével",
+      "url": "https://partner.divian.hu/kategoria/slim-mosogatotalca-1-mely-csepegtetos-balos-medencevel",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-slim-mosogatotalca-1-mely-csepegtetos-jobbos-medencevel",
+      "name": "Divian partner - Akciós termék - SLIM mosogatótálca 1 mély csepegtetős jobbos medencével",
+      "url": "https://partner.divian.hu/kategoria/slim-mosogatotalca-1-mely-csepegtetos-jobbos-medencevel",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-snake-granit-zuhanyfejes-csaptelep",
+      "name": "Divian partner - Akciós termék - Snake gránit zuhanyfejes csaptelep",
+      "url": "https://partner.divian.hu/kategoria/snake-granit-zuhanyfejes-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-snake-krom-zuhanyfejes-csaptelep",
+      "name": "Divian partner - Akciós termék - Snake króm zuhanyfejes csaptelep",
+      "url": "https://partner.divian.hu/kategoria/snake-krom-zuhanyfejes-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-sonic-szek",
+      "name": "Divian partner - Akciós termék - Sonic szék",
+      "url": "https://partner.divian.hu/kategoria/sonic-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-spark-asztal-140-es",
+      "name": "Divian partner - Akciós termék - Spark asztal 140-es",
+      "url": "https://partner.divian.hu/kategoria/spark-asztal-140-es",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-suto",
+      "name": "Divian partner - Akciós termék - Sütő",
+      "url": "https://partner.divian.hu/kategoria/suto",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-szabadonallo-huto",
+      "name": "Divian partner - Akciós termék - Szabadonálló hűtő",
+      "url": "https://partner.divian.hu/kategoria/szabadonallo-huto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-szabadonallo-suto",
+      "name": "Divian partner - Akciós termék - Szabadonálló sütő",
+      "url": "https://partner.divian.hu/kategoria/szabadonallo-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-szekek",
+      "name": "Divian partner - Termék - Székek",
+      "url": "https://partner.divian.hu/kategoria/szekek",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-sziget-paraelszivo",
+      "name": "Divian partner - Akciós termék - Sziget páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/sziget-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-talia-barszek",
+      "name": "Divian partner - Akciós termék - Tália bárszék",
+      "url": "https://partner.divian.hu/kategoria/talia-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-talia-szek",
+      "name": "Divian partner - Akciós termék - Tália szék",
+      "url": "https://partner.divian.hu/kategoria/talia-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-toni-asztal-120-as",
+      "name": "Divian partner - Akciós termék - Toni asztal 120-as",
+      "url": "https://partner.divian.hu/kategoria/toni-asztal-120-as",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-toni-asztal-160-as",
+      "name": "Divian partner - Akciós termék - Toni asztal 160-as",
+      "url": "https://partner.divian.hu/kategoria/toni-asztal-160-as",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-torino-asztal-160cm210x90cm",
+      "name": "Divian partner - Akciós termék - Torino asztal 160cm(210)x90cm",
+      "url": "https://partner.divian.hu/kategoria/torino-asztal-160cm210x90cm",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-torrano-1-mely-csepegtetos",
+      "name": "Divian partner - Akciós termék - TORRANO 1 mély csepegtetős",
+      "url": "https://partner.divian.hu/kategoria/torrano-1-mely-csepegtetos",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-tovabbi-termekek-es-alkatreszek-paraelszivohoz",
+      "name": "Divian partner - Akciós termék - További termékek és alkatrészek páraelszívóhoz",
+      "url": "https://partner.divian.hu/kategoria/tovabbi-termekek-es-alkatreszek-paraelszivohoz",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-tovabbi-termekek-es-alkatreszek-sutohoz",
+      "name": "Divian partner - Akciós termék - További termékek és alkatrészek sütőhöz",
+      "url": "https://partner.divian.hu/kategoria/tovabbi-termekek-es-alkatreszek-sutohoz",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-tuzhelyek",
+      "name": "Divian partner - Akciós termék - Tűzhelyek",
+      "url": "https://partner.divian.hu/kategoria/tuzhelyek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-twist-szek",
+      "name": "Divian partner - Akciós termék - Twist szék",
+      "url": "https://partner.divian.hu/kategoria/twist-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-uj-talia-szek",
+      "name": "Divian partner - Akciós termék - Új Tália szék",
+      "url": "https://partner.divian.hu/kategoria/uj-talia-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-vasalatok",
+      "name": "Divian partner - Termék - Vasalatok",
+      "url": "https://partner.divian.hu/kategoria/vasalatok",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-vegasi-csaptelep",
+      "name": "Divian partner - Akciós termék - VEGASI csaptelep",
+      "url": "https://partner.divian.hu/kategoria/vegasi-csaptelep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-velvet-barszek",
+      "name": "Divian partner - Akciós termék - Velvet bárszék",
+      "url": "https://partner.divian.hu/kategoria/velvet-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-velvet-szek",
+      "name": "Divian partner - Akciós termék - Velvet szék",
+      "url": "https://partner.divian.hu/kategoria/velvet-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-viztisztito",
+      "name": "Divian partner - Akciós termék - Víztisztító",
+      "url": "https://partner.divian.hu/kategoria/viztisztito",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-akr-7491-ix-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool AKR 749/1 IX páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-akr-7491-ix-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-akr-750-g-k-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool AKR 750 G K páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-akr-750-g-k-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-akr-750-g-sd-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool AKR 750 G SD páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-akr-750-g-sd-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-amw-730sd-beepitheto-mikro",
+      "name": "Divian partner - Akciós termék - Whirlpool AMW 730 beépíthető mikró",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-amw-730sd-beepitheto-mikro",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-art-6711-sf2-beepitheto-hutoszekreny",
+      "name": "Divian partner - Akciós termék - Whirlpool ART 6711 SF2 beépíthető hűtőszekrény",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-art-6711-sf2-beepitheto-hutoszekreny",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-gowl-628nb-ee-gaz-fozolap",
+      "name": "Divian partner - Akciós termék - Whirlpool GOWL 628/NB EE gáz főzőlap",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-gowl-628nb-ee-gaz-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-omk38hu0x-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Whirlpool OMK38HU0X beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-omk38hu0x-beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-omk58hu1b-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Whirlpool OMK58HU1B beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-omk58hu1b-beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-omsk58ru1sb-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Whirlpool OMSK58RU1 beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-omsk58ru1sb-beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-w6-os4-4s2-p-bl-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Whirlpool W6 OS4 4S2 P BL beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-w6-os4-4s2-p-bl-beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-w8i-ht40-t-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool W8I HT40 T beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-w8i-ht40-t-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wb-b8360-ne-indukcios-fozolap",
+      "name": "Divian partner - Akciós termék - Whirlpool WB B8360 NE indukciós főzőlap",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wb-b8360-ne-indukcios-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wbo-3t333-p-65-x-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool WBO 3T333 P 6.5 X beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wbo-3t333-p-65-x-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wcic-3c33-p-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool WCIC 3C33 P beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wcic-3c33-p-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wct-64-fly-x-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool WCT 64 FLY X páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wct-64-fly-x-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wcth-63f-leb-x-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool WCTH 63F LEB X páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wcth-63f-leb-x-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wf-s3660-cpne-indukcios-fozolap",
+      "name": "Divian partner - Akciós termék - Whirlpool WF S3660 CPNE indukciós főzőlap",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wf-s3660-cpne-indukcios-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wh6ib10bs7la0-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool WH6IB10BS7LA0 beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wh6ib10bs7la0-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-whc20d013d1-beepitheto-hutoszekreny",
+      "name": "Divian partner - Akciós termék - Whirlpool WHC20D013D1 beépíthető hűtőszekrény",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-whc20d013d1-beepitheto-hutoszekreny",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-whva-62f-lm-k-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool WHVA 62F LM K páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-whva-62f-lm-k-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-whvp-62f-lt-sd-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool WHVP 62F LT SD páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-whvp-62f-lt-sd-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-whvp-65f-lm-k-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool WHVP 65F LM K páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-whvp-65f-lm-k-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-whvp-82f-lt-k-paraelszivo",
+      "name": "Divian partner - Akciós termék - Whirlpool WHVP 82F LT K páraelszívó",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-whvp-82f-lt-k-paraelszivo",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wi-7020-p-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool WI 7020 P beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wi-7020-p-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wic-3c26-f-beepitheto-mosogatogep",
+      "name": "Divian partner - Termék - Whirlpool WIC 3C26 F beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wic-3c26-f-beepitheto-mosogatogep",
+      "section": "akcio|partner|uj",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wic-3c34-pfe-s-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool WIC 3C34 PFE S beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wic-3c34-pfe-s-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wl-s2760-bfs-indukcios-fozolap",
+      "name": "Divian partner - Akciós termék - Whirlpool WL S2760 BF/S indukciós főzőlap",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wl-s2760-bfs-indukcios-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wl-s5360-bfw-indukcios-fozolap2",
+      "name": "Divian partner - Akciós termék - Whirlpool WL S5360 BF/W indukciós főzőlap",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wl-s5360-bfw-indukcios-fozolap2",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-woi5s8pm-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Whirlpool WOI5S8PM beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-woi5s8pm-beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-woi78pt1ssga-beepitheto-suto",
+      "name": "Divian partner - Akciós termék - Whirlpool WOI78PT1SSGA beépíthető sütő",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-woi78pt1ssga-beepitheto-suto",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-ws-q7360-ne-indukcios-fozolap",
+      "name": "Divian partner - Akciós termék - Whirlpool WS Q7360 NE indukciós főzőlap",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-ws-q7360-ne-indukcios-fozolap",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirlpool-wsbc-3m27-x-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirlpool WSBC 3M27 X beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirlpool-wsbc-3m27-x-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-whirpool-wsic-3m27-c-beepitheto-mosogatogep",
+      "name": "Divian partner - Akciós termék - Whirpool WSIC 3M27 C beépíthető mosogatógép",
+      "url": "https://partner.divian.hu/kategoria/whirpool-wsic-3m27-c-beepitheto-mosogatogep",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-yade-barszek",
+      "name": "Divian partner - Akciós termék - Yade bárszék",
+      "url": "https://partner.divian.hu/kategoria/yade-barszek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-yade-szek",
+      "name": "Divian partner - Akciós termék - Yade szék",
+      "url": "https://partner.divian.hu/kategoria/yade-szek",
+      "section": "akcio|partner",
+      "page_type": "product"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-zoldsegmoso-feltekerheto",
+      "name": "Divian partner - Akciós termék - zöldségmosó feltekerhető",
+      "url": "https://partner.divian.hu/kategoria/zoldsegmoso-feltekerheto",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-kategoria-zoldsegmoso-kihuzhato",
+      "name": "Divian partner - Akciós termék - Zöldségmosó kihúzható",
+      "url": "https://partner.divian.hu/kategoria/zoldsegmoso-kihuzhato",
+      "section": "akcio|partner",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-szemelyes-adatok-kezelese",
+      "name": "Divian partner - Oldal - Személyes adatok kezelése",
+      "url": "https://partner.divian.hu/szemelyes-adatok-kezelese",
+      "section": "akcio|partner|uj",
+      "page_type": "page"
+    },
+    {
+      "slug": "partner-divian-hu-uj-termekek-page-1",
+      "name": "Divian partner - Új termékek - 1. oldal",
+      "url": "https://partner.divian.hu/uj-termekek?page=1",
+      "section": "partner|uj",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-uj-termekek-page-2",
+      "name": "Divian partner - Új termékek - 2. oldal",
+      "url": "https://partner.divian.hu/uj-termekek?page=2",
+      "section": "partner|uj",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-uj-termekek-page-3",
+      "name": "Divian partner - Új termékek - 3. oldal",
+      "url": "https://partner.divian.hu/uj-termekek?page=3",
+      "section": "partner|uj",
+      "page_type": "listing"
+    },
+    {
+      "slug": "partner-divian-hu-uj-termekek-page-4",
+      "name": "Divian partner - Új termékek - 4. oldal",
+      "url": "https://partner.divian.hu/uj-termekek?page=4",
+      "section": "partner|uj",
+      "page_type": "listing"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "job_id": "62933706fc11",
+  "job_type": "order",
+  "bundle_name": "nettfront-rendeles-output.zip",
+  "source_stock_name": "aktualis-raktar.xlsx",
+  "source_stock_file": "source-stock.xlsx",
+  "suggestion_row_count": 36,
+  "merged_variant_count": 132,
+  "filtered_stock_count": 31,
+  "added_super_matt_count": 5,
+  "total_m2": 74.37803799999999,
+  "avg_row_count": 1522,
+  "approved_row_count": 34,
+  "approved_total_m2": 74.37803799999999,
+  "approved_file": "rendeles-jovahagyott.xlsx",
+  "approved_generated_at": "2026-03-23T10:49:45",
+  "import_file": "rendeles_sima.csv"
+}

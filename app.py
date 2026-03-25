@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import html
+import hashlib
 import io
 import json
 import mimetypes
@@ -10,8 +11,11 @@ import re
 import subprocess
 import sys
 import time
+import threading
 import unicodedata
 import urllib.parse
+import urllib.request
+import urllib.error
 import uuid
 import zipfile
 import zlib
@@ -20,6 +24,7 @@ import calendar as month_calendar
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
+from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -42,6 +47,15 @@ from nettfront_order_module import (
     rows_to_approved_workbook,
     rows_to_suggestion_workbook,
 )
+from manufacturing_module import (
+    available_production_numbers,
+    latest_production_number,
+    load_production_bundle,
+    load_selection_state,
+    production_folder as manufacturing_production_folder,
+    save_selection_state,
+)
+from manufacturing_view import render_manufacturing_page
 from procurement_helper import (
     get_procurement_helper_state,
     launch_procurement_helper,
@@ -65,7 +79,7 @@ except Exception:  # pragma: no cover - optional dependency handling
 
 
 HOST = "0.0.0.0"
-PORT = 5000
+PORT = int(os.getenv("DIVIAN_HUB_PORT", "5000"))
 NO_DATA = "Nincs adat"
 BASE_DIR = Path(__file__).resolve().parent
 RUNTIME_DIR = BASE_DIR / "runtime"
@@ -97,6 +111,8 @@ NETTFRONT_ORDER_ROUTE = "/apps/nettfront-rendeles"
 NETTFRONT_ORDER_PROCESS_ROUTE = f"{NETTFRONT_ORDER_ROUTE}/process"
 NETTFRONT_ORDER_APPROVE_PREFIX = f"{NETTFRONT_ORDER_ROUTE}/approve"
 NETTFRONT_ORDER_DOWNLOAD_PREFIX = f"{NETTFRONT_ORDER_ROUTE}/download"
+NETTFRONT_ORDER_LAUNCH_PREFIX = f"{NETTFRONT_ORDER_ROUTE}/launch"
+NETTFRONT_ORDER_STOP_PREFIX = f"{NETTFRONT_ORDER_ROUTE}/stop"
 VACATION_CALENDAR_ROUTE = "/apps/szabadsag-naptar"
 VACATION_CALENDAR_DEPARTMENT_SAVE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/reszlegek/mentes"
 VACATION_CALENDAR_DEPARTMENT_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/reszlegek/torles"
@@ -104,26 +120,93 @@ VACATION_CALENDAR_EMPLOYEE_SAVE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/kollegak/men
 VACATION_CALENDAR_EMPLOYEE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/kollegak/torles"
 VACATION_CALENDAR_LEAVE_SAVE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/mentes"
 VACATION_CALENDAR_LEAVE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/torles"
+MANUFACTURING_ROUTE = "/apps/gyartasi-papirok"
+MANUFACTURING_STATE_ROUTE = f"{MANUFACTURING_ROUTE}/state"
 DIVIAN_AI_KNOWLEDGE_ROUTE = "/apps/ai-tudasbazis"
 DIVIAN_AI_KNOWLEDGE_PROCESS_ROUTE = f"{DIVIAN_AI_KNOWLEDGE_ROUTE}/upload"
 DIVIAN_AI_KNOWLEDGE_FILE_PREFIX = f"{DIVIAN_AI_KNOWLEDGE_ROUTE}/file"
 DIVIAN_AI_KNOWLEDGE_DELETE_PREFIX = f"{DIVIAN_AI_KNOWLEDGE_ROUTE}/delete"
 DIVIAN_AI_STATUS_ROUTE = "/api/divian-ai/status"
 DIVIAN_AI_CHAT_ROUTE = "/api/divian-ai/chat"
+DIVIAN_AI_PROVIDER = os.getenv("DIVIAN_AI_PROVIDER", "").strip().lower()
 DIVIAN_AI_MODEL = os.getenv("DIVIAN_AI_MODEL", "gpt-4.1-mini")
-DIVIAN_AI_REMOTE_ENABLED = os.getenv("DIVIAN_AI_REMOTE_ENABLED", "0") == "1"
+DIVIAN_AI_GEMINI_MODEL = os.getenv("DIVIAN_AI_GEMINI_MODEL", "gemini-2.5-flash-lite")
+DIVIAN_AI_GROQ_MODEL = os.getenv("DIVIAN_AI_GROQ_MODEL", "llama-3.1-8b-instant")
+DIVIAN_AI_REMOTE_ENABLED = os.getenv("DIVIAN_AI_REMOTE_ENABLED", "1") != "0"
 DIVIAN_AI_KNOWLEDGE_ENV = "DIVIAN_AI_KNOWLEDGE_PDFS"
 DIVIAN_AI_KNOWLEDGE_DIR = BASE_DIR / "data" / "divian-ai"
 DIVIAN_AI_UPLOAD_DIR = DIVIAN_AI_KNOWLEDGE_DIR / "uploads"
 DIVIAN_AI_RUNTIME_DIR = RUNTIME_DIR / "divian-ai"
 DIVIAN_AI_UPLOAD_MANIFEST = DIVIAN_AI_RUNTIME_DIR / "uploads.json"
 DIVIAN_AI_DB = DIVIAN_AI_RUNTIME_DIR / "knowledge.db"
+DIVIAN_AI_RESPONSE_CACHE = DIVIAN_AI_RUNTIME_DIR / "response-cache.json"
+DIVIAN_AI_PUBLIC_WEB_DIR = DIVIAN_AI_RUNTIME_DIR / "public-web"
+DIVIAN_AI_PUBLIC_WEB_SOURCE_MANIFEST = DIVIAN_AI_PUBLIC_WEB_DIR / "_sources.json"
+DIVIAN_AI_INDEXER_VERSION = 6
+DIVIAN_AI_PUBLIC_WEB_VERSION = 6
+DIVIAN_AI_PUBLIC_WEB_REFRESH_SECONDS = 30 * 24 * 60 * 60
+DIVIAN_AI_PUBLIC_WEB_DISCOVERY_SECONDS = 30 * 24 * 60 * 60
+DIVIAN_AI_PARTNER_PUBLIC_MAX_PAGES = 240
+DIVIAN_AI_OPENAI_RETRY_SECONDS = 60
+DIVIAN_AI_RESPONSE_CACHE_LIMIT = 160
+DIVIAN_AI_MEMORY_CACHE_SECONDS = 5 * 60
+DIVIAN_AI_PUBLIC_WEB_SOURCES = (
+    {
+        "slug": "divian-rolunk",
+        "name": "Divian hivatalos - Rólunk",
+        "url": "https://divian.hu/rolunk",
+    },
+    {
+        "slug": "divian-adatkezeles",
+        "name": "Divian hivatalos - Adatkezelés",
+        "url": "https://divian.hu/adatkezeles",
+    },
+    {
+        "slug": "divian-aszf",
+        "name": "Divian hivatalos - ÁSZF",
+        "url": "https://www.divian.hu/aszf",
+    },
+    {
+        "slug": "divian-gyik",
+        "name": "Divian hivatalos - GYIK",
+        "url": "https://www.divian.hu/gyik",
+    },
+    {
+        "slug": "divian-partner-fooldal",
+        "name": "Divian partner - Főoldal",
+        "url": "https://partner.divian.hu/",
+    },
+    {
+        "slug": "divian-partner-akciok",
+        "name": "Divian partner - Akciók",
+        "url": "https://partner.divian.hu/akcios-termekek",
+    },
+    {
+        "slug": "divian-partner-uj-termekek",
+        "name": "Divian partner - Új termékek",
+        "url": "https://partner.divian.hu/uj-termekek",
+    },
+    {
+        "slug": "divian-partner-aszf",
+        "name": "Divian partner - ÁSZF",
+        "url": "https://partner.divian.hu/aszf",
+    },
+)
 DIVIAN_AI_OCR_SCRIPT = BASE_DIR / "tools" / "windows_ocr.ps1"
 VACATION_CALENDAR_RUNTIME_DIR = RUNTIME_DIR / "szabadsag-naptar"
 VACATION_CALENDAR_DB = VACATION_CALENDAR_RUNTIME_DIR / "calendar.db"
+MANUFACTURING_RUNTIME_DIR = RUNTIME_DIR / "gyartasi-papirok"
 DIVIAN_AI_DEFAULT_KNOWLEDGE_FILES = [
     Path.home() / "Downloads" / "ceges_termekinformacios_kezikonyv.pdf",
 ]
+DIVIAN_AI_CURATED_DOCUMENT_HINTS = (
+    "katalogus",
+    "katalógus",
+    "kezikonyv",
+    "kézikönyv",
+    "elemjegyzek",
+    "elemjegyzék",
+)
 DIVIAN_AI_MAX_QUESTION_CHARS = 1000
 DIVIAN_AI_MAX_HISTORY_MESSAGES = 8
 DIVIAN_AI_MAX_CONTEXT_CHARS = 12000
@@ -221,6 +304,9 @@ DIVIAN_AI_COLOR_PHRASES = (
     "Króm",
     "Arany",
     "Rose gold",
+    "Malibu",
+    "Beige-kvarc",
+    "Snow fehér",
 )
 DIVIAN_AI_PRODUCT_ALIASES = {
     "doroti": ("doroti", "doroit"),
@@ -239,9 +325,47 @@ DIVIAN_AI_SUBJECT_ALIASES = {
     "korpusz": ("korpusz", "korpusz", "korpuszok", "látható korpusz", "nem látható korpusz"),
     "munkalap": ("munkalap", "munkalapok"),
     "falipanel": ("falipanel", "falipanelek"),
+    "vilagitas": ("világítás", "vilagitas", "világítási", "vilagitasi", "led", "led profil", "led szett"),
     "fogantyu": ("fogantyú", "fogantyu", "fogantyúk", "fogantyuk"),
     "garancia": ("garancia",),
 }
+DIVIAN_AI_PARTNER_CATEGORY_ALIASES = {
+    "szek": ("szek", "szék", "szekek", "székek", "etkezo szek", "étkező szék"),
+    "asztal": ("asztal", "asztalok"),
+    "garnitura": ("garnitura", "garnitúra", "garniturak", "garnitúrák", "etkezogarnitura", "étkezőgarnitúra"),
+    "konyhagep": ("konyhagep", "konyhagép", "konyha gepek", "konyhagépek"),
+    "kisgep": ("kisgep", "kisgép", "konyhai kisgep", "konyhai kisgép", "konyhai kisgepek", "konyhai kisgépek"),
+    "mosogatotalca": ("mosogatotalca", "mosogatótálca", "mosogatotalcak", "mosogatótálcák"),
+    "csaptelep": ("csaptelep", "csaptelepek"),
+    "vasalat": ("vasalat", "vasalatok"),
+    "kiegeszito": ("kiegeszito", "kiegészítő", "kiegeszitok", "kiegészítők"),
+    "vilagitas": ("vilagitas", "világítás", "vilagitasi", "világítási", "led", "led profil", "led szett", "konyhai világítás", "konyhai vilagitas"),
+    "blokk_konyha": ("blokk konyha", "blokk konyhak", "blokk konyhák"),
+}
+DIVIAN_AI_COMPANY_TERM_HINTS = (
+    "divian",
+    "ceg",
+    "cég",
+    "szekhely",
+    "székhely",
+    "telephely",
+    "telephelyek",
+    "cegjegyzek",
+    "cégjegyzék",
+    "adoszam",
+    "adószám",
+    "akcio",
+    "akció",
+    "uj termek",
+    "új termék",
+    "partner",
+    "katalogus",
+    "katalógus",
+    "elemjegyzek",
+    "elemjegyzék",
+    "viszontelado",
+    "viszonteladó",
+)
 DIVIAN_AI_COMPANY_PROFILE = {
     "groups": {
         "elemes": {
@@ -741,7 +865,9 @@ class DivianAIRecord:
 @dataclass
 class DivianAIKnowledgeCache:
     signature: tuple[tuple[str, int, int], ...] = field(default_factory=tuple)
+    loaded_at: float = 0.0
     sources: list[str] = field(default_factory=list)
+    source_meta: dict[str, dict] = field(default_factory=dict)
     pages: list[DivianAIPage] = field(default_factory=list)
     chunks: list[DivianAIChunk] = field(default_factory=list)
     records: list[DivianAIRecord] = field(default_factory=list)
@@ -751,6 +877,10 @@ class DivianAIKnowledgeCache:
 @dataclass
 class DivianAISourceExtractResult:
     source_name: str
+    parser_name: str = ""
+    study_mode: str = ""
+    confidence: str = ""
+    note: str = ""
     pages: list[DivianAIPage] = field(default_factory=list)
     chunks: list[DivianAIChunk] = field(default_factory=list)
     records: list[DivianAIRecord] = field(default_factory=list)
@@ -759,6 +889,11 @@ class DivianAISourceExtractResult:
 
 DIVIAN_AI_CACHE = DivianAIKnowledgeCache()
 DIVIAN_AI_OPENAI_DISABLED_REASON = ""
+DIVIAN_AI_OPENAI_DISABLED_UNTIL = 0.0
+DIVIAN_AI_PRIME_LOCK = threading.Lock()
+DIVIAN_AI_PRIME_STARTED = False
+MANUFACTURING_BUNDLE_CACHE: dict[str, dict[str, object]] = {}
+MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 
 
 def _dev_reload_token() -> str:
@@ -785,6 +920,119 @@ def _read_env_value(name: str, default: str = "") -> str:
                 continue
 
     return default
+
+
+def _divian_ai_read_response_cache() -> dict[str, dict]:
+    if not DIVIAN_AI_RESPONSE_CACHE.exists():
+        return {}
+    try:
+        payload = json.loads(DIVIAN_AI_RESPONSE_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+
+
+def _divian_ai_write_response_cache(entries: dict[str, dict]) -> None:
+    DIVIAN_AI_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    ordered_items = sorted(
+        entries.items(),
+        key=lambda item: float(item[1].get("updated_at", 0.0)),
+        reverse=True,
+    )[:DIVIAN_AI_RESPONSE_CACHE_LIMIT]
+    trimmed_entries = {key: value for key, value in ordered_items}
+    DIVIAN_AI_RESPONSE_CACHE.write_text(
+        json.dumps(trimmed_entries, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _divian_ai_response_cache_key(
+    *,
+    provider: str,
+    model: str,
+    question: str,
+    effective_question: str,
+    is_company_question: bool,
+    history_items: list[dict[str, str]],
+    context_text: str,
+) -> str:
+    payload = {
+        "provider": provider,
+        "model": model,
+        "question": question,
+        "effective_question": effective_question,
+        "is_company_question": is_company_question,
+        "history": history_items[-6:],
+        "context_hash": hashlib.sha1(context_text.encode("utf-8")).hexdigest(),
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()
+
+
+def _divian_ai_cached_response(cache_key: str) -> dict | None:
+    entry = _divian_ai_read_response_cache().get(cache_key)
+    if not entry:
+        return None
+
+    answer = str(entry.get("answer", "")).strip()
+    if not answer:
+        return None
+
+    sources = entry.get("sources", [])
+    if not isinstance(sources, list):
+        sources = []
+
+    return {
+        "ok": True,
+        "answer": answer,
+        "sources": [str(source) for source in sources if str(source).strip()],
+        "cached": True,
+    }
+
+
+def _divian_ai_store_cached_response(cache_key: str, answer: str, sources: list[str]) -> None:
+    entries = _divian_ai_read_response_cache()
+    entries[cache_key] = {
+        "answer": answer,
+        "sources": sources,
+        "updated_at": time.time(),
+    }
+    _divian_ai_write_response_cache(entries)
+
+
+def _divian_ai_provider() -> str:
+    provider = _read_env_value("DIVIAN_AI_PROVIDER", DIVIAN_AI_PROVIDER).strip().lower()
+    if provider in {"openai", "gemini", "groq"}:
+        return provider
+    if _read_env_value("GROQ_API_KEY", "").strip():
+        return "groq"
+    if _read_env_value("GEMINI_API_KEY", "").strip():
+        return "gemini"
+    return "openai"
+
+
+def _divian_ai_provider_model(provider: str) -> str:
+    if provider == "groq":
+        return _read_env_value("DIVIAN_AI_GROQ_MODEL", DIVIAN_AI_GROQ_MODEL).strip() or "llama-3.1-8b-instant"
+    if provider == "gemini":
+        return _read_env_value("DIVIAN_AI_GEMINI_MODEL", DIVIAN_AI_GEMINI_MODEL).strip() or "gemini-2.5-flash"
+    return _read_env_value("DIVIAN_AI_MODEL", DIVIAN_AI_MODEL).strip() or "gpt-4.1-mini"
+
+
+def _divian_ai_provider_api_key(provider: str) -> str:
+    if provider == "groq":
+        return _read_env_value("GROQ_API_KEY", "").strip()
+    if provider == "gemini":
+        return _read_env_value("GEMINI_API_KEY", "").strip()
+    return _read_env_value("OPENAI_API_KEY", "").strip()
+
+
+def _divian_ai_provider_base_url(provider: str) -> str | None:
+    if provider == "groq":
+        return "https://api.groq.com/openai/v1"
+    return None
 
 
 def _should_watch_path(path: Path) -> bool:
@@ -1523,6 +1771,58 @@ def _vacation_query_params(raw_path: str) -> dict[str, str]:
     parsed = urllib.parse.urlparse(raw_path)
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     return {key: values[-1].strip() for key, values in query.items() if values}
+
+
+def _json_script_payload(payload: object) -> str:
+    return json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+
+
+def _manufacturing_query_params(raw_path: str) -> dict[str, str]:
+    parsed = urllib.parse.urlparse(raw_path)
+    query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    return {key: values[-1].strip() for key, values in query.items() if values}
+
+
+def _manufacturing_normalize_number(value: object) -> str:
+    return re.sub(r"[^0-9]", "", str(value or ""))
+
+
+def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[tuple[str, int, int], ...]]:
+    normalized = _manufacturing_normalize_number(production_number)
+    if not normalized:
+        return "", tuple()
+
+    folder = manufacturing_production_folder(normalized)
+    if not folder.exists():
+        return normalized, tuple()
+
+    signature_items: list[tuple[str, int, int]] = []
+    for entry in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if not entry.is_file():
+            continue
+        stat = entry.stat()
+        signature_items.append((entry.name, stat.st_mtime_ns, stat.st_size))
+    return normalized, tuple(signature_items)
+
+
+def _load_manufacturing_bundle_cached(production_number: str) -> dict:
+    normalized, signature = _manufacturing_bundle_signature(production_number)
+    if not normalized:
+        raise FileNotFoundError("Adj meg egy érvényes gyártási számot.")
+
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        cached = MANUFACTURING_BUNDLE_CACHE.get(normalized)
+        if cached and cached.get("signature") == signature:
+            return dict(cached.get("bundle", {}))
+
+    bundle = load_production_bundle(normalized)
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        MANUFACTURING_BUNDLE_CACHE[normalized] = {
+            "signature": signature,
+            "bundle": bundle,
+        }
+    return dict(bundle)
+
 
 ITEM_PATTERN_FULL = re.compile(
     r"^\s*(\d+)\s+([A-Z0-9\-/]+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+([0-9][0-9.,]*)\s+([A-Z]{1,6})\s+([0-9][0-9.,]*)\s+([0-9][0-9.,]*)\s*$",
@@ -6817,6 +7117,129 @@ def _write_nettfront_order_rows(job_dir: Path, rows: list[NettfrontOrderRow]) ->
     (job_dir / "suggestions.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _nettfront_order_quantity_text(value: float) -> str:
+    number = _order_safe_number(value)
+    if abs(number - round(number)) < 1e-9:
+        return str(int(round(number)))
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def _normalize_nettfront_part_number(value: object) -> str:
+    text = str(value or "").strip().upper()
+    return re.sub(r"\s+", "", text)
+
+
+def _nettfront_parts_list_header_key(value: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "", _normalize_nettfront_part_number(value))
+
+
+def _nettfront_order_part_number_aliases(value: object) -> list[str]:
+    normalized = _normalize_nettfront_part_number(value)
+    if not normalized:
+        return []
+
+    aliases = [normalized]
+    for base_tag, secondary_tag, merged_tag in (("KAF", "KAFS", "KAFU"), ("PRA", "PRAS", "PRAU")):
+        match = re.match(rf"^(NFA[^_]*_ANT)_{merged_tag}_(.+)$", normalized)
+        if not match:
+            continue
+        base = match.group(1)
+        suffix = match.group(2)
+        aliases.extend(
+            [
+                f"{base}_{base_tag}_{suffix}",
+                f"{base}_{secondary_tag}_{suffix}",
+            ]
+        )
+        break
+
+    unique_aliases: list[str] = []
+    seen: set[str] = set()
+    for alias in aliases:
+        if alias in seen:
+            continue
+        seen.add(alias)
+        unique_aliases.append(alias)
+    return unique_aliases
+
+
+def _nettfront_order_display_part_number(value: object) -> str:
+    aliases = _nettfront_order_part_number_aliases(value)
+    if not aliases:
+        return ""
+    if len(aliases) >= 2 and aliases[0] != aliases[1]:
+        return aliases[1]
+    return aliases[0]
+
+
+def _load_nettfront_parts_list_from_bytes(payload: bytes, file_name: str) -> list[str]:
+    file_name = str(file_name or "").strip().lower()
+    values: list[str] = []
+
+    if file_name.endswith((".xlsx", ".xlsm")):
+        if load_workbook is None:
+            raise ValueError("Az Excel feldolgozáshoz hiányzik az openpyxl csomag.")
+        workbook = load_workbook(io.BytesIO(payload), data_only=True, read_only=True)
+        worksheet = workbook.active
+        for row in worksheet.iter_rows(values_only=True):
+            first_value = None
+            for cell in row:
+                if cell not in (None, ""):
+                    first_value = cell
+                    break
+            normalized = _normalize_nettfront_part_number(first_value)
+            if normalized:
+                values.append(normalized)
+    elif file_name.endswith(".csv"):
+        decoded = None
+        for encoding in ("utf-8-sig", "cp1250", "cp1252", "latin-1"):
+            try:
+                decoded = payload.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            raise ValueError("A CSV fájl kódolását nem tudtam beolvasni.")
+        for row in csv.reader(io.StringIO(decoded)):
+            first_value = next((cell for cell in row if str(cell).strip()), "")
+            normalized = _normalize_nettfront_part_number(first_value)
+            if normalized:
+                values.append(normalized)
+    else:
+        raise ValueError("A friss alkatrészlista csak XLSX, XLSM vagy CSV lehet.")
+
+    unique_values: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not unique_values and _nettfront_parts_list_header_key(value) in {
+            "ALKATRESZ",
+            "ALKATRESZSZAM",
+            "ALKATRSZAM",
+            "CIKKSZAM",
+            "PARTNUMBER",
+            "PARTNUM",
+        }:
+            continue
+        if value in seen:
+            continue
+        seen.add(value)
+        unique_values.append(value)
+    return unique_values
+
+
+def _build_nettfront_order_import_csv(rows: list[NettfrontOrderRow]) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+    for row in rows:
+        if _order_safe_number(row.order_qty) <= 0:
+            continue
+        part_number = _nettfront_order_display_part_number(row.part_number) or row.part_number.strip()
+        if not part_number:
+            continue
+        writer.writerow([part_number, _nettfront_order_quantity_text(row.order_qty)])
+    return buffer.getvalue().encode("utf-8-sig")
+
+
 def _write_nettfront_order_bundle(job_dir: Path, metadata: dict) -> None:
     bundle_name = str(metadata.get("bundle_name", "nettfront-rendeles-output.zip")).strip() or "nettfront-rendeles-output.zip"
     bundle_files: list[str] = ["metadata.json", "suggestions.json", "rendelesi-javaslat.xlsx"]
@@ -6825,6 +7248,10 @@ def _write_nettfront_order_bundle(job_dir: Path, metadata: dict) -> None:
     if source_stock_file:
         bundle_files.append(source_stock_file)
 
+    source_parts_file = str(metadata.get("source_parts_file", "")).strip()
+    if source_parts_file:
+        bundle_files.append(source_parts_file)
+
     source_avg_file = str(metadata.get("source_average_file", "")).strip()
     if source_avg_file:
         bundle_files.append(source_avg_file)
@@ -6832,6 +7259,10 @@ def _write_nettfront_order_bundle(job_dir: Path, metadata: dict) -> None:
     approved_file = str(metadata.get("approved_file", "")).strip()
     if approved_file:
         bundle_files.append(approved_file)
+
+    import_file = str(metadata.get("import_file", "")).strip()
+    if import_file:
+        bundle_files.append(import_file)
 
     seen: set[str] = set()
     existing_files = []
@@ -6845,7 +7276,14 @@ def _write_nettfront_order_bundle(job_dir: Path, metadata: dict) -> None:
     (job_dir / bundle_name).write_bytes(create_bundle_archive(job_dir, existing_files))
 
 
-def _write_nettfront_order_job(result, stock_name: str, stock_bytes: bytes, avg_name: str = "", avg_bytes: bytes | None = None) -> tuple[str, dict]:
+def _write_nettfront_order_job(
+    result,
+    stock_name: str,
+    stock_bytes: bytes,
+    parts_name: str = "",
+    parts_bytes: bytes | None = None,
+    parts_count: int = 0,
+) -> tuple[str, dict]:
     job_id = uuid.uuid4().hex[:12]
     job_dir = _job_runtime_dir("order") / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -6874,12 +7312,13 @@ def _write_nettfront_order_job(result, stock_name: str, stock_bytes: bytes, avg_
         "approved_generated_at": "",
     }
 
-    if avg_name and avg_bytes is not None:
-        avg_suffix = Path(avg_name).suffix.lower() or ".xlsx"
-        avg_file = f"source-average{avg_suffix}"
-        (job_dir / avg_file).write_bytes(avg_bytes)
-        metadata["source_average_name"] = avg_name
-        metadata["source_average_file"] = avg_file
+    if parts_name and parts_bytes is not None:
+        parts_suffix = Path(parts_name).suffix.lower() or ".xlsx"
+        parts_file = f"source-parts{parts_suffix}"
+        (job_dir / parts_file).write_bytes(parts_bytes)
+        metadata["source_parts_name"] = parts_name
+        metadata["source_parts_file"] = parts_file
+        metadata["source_parts_count"] = max(0, int(parts_count))
 
     (job_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     _write_nettfront_order_bundle(job_dir, metadata)
@@ -6890,9 +7329,11 @@ def _persist_nettfront_order_approval(job_dir: Path, metadata: dict, rows: list[
     suggestion_workbook = rows_to_suggestion_workbook(rows)
     approved_title = f"Divian-Mega Kft. Rendelés {datetime.now().strftime('%Y.%m.%d.')}"
     approved_workbook = rows_to_approved_workbook(rows, approved_title)
+    import_csv = _build_nettfront_order_import_csv(rows)
 
     (job_dir / "rendelesi-javaslat.xlsx").write_bytes(suggestion_workbook)
     (job_dir / "rendeles-jovahagyott.xlsx").write_bytes(approved_workbook)
+    (job_dir / "rendeles_sima.csv").write_bytes(import_csv)
     _write_nettfront_order_rows(job_dir, rows)
 
     updated_metadata = {
@@ -6902,6 +7343,7 @@ def _persist_nettfront_order_approval(job_dir: Path, metadata: dict, rows: list[
         "approved_row_count": _count_positive_order_rows(rows),
         "approved_total_m2": calc_total_m2_from_rows(rows),
         "approved_file": "rendeles-jovahagyott.xlsx",
+        "import_file": "rendeles_sima.csv",
         "approved_generated_at": datetime.now().isoformat(timespec="seconds"),
     }
     (job_dir / "metadata.json").write_text(json.dumps(updated_metadata, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -6978,6 +7420,31 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                 </div>
                 <span class="order-file-state" id="nettfront-order-stock-state">Támogatott formátum: XLSX, XLSM, CSV</span>
               </label>
+            </div>
+
+            <div class="order-optional-upload">
+              <div class="order-optional-copy">
+                <strong>Friss alkatrészlista</strong>
+                <p>Opcionális egyoszlopos lista. A jóváhagyásnál ebből ellenőrizzük a kiválasztott cikkszámokat, hogy a kész rendelés bevételezhető legyen.</p>
+              </div>
+
+              <div class="order-dropzone is-secondary" id="nettfront-order-parts-dropzone">
+                <input
+                  id="nettfront-order-parts"
+                  class="order-file-input"
+                  type="file"
+                  name="parts_file"
+                  accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                />
+                <label class="order-dropzone-surface" for="nettfront-order-parts">
+                  <div class="order-dropzone-copy">
+                    <span class="order-dropzone-chip">Opcionális</span>
+                    <strong>Friss lista kiválasztása</strong>
+                    <p>Kattints ide, vagy húzd be a fájlt.</p>
+                  </div>
+                  <span class="order-file-state" id="nettfront-order-parts-state">Támogatott formátum: XLSX, XLSM, CSV</span>
+                </label>
+              </div>
             </div>
 
             <div class="order-action-row">
@@ -7119,8 +7586,37 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
     display: grid;
     gap: 16px;
   }
+  .order-optional-upload {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.025);
+  }
+  .order-optional-copy {
+    display: grid;
+    gap: 6px;
+  }
+  .order-optional-copy strong {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 0.96rem;
+  }
+  .order-optional-copy p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+  }
   .order-dropzone {
     position: relative;
+  }
+  .order-dropzone.is-secondary .order-dropzone-surface {
+    min-height: 138px;
+    padding: 18px 20px;
+    border-radius: 20px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.012));
   }
   .order-file-input {
     position: absolute;
@@ -7203,37 +7699,46 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
 </style>
 <script>
   (() => {
-    const input = document.getElementById("nettfront-order-stock");
-    const state = document.getElementById("nettfront-order-stock-state");
-    const dropzone = document.getElementById("nettfront-order-dropzone");
+    const stockInput = document.getElementById("nettfront-order-stock");
+    const stockState = document.getElementById("nettfront-order-stock-state");
+    const stockDropzone = document.getElementById("nettfront-order-dropzone");
+    const partsInput = document.getElementById("nettfront-order-parts");
+    const partsState = document.getElementById("nettfront-order-parts-state");
+    const partsDropzone = document.getElementById("nettfront-order-parts-dropzone");
     const form = document.getElementById("nettfront-order-form");
     const submitButton = document.getElementById("nettfront-order-submit");
-    if (!input || !state || !dropzone || !form || !submitButton) return;
+    if (!stockInput || !stockState || !stockDropzone || !partsInput || !partsState || !partsDropzone || !form || !submitButton) return;
 
-    const updateState = () => {
+    const updateState = (input, state, emptyLabel) => {
       const file = input.files && input.files[0];
       if (!file) {
-        state.textContent = "Támogatott formátum: XLSX, XLSM, CSV";
+        state.textContent = emptyLabel;
         return;
       }
       state.textContent = `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)} MB`;
     };
 
-    ["dragenter", "dragover"].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        dropzone.classList.add("is-dragover");
+    const bindDropzone = (dropzone) => {
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.add("is-dragover");
+        });
       });
-    });
 
-    ["dragleave", "drop"].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        dropzone.classList.remove("is-dragover");
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove("is-dragover");
+        });
       });
-    });
+    };
 
-    input.addEventListener("change", updateState);
+    bindDropzone(stockDropzone);
+    bindDropzone(partsDropzone);
+
+    stockInput.addEventListener("change", () => updateState(stockInput, stockState, "Támogatott formátum: XLSX, XLSM, CSV"));
+    partsInput.addEventListener("change", () => updateState(partsInput, partsState, "Támogatott formátum: XLSX, XLSM, CSV"));
     form.addEventListener("submit", () => {
       submitButton.textContent = "Javaslat készül...";
       submitButton.disabled = true;
@@ -7267,7 +7772,13 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
     total_m2 = calc_total_m2_from_rows(rows)
     approved_file = str(metadata.get("approved_file", "")).strip()
     approved_ready = bool(approved_file and job_dir is not None and (job_dir / approved_file).exists())
+    helper_state = get_procurement_helper_state(job_dir)
+    helper_running = bool(helper_state.get("running"))
+    import_file = str(metadata.get("import_file", "")).strip()
+    import_ready = bool(import_file and job_dir is not None and (job_dir / import_file).exists())
     source_stock_name = str(metadata.get("source_stock_name", "")).strip() or "Feltöltött raktárfájl"
+    source_parts_name = str(metadata.get("source_parts_name", "")).strip() or str(metadata.get("source_average_name", "")).strip()
+    source_parts_count = int(metadata.get("source_parts_count", 0) or 0)
 
     table_html = """
       <div class="order-empty-state">
@@ -7279,7 +7790,8 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
         row_html = []
         for row in rows:
             description = html.escape(row.description or "Megnevezés nélkül")
-            part_number = html.escape(row.part_number or "Nincs cikkszám")
+            display_part_number = _nettfront_order_display_part_number(row.part_number)
+            part_number = html.escape(display_part_number or row.part_number or "Nincs cikkszám")
             color_value = html.escape(row.color.strip() or "Nincs színadat")
             current_stock = html.escape(_format_order_metric(row.current_stock))
             safe_stock = html.escape(_format_order_metric(row.safe_stock))
@@ -7343,11 +7855,23 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
           </form>
         """
 
-    approved_actions = ""
-    if approved_ready:
-        approved_actions = f"""
-          <a class="button button-primary" href="{NETTFRONT_ORDER_DOWNLOAD_PREFIX}/{job_id}/approved-xlsx">Kész rendelés letöltése</a>
-        """
+    helper_action_html = ""
+    helper_hint_html = ""
+    if approved_ready and import_ready:
+        if helper_running:
+            helper_action_html = f"""
+              <form method="post" action="{NETTFRONT_ORDER_STOP_PREFIX}/{job_id}">
+                <button class="button button-primary" type="submit">Leállítás</button>
+              </form>
+            """
+            helper_hint_html = '<p class="order-helper-copy">A bevételezési segéd fut. Nyisd meg a bevételezési ablakot, majd Shift + Space indítja az importot. Kilépés: ESC.</p>'
+        else:
+            helper_action_html = f"""
+              <form method="post" action="{NETTFRONT_ORDER_LAUNCH_PREFIX}/{job_id}">
+                <button class="button button-primary" type="submit">Bevételezés indítása</button>
+              </form>
+            """
+            helper_hint_html = '<p class="order-helper-copy">A kész rendelés bevételezhető. Indítsd a segédet, majd a bevételezési ablakban Shift + Space indítja az importot. Kilépés: ESC.</p>'
 
     content_html = f"""
       <div class="order-result-shell">
@@ -7377,14 +7901,20 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
             <span>Összevont variánsok: {metadata.get("merged_variant_count", 0)}</span>
             <span>Küszöb alatti tételek: {metadata.get("filtered_stock_count", 0)}</span>
             <span>SM sorok: {metadata.get("added_super_matt_count", 0)}</span>
+            <span>Átlagolt alkatrészek: {metadata.get("avg_row_count", 0)}</span>
+            {"<span>Friss alkatrészlista: " + html.escape(source_parts_name) + (f' • {source_parts_count} tétel' if source_parts_count else '') + "</span>" if source_parts_name else ""}
+            {"<span>Bevételezési segéd fut</span>" if helper_running else ""}
           </div>
 
           <div class="order-toolbar">
             <button class="button button-secondary order-toggle-button" type="button" id="order-table-toggle">Javaslat megmutatása</button>
             <a class="button button-secondary" href="{NETTFRONT_ORDER_DOWNLOAD_PREFIX}/{job_id}/suggestion-xlsx">Javaslat letöltése</a>
-            {approved_actions}
+            {f'<a class="button button-primary" href="{NETTFRONT_ORDER_DOWNLOAD_PREFIX}/{job_id}/approved-xlsx">Kész rendelés letöltése</a>' if approved_ready else ''}
+            {f'<a class="button button-secondary" href="{NETTFRONT_ORDER_DOWNLOAD_PREFIX}/{job_id}/import-csv">Bevételezési lista</a>' if import_ready else ''}
+            {helper_action_html}
             <a class="button button-secondary" href="{NETTFRONT_ORDER_ROUTE}">Új feltöltés</a>
           </div>
+          {helper_hint_html}
         </section>
 
         <section class="order-table-card" id="order-table-card" hidden>
@@ -7471,6 +8001,11 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
     margin-top: 4px;
     padding-top: 6px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .order-helper-copy {
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.55;
   }
   .order-toggle-button {
     min-width: 200px;
@@ -9010,6 +9545,50 @@ def render_vacation_calendar(
     )
 
 
+def render_manufacturing_module(production_number: str = "", message: str = "", success: bool = False) -> bytes:
+    requested_number = _manufacturing_normalize_number(production_number)
+    recent_numbers = available_production_numbers(limit=80, ready_only=True)
+    selected_number = requested_number if requested_number in recent_numbers else (recent_numbers[0] if recent_numbers else "")
+    if requested_number and requested_number not in recent_numbers:
+        combined_prefix = f"A {requested_number} gyártásban nem található meg mindkét szükséges PDF, ezért a legfrissebb használható gyártást nyitottam meg."
+        message = f"{combined_prefix} {message}".strip() if message else combined_prefix
+        success = False
+
+    bundle: dict | None = None
+    selection_state: dict[str, str] = {}
+    combined_message = message
+    combined_success = success
+
+    if not selected_number:
+        combined_message = "Nem találok gyártási mappát a V meghajtón."
+        combined_success = False
+    else:
+        try:
+            bundle = _load_manufacturing_bundle_cached(selected_number)
+            selection_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, selected_number)
+        except Exception as exc:
+            combined_message = f"A gyártási papírok betöltése nem sikerült: {exc}"
+            combined_success = False
+
+    if bundle is None:
+        bundle = {
+            "production_number": selected_number,
+            "folder": str(manufacturing_production_folder(selected_number)) if selected_number else "",
+            "documents": [],
+        }
+
+    return render_manufacturing_page(
+        route=MANUFACTURING_ROUTE,
+        state_route=MANUFACTURING_STATE_ROUTE,
+        selected_number=selected_number,
+        recent_numbers=recent_numbers,
+        bundle=bundle,
+        selection_state=selection_state,
+        message=combined_message,
+        success=combined_success,
+    )
+
+
 def _divian_ai_format_file_size(size_bytes: int) -> str:
     size = max(0, int(size_bytes))
     units = ["B", "KB", "MB", "GB"]
@@ -9025,9 +9604,10 @@ def _divian_ai_format_file_size(size_bytes: int) -> str:
 
 def _divian_ai_db_connection() -> sqlite3.Connection:
     DIVIAN_AI_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DIVIAN_AI_DB)
+    connection = sqlite3.connect(DIVIAN_AI_DB, timeout=30)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
     connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS knowledge_documents (
@@ -9037,6 +9617,9 @@ def _divian_ai_db_connection() -> sqlite3.Connection:
             path TEXT NOT NULL,
             stored_name TEXT NOT NULL,
             kind TEXT NOT NULL,
+            parser_name TEXT NOT NULL DEFAULT '',
+            study_mode TEXT NOT NULL DEFAULT '',
+            confidence TEXT NOT NULL DEFAULT '',
             is_uploaded INTEGER NOT NULL DEFAULT 0,
             uploaded_at TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'pending',
@@ -9094,7 +9677,582 @@ def _divian_ai_db_connection() -> sqlite3.Connection:
         );
         """
     )
+    document_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(knowledge_documents)").fetchall()}
+    if "parser_name" not in document_columns:
+        connection.execute("ALTER TABLE knowledge_documents ADD COLUMN parser_name TEXT NOT NULL DEFAULT ''")
+    if "study_mode" not in document_columns:
+        connection.execute("ALTER TABLE knowledge_documents ADD COLUMN study_mode TEXT NOT NULL DEFAULT ''")
+    if "confidence" not in document_columns:
+        connection.execute("ALTER TABLE knowledge_documents ADD COLUMN confidence TEXT NOT NULL DEFAULT ''")
     return connection
+
+
+class _DivianAIHTMLToTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._skip_depth = 0
+        self._current_tag_stack: list[str] = []
+        self._title_parts: list[str] = []
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        tag_name = tag.lower()
+        self._current_tag_stack.append(tag_name)
+        if tag_name in {"script", "style", "noscript", "svg"}:
+            self._skip_depth += 1
+            return
+        if tag_name in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "section", "article", "li", "ul", "ol", "br", "tr"}:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag_name = tag.lower()
+        if tag_name in {"script", "style", "noscript", "svg"} and self._skip_depth:
+            self._skip_depth -= 1
+        if self._current_tag_stack:
+            self._current_tag_stack.pop()
+        if tag_name in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "section", "article", "li", "ul", "ol", "tr"}:
+            self._parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth:
+            return
+        text = _clean_spaces(data)
+        if not text:
+            return
+        if self._current_tag_stack and self._current_tag_stack[-1] == "title":
+            self._title_parts.append(text)
+        if self._parts:
+            previous = self._parts[-1]
+            if previous and not previous.endswith(("\n", " ", "\t")):
+                if previous[-1].isalnum() and text[:1].isalnum():
+                    self._parts.append(" ")
+        self._parts.append(text)
+
+    def text(self) -> str:
+        raw = "".join(self._parts)
+        normalized = re.sub(r"\n{3,}", "\n\n", raw)
+        return "\n".join(line.strip() for line in normalized.splitlines() if line.strip()).strip()
+
+    def title(self) -> str:
+        return _clean_spaces(" ".join(self._title_parts))
+
+
+class _DivianAILinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._current_link: dict | None = None
+        self._links: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() != "a":
+            return
+        attr_map = dict(attrs)
+        href = _clean_spaces(attr_map.get("href", ""))
+        if not href:
+            return
+        self._current_link = {
+            "href": href,
+            "title": _clean_spaces(attr_map.get("title", "")),
+            "class": _clean_spaces(attr_map.get("class", "")),
+            "text": "",
+        }
+
+    def handle_data(self, data: str) -> None:
+        if self._current_link is None:
+            return
+        text = _clean_spaces(data)
+        if not text:
+            return
+        if self._current_link["text"]:
+            self._current_link["text"] += f" {text}"
+        else:
+            self._current_link["text"] = text
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() != "a" or self._current_link is None:
+            return
+        self._current_link["text"] = _clean_spaces(self._current_link["text"])
+        self._links.append(self._current_link)
+        self._current_link = None
+
+    def links(self) -> list[dict[str, str]]:
+        return list(self._links)
+
+
+def _divian_ai_fetch_public_web_html(url: str) -> tuple[str, str]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            charset = response.headers.get_content_charset() or "utf-8"
+            return response.read().decode(charset, errors="ignore"), ""
+    except Exception as exc:
+        return "", str(exc)
+
+
+def _divian_ai_collect_html_links(base_url: str, html_text: str) -> list[dict[str, str]]:
+    parser = _DivianAILinkCollector()
+    parser.feed(html_text)
+    parser.close()
+    results: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for item in parser.links():
+        full_url = urllib.parse.urljoin(base_url, item.get("href", ""))
+        normalized_url = full_url.split("#", 1)[0].strip()
+        if not normalized_url or normalized_url in seen_urls:
+            continue
+        seen_urls.add(normalized_url)
+        results.append(
+            {
+                "url": normalized_url,
+                "title": _clean_spaces(item.get("title", "")),
+                "text": _clean_spaces(item.get("text", "")),
+                "class": _clean_spaces(item.get("class", "")),
+            }
+        )
+    return results
+
+
+def _divian_ai_public_web_slug_for_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    host_part = re.sub(r"[^a-z0-9]+", "-", parsed.netloc.lower()).strip("-")
+    path_part = re.sub(r"[^a-z0-9]+", "-", parsed.path.strip("/").lower()).strip("-") or "root"
+    query_part = re.sub(r"[^a-z0-9]+", "-", parsed.query.lower()).strip("-")
+    parts = [part for part in (host_part, path_part, query_part) if part]
+    return re.sub(r"-{2,}", "-", "-".join(parts)).strip("-")
+
+
+def _divian_ai_normalize_partner_public_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path or "/"
+    if path != "/":
+        path = path.rstrip("/")
+    query_pairs: list[tuple[str, str]] = []
+    if path in {"/akcios-termekek", "/uj-termekek"}:
+        query_values = urllib.parse.parse_qs(parsed.query)
+        page_value = query_values.get("page", [""])
+        if page_value and page_value[0]:
+            query_pairs.append(("page", page_value[0]))
+    query = urllib.parse.urlencode(query_pairs)
+    return urllib.parse.urlunparse(("https", parsed.netloc.lower(), path, "", query, ""))
+
+
+def _divian_ai_partner_page_type(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path or "/"
+    if path.startswith("/kategoria/"):
+        return "product"
+    if path in {"/akcios-termekek", "/uj-termekek"} or parsed.query:
+        return "listing"
+    return "page"
+
+
+def _divian_ai_partner_should_crawl_url(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.netloc.lower() != "partner.divian.hu":
+        return False
+    path = parsed.path or "/"
+    if path.startswith("/image/"):
+        return False
+    if path in {"/belepes", "/regisztracio"}:
+        return False
+    if path.startswith("/kategoria/"):
+        return True
+    return path in {
+        "/",
+        "/akcios-termekek",
+        "/uj-termekek",
+        "/kapcsolat",
+        "/garanciabejelento",
+        "/aszf",
+        "/adatvedelmi-nyilatkozat",
+        "/szemelyes-adatok-kezelese",
+    }
+
+
+def _divian_ai_partner_entry_name(url: str, page_title: str, sections: set[str]) -> str:
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path or "/"
+    page_type = _divian_ai_partner_page_type(url)
+    clean_title = _clean_spaces(page_title)
+
+    if page_type == "product":
+        if "akcio" in sections and "uj" not in sections:
+            prefix = "Divian partner - Akciós termék"
+        elif "uj" in sections and "akcio" not in sections:
+            prefix = "Divian partner - Új termék"
+        else:
+            prefix = "Divian partner - Termék"
+    elif path == "/akcios-termekek":
+        prefix = "Divian partner - Akciók"
+    elif path == "/uj-termekek":
+        prefix = "Divian partner - Új termékek"
+    elif path == "/kapcsolat":
+        prefix = "Divian partner - Kapcsolat"
+    elif path == "/garanciabejelento":
+        prefix = "Divian partner - Garancia bejelentő"
+    else:
+        prefix = "Divian partner - Oldal"
+
+    page_value = urllib.parse.parse_qs(parsed.query).get("page", [""])
+    if page_value and page_value[0] and prefix in {"Divian partner - Akciók", "Divian partner - Új termékek"}:
+        return f"{prefix} - {page_value[0]}. oldal"
+
+    if clean_title and _divian_ai_fold_text(clean_title) != _divian_ai_fold_text(prefix):
+        return f"{prefix} - {clean_title}"
+    return clean_title or prefix
+
+
+def _divian_ai_load_public_web_source_manifest() -> list[dict] | None:
+    if not DIVIAN_AI_PUBLIC_WEB_SOURCE_MANIFEST.exists():
+        return None
+    try:
+        payload = json.loads(DIVIAN_AI_PUBLIC_WEB_SOURCE_MANIFEST.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if int(payload.get("version", 0)) != DIVIAN_AI_PUBLIC_WEB_VERSION:
+        return None
+    generated_at = float(payload.get("generated_at", 0))
+    if generated_at and time.time() - generated_at > DIVIAN_AI_PUBLIC_WEB_DISCOVERY_SECONDS:
+        return None
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return None
+    valid_entries: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        slug = _clean_spaces(str(entry.get("slug", "")))
+        name = _clean_spaces(str(entry.get("name", "")))
+        url = _clean_spaces(str(entry.get("url", "")))
+        if not slug or not name or not url:
+            continue
+        valid_entries.append(entry)
+    return valid_entries or None
+
+
+def _divian_ai_write_public_web_source_manifest(entries: list[dict]) -> None:
+    DIVIAN_AI_PUBLIC_WEB_SOURCE_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": DIVIAN_AI_PUBLIC_WEB_VERSION,
+        "generated_at": time.time(),
+        "entries": entries,
+    }
+    DIVIAN_AI_PUBLIC_WEB_SOURCE_MANIFEST.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _divian_ai_discover_partner_public_sources() -> list[dict]:
+    cached_entries = _divian_ai_load_public_web_source_manifest()
+    if cached_entries is not None:
+        return cached_entries
+
+    seed_items = [
+        {"url": "https://partner.divian.hu/", "sections": {"partner"}},
+        {"url": "https://partner.divian.hu/kapcsolat", "sections": {"partner"}},
+        {"url": "https://partner.divian.hu/akcios-termekek", "sections": {"partner", "akcio"}},
+        {"url": "https://partner.divian.hu/uj-termekek", "sections": {"partner", "uj"}},
+    ]
+    queued_urls = {item["url"] for item in seed_items}
+    visited_urls: set[str] = set()
+    discovered: dict[str, dict] = {}
+    static_urls = {
+        _divian_ai_normalize_partner_public_url(str(entry.get("url", "")).strip())
+        for entry in DIVIAN_AI_PUBLIC_WEB_SOURCES
+        if "partner.divian.hu" in str(entry.get("url", ""))
+    }
+    queue = list(seed_items)
+
+    while queue and len(visited_urls) < DIVIAN_AI_PARTNER_PUBLIC_MAX_PAGES:
+        item = queue.pop(0)
+        current_url = _divian_ai_normalize_partner_public_url(str(item.get("url", "")).strip())
+        if not current_url or current_url in visited_urls:
+            continue
+
+        current_sections = set(item.get("sections", set()))
+        page_meta = discovered.setdefault(
+            current_url,
+            {
+                "sections": set(),
+                "title": "",
+                "page_type": _divian_ai_partner_page_type(current_url),
+            },
+        )
+        page_meta["sections"].update(current_sections)
+
+        html_text, error = _divian_ai_fetch_public_web_html(current_url)
+        if error:
+            visited_urls.add(current_url)
+            continue
+
+        parser = _DivianAIHTMLToTextParser()
+        parser.feed(html_text)
+        parser.close()
+        page_title = parser.title()
+        if page_title:
+            page_meta["title"] = page_title
+        if _divian_ai_fold_text(page_title) == "belepes":
+            page_meta["skip"] = True
+            visited_urls.add(current_url)
+            continue
+
+        sku_present = bool(re.search(r"\bSKU\s*:\s*[A-Z0-9_\-]+\b", parser.text(), re.IGNORECASE))
+        if page_meta["page_type"] == "product" and not sku_present:
+            if _divian_ai_partner_product_titles_from_html(current_url, html_text):
+                page_meta["page_type"] = "listing"
+
+        visited_urls.add(current_url)
+
+        for link in _divian_ai_collect_html_links(current_url, html_text):
+            next_url = _divian_ai_normalize_partner_public_url(link.get("url", ""))
+            if not next_url or not _divian_ai_partner_should_crawl_url(next_url):
+                continue
+
+            next_sections = set(current_sections)
+            next_path = urllib.parse.urlparse(next_url).path or "/"
+            if page_meta["page_type"] == "product" and next_path.startswith("/kategoria/"):
+                continue
+            folded_link_text = _divian_ai_fold_text(f"{link.get('text', '')} {link.get('title', '')}")
+            if next_path == "/akcios-termekek" or "akcio" in folded_link_text:
+                next_sections.add("akcio")
+            if next_path == "/uj-termekek" or "uj termek" in folded_link_text:
+                next_sections.add("uj")
+
+            next_meta = discovered.setdefault(
+                next_url,
+                {
+                    "sections": set(),
+                    "title": "",
+                    "page_type": _divian_ai_partner_page_type(next_url),
+                },
+            )
+            next_meta["sections"].update(next_sections)
+            if not next_meta["title"]:
+                next_meta["title"] = link.get("text", "") or link.get("title", "")
+
+            if next_url not in visited_urls and next_url not in queued_urls:
+                queue.append({"url": next_url, "sections": next_sections})
+                queued_urls.add(next_url)
+
+    dynamic_entries: list[dict] = []
+    for url in sorted(visited_urls):
+        meta = discovered.get(url, {})
+        if url in static_urls:
+            continue
+        if meta.get("skip"):
+            continue
+        sections = set(meta.get("sections", set()))
+        page_title = _clean_spaces(str(meta.get("title", "")))
+        entry = {
+            "slug": _divian_ai_public_web_slug_for_url(url),
+            "name": _divian_ai_partner_entry_name(url, page_title, sections),
+            "url": url,
+            "section": "|".join(sorted(sections)),
+            "page_type": str(meta.get("page_type") or _divian_ai_partner_page_type(url)),
+        }
+        dynamic_entries.append(entry)
+
+    _divian_ai_write_public_web_source_manifest(dynamic_entries)
+    return dynamic_entries
+
+
+def _divian_ai_public_web_sources() -> tuple[dict, ...]:
+    dynamic_entries = _divian_ai_discover_partner_public_sources()
+    return tuple(DIVIAN_AI_PUBLIC_WEB_SOURCES) + tuple(dynamic_entries)
+
+
+def _divian_ai_public_web_entry(path: Path) -> dict | None:
+    file_name = path.name.lower()
+    for entry in _divian_ai_public_web_sources():
+        slug = str(entry.get("slug", "")).strip().lower()
+        if file_name == f"{slug}.txt":
+            return entry
+    return None
+
+
+def _divian_ai_public_web_source_path(entry: dict) -> Path:
+    slug = str(entry.get("slug", "")).strip().lower()
+    return DIVIAN_AI_PUBLIC_WEB_DIR / f"{slug}.txt"
+
+
+def _divian_ai_cleanup_public_web_text(text: str) -> str:
+    cleaned = text
+    cleaned = re.sub(
+        r"(?<=[a-záéíóöőúüű])(?=[A-ZÁÉÍÓÖŐÚÜŰ])",
+        " ",
+        cleaned,
+    )
+    cleaned = re.sub(r"(?<=\S)(https?://)", r" \1", cleaned)
+    cleaned = re.sub(r"(?<=[a-záéíóöőúüű])(?=\d)", " ", cleaned)
+    cleaned = re.sub(r"(?<=\d)(?=[A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű])", " ", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _divian_ai_partner_product_titles_from_html(base_url: str, html_text: str) -> list[str]:
+    generic_category_slugs = {
+        "szekek",
+        "asztal",
+        "garniturak",
+        "konyha-gepek",
+        "konyhai-kisgepek",
+        "mosogatotalcak",
+        "csaptelepek",
+        "vasalatok",
+        "kiegeszitok",
+        "kisopres",
+        "blokk-konyha",
+        "blokk-konyha-keszlett",
+    }
+    titles: list[str] = []
+    seen_titles: set[str] = set()
+    for link in _divian_ai_collect_html_links(base_url, html_text):
+        link_url = _divian_ai_normalize_partner_public_url(link.get("url", ""))
+        parsed = urllib.parse.urlparse(link_url)
+        if parsed.netloc.lower() != "partner.divian.hu" or not parsed.path.startswith("/kategoria/"):
+            continue
+        path_slug = parsed.path.rsplit("/", 1)[-1].strip().lower()
+        if path_slug in generic_category_slugs:
+            continue
+        if "list-group-item" in _divian_ai_fold_text(link.get("class", "")):
+            continue
+        title = _clean_spaces(link.get("text", "") or link.get("title", ""))
+        if not title:
+            continue
+        folded_title = _divian_ai_fold_text(title)
+        if folded_title in seen_titles:
+            continue
+        seen_titles.add(folded_title)
+        titles.append(title)
+    return titles
+
+
+def _divian_ai_partner_stock_label(plain_text: str) -> str:
+    folded_text = _divian_ai_fold_text(plain_text)
+    if "raktaron" in folded_text:
+        return "Raktáron"
+    if any(term in folded_text for term in ("nincs raktaron", "elfogyott", "nem rendelheto", "nem rendelhető")):
+        return "Nem elérhető"
+    return ""
+
+
+def _divian_ai_partner_public_document_text(entry: dict, url: str, page_title: str, plain_text: str, html_text: str) -> str:
+    page_type = str(entry.get("page_type", "")).strip() or _divian_ai_partner_page_type(url)
+    section_tags = [value for value in str(entry.get("section", "")).split("|") if value]
+    section_labels: list[str] = []
+    if "akcio" in section_tags:
+        section_labels.append("Akciók")
+    if "uj" in section_tags:
+        section_labels.append("Új termékek")
+    if not section_labels and "partner" in section_tags:
+        section_labels.append("Partner katalógus")
+
+    header_lines: list[str] = []
+    if page_type == "product":
+        header_lines.append("Oldal típus: Partner termékoldal")
+        header_lines.append(f"Termék neve: {page_title}")
+        sku_match = re.search(r"\bSKU\s*:\s*([A-Z0-9_\-]+)\b", plain_text, re.IGNORECASE)
+        if sku_match:
+            header_lines.append(f"SKU: {sku_match.group(1).strip()}")
+        stock_label = _divian_ai_partner_stock_label(plain_text)
+        if stock_label:
+            header_lines.append(f"Készletállapot: {stock_label}")
+    elif page_type == "listing":
+        if "akcio" in section_tags:
+            header_lines.append("Oldal típus: Partner akciós lista")
+        elif "uj" in section_tags:
+            header_lines.append("Oldal típus: Partner új termék lista")
+        else:
+            header_lines.append("Oldal típus: Partner listaoldal")
+    else:
+        header_lines.append("Oldal típus: Partner információs oldal")
+
+    if section_labels:
+        header_lines.append(f"Partner szekció: {', '.join(section_labels)}")
+
+    product_titles = _divian_ai_partner_product_titles_from_html(url, html_text)
+    if product_titles and page_type == "listing":
+        header_lines.append(f"Talált termékek száma: {len(product_titles)}")
+        for title in product_titles[:160]:
+            if "akcio" in section_tags:
+                header_lines.append(f"Akciós termék: {title}")
+            elif "uj" in section_tags:
+                header_lines.append(f"Új termék: {title}")
+            else:
+                header_lines.append(f"Termék: {title}")
+
+    merged_lines = "\n".join(line for line in header_lines if line.strip()).strip()
+    if not merged_lines:
+        return plain_text
+    return "\n\n".join(part for part in (merged_lines, plain_text) if part.strip()).strip()
+
+
+def _divian_ai_fetch_public_web_source(entry: dict) -> tuple[Path | None, str]:
+    url = str(entry.get("url", "")).strip()
+    if not url:
+        return None, "A nyilvános Divian webforrás URL-je hiányzik."
+
+    target_path = _divian_ai_public_web_source_path(entry)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if target_path.exists():
+        age_seconds = time.time() - target_path.stat().st_mtime
+        if age_seconds < DIVIAN_AI_PUBLIC_WEB_REFRESH_SECONDS:
+            return target_path, ""
+
+    html_text, fetch_error = _divian_ai_fetch_public_web_html(url)
+    if fetch_error:
+        if target_path.exists():
+            return target_path, f"A nyilvános webforrás frissítése most nem sikerült: {entry.get('name', url)} ({fetch_error})"
+        return None, f"A nyilvános webforrás nem érhető el: {entry.get('name', url)} ({fetch_error})"
+
+    parser = _DivianAIHTMLToTextParser()
+    parser.feed(html_text)
+    parser.close()
+    plain_text = _divian_ai_cleanup_public_web_text(parser.text())
+    page_title = parser.title() or str(entry.get("name", "")).strip() or url
+    if "partner.divian.hu" in urllib.parse.urlparse(url).netloc.lower():
+        plain_text = _divian_ai_partner_public_document_text(entry, url, page_title, plain_text, html_text)
+
+    if not plain_text:
+        if target_path.exists():
+            return target_path, f"A nyilvános webforrásból most nem sikerült szöveget kinyerni: {entry.get('name', url)}"
+        return None, f"A nyilvános webforrásból nem sikerült olvasható szöveget kinyerni: {entry.get('name', url)}"
+
+    document_text = "\n".join(
+        [
+            f"Divian nyilvános webforrás: {str(entry.get('name', '')).strip() or page_title}",
+            f"Web extract version: {DIVIAN_AI_PUBLIC_WEB_VERSION}",
+            f"Forrás URL: {url}",
+            f"Oldal címe: {page_title}",
+            f"Frissítve: {datetime.now().isoformat(timespec='seconds')}",
+            "",
+            plain_text,
+        ]
+    ).strip()
+    target_path.write_text(document_text, encoding="utf-8")
+    return target_path, ""
+
+
+def _divian_ai_public_web_source_paths() -> tuple[list[Path], list[str]]:
+    paths: list[Path] = []
+    errors: list[str] = []
+    for entry in _divian_ai_public_web_sources():
+        path, error = _divian_ai_fetch_public_web_source(entry)
+        if path is not None and path.exists():
+            paths.append(path)
+        if error:
+            errors.append(error)
+    return paths, errors
 
 
 def _divian_ai_source_key(path: Path) -> str:
@@ -9114,6 +10272,9 @@ def _divian_ai_document_rows() -> list[sqlite3.Row]:
                 path,
                 stored_name,
                 kind,
+                parser_name,
+                study_mode,
+                confidence,
                 is_uploaded,
                 uploaded_at,
                 status,
@@ -9141,6 +10302,7 @@ def _divian_ai_registry_totals() -> dict[str, int]:
                 COUNT(*) AS document_count,
                 SUM(CASE WHEN status IN ('indexed', 'indexed_with_warning') THEN 1 ELSE 0 END) AS indexed_count,
                 SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+                SUM(CASE WHEN study_mode = 'strukturált' THEN 1 ELSE 0 END) AS structured_count,
                 COALESCE(SUM(chunk_count), 0) AS chunk_count,
                 COALESCE(SUM(record_count), 0) AS record_count
             FROM knowledge_documents
@@ -9150,6 +10312,7 @@ def _divian_ai_registry_totals() -> dict[str, int]:
         "document_count": int(row["document_count"] or 0),
         "indexed_count": int(row["indexed_count"] or 0),
         "error_count": int(row["error_count"] or 0),
+        "structured_count": int(row["structured_count"] or 0),
         "chunk_count": int(row["chunk_count"] or 0),
         "record_count": int(row["record_count"] or 0),
     }
@@ -9162,6 +10325,7 @@ def _divian_ai_catalog_entries() -> list[dict]:
     for row in _divian_ai_document_rows():
         file_path = Path(row["path"])
         display_name = str(row["source_name"]).strip() or file_path.name
+        is_public_web = _divian_ai_public_web_entry(file_path) is not None
         try:
             size_bytes = int(row["size_bytes"] or 0)
         except Exception:
@@ -9173,6 +10337,9 @@ def _divian_ai_catalog_entries() -> list[dict]:
                 "display_name": display_name,
                 "stored_name": str(row["stored_name"]).strip() or file_path.name,
                 "kind": str(row["kind"]).strip() or _divian_ai_doc_kind(file_path),
+                "parser_name": str(row["parser_name"]).strip(),
+                "study_mode": str(row["study_mode"]).strip(),
+                "confidence": str(row["confidence"]).strip(),
                 "size_label": _divian_ai_format_file_size(size_bytes),
                 "uploaded_at": str(row["uploaded_at"]).strip(),
                 "is_uploaded": bool(row["is_uploaded"]),
@@ -9181,7 +10348,7 @@ def _divian_ai_catalog_entries() -> list[dict]:
                 "note": str(row["note"]).strip(),
                 "previewable": file_path.exists() and _divian_ai_previewable(file_path),
                 "downloadable": file_path.exists(),
-                "deletable": file_path.exists(),
+                "deletable": file_path.exists() and not is_public_web,
                 "page_count": int(row["page_count"] or 0),
                 "chunk_count": int(row["chunk_count"] or 0),
                 "record_count": int(row["record_count"] or 0),
@@ -9217,6 +10384,7 @@ def render_divian_ai_knowledge_form(message: str = "", success: bool = False) ->
           <div>
             <strong>{html.escape(entry['display_name'])}</strong>
             <span>{html.escape(entry['kind'])} · {html.escape(entry['size_label'])} · {entry['chunk_count']} blokk · {entry['record_count']} rekord</span>
+            {f'<span>{html.escape(entry["parser_name"])} · {html.escape(entry["study_mode"])} · biztonság: {html.escape(entry["confidence"])}</span>' if entry['parser_name'] else ''}
           </div>
           <div class="knowledge-list-side">
             <span class="knowledge-list-badge">{'Feltöltött' if entry['is_uploaded'] else 'Rendszerforrás'}</span>
@@ -9246,7 +10414,7 @@ def render_divian_ai_knowledge_form(message: str = "", success: bool = False) ->
             <div class="knowledge-hero-copy">
               <div class="tag">AI tudástár</div>
               <h2>Tölts fel fájlokat, és a Divian-AI már ezekből is dolgozik.</h2>
-              <p>PDF, Excel, Word, kép vagy export. A rendszer elmenti, beolvassa, és kérdezhetővé teszi.</p>
+              <p>PDF, Excel, Word, kép vagy export. A rendszer elmenti, beolvassa, és kérdezhetővé teszi. A hivatalos Divian webes források automatikusan bekerülnek.</p>
               <div class="knowledge-stat-strip">
                 <div class="knowledge-mini-stat">
                   <strong>{registry_totals["document_count"]}</strong>
@@ -9602,6 +10770,12 @@ def _delete_divian_ai_upload(entry_id: str) -> tuple[bool, str]:
 
 
 def _divian_ai_source_display_name(path: Path) -> str:
+    public_web_entry = _divian_ai_public_web_entry(path)
+    if public_web_entry:
+        display_name = str(public_web_entry.get("name", "")).strip()
+        if display_name:
+            return display_name
+
     entry = _divian_ai_upload_display_map().get(path.name)
     original_name = str(entry.get("original_name", "")).strip() if entry else ""
     return original_name or path.name
@@ -9636,11 +10810,366 @@ def _divian_ai_filter_knowledge_sources(
     return DivianAIKnowledgeCache(
         signature=knowledge.signature,
         sources=sources,
+        source_meta={source: dict(knowledge.source_meta.get(source, {})) for source in sources},
         pages=pages,
         chunks=chunks,
         records=records,
         errors=[],
     )
+
+
+def _divian_ai_source_meta_value(
+    knowledge: DivianAIKnowledgeCache,
+    source_name: str,
+    key: str,
+) -> str:
+    return str((knowledge.source_meta.get(source_name) or {}).get(key, "")).strip()
+
+
+def _divian_ai_confidence_rank(value: str) -> int:
+    folded_value = _divian_ai_fold_text(value)
+    if folded_value == "magas":
+        return 3
+    if folded_value == "kozepes":
+        return 2
+    if folded_value == "alacsony":
+        return 1
+    return 0
+
+
+def _divian_ai_study_mode_rank(value: str) -> int:
+    folded_value = _divian_ai_fold_text(value)
+    if folded_value == "strukturalt":
+        return 3
+    if folded_value == "web":
+        return 2
+    if folded_value == "szoveges":
+        return 1
+    return 0
+
+
+def _divian_ai_iso_sort_value(value: str) -> str:
+    clean_value = str(value or "").strip()
+    try:
+        return datetime.fromisoformat(clean_value).isoformat(timespec="seconds")
+    except Exception:
+        return ""
+
+
+def _divian_ai_source_quality_key(
+    knowledge: DivianAIKnowledgeCache,
+    source_name: str,
+) -> tuple[int, int, int, str, str, int, str]:
+    meta = knowledge.source_meta.get(source_name) or {}
+    study_mode = _divian_ai_study_mode_rank(str(meta.get("study_mode", "")))
+    confidence = _divian_ai_confidence_rank(str(meta.get("confidence", "")))
+    is_uploaded = 1 if str(meta.get("is_uploaded", "")).strip() in {"1", "true", "True"} else 0
+    uploaded_at = _divian_ai_iso_sort_value(str(meta.get("uploaded_at", "")))
+    updated_at = _divian_ai_iso_sort_value(str(meta.get("updated_at", "")))
+    parser_bonus = 1 if "parser" in _divian_ai_fold_text(str(meta.get("parser_name", ""))) else 0
+    return (study_mode, confidence, is_uploaded, uploaded_at, updated_at, parser_bonus, _divian_ai_fold_text(source_name))
+
+
+def _divian_ai_ranked_sources(
+    knowledge: DivianAIKnowledgeCache,
+    predicate=None,
+) -> list[str]:
+    sources = [source for source in knowledge.sources if predicate is None or predicate(source)]
+    return sorted(
+        sources,
+        key=lambda source: _divian_ai_source_quality_key(knowledge, source),
+        reverse=True,
+    )
+
+
+def _divian_ai_preferred_structured_sources(
+    knowledge: DivianAIKnowledgeCache,
+    *,
+    source_type: str = "",
+    limit: int = 3,
+) -> list[str]:
+    normalized_type = _divian_ai_fold_text(source_type)
+
+    def predicate(source_name: str) -> bool:
+        meta = knowledge.source_meta.get(source_name) or {}
+        if _divian_ai_fold_text(str(meta.get("study_mode", ""))) != "strukturalt":
+            return False
+        if _divian_ai_confidence_rank(str(meta.get("confidence", ""))) < 2:
+            return False
+        if normalized_type == "catalog" and not _divian_ai_source_is_catalog(source_name):
+            return False
+        if normalized_type == "elemjegyzek" and not _divian_ai_source_is_elemjegyzek(source_name):
+            return False
+        return True
+
+    ranked = _divian_ai_ranked_sources(knowledge, predicate)
+    return ranked[:limit] if limit > 0 else ranked
+
+
+def _divian_ai_preferred_handbook_sources(
+    knowledge: DivianAIKnowledgeCache,
+    *,
+    limit: int = 2,
+) -> list[str]:
+    handbook_hints = ("kezikonyv", "kézikönyv", "termekinformacios", "termékinformációs")
+    handbook_sources = _divian_ai_ranked_sources(
+        knowledge,
+        lambda source_name: (
+            source_name in _divian_ai_preferred_structured_sources(knowledge, source_type="catalog", limit=0)
+            and any(hint in _divian_ai_fold_text(source_name) for hint in handbook_hints)
+        ),
+    )
+    if handbook_sources:
+        return handbook_sources[:limit] if limit > 0 else handbook_sources
+    return _divian_ai_preferred_structured_sources(knowledge, source_type="catalog", limit=limit)
+
+
+def _divian_ai_cleanup_material_colors(colors: list[str], material_key: str) -> list[str]:
+    cleaned: list[str] = []
+    seen_colors: set[str] = set()
+    blocked_terms = {"krom", "króm", "arany", "rose gold"}
+    front_only_terms = {"fenyes", "fényes", "szuper matt"}
+
+    for color in colors:
+        folded_color = _divian_ai_fold_text(color)
+        if not folded_color:
+            continue
+        if any(term in folded_color for term in blocked_terms):
+            continue
+        if material_key == "butorlap" and any(term in folded_color for term in front_only_terms):
+            continue
+        if folded_color in seen_colors:
+            continue
+        seen_colors.add(folded_color)
+        cleaned.append(color)
+    return cleaned
+
+
+def _divian_ai_known_colors_from_folded_text(folded_text: str) -> list[str]:
+    if not folded_text:
+        return []
+
+    matches: list[tuple[int, int, str]] = []
+    for phrase in sorted(DIVIAN_AI_COLOR_PHRASES, key=len, reverse=True):
+        folded_phrase = _divian_ai_fold_text(phrase)
+        if not folded_phrase:
+            continue
+        start = 0
+        while True:
+            position = folded_text.find(folded_phrase, start)
+            if position == -1:
+                break
+            matches.append((position, len(folded_phrase), phrase))
+            start = position + len(folded_phrase)
+
+    matches.sort(key=lambda item: (item[0], -item[1], item[2]))
+    colors: list[str] = []
+    last_end = -1
+    for position, length, phrase in matches:
+        if position < last_end:
+            continue
+        colors.append(phrase)
+        last_end = position + length
+    return colors
+
+
+def _divian_ai_folded_section_colors(
+    folded_text: str,
+    *,
+    start_marker: str,
+    end_markers: tuple[str, ...] = (),
+) -> list[str]:
+    normalized_start = _divian_ai_fold_text(start_marker)
+    if not normalized_start:
+        return []
+
+    start_position = folded_text.find(normalized_start)
+    if start_position == -1:
+        return []
+
+    content_start = start_position + len(normalized_start)
+    content_end = len(folded_text)
+    for marker in end_markers:
+        normalized_end = _divian_ai_fold_text(marker)
+        if not normalized_end:
+            continue
+        marker_position = folded_text.find(normalized_end, content_start)
+        if marker_position != -1:
+            content_end = min(content_end, marker_position)
+
+    section_text = folded_text[content_start:content_end]
+    return _divian_ai_known_colors_from_folded_text(section_text)
+
+
+def _divian_ai_unique_values(values: list[str]) -> list[str]:
+    unique_values: list[str] = []
+    seen_values: set[str] = set()
+    for value in values:
+        normalized_value = _divian_ai_fold_text(value)
+        if not normalized_value or normalized_value in seen_values:
+            continue
+        seen_values.add(normalized_value)
+        unique_values.append(value)
+    return unique_values
+
+
+def _divian_ai_handbook_kitchen_page_data(page: DivianAIPage) -> dict | None:
+    title_folded = _divian_ai_fold_text(page.title)
+    if "konyha" not in title_folded:
+        return None
+
+    kitchen_key = ""
+    for candidate_key in DIVIAN_AI_PRODUCT_ALIASES:
+        if candidate_key in {"doroti", "antonia", "laura", "zille", "anna", "kira", "kata", "kinga", "klio"}:
+            if any(_divian_ai_fold_text(alias) in title_folded for alias in DIVIAN_AI_PRODUCT_ALIASES[candidate_key]):
+                kitchen_key = candidate_key
+                break
+    if not kitchen_key:
+        return None
+
+    page_folded = page.folded
+    front_colors: list[str] = []
+    butorlap_colors: list[str] = []
+
+    if kitchen_key == "doroti":
+        grouped_colors = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="MDF fóliás frontok Látható korpusz színek Nem látható korpusz színek Bútorlap frontok",
+            end_markers=("ÚJ!",),
+        )
+        if grouped_colors:
+            front_colors = _divian_ai_unique_values(grouped_colors[0::4] + grouped_colors[3::4])
+            butorlap_colors = _divian_ai_unique_values(grouped_colors[1::4] + grouped_colors[2::4])
+    elif kitchen_key == "antonia":
+        front_section = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="Matt frontok Magasfényû frontok",
+            end_markers=("Látható és nem látható korpusz színek",),
+        )
+        if front_section:
+            front_colors = _divian_ai_unique_values(front_section)
+        board_section = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="Látható korpusz színek Nem látható korpusz színek",
+            end_markers=("A Szuper matt frontok fõ elõnyei", "ÚJ!"),
+        )
+        if board_section:
+            butorlap_colors = _divian_ai_unique_values(board_section)
+    elif kitchen_key in {"laura", "zille"}:
+        front_section = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="Front színek",
+            end_markers=("Látható és nem látható korpusz színek",),
+        )
+        if front_section:
+            front_colors = _divian_ai_unique_values(front_section)
+        board_section = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="Látható korpusz színek Nem látható korpusz színek",
+            end_markers=("A Szuper matt frontok fõ elõnyei", "ÚJ!", "Fogantyú"),
+        )
+        if board_section:
+            butorlap_colors = _divian_ai_unique_values(board_section)
+    else:
+        board_section = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="Látható korpusz színek Nem látható korpusz színek",
+            end_markers=("Munkalap", "Garancia", "Fogantyú", "ÚJ!"),
+        )
+        if board_section:
+            butorlap_colors = _divian_ai_unique_values(board_section)
+        front_section = _divian_ai_folded_section_colors(
+            page_folded,
+            start_marker="Front színek",
+            end_markers=("Látható és nem látható korpusz színek", "Munkalap", "Garancia"),
+        )
+        if front_section:
+            front_colors = _divian_ai_unique_values(front_section)
+
+    if not front_colors and not butorlap_colors:
+        return None
+
+    return {
+        "kitchen_key": kitchen_key,
+        "kitchen_label": _divian_ai_product_label(kitchen_key) or kitchen_key.title(),
+        "front_colors": front_colors,
+        "butorlap_colors": butorlap_colors,
+        "source": page.label,
+    }
+
+
+def _divian_ai_structured_catalog_material_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    if not _divian_ai_is_color_question(question):
+        return None
+
+    subject_keys = set(_divian_ai_detect_subject_keys(question))
+    material_subjects = {"butorlap", "front"} & subject_keys
+    if not material_subjects:
+        return None
+
+    preferred_sources = set(_divian_ai_preferred_handbook_sources(knowledge, limit=2))
+    if not preferred_sources:
+        return None
+
+    kitchen_filter = set(_divian_ai_detect_product_keys(question))
+    page_materials: list[dict] = []
+    for page in knowledge.pages:
+        if page.source_name not in preferred_sources:
+            continue
+        page_data = _divian_ai_handbook_kitchen_page_data(page)
+        if page_data is None:
+            continue
+        if kitchen_filter and page_data["kitchen_key"] not in kitchen_filter:
+            continue
+        page_materials.append(page_data)
+
+    if not page_materials:
+        return None
+
+    color_bucket_key = "butorlap_colors" if "butorlap" in material_subjects else "front_colors"
+    material_key = "butorlap" if color_bucket_key == "butorlap_colors" else "front"
+    material_label = "bútorlap színei" if color_bucket_key == "butorlap_colors" else "front színei"
+    source_labels: list[str] = []
+    seen_sources: set[str] = set()
+
+    if kitchen_filter:
+        page_data = page_materials[0]
+        colors = _divian_ai_cleanup_material_colors(
+            _divian_ai_unique_values(page_data.get(color_bucket_key, [])),
+            material_key,
+        )
+        if not colors:
+            return None
+        if page_data["source"] not in seen_sources:
+            seen_sources.add(page_data["source"])
+            source_labels.append(page_data["source"])
+        return {
+            "ok": True,
+            "answer": f"{page_data['kitchen_label']} {material_label}:\n- " + "\n- ".join(colors),
+            "sources": source_labels,
+        }
+
+    merged_colors: list[str] = []
+    for page_data in page_materials:
+        merged_colors.extend(page_data.get(color_bucket_key, []))
+        if page_data["source"] not in seen_sources:
+            seen_sources.add(page_data["source"])
+            source_labels.append(page_data["source"])
+
+    merged_colors = _divian_ai_cleanup_material_colors(_divian_ai_unique_values(merged_colors), material_key)
+    if not merged_colors:
+        return None
+
+    noun = "bútorlap színek/dekorok" if color_bucket_key == "butorlap_colors" else "front színek"
+    return {
+        "ok": True,
+        "answer": f"{evidence_label} ezek a fő {noun} érhetők el:\n- " + "\n- ".join(merged_colors),
+        "sources": source_labels[:4],
+    }
 
 
 def _divian_ai_best_chunk_evidence(question: str, chunks: list[DivianAIChunk]) -> tuple[int, int, int, bool, int]:
@@ -9707,17 +11236,17 @@ def _divian_ai_no_confident_answer(question: str = "", prefer_uploaded_sources: 
         return {
             "ok": True,
             "answer": (
-                "A jelenlegi feltöltött fájlokban ehhez nem találtam elég biztos információt. "
+                "A jelenlegi Divian forrásokban ehhez nem találtam elég biztos információt. "
                 "Nem szeretnék találgatni.\n\n"
                 f"{guidance}"
             ),
-            "sources": ["AI-tudásbázis"],
+            "sources": [],
         }
 
     return {
         "ok": True,
         "answer": (
-            "Ehhez most nem találtam elég biztos információt a jelenlegi tudástárban. "
+            "Ehhez most nem találtam elég biztos információt a jelenlegi Divian forrásokban. "
             "Nem szeretnék találgatni.\n\n"
             f"{guidance}"
         ),
@@ -9900,7 +11429,7 @@ def _divian_ai_record_answer(question: str, knowledge: DivianAIKnowledgeCache) -
             source_labels.append(record.label)
 
     if asks_count:
-        answer = f"A feltöltött fájlok alapján {len(selected_records)} releváns találatot találtam."
+        answer = f"A Divian források alapján {len(selected_records)} releváns találatot találtam."
         return {"ok": True, "answer": answer, "sources": source_labels[:4]}
 
     if asks_list:
@@ -9920,9 +11449,9 @@ def _divian_ai_record_answer(question: str, knowledge: DivianAIKnowledgeCache) -
                 break
         if items:
             if len(items) == 1:
-                answer = f"A feltöltött fájlok alapján ezt találtam: {items[0]}."
+                answer = f"A Divian források alapján ezt találtam: {items[0]}."
             else:
-                answer = "A feltöltött fájlok alapján ezeket találtam:\n- " + "\n- ".join(items)
+                answer = "A Divian források alapján ezeket találtam:\n- " + "\n- ".join(items)
             return {"ok": True, "answer": answer, "sources": source_labels[:4]}
 
     top_record = selected_records[0][1]
@@ -9933,19 +11462,19 @@ def _divian_ai_record_answer(question: str, knowledge: DivianAIKnowledgeCache) -
         if _divian_ai_parse_date(best_field[1]) is not None:
             folded_key = _divian_ai_fold_text(best_field[0])
             if "esedekes" in folded_key:
-                answer = f"A feltöltött fájlok alapján {subject_name} esetén {best_field[0].lower()}: {_divian_ai_format_date(best_field[1])}."
+                answer = f"A Divian források alapján {subject_name} esetén {best_field[0].lower()}: {_divian_ai_format_date(best_field[1])}."
             else:
-                answer = f"A feltöltött fájlok alapján {subject_name} esetén a releváns dátum: {_divian_ai_format_date(best_field[1])}."
+                answer = f"A Divian források alapján {subject_name} esetén a releváns dátum: {_divian_ai_format_date(best_field[1])}."
         else:
-            answer = f"A feltöltött fájlok alapján {subject_name} esetén {best_field[0].lower()}: {best_field[1]}."
+            answer = f"A Divian források alapján {subject_name} esetén {best_field[0].lower()}: {best_field[1]}."
         return {"ok": True, "answer": answer, "sources": top_record_sources}
 
     if best_field is not None:
-        answer = f"A feltöltött fájlok alapján {subject_name} esetén {best_field[0].lower()}: {best_field[1]}."
+        answer = f"A Divian források alapján {subject_name} esetén {best_field[0].lower()}: {best_field[1]}."
         return {"ok": True, "answer": answer, "sources": top_record_sources}
 
     compact_fields = ", ".join(f"{key}: {value}" for key, value in top_record.fields[:3])
-    answer = f"A feltöltött fájlok alapján ezt találtam: {compact_fields}."
+    answer = f"A Divian források alapján ezt találtam: {compact_fields}."
     return {"ok": True, "answer": answer, "sources": top_record_sources}
 
 
@@ -9961,6 +11490,9 @@ def _divian_ai_safe_filename(name: str) -> str:
 
 
 def _divian_ai_doc_kind(path: Path) -> str:
+    if _divian_ai_public_web_entry(path):
+        return "Nyilvános web"
+
     suffix = path.suffix.lower()
     if suffix == ".pdf":
         return "PDF"
@@ -9977,6 +11509,25 @@ def _divian_ai_doc_kind(path: Path) -> str:
     if suffix in {".txt", ".md"}:
         return "Szöveg"
     return suffix.lstrip(".").upper() or "Dokumentum"
+
+
+def _divian_ai_source_study_profile(path: Path, source_name: str) -> tuple[str, str, str, str]:
+    folded_name = _divian_ai_fold_text(source_name or path.name)
+    if _divian_ai_public_web_entry(path) is not None:
+        return ("Nyilvános web parser", "web", "magas", "Hivatalos nyilvános webforrásként feltérképezve.")
+    if _divian_ai_is_elemjegyzek_source(source_name or path.name):
+        return ("Elemjegyzék parser", "strukturált", "magas", "Az elemjegyzék külön szerkezeti parserrel kerül feldolgozásra.")
+    if any(term in folded_name for term in ("katalogus", "katalógus", "kezikonyv", "kézikönyv")):
+        return ("Katalógus parser", "strukturált", "kozepes", "A katalógusból célzott oldaltípus-parser próbál strukturált adatot kinyerni.")
+    if path.suffix.lower() in DIVIAN_AI_SPREADSHEET_EXTENSIONS:
+        return ("Táblázat parser", "strukturált", "magas", "A táblázat soronként és oszloponként kerül beolvasásra.")
+    if path.suffix.lower() in DIVIAN_AI_WORD_EXTENSIONS:
+        return ("Dokumentum parser", "szöveges", "kozepes", "A dokumentum szöveges és kulcs-érték alapú feldolgozást kap.")
+    if path.suffix.lower() in DIVIAN_AI_IMAGE_EXTENSIONS:
+        return ("OCR parser", "szöveges", "alacsony", "A kép OCR-rel kerül beolvasásra, ezért kézi ellenőrzés javasolt.")
+    if path.suffix.lower() == ".pdf":
+        return ("Általános PDF parser", "szöveges", "kozepes", "A PDF nyers szövegkinyeréssel kerül feldolgozásra.")
+    return ("Általános parser", "szöveges", "alacsony", "A forrás általános szövegkinyeréssel kerül beolvasásra.")
 
 
 def _divian_ai_source_paths() -> list[Path]:
@@ -10009,6 +11560,25 @@ def _divian_ai_source_paths() -> list[Path]:
             unique_paths.append(resolved)
 
     return unique_paths
+
+
+def _divian_ai_curated_document_paths() -> list[Path]:
+    curated_paths: list[Path] = []
+    seen_paths: set[str] = set()
+    for path in _divian_ai_source_paths():
+        if path.suffix.lower() != ".pdf":
+            continue
+
+        folded_name = _divian_ai_fold_text(path.name)
+        if not any(hint in folded_name for hint in DIVIAN_AI_CURATED_DOCUMENT_HINTS):
+            continue
+
+        path_key = _divian_ai_source_key(path)
+        if path_key in seen_paths:
+            continue
+        seen_paths.add(path_key)
+        curated_paths.append(path)
+    return curated_paths
 
 
 def _divian_ai_tokens(text: str) -> frozenset[str]:
@@ -10303,6 +11873,716 @@ def _divian_ai_extract_key_value_records(
     return records
 
 
+def _divian_ai_is_elemjegyzek_source(source_name: str) -> bool:
+    return "elemjegyz" in _divian_ai_fold_text(source_name)
+
+
+def _divian_ai_elemjegyzek_section(page_number: int, page_title: str, raw_page_text: str) -> str:
+    title_context = _divian_ai_fold_text(page_title)
+    lead_context = _divian_ai_fold_text(raw_page_text[:400])
+    full_context = _divian_ai_fold_text(f"{page_title}\n{raw_page_text[:1500]}")
+    if "blokk konyhakhoz rendelheto elemek" in full_context:
+        return "Blokk konyhákhoz rendelhető elemek"
+    if "oldaltakaro" in title_context or "oldaltakaro" in lead_context:
+        return "Oldaltakarók"
+    if "fogantyu" in title_context or "fogantyu" in lead_context:
+        return "Fogantyúk"
+    if "falipanel" in title_context or title_context.startswith("kiegeszitok falipanel"):
+        return "Falipanelek"
+    if "munkalap" in title_context or title_context.startswith("28-as munkalapok") or title_context.startswith("38-as 900 mely munkalapok"):
+        return "Munkalapok"
+    if "konyhasziget" in title_context or "konyhasziget" in lead_context:
+        return "Konyhasziget elemek"
+    if "kiegeszit" in title_context or "kiegeszit" in lead_context:
+        return "Kiegészítők"
+    if 2 <= page_number <= 6:
+        return "Alsó elemek"
+    if 7 <= page_number <= 11:
+        return "Felső elemek"
+    return "Elemjegyzék"
+
+
+def _divian_ai_elemjegyzek_scope(page_number: int, raw_page_text: str, section_label: str) -> tuple[str, str]:
+    context = _divian_ai_fold_text(f"{section_label}\n{raw_page_text[:1500]}")
+    if "kinga" in context and "kata" in context and "kira" in context and "blokk" in context:
+        return "Blokk konyhák", "Kinga, Kata, Kira"
+    if 2 <= page_number <= 11:
+        return "Elemes konyhák", ""
+    return "", ""
+
+
+def _divian_ai_clean_elemjegyzek_description(raw_description: str, code: str) -> tuple[str, str]:
+    description = _divian_ai_normalize_text(raw_description)
+    if not description:
+        return f"Nem egyértelmű megnevezés ({code})", ""
+
+    description = re.sub(r"^\d+\s+(?=\S)", "", description).strip(" ,-:;")
+    if len(description) > 90 and "!" in description:
+        description = description.split("!")[-1].strip()
+
+    markers = (
+        "BLOKK KONYHÁKHOZ RENDELHETŐ ELEMEK",
+        "RENDELHETŐ ELEMEK",
+        "ALSÓ ELEMEK",
+        "FELSŐ ELEMEK",
+        "KONYHASZIGET ELEMEK",
+        "KIEGÉSZÍTŐK",
+    )
+    upper_description = description.upper()
+    for marker in markers:
+        marker_position = upper_description.rfind(marker)
+        if marker_position != -1:
+            description = description[marker_position + len(marker) :].strip(" ,-:;")
+            upper_description = description.upper()
+
+    note = ""
+    note_match = re.search(r"\b(Csak [^!?.]+[!?]?|Tartalmazza [^.]+)$", description, flags=re.IGNORECASE)
+    if note_match:
+        note = _divian_ai_normalize_text(note_match.group(1))
+        description = _divian_ai_normalize_text(description[: note_match.start()]).strip(" ,-:;")
+
+    if not description:
+        description = f"Nem egyértelmű megnevezés ({code})"
+    return description, note
+
+
+def _divian_ai_extract_elemjegyzek_dimension_records(
+    raw_page_text: str,
+    source_name: str,
+    page_number: int,
+    section_label: str,
+    kitchen_group: str,
+    kitchens_label: str,
+) -> list[DivianAIRecord]:
+    code_dimension_pattern = re.compile(
+        r"(?P<code>[A-ZÁÉÍÓÖŐÚÜŰ]{1,8}[A-ZÁÉÍÓÖŐÚÜŰ0-9_x]{1,})\s+"
+        r"(?P<dims>\d{1,4}(?:,\d+)?\s*x\s*\d{1,4}(?:,\d+)?(?:\s*x\s*\d{1,4}(?:,\d+)?)?)"
+    )
+    records: list[DivianAIRecord] = []
+    last_end = 0
+    row_number = 0
+    matches = list(code_dimension_pattern.finditer(raw_page_text))
+    for match in matches:
+        code = _divian_ai_normalize_text(match.group("code"))
+        dimensions = _divian_ai_normalize_text(match.group("dims"))
+        description, note = _divian_ai_clean_elemjegyzek_description(raw_page_text[last_end : match.start()], code)
+        last_end = match.end()
+
+        if not code or not dimensions:
+            continue
+
+        dimension_parts = [part.strip() for part in re.split(r"\s*x\s*", dimensions) if part.strip()]
+        fields: list[tuple[str, str]] = [
+            ("Megnevezés", description),
+            ("Kód", code),
+            ("Méretek", dimensions),
+            ("Elemcsoport", section_label),
+        ]
+        for dimension_index, part in enumerate(dimension_parts, start=1):
+            fields.append((f"Méret {dimension_index}", part))
+        if kitchen_group:
+            fields.append(("Konyhacsoport", kitchen_group))
+        if kitchens_label:
+            fields.append(("Konyhák", kitchens_label))
+        if note:
+            fields.append(("Megjegyzés", note))
+
+        row_number += 1
+        record = _divian_ai_build_record(
+            label=f"{source_name} · {page_number}. oldal · elem {row_number}",
+            source_name=source_name,
+            row_number=row_number,
+            fields=fields,
+        )
+        if record is not None:
+            records.append(record)
+    return records
+
+
+def _divian_ai_extract_elemjegyzek_code_only_records(
+    raw_page_text: str,
+    source_name: str,
+    page_number: int,
+    section_label: str,
+    kitchen_group: str,
+    kitchens_label: str,
+) -> list[DivianAIRecord]:
+    if "blokk konyhakhoz rendelheto elemek" not in _divian_ai_fold_text(raw_page_text):
+        return []
+
+    working_text = raw_page_text
+    anchor_match = re.search(r"ELEMEK", working_text, flags=re.IGNORECASE)
+    if anchor_match:
+        working_text = working_text[anchor_match.end() :]
+
+    price_match = re.search(r"\d{1,3}(?:\.\d{3})?\s*Ft", working_text, flags=re.IGNORECASE)
+    if price_match:
+        working_text = working_text[: price_match.start()]
+
+    code_pattern = re.compile(r"(?P<code>[A-ZÁÉÍÓÖŐÚÜŰ]{1,8}[A-ZÁÉÍÓÖŐÚÜŰ0-9_x]{1,})")
+    records: list[DivianAIRecord] = []
+    last_end = 0
+    row_number = 0
+    for match in code_pattern.finditer(working_text):
+        code = _divian_ai_normalize_text(match.group("code"))
+        description, note = _divian_ai_clean_elemjegyzek_description(working_text[last_end : match.start()], code)
+        last_end = match.end()
+        if not code:
+            continue
+
+        row_number += 1
+        fields: list[tuple[str, str]] = [
+            ("Megnevezés", description),
+            ("Kód", code),
+            ("Elemcsoport", section_label),
+        ]
+        if kitchen_group:
+            fields.append(("Konyhacsoport", kitchen_group))
+        if kitchens_label:
+            fields.append(("Konyhák", kitchens_label))
+        if note:
+            fields.append(("Megjegyzés", note))
+
+        record = _divian_ai_build_record(
+            label=f"{source_name} · {page_number}. oldal · elem {row_number}",
+            source_name=source_name,
+            row_number=row_number,
+            fields=fields,
+        )
+        if record is not None:
+            records.append(record)
+    return records
+
+
+def _divian_ai_extract_elemjegyzek_records(
+    raw_page_text: str,
+    source_name: str,
+    page_number: int,
+    page_title: str,
+) -> list[DivianAIRecord]:
+    if not _divian_ai_is_elemjegyzek_source(source_name):
+        return []
+
+    section_label = _divian_ai_elemjegyzek_section(page_number, page_title, raw_page_text)
+    kitchen_group, kitchens_label = _divian_ai_elemjegyzek_scope(page_number, raw_page_text, section_label)
+    records = _divian_ai_extract_elemjegyzek_dimension_records(
+        raw_page_text,
+        source_name,
+        page_number,
+        section_label,
+        kitchen_group,
+        kitchens_label,
+    )
+    if records:
+        return records
+    return _divian_ai_extract_elemjegyzek_code_only_records(
+        raw_page_text,
+        source_name,
+        page_number,
+        section_label,
+        kitchen_group,
+        kitchens_label,
+    )
+
+
+def _divian_ai_catalog_lines(raw_text: str) -> list[str]:
+    fixed_text = (
+        raw_text.replace("õ", "ő")
+        .replace("û", "ű")
+        .replace("Õ", "Ő")
+        .replace("Û", "Ű")
+    )
+    fixed_text = re.sub(r"([a-záéíóöőúüű])([A-ZÁÉÍÓÖŐÚÜŰ])", r"\1 \2", fixed_text)
+    lines = [_clean_spaces(line) for line in fixed_text.splitlines()]
+    return [
+        line
+        for line in lines
+        if line
+        and not re.fullmatch(r"\d+", line)
+        and "copyright" not in _divian_ai_fold_text(line)
+    ]
+
+
+def _divian_ai_catalog_subject_label(page_title: str, raw_page_text: str) -> str:
+    context = f"{page_title}\n{raw_page_text[:2000]}"
+    product_keys = _divian_ai_detect_product_keys(context)
+    if product_keys:
+        return _divian_ai_product_label(product_keys[0]) or product_keys[0].capitalize()
+
+    folded_context = _divian_ai_fold_text(context)
+    if "munkalapok es falipanelek" in folded_context:
+        return "Munkalapok és falipanelek"
+    if "blokk konyhak" in folded_context:
+        return "Blokk konyhák"
+    if "inspiraciok" in folded_context:
+        return "Inspirációk"
+    if "fogantyu" in folded_context and "munkalap" in folded_context:
+        return "Konyhai kiegészítők"
+    clean_title = _clean_spaces(page_title)
+    return clean_title if clean_title else "Divian katalógus"
+
+
+def _divian_ai_catalog_kind(subject_label: str, raw_page_text: str) -> str:
+    folded_subject = _divian_ai_fold_text(subject_label)
+    folded_text = _divian_ai_fold_text(raw_page_text[:2000])
+    if subject_label == "Munkalapok és falipanelek":
+        return "Anyagválaszték"
+    if any(name in folded_subject for name in ("kata", "kira", "kinga", "klio")) or "blokk konyha" in folded_text:
+        return "Blokk konyha"
+    if any(name in folded_subject for name in ("doroti", "antonia", "laura", "zille", "anna")):
+        return "Elemes konyha"
+    return "Katalógus oldal"
+
+
+def _divian_ai_catalog_color_values(raw_page_text: str) -> list[str]:
+    folded_text = _divian_ai_fold_text(raw_page_text)
+    colors: list[str] = []
+    seen_colors: set[str] = set()
+    for color in DIVIAN_AI_COLOR_PHRASES:
+        folded_color = _divian_ai_fold_text(color)
+        if folded_color in folded_text and folded_color not in seen_colors:
+            seen_colors.add(folded_color)
+            colors.append(color)
+    return colors
+
+
+def _divian_ai_catalog_short_values(lines: list[str], *, max_length: int = 42, max_words: int = 6) -> list[str]:
+    values: list[str] = []
+    seen_values: set[str] = set()
+    for line in lines:
+        folded_line = _divian_ai_fold_text(line)
+        if not line or len(line) > max_length:
+            continue
+        if len(line.split()) > max_words:
+            continue
+        if any(token in folded_line for token in ("ft", "garancia", "kedvezmeny", "regisztracio", "oldal tipus", "partner szekcio")):
+            continue
+        if re.search(r"\d{2,4}\s*x\s*\d{2,4}", line):
+            continue
+        if _divian_ai_is_code_like(line):
+            continue
+        if folded_line in seen_values:
+            continue
+        seen_values.add(folded_line)
+        values.append(line)
+    return values
+
+
+def _divian_ai_catalog_feature_values(lines: list[str]) -> list[str]:
+    features = _divian_ai_catalog_short_values(lines, max_length=48, max_words=7)
+    return [value for value in features if len(value) >= 6][:12]
+
+
+def _divian_ai_catalog_inline_material_values(raw_page_text: str, material_label: str) -> list[str]:
+    fixed_text = (
+        raw_page_text.replace("õ", "ő")
+        .replace("û", "ű")
+        .replace("Õ", "Ő")
+        .replace("Û", "Ű")
+    )
+    fixed_text = re.sub(r"([a-záéíóöőúüű])([A-ZÁÉÍÓÖŐÚÜŰ])", r"\1 \2", fixed_text)
+    flat_text = re.sub(r"\s+", " ", fixed_text)
+    pattern = re.compile(
+        rf"([A-ZÁÉÍÓÖŐÚÜŰa-záéíóöőúüű][A-ZÁÉÍÓÖŐÚÜŰa-záéíóöőúüű0-9\-/ ]{{2,42}}?)\s+{re.escape(material_label)}\*?",
+        flags=re.IGNORECASE,
+    )
+    values: list[str] = []
+    seen: set[str] = set()
+    for match in pattern.finditer(flat_text):
+        value = _clean_spaces(match.group(1)).strip(" -*,")
+        folded_value = _divian_ai_fold_text(value)
+        if not value or folded_value in seen:
+            continue
+        if any(term in folded_value for term in ("28-as", "38-as", "minden", "feltuntetett", "tovabbi", "vizzaro", "konyhasziget")):
+            continue
+        if len(value) > 32 or re.search(r"\d", value):
+            continue
+        seen.add(folded_value)
+        values.append(value)
+    return values
+
+
+def _divian_ai_catalog_page_color_values(
+    raw_page_text: str,
+    *,
+    start_markers: tuple[str, ...] = (),
+    end_markers: tuple[str, ...] = (),
+    excluded: tuple[str, ...] = (),
+) -> list[str]:
+    fixed_text = (
+        raw_page_text.replace("õ", "ő")
+        .replace("û", "ű")
+        .replace("Õ", "Ő")
+        .replace("Û", "Ű")
+    )
+    fixed_text = re.sub(r"([a-záéíóöőúüű])([A-ZÁÉÍÓÖŐÚÜŰ])", r"\1 \2", fixed_text)
+    lines = [_clean_spaces(line) for line in fixed_text.splitlines() if _clean_spaces(line)]
+    folded_lines = [_divian_ai_fold_text(line) for line in lines]
+
+    start_index = 0
+    if start_markers:
+        for index, folded_line in enumerate(folded_lines):
+            if any(marker in folded_line for marker in start_markers):
+                start_index = index
+                break
+        else:
+            return []
+
+    collected: list[str] = []
+    excluded_folded = {_divian_ai_fold_text(value) for value in excluded}
+    for line, folded_line in zip(lines[start_index:], folded_lines[start_index:]):
+        if end_markers and any(marker in folded_line for marker in end_markers):
+            break
+        collected.append(line)
+
+    block_text = " ".join(collected)
+    values: list[str] = []
+    seen: set[str] = set()
+    for color in DIVIAN_AI_COLOR_PHRASES:
+        folded_color = _divian_ai_fold_text(color)
+        if folded_color in excluded_folded or folded_color in seen:
+            continue
+        if folded_color in _divian_ai_fold_text(block_text):
+            seen.add(folded_color)
+            values.append(color)
+    return values
+
+
+def _divian_ai_catalog_surface_colors(
+    knowledge: DivianAIKnowledgeCache,
+    subject_key: str,
+) -> tuple[list[str], list[str]]:
+    colors: list[str] = []
+    sources: list[str] = []
+    seen_colors: set[str] = set()
+    seen_sources: set[str] = set()
+
+    preferred_sources = set(_divian_ai_preferred_structured_sources(knowledge, source_type="catalog", limit=3))
+    for page in knowledge.pages:
+        if page.source_name not in preferred_sources:
+            continue
+        page_folded = page.folded
+        page_colors: list[str] = []
+        if subject_key == "munkalap":
+            if not any(
+                marker in page_folded
+                for marker in ("28-as munkalapok", "38-as munkalapok", "munkalapok es falipanelek")
+            ):
+                continue
+            page_colors = _divian_ai_catalog_inline_material_values(page.text, "munkalap")
+        elif subject_key == "falipanel":
+            if not any(marker in page_folded for marker in ("falipanel szinek", "munkalapok es falipanelek")):
+                continue
+            page_colors = _divian_ai_catalog_page_color_values(
+                page.text,
+                start_markers=("falipanel szinek", "munkalapok es falipanelek"),
+                excluded=("Króm", "Matt fekete", "Arany", "Rose gold"),
+            )
+            if not page_colors:
+                page_colors = _divian_ai_catalog_page_color_values(
+                    page.text,
+                    start_markers=("38-as munkalapok es vizzarok",),
+                    excluded=("Króm", "Matt fekete", "Arany", "Rose gold"),
+                )
+        else:
+            continue
+
+        for color in page_colors:
+            folded_color = _divian_ai_fold_text(color)
+            if not folded_color or folded_color in seen_colors:
+                continue
+            seen_colors.add(folded_color)
+            colors.append(color)
+
+        if page_colors and page.label not in seen_sources:
+            seen_sources.add(page.label)
+            sources.append(page.label)
+
+    return colors, sources
+
+
+def _divian_ai_catalog_summary(lines: list[str], subject_label: str) -> str:
+    summary_parts: list[str] = []
+    folded_subject = _divian_ai_fold_text(subject_label)
+    for line in lines:
+        folded_line = _divian_ai_fold_text(line)
+        if folded_subject and folded_subject in folded_line:
+            continue
+        if len(line) < 40 or len(line.split()) < 7:
+            continue
+        if any(term in folded_line for term in ("az akcioban", "idotartama", "regisztraciohoz", "garancia van ra", "copyright")):
+            continue
+        if "ft" in folded_line:
+            continue
+        summary_parts.append(line)
+        if len(" ".join(summary_parts)) >= 420 or len(summary_parts) >= 3:
+            break
+    return " ".join(summary_parts).strip()
+
+
+def _divian_ai_catalog_extract_records(
+    page_data: DivianAIPage,
+    raw_page_text: str,
+    source_name: str,
+    page_number: int,
+) -> list[DivianAIRecord]:
+    if not _divian_ai_source_is_catalog(source_name):
+        return []
+
+    detected_product_keys = list(dict.fromkeys(_divian_ai_detect_product_keys(f"{page_data.title}\n{raw_page_text[:2000]}")))
+    folded_text = _divian_ai_fold_text(raw_page_text)
+    if len(detected_product_keys) >= 3 and not any(
+        marker in folded_text
+        for marker in (
+            "front szinek",
+            "munkalap",
+            "falipanel",
+            "garancia",
+            "blokk konyha",
+            "fogantyu",
+            "elony",
+            "előny",
+            "front es korpusz",
+        )
+    ):
+        return []
+
+    subject_label = _divian_ai_catalog_subject_label(page_data.title, raw_page_text)
+    kind_label = _divian_ai_catalog_kind(subject_label, raw_page_text)
+    lines = _divian_ai_catalog_lines(raw_page_text)
+    summary = _divian_ai_catalog_summary(lines, subject_label)
+    colors = _divian_ai_catalog_color_values(raw_page_text)
+    features = _divian_ai_catalog_feature_values(lines)
+
+    front_materials: list[str] = []
+    if "mdf folias" in folded_text:
+        front_materials.append("MDF fóliás")
+    if "butorlap" in folded_text:
+        front_materials.append("Bútorlap")
+
+    price_matches = re.findall(r"\d[\d.\s]*\s*Ft(?:-tól)?", raw_page_text, flags=re.IGNORECASE)
+    prices = [_clean_spaces(price) for price in price_matches]
+    unique_prices: list[str] = []
+    seen_prices: set[str] = set()
+    for price in prices:
+        folded_price = _divian_ai_fold_text(price)
+        if folded_price in seen_prices:
+            continue
+        seen_prices.add(folded_price)
+        unique_prices.append(price)
+
+    size_matches = re.findall(r"\b\d+\s*cm(?:-es)?(?:\s*vagy\s*\d+\s*cm)?(?:,\s*\d+\s*cm)?", raw_page_text, flags=re.IGNORECASE)
+    sizes = []
+    seen_sizes: set[str] = set()
+    for size in size_matches:
+        clean_size = _clean_spaces(size)
+        folded_size = _divian_ai_fold_text(clean_size)
+        if folded_size in seen_sizes:
+            continue
+        seen_sizes.add(folded_size)
+        sizes.append(clean_size)
+
+    warranty_matches = re.findall(r"(?:Akár\s*)?\d+\s*(?:\+\s*\d+\s*)?év\*?", raw_page_text, flags=re.IGNORECASE)
+    warranties = []
+    seen_warranties: set[str] = set()
+    for warranty in warranty_matches:
+        clean_warranty = _clean_spaces(warranty)
+        folded_warranty = _divian_ai_fold_text(clean_warranty)
+        if folded_warranty in seen_warranties:
+            continue
+        seen_warranties.add(folded_warranty)
+        warranties.append(clean_warranty)
+
+    fields: list[tuple[str, str]] = [
+        ("Megnevezés", subject_label),
+        ("Típus", kind_label),
+    ]
+    if summary:
+        fields.append(("Leírás", summary))
+    if front_materials:
+        fields.append(("Front anyag", ", ".join(front_materials)))
+    if colors:
+        fields.append(("Színek", ", ".join(colors[:18])))
+    worktop_colors = _divian_ai_catalog_inline_material_values(raw_page_text, "munkalap")
+    if worktop_colors:
+        fields.append(("Munkalap színek", ", ".join(worktop_colors[:24])))
+    if "falipanel" in folded_text:
+        panel_colors = _divian_ai_catalog_page_color_values(
+            raw_page_text,
+            start_markers=("falipanel szinek",),
+            excluded=("Króm", "Matt fekete", "Arany", "Rose gold"),
+        )
+        if panel_colors:
+            fields.append(("Falipanel színek", ", ".join(panel_colors[:24])))
+    if features:
+        fields.append(("Jellemzők", ", ".join(features[:12])))
+    if unique_prices:
+        fields.append(("Ár", ", ".join(unique_prices[:4])))
+    if sizes:
+        fields.append(("Méret", ", ".join(sizes[:6])))
+    if warranties:
+        fields.append(("Garancia", ", ".join(warranties[:4])))
+
+    records: list[DivianAIRecord] = []
+    summary_record = _divian_ai_build_record(
+        label=f"{source_name} · {page_number}. oldal · összefoglaló",
+        source_name=source_name,
+        row_number=page_number * 1000 + 1,
+        fields=fields,
+    )
+    if summary_record is not None:
+        records.append(summary_record)
+
+    for item_index, color in enumerate(colors[:24], start=1):
+        color_record = _divian_ai_build_record(
+            label=f"{source_name} · {page_number}. oldal · szín {item_index}",
+            source_name=source_name,
+            row_number=page_number * 1000 + 20 + item_index,
+            fields=[
+                ("Megnevezés", color),
+                ("Típus", "Szín"),
+                ("Kapcsolódó modell", subject_label),
+            ],
+        )
+        if color_record is not None:
+            records.append(color_record)
+
+    for item_index, feature in enumerate(features[:16], start=1):
+        feature_record = _divian_ai_build_record(
+            label=f"{source_name} · {page_number}. oldal · jellemző {item_index}",
+            source_name=source_name,
+            row_number=page_number * 1000 + 100 + item_index,
+            fields=[
+                ("Megnevezés", feature),
+                ("Típus", "Jellemző"),
+                ("Kapcsolódó modell", subject_label),
+            ],
+        )
+        if feature_record is not None:
+            records.append(feature_record)
+
+    return records
+
+
+def _divian_ai_partner_category_key_from_text(*values: str) -> str:
+    combined = " ".join(value for value in values if value)
+    folded_text = _divian_ai_fold_text(combined)
+    for category_key, aliases in DIVIAN_AI_PARTNER_CATEGORY_ALIASES.items():
+        if any(_divian_ai_fold_text(alias) in folded_text for alias in aliases):
+            return category_key
+    return ""
+
+
+def _divian_ai_partner_category_label(category_key: str) -> str:
+    return {
+        "szek": "Szék",
+        "asztal": "Asztal",
+        "garnitura": "Étkezőgarnitúra",
+        "konyhagep": "Konyhagép",
+        "kisgep": "Konyhai kisgép",
+        "mosogatotalca": "Mosogatótálca",
+        "csaptelep": "Csaptelep",
+        "vasalat": "Vasalat",
+        "kiegeszito": "Kiegészítő",
+        "vilagitas": "Világítás",
+        "blokk_konyha": "Blokk konyha",
+    }.get(category_key, category_key.replace("_", " ").strip().title())
+
+
+def _divian_ai_extract_public_web_records(
+    raw_text: str,
+    source_name: str,
+    source_path: Path,
+) -> list[DivianAIRecord]:
+    entry = _divian_ai_public_web_entry(source_path)
+    if entry is None:
+        return []
+
+    page_type = str(entry.get("page_type", "")).strip() or "info"
+    source_url = str(entry.get("url", "")).strip()
+    category_key = _divian_ai_partner_category_key_from_text(source_name, raw_text, source_url)
+    category_label = _divian_ai_partner_category_label(category_key) if category_key else ""
+
+    key_value_lines: list[tuple[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for raw_line in raw_text.splitlines():
+        line = _clean_spaces(raw_line)
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        clean_key = _clean_spaces(key)
+        clean_value = _clean_spaces(value)
+        if not clean_key or not clean_value:
+            continue
+        folded_key = _divian_ai_fold_text(clean_key)
+        if folded_key in {"forras url", "frissitve", "oldal cime", "web extract version"}:
+            continue
+        pair = (clean_key, clean_value)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+        key_value_lines.append(pair)
+
+    name_value = ""
+    for key, value in key_value_lines:
+        if _divian_ai_fold_text(key) in {"termek neve", "megnevezes"}:
+            name_value = value
+            break
+    if not name_value:
+        name_value = _clean_spaces(str(entry.get("name", "")).strip() or source_name)
+
+    base_fields: list[tuple[str, str]] = [
+        ("Megnevezés", name_value),
+        ("Oldal típus", page_type),
+    ]
+    if category_label:
+        base_fields.append(("Kategória", category_label))
+    for key, value in key_value_lines[:14]:
+        if (key, value) not in base_fields:
+            base_fields.append((key, value))
+
+    records: list[DivianAIRecord] = []
+    main_record = _divian_ai_build_record(
+        label=f"{source_name} · web összefoglaló",
+        source_name=source_name,
+        row_number=1,
+        fields=base_fields,
+    )
+    if main_record is not None:
+        records.append(main_record)
+
+    item_patterns = (
+        ("Akciós termék", "Akció"),
+        ("Új termék", "Új termék"),
+        ("Termék", "Partner termék"),
+    )
+    item_index = 0
+    for key, item_type in item_patterns:
+        regex = re.compile(rf"^{re.escape(key)}\s*:\s*(.+)$", re.IGNORECASE)
+        for raw_line in raw_text.splitlines():
+            line = _clean_spaces(raw_line)
+            match = regex.match(line)
+            if not match:
+                continue
+            item_name = _clean_spaces(match.group(1))
+            if not item_name:
+                continue
+            item_index += 1
+            item_fields = [("Megnevezés", item_name), ("Típus", item_type)]
+            if category_label:
+                item_fields.append(("Kategória", category_label))
+            item_record = _divian_ai_build_record(
+                label=f"{source_name} · web tétel {item_index}",
+                source_name=source_name,
+                row_number=50 + item_index,
+                fields=item_fields,
+            )
+            if item_record is not None:
+                records.append(item_record)
+
+    return records
+
+
 def _divian_ai_chunk_text(label: str, source_name: str, page_number: int, text: str) -> list[DivianAIChunk]:
     clean_text = _divian_ai_normalize_text(text)
     if not clean_text:
@@ -10424,7 +12704,7 @@ def _divian_ai_flatten_json(value, prefix: str = "") -> list[str]:
 
 def _divian_ai_extract_pdf_source(source_path: Path, source_name: str) -> DivianAISourceExtractResult:
     if PdfReader is None:
-        return DivianAISourceExtractResult(source_name=source_name, error="A PDF tudástár olvasásához a pypdf csomag szükséges.")
+        return DivianAISourceExtractResult(source_name=source_name, error="A PDF források olvasásához a pypdf csomag szükséges.")
 
     try:
         reader = PdfReader(str(source_path))
@@ -10453,6 +12733,12 @@ def _divian_ai_extract_pdf_source(source_path: Path, source_name: str) -> Divian
 
         result.pages.append(page_data)
         result.chunks.extend(_divian_ai_chunk_text(label, source_name, page_number, raw_page_text))
+        elemjegyzek_records = _divian_ai_extract_elemjegyzek_records(raw_page_text, source_name, page_number, page_title)
+        if elemjegyzek_records:
+            result.records.extend(elemjegyzek_records)
+        catalog_records = _divian_ai_catalog_extract_records(page_data, raw_page_text, source_name, page_number)
+        if catalog_records:
+            result.records.extend(catalog_records)
         result.records.extend(_divian_ai_extract_key_value_records(raw_page_text, source_name, f"{page_number}. oldal"))
 
     if not result.pages and not result.error:
@@ -10478,11 +12764,16 @@ def _divian_ai_extract_text_source(source_path: Path, source_name: str) -> Divia
     if page_data is None:
         return DivianAISourceExtractResult(source_name=source_name, error=f"A fájl üres vagy nem olvasható: {source_name}")
 
+    records = _divian_ai_extract_key_value_records(raw_text, source_name, "szöveg")
+    public_web_records = _divian_ai_extract_public_web_records(raw_text, source_name, source_path)
+    if public_web_records:
+        records.extend(public_web_records)
+
     return DivianAISourceExtractResult(
         source_name=source_name,
         pages=[page_data],
         chunks=_divian_ai_chunk_text(label, source_name, 1, raw_text),
-        records=_divian_ai_extract_key_value_records(raw_text, source_name, "szöveg"),
+        records=records,
     )
 
 
@@ -10645,21 +12936,29 @@ def _divian_ai_extract_image_source(source_path: Path, source_name: str) -> Divi
 def _divian_ai_extract_source(source_path: Path, source_name: str | None = None) -> DivianAISourceExtractResult:
     source_name = source_name or _divian_ai_source_display_name(source_path)
     suffix = source_path.suffix.lower()
+    parser_name, study_mode, confidence, note = _divian_ai_source_study_profile(source_path, source_name)
 
     if suffix == ".pdf":
-        return _divian_ai_extract_pdf_source(source_path, source_name)
-    if suffix in {".txt", ".md", ".json"}:
-        return _divian_ai_extract_text_source(source_path, source_name)
-    if suffix == ".csv":
-        return _divian_ai_extract_csv_source(source_path, source_name)
-    if suffix in {".xlsx", ".xlsm"}:
-        return _divian_ai_extract_workbook_source(source_path, source_name)
-    if suffix == ".docx":
-        return _divian_ai_extract_docx_source(source_path, source_name)
-    if suffix in DIVIAN_AI_IMAGE_EXTENSIONS:
-        return _divian_ai_extract_image_source(source_path, source_name)
+        result = _divian_ai_extract_pdf_source(source_path, source_name)
+    elif suffix in {".txt", ".md", ".json"}:
+        result = _divian_ai_extract_text_source(source_path, source_name)
+    elif suffix == ".csv":
+        result = _divian_ai_extract_csv_source(source_path, source_name)
+    elif suffix in {".xlsx", ".xlsm"}:
+        result = _divian_ai_extract_workbook_source(source_path, source_name)
+    elif suffix == ".docx":
+        result = _divian_ai_extract_docx_source(source_path, source_name)
+    elif suffix in DIVIAN_AI_IMAGE_EXTENSIONS:
+        result = _divian_ai_extract_image_source(source_path, source_name)
+    else:
+        result = DivianAISourceExtractResult(source_name=source_name, error=f"Nem támogatott forrásformátum: {source_name}")
 
-    return DivianAISourceExtractResult(source_name=source_name, error=f"Nem támogatott tudástár-formátum: {source_name}")
+    result.parser_name = parser_name
+    result.study_mode = study_mode
+    result.confidence = confidence
+    if note and not result.note:
+        result.note = note
+    return result
 
 
 def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
@@ -10672,14 +12971,15 @@ def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
         for source_path in source_paths:
             source_key = _divian_ai_source_key(source_path)
             display_name = _divian_ai_source_display_name(source_path)
+            parser_name, study_mode, confidence, profile_note = _divian_ai_source_study_profile(source_path, display_name)
             upload_entry = manifest_map.get(source_path.name)
             document_id = _divian_ai_source_entry_id(source_path, upload_entry)
             stat = source_path.stat()
             size_bytes = int(stat.st_size)
-            modified_ns = int(stat.st_mtime_ns)
+            modified_ns = int(stat.st_mtime_ns) + DIVIAN_AI_INDEXER_VERSION
             row = connection.execute(
                 """
-                SELECT id, source_name, modified_ns, size_bytes, status
+                SELECT id, source_name, modified_ns, size_bytes, status, parser_name, study_mode, confidence
                 FROM knowledge_documents
                 WHERE source_key = ?
                 """,
@@ -10690,14 +12990,17 @@ def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
                 or int(row["modified_ns"] or 0) != modified_ns
                 or int(row["size_bytes"] or 0) != size_bytes
                 or str(row["source_name"] or "") != display_name
+                or not str(row["parser_name"] or "").strip()
+                or not str(row["study_mode"] or "").strip()
+                or not str(row["confidence"] or "").strip()
             )
 
             connection.execute(
                 """
                 INSERT INTO knowledge_documents (
                     id, source_key, source_name, path, stored_name, kind, is_uploaded, uploaded_at,
-                    status, note, size_bytes, modified_ns, page_count, chunk_count, record_count, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    parser_name, study_mode, confidence, status, note, size_bytes, modified_ns, page_count, chunk_count, record_count, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(source_key) DO UPDATE SET
                     id = excluded.id,
                     source_name = excluded.source_name,
@@ -10706,6 +13009,9 @@ def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
                     kind = excluded.kind,
                     is_uploaded = excluded.is_uploaded,
                     uploaded_at = excluded.uploaded_at,
+                    parser_name = excluded.parser_name,
+                    study_mode = excluded.study_mode,
+                    confidence = excluded.confidence,
                     size_bytes = excluded.size_bytes,
                     modified_ns = excluded.modified_ns,
                     updated_at = excluded.updated_at
@@ -10719,8 +13025,11 @@ def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
                     _divian_ai_doc_kind(source_path),
                     1 if upload_entry else 0,
                     str((upload_entry or {}).get("uploaded_at", "")).strip(),
+                    parser_name,
+                    study_mode,
+                    confidence,
                     "pending",
-                    "",
+                    profile_note,
                     size_bytes,
                     modified_ns,
                     0,
@@ -10814,15 +13123,20 @@ def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
                 else:
                     status = "stored"
 
+                final_note = " ".join(part for part in (extracted.note, extracted.error) if part).strip()
+
                 connection.execute(
                     """
                     UPDATE knowledge_documents
-                    SET status = ?, note = ?, page_count = ?, chunk_count = ?, record_count = ?, updated_at = ?
+                    SET parser_name = ?, study_mode = ?, confidence = ?, status = ?, note = ?, page_count = ?, chunk_count = ?, record_count = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
+                        extracted.parser_name,
+                        extracted.study_mode,
+                        extracted.confidence,
                         status,
-                        extracted.error or "",
+                        final_note,
                         len(extracted.pages),
                         len(extracted.chunks),
                         len(extracted.records),
@@ -10862,16 +13176,30 @@ def _divian_ai_sync_knowledge_registry(source_paths: list[Path]) -> list[str]:
 
 
 def _divian_ai_cache_from_db(signature: tuple[tuple[str, int, int], ...]) -> DivianAIKnowledgeCache:
-    cache = DivianAIKnowledgeCache(signature=signature)
+    cache = DivianAIKnowledgeCache(signature=signature, loaded_at=time.time())
     with _divian_ai_db_connection() as connection:
         documents = connection.execute(
             """
-            SELECT id, source_name, status, note
+            SELECT id, source_name, status, note, parser_name, study_mode, confidence, kind, is_uploaded, uploaded_at, updated_at
             FROM knowledge_documents
             ORDER BY source_name COLLATE NOCASE
             """
         ).fetchall()
         cache.sources = [str(row["source_name"]) for row in documents]
+        cache.source_meta = {
+            str(row["source_name"]): {
+                "parser_name": str(row["parser_name"] or "").strip(),
+                "study_mode": str(row["study_mode"] or "").strip(),
+                "confidence": str(row["confidence"] or "").strip(),
+                "status": str(row["status"] or "").strip(),
+                "note": str(row["note"] or "").strip(),
+                "kind": str(row["kind"] or "").strip(),
+                "is_uploaded": str(row["is_uploaded"] or "").strip(),
+                "uploaded_at": str(row["uploaded_at"] or "").strip(),
+                "updated_at": str(row["updated_at"] or "").strip(),
+            }
+            for row in documents
+        }
 
         page_rows = connection.execute(
             """
@@ -10961,10 +13289,32 @@ def _divian_ai_cache_from_db(signature: tuple[tuple[str, int, int], ...]) -> Div
 
 def _load_divian_ai_knowledge() -> DivianAIKnowledgeCache:
     global DIVIAN_AI_CACHE
+    now = time.time()
 
-    source_paths = _divian_ai_source_paths()
-    signature = tuple((str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in source_paths)
+    if DIVIAN_AI_CACHE.signature and (now - DIVIAN_AI_CACHE.loaded_at) < DIVIAN_AI_MEMORY_CACHE_SECONDS:
+        return DIVIAN_AI_CACHE
+
+    public_web_paths, public_web_errors = _divian_ai_public_web_source_paths()
+    curated_document_paths = _divian_ai_curated_document_paths()
+    source_paths = list(public_web_paths) + list(curated_document_paths)
+    unique_paths: list[Path] = []
+    seen_path_keys: set[str] = set()
+    for path in source_paths:
+        try:
+            path_key = str(path.resolve()).lower()
+        except Exception:
+            path_key = str(path).lower()
+        if path_key in seen_path_keys:
+            continue
+        seen_path_keys.add(path_key)
+        unique_paths.append(path)
+    source_paths = unique_paths
+    signature = tuple((str(path), path.stat().st_mtime_ns, path.stat().st_size, DIVIAN_AI_INDEXER_VERSION) for path in source_paths)
     if signature == DIVIAN_AI_CACHE.signature:
+        DIVIAN_AI_CACHE.loaded_at = now
+        for error in public_web_errors:
+            if error not in DIVIAN_AI_CACHE.errors:
+                DIVIAN_AI_CACHE.errors.append(error)
         return DIVIAN_AI_CACHE
 
     if not source_paths:
@@ -10973,17 +13323,19 @@ def _load_divian_ai_knowledge() -> DivianAIKnowledgeCache:
             connection.execute("DELETE FROM knowledge_chunks")
             connection.execute("DELETE FROM knowledge_records")
             connection.execute("DELETE FROM knowledge_documents")
-        cache = DivianAIKnowledgeCache(signature=signature)
-        cache.errors.append("Még nincs elérhető tudástár a Divian-AI számára.")
+        cache = DivianAIKnowledgeCache(signature=signature, loaded_at=now)
+        cache.errors.append("Még nincs elérhető Divian forrás a Divian-AI számára.")
         DIVIAN_AI_CACHE = cache
         return cache
 
     sync_errors = _divian_ai_sync_knowledge_registry(source_paths)
+    sync_errors.extend(error for error in public_web_errors if error not in sync_errors)
     cache = _divian_ai_cache_from_db(signature)
     cache.errors.extend(error for error in sync_errors if error not in cache.errors)
     if not cache.chunks and not cache.errors:
-        cache.errors.append("A megadott tudástárból nem sikerült használható szöveget kinyerni.")
+        cache.errors.append("A Divian forrásokból nem sikerült használható szöveget kinyerni.")
 
+    cache.loaded_at = now
     DIVIAN_AI_CACHE = cache
     return cache
 
@@ -11143,38 +13495,9 @@ def _divian_ai_rewrite_question_from_correction(last_question: str, correction_f
 
 
 def _divian_ai_upload_guidance(question: str, prefer_uploaded_sources: bool = False) -> str:
-    folded_question = _divian_ai_fold_text(question)
-    subject_keys = _divian_ai_detect_subject_keys(question)
-    prefix = "Nyisd meg az AI-tudásbázist, és tölts fel" if prefer_uploaded_sources else "A jobb válaszhoz érdemes feltölteni"
-
-    if _divian_ai_is_color_question(question) or any(key in {"butorlap", "front", "munkalap", "korpusz", "falipanel"} for key in subject_keys) or any(term in folded_question for term in ("anyag", "cikkszam")):
-        return (
-            f"{prefix} egy tiszta terméklistát Excel vagy CSV formában. "
-            "Javasolt oszlopok: Kategória, Megnevezés, Szín/dekor, Anyag, Cikkszám."
-        )
-
-    if any(term in folded_question for term in ("hatarido", "katalogus", "marketing", "lead", "feladat", "kampany")):
-        return (
-            f"{prefix} egy határidőlistát Excel vagy CSV formában. "
-            "Javasolt oszlopok: Feladat, Határidő, Felelős, Státusz, Részleg."
-        )
-
-    if any(term in folded_question for term in ("tudoszur", "alkalmassag", "hr", "dolgozo", "szabadsag", "vizsgalat")):
-        return (
-            f"{prefix} egy HR listát Excel vagy CSV formában. "
-            "Javasolt oszlopok: Név, Részleg, Esemény, Következő esedékesség, Státusz."
-        )
-
-    if any(term in folded_question for term in ("szerzodes", "partner", "lejarat", "felmondas")):
-        return (
-            f"{prefix} egy szerződés-nyilvántartást Excel vagy CSV formában. "
-            "Javasolt oszlopok: Partner, Szerződés, Kezdés, Lejárat, Felelős, Státusz."
-        )
-
     return (
-        f"{prefix} egy tiszta, jól strukturált forrást. "
-        "A legjobb, ha 1 sor = 1 tétel, és a fejléc egyértelmű. "
-        "AI-tudásbázis: /apps/ai-tudasbazis"
+        "Jelenleg a Divian webes és katalógus forrásokból dolgozom. "
+        "Ha valamire nincs biztos válasz, akkor azt jelzem, és nem találgatok."
     )
 
 
@@ -11197,7 +13520,7 @@ def _divian_ai_feedback_response(question: str, history: list[dict[str, str]]) -
             "\"csak a Kastamonu színeket mutasd\".\n\n"
             f"{guidance}"
         ),
-        "sources": ["AI-tudásbázis"],
+        "sources": [],
     }
 
 
@@ -11236,7 +13559,7 @@ def _divian_ai_needs_product_context(question: str) -> bool:
     if re.match(r"^(es|es akkor|es ilyenkor|es meg)\b", folded_question):
         return True
 
-    if any(marker in folded_question for marker in contextual_markers):
+    if any(re.search(rf"\b{re.escape(marker)}\b", folded_question) for marker in contextual_markers):
         return True
 
     return False
@@ -11271,18 +13594,7 @@ def _divian_ai_contextualize_question(question: str, history: list[dict[str, str
     if last_user_question and last_user_question != clean_question and _divian_ai_is_reference_followup(clean_question):
         return f"{last_user_question}\nKiegészítő kérdés: {clean_question}"
 
-    if not _divian_ai_needs_product_context(clean_question):
-        return clean_question
-
-    product_label = _divian_ai_last_history_product_label(history)
-    if not product_label:
-        return f"{last_user_question}\nKiegészítő kérdés: {clean_question}" if last_user_question else clean_question
-
-    context_label = product_label
-    if "konyha" not in _divian_ai_fold_text(context_label):
-        context_label = f"{context_label} konyha"
-
-    return f"{clean_question}\nKapcsolódó termék: {context_label}."
+    return clean_question
 
 
 def _divian_ai_is_color_question(question: str) -> bool:
@@ -11330,6 +13642,8 @@ def _divian_ai_collect_profile_colors(kitchen_keys: list[str], material_filter: 
             else:
                 continue
 
+            color_values = _divian_ai_refine_material_colors(color_values, material_filter)
+
         for color in color_values:
             color_key = _divian_ai_fold_text(color)
             if color_key in seen_colors:
@@ -11343,6 +13657,49 @@ def _divian_ai_collect_profile_colors(kitchen_keys: list[str], material_filter: 
             sources.append(source)
 
     return colors, sources
+
+
+def _divian_ai_match_material_color_set(kitchen: dict, material_filter: str) -> list[str]:
+    material_sets = kitchen.get("material_color_sets", {})
+    matched_sets = [
+        values
+        for set_key, values in material_sets.items()
+        if material_filter in _divian_ai_fold_text(set_key)
+    ]
+    if matched_sets:
+        merged: list[str] = []
+        seen: set[str] = set()
+        for values in matched_sets:
+            for color in values:
+                color_key = _divian_ai_fold_text(color)
+                if not color_key or color_key in seen:
+                    continue
+                seen.add(color_key)
+                merged.append(color)
+        return _divian_ai_refine_material_colors(merged, material_filter)
+    return []
+
+
+def _divian_ai_refine_material_colors(colors: list[str], material_filter: str, question: str = "") -> list[str]:
+    if material_filter != "butorlap":
+        return colors
+
+    folded_question = _divian_ai_fold_text(question)
+    asks_finish = any(term in folded_question for term in ("fenyes", "fényes", "matt", "magasfenyu", "magasfényű"))
+    if asks_finish:
+        return colors
+
+    refined: list[str] = []
+    seen: set[str] = set()
+    for color in colors:
+        folded_color = _divian_ai_fold_text(color)
+        if any(term in folded_color for term in ("fenyes", "fényes", "matt", "magasfenyu", "magasfényű")):
+            continue
+        if folded_color in seen:
+            continue
+        seen.add(folded_color)
+        refined.append(color)
+    return refined or colors
 
 
 def _divian_ai_format_source_list(values: list[str]) -> list[str]:
@@ -11412,6 +13769,8 @@ def _divian_ai_profile_material_answer(question: str) -> dict | None:
     folded_question = _divian_ai_fold_text(question)
     subject_keys = _divian_ai_detect_subject_keys(question)
     question_tokens = _divian_ai_tokens(question)
+    if _divian_ai_detect_product_keys(question):
+        return None
 
     if "munkalap" in subject_keys and not _divian_ai_detect_product_keys(question):
         colors = DIVIAN_AI_COMPANY_PROFILE["worktops"]["all_colors"]
@@ -11423,10 +13782,21 @@ def _divian_ai_profile_material_answer(question: str) -> dict | None:
         }
 
     if ("butorlap" in subject_keys or "butorlap" in question_tokens or "butorlap" in folded_question) and _divian_ai_is_color_question(question):
-        kitchen_keys = [key for key in _divian_ai_current_kitchen_keys() if key in {"doroti", "kira", "kata", "kinga", "klio"}]
+        kitchen_keys = [key for key in ("doroti", "anna", "kira", "kata", "kinga", "klio") if _divian_ai_profile_kitchen(key)]
         colors, sources = _divian_ai_collect_profile_colors(kitchen_keys, material_filter="butorlap")
         if colors:
-            answer = "A jelenlegi kínálat és a kézikönyv alapján ezek a fő bútorlap színek/dekorok szerepelnek:\n- " + "\n- ".join(colors)
+            answer = "A jelenlegi kínálat és a kézikönyv alapján ezek a fő bútorlap színek/dekorok érhetők el:\n- " + "\n- ".join(colors)
+            return {
+                "ok": True,
+                "answer": answer,
+                "sources": ["Belső aktuális kínálat"] + _divian_ai_format_source_list(sources),
+            }
+
+    if "front" in subject_keys and _divian_ai_is_color_question(question):
+        kitchen_keys = [key for key in _divian_ai_current_kitchen_keys() if key in {"doroti", "antonia", "laura", "zille", "anna", "kira", "kata", "kinga"}]
+        colors, sources = _divian_ai_collect_profile_colors(kitchen_keys)
+        if colors:
+            answer = "A jelenlegi kínálat és a kézikönyv alapján ezek a fő front színek érhetők el:\n- " + "\n- ".join(colors)
             return {
                 "ok": True,
                 "answer": answer,
@@ -11494,9 +13864,18 @@ def _divian_ai_profile_kitchen_answer(question: str) -> dict | None:
         }
 
     if ("front" in subject_keys or "butorlap" in subject_keys or _divian_ai_is_color_question(question)) and kitchen.get("front_colors"):
-        label = "front színei"
         if "butorlap" in subject_keys:
-            label = "bútorlap/front színei"
+            butorlap_colors = _divian_ai_match_material_color_set(kitchen, "butorlap")
+            if butorlap_colors:
+                return {
+                    "ok": True,
+                    "answer": f"{kitchen['label']} bútorlap színei:\n- " + "\n- ".join(butorlap_colors),
+                    "sources": sources,
+                }
+        if "front" in subject_keys:
+            label = "front színei"
+        else:
+            label = "színei"
         return {
             "ok": True,
             "answer": f"{kitchen['label']} {label}:\n- " + "\n- ".join(kitchen["front_colors"]),
@@ -11522,6 +13901,48 @@ def _divian_ai_profile_kitchen_answer(question: str) -> dict | None:
         "ok": True,
         "answer": f"{kitchen['label']} összefoglaló:\n" + "\n".join(summary_lines),
         "sources": sources,
+    }
+
+
+def _divian_ai_catalog_surface_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    if not _divian_ai_is_color_question(question):
+        return None
+
+    subject_keys = _divian_ai_detect_subject_keys(question)
+    if not any(subject in subject_keys for subject in ("munkalap", "falipanel")):
+        return None
+
+    sections: list[tuple[str, list[str], list[str]]] = []
+    if "munkalap" in subject_keys:
+        colors, sources = _divian_ai_catalog_surface_colors(knowledge, "munkalap")
+        if colors:
+            sections.append(("Munkalap színek", colors, sources))
+    if "falipanel" in subject_keys:
+        colors, sources = _divian_ai_catalog_surface_colors(knowledge, "falipanel")
+        if colors:
+            sections.append(("Falipanel színek", colors, sources))
+
+    if not sections:
+        return None
+
+    answer_lines: list[str] = []
+    source_labels: list[str] = []
+    seen_sources: set[str] = set()
+    for label, colors, sources in sections:
+        answer_lines.append(f"- {label}: " + ", ".join(colors))
+        for source in sources:
+            if source not in seen_sources:
+                seen_sources.add(source)
+                source_labels.append(source)
+
+    return {
+        "ok": True,
+        "answer": "A Divian katalógus alapján:\n" + "\n".join(answer_lines),
+        "sources": source_labels[:4],
     }
 
 
@@ -11636,7 +14057,7 @@ def _divian_ai_best_matching_source(question: str, sources: list[str]) -> str | 
 def _divian_ai_source_summary_answer(
     question: str,
     knowledge: DivianAIKnowledgeCache,
-    evidence_label: str = "A tudástár alapján",
+    evidence_label: str = "A Divian források alapján",
 ) -> dict | None:
     folded_question = _divian_ai_fold_text(question)
     if not any(hint in folded_question for hint in DIVIAN_AI_FILE_QUERY_HINTS):
@@ -11683,10 +14104,762 @@ def _divian_ai_source_summary_answer(
     return None
 
 
+def _divian_ai_company_founding_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    folded_question = _divian_ai_fold_text(question)
+    if not any(term in folded_question for term in ("mikor alakult", "alapitas", "alapit", "alapított")):
+        return None
+
+    preferred_pages = [
+        page
+        for page in knowledge.pages
+        if any(
+            hint in _divian_ai_fold_text(page.source_name)
+            for hint in ("divian hivatalos - rolunk", "divian partner - fooldal")
+        )
+    ]
+    candidate_pages = preferred_pages or knowledge.pages
+    for page in candidate_pages:
+        match = re.search(r"\b((?:19|20)\d{2})-?ben\s+alakult", _divian_ai_fold_text(page.text))
+        if not match:
+            continue
+        year = match.group(1)
+        return {
+            "ok": True,
+            "answer": f"{evidence_label} a Divian-Mega Kft. {year}-ben alakult.",
+            "sources": [page.label],
+        }
+    return None
+
+
+def _divian_ai_is_company_info_question(question: str) -> bool:
+    folded_question = _divian_ai_fold_text(question)
+    company_terms = (
+        "divian",
+        "ceg",
+        "cegjegyzek",
+        "cegjegyzek",
+        "adoszam",
+        "szekhely",
+        "telephely",
+        "fotevekenyseg",
+        "főtevékenys",
+        "mivel foglalkozik",
+        "mivel foglalkoznak",
+        "partner felulet",
+        "partner oldal",
+        "akcio",
+        "akcioink",
+        "uj termek",
+        "uj termekek",
+        "viszontelado",
+        "beepito",
+        "beépítő",
+        "mikor alakult",
+        "alapit",
+        "alapított",
+    )
+    return any(term in folded_question for term in company_terms)
+
+
+def _divian_ai_is_partner_offer_question(question: str) -> bool:
+    folded_question = _divian_ai_fold_text(question)
+    return any(
+        term in folded_question
+        for term in (
+            "akcio",
+            "akcioink",
+            "akcios",
+            "uj termek",
+            "uj termekeink",
+            "ujdonsag",
+            "ujdonsagok",
+        )
+    )
+
+
+def _divian_ai_official_web_pages(knowledge: DivianAIKnowledgeCache) -> list[DivianAIPage]:
+    return [
+        page
+        for page in knowledge.pages
+        if any(
+            hint in _divian_ai_fold_text(page.source_name)
+            for hint in ("divian hivatalos", "divian partner")
+        )
+    ]
+
+
+def _divian_ai_extract_web_field_value(page: DivianAIPage, labels: tuple[str, ...]) -> str:
+    folded_labels = tuple(_divian_ai_fold_text(label) for label in labels)
+    for index, line in enumerate(page.lines):
+        folded_line = _divian_ai_fold_text(line)
+        if not any(label in folded_line for label in folded_labels):
+            continue
+        if ":" in line:
+            value = line.split(":", 1)[1].strip()
+            if value:
+                return value
+        for next_line in page.lines[index + 1 : index + 6]:
+            next_folded = _divian_ai_fold_text(next_line)
+            if ":" in next_line and not re.search(r"\d", next_line):
+                break
+            if any(label in next_folded for label in folded_labels):
+                continue
+            if next_line.strip():
+                return next_line.strip()
+    return ""
+
+
+def _divian_ai_extract_web_field_list(page: DivianAIPage, labels: tuple[str, ...]) -> list[str]:
+    folded_labels = tuple(_divian_ai_fold_text(label) for label in labels)
+    for index, line in enumerate(page.lines):
+        folded_line = _divian_ai_fold_text(line)
+        if not any(label in folded_line for label in folded_labels):
+            continue
+        values: list[str] = []
+        if ":" in line:
+            value = line.split(":", 1)[1].strip()
+            if value:
+                values.append(value)
+        for next_line in page.lines[index + 1 : index + 8]:
+            next_folded = _divian_ai_fold_text(next_line)
+            if ":" in next_line and values:
+                break
+            if any(label in next_folded for label in folded_labels):
+                continue
+            if not next_line.strip():
+                continue
+            if re.search(r"\d{4}", next_line):
+                values.append(next_line.strip())
+            elif values:
+                break
+        return values
+    return []
+
+
+def _divian_ai_partner_product_name(page: DivianAIPage) -> str:
+    explicit_name = _divian_ai_extract_web_field_value(page, ("Termék neve",))
+    if explicit_name:
+        return explicit_name
+    source_name = _clean_spaces(page.source_name)
+    source_parts = [part.strip() for part in source_name.split(" - ") if part.strip()]
+    if source_parts:
+        return source_parts[-1]
+    return source_name
+
+
+def _divian_ai_detect_partner_category_keys(question: str) -> list[str]:
+    folded_question = _divian_ai_fold_text(question)
+    detected: list[str] = []
+    for category_key, aliases in DIVIAN_AI_PARTNER_CATEGORY_ALIASES.items():
+        if any(_divian_ai_fold_text(alias) in folded_question for alias in aliases):
+            detected.append(category_key)
+    return detected
+
+
+def _divian_ai_partner_product_titles(pages: list[DivianAIPage]) -> list[str]:
+    titles: list[str] = []
+    seen_titles: set[str] = set()
+    rejected_titles = {
+        "belepes",
+        "akciok",
+        "uj termekek",
+        "divian partner - uj termek",
+        "divian partner - akcios termek",
+        "divian partner - termek",
+    }
+    for page in pages:
+        title = _clean_spaces(_divian_ai_partner_product_name(page))
+        if not title:
+            continue
+        folded_title = _divian_ai_fold_text(title)
+        if folded_title in rejected_titles or re.fullmatch(r"\d+\. oldal", folded_title):
+            continue
+        if folded_title in seen_titles:
+            continue
+        seen_titles.add(folded_title)
+        titles.append(title)
+    return titles
+
+
+def _divian_ai_is_partner_catalog_question(question: str) -> bool:
+    folded_question = _divian_ai_fold_text(question)
+    if not _divian_ai_detect_partner_category_keys(question):
+        return False
+    return any(
+        term in folded_question
+        for term in (
+            "milyen",
+            "fajta",
+            "sorold",
+            "listaz",
+            "listáz",
+            "miket",
+            "mik vannak",
+            "milyen van",
+            "milyen vannak",
+        )
+    )
+
+
+def _divian_ai_partner_alias_match(text: str, alias: str) -> bool:
+    folded_text = _divian_ai_fold_text(text)
+    folded_alias = _divian_ai_fold_text(alias)
+    if " " in folded_alias:
+        return folded_alias in folded_text
+    return folded_alias in _divian_ai_tokens(folded_text)
+
+
+def _divian_ai_partner_catalog_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    category_keys = _divian_ai_detect_partner_category_keys(question)
+    if not category_keys:
+        return None
+
+    partner_pages = [
+        page
+        for page in knowledge.pages
+        if "divian partner" in _divian_ai_fold_text(page.source_name)
+        and "szoveg" in _divian_ai_fold_text(page.label)
+    ]
+    if not partner_pages:
+        return None
+
+    matching_pages: list[DivianAIPage] = []
+    generic_titles = {
+        "akciok",
+        "uj termekek",
+        "fooldal",
+        "kapcsolat",
+        "aszf",
+        "adatvedelmi nyilatkozat",
+        "garancia bejelento",
+        "szekek",
+        "asztalok",
+        "etkezogarniturak",
+        "etkezőgarnitúrák",
+        "vasalatok",
+        "kiegeszitok",
+        "kiegészítők",
+        "blokk konyha",
+    }
+    for page in partner_pages:
+        source_folded = _divian_ai_fold_text(page.source_name)
+        title_folded = _divian_ai_fold_text(_divian_ai_partner_product_name(page))
+        if title_folded in generic_titles or re.fullmatch(r"\d+\. oldal", title_folded):
+            continue
+        if any(
+            any(
+                _divian_ai_partner_alias_match(title_folded, alias)
+                or _divian_ai_partner_alias_match(source_folded, alias)
+                for alias in DIVIAN_AI_PARTNER_CATEGORY_ALIASES.get(category_key, ())
+            )
+            for category_key in category_keys
+        ):
+            matching_pages.append(page)
+
+    titles = _divian_ai_partner_product_titles(matching_pages)
+    if not titles:
+        return None
+
+    visible_titles = titles[:18]
+    category_label = category_keys[0].replace("_", " ")
+    category_label = {
+        "szek": "széket",
+        "asztal": "asztalt",
+        "garnitura": "garnitúrát",
+        "konyhagep": "konyhagépet",
+        "kisgep": "konyhai kisgépet",
+        "mosogatotalca": "mosogatótálcát",
+        "csaptelep": "csaptelepet",
+        "vasalat": "vasalatot",
+        "kiegeszito": "kiegészítőt",
+        "blokk konyha": "blokk konyhát",
+    }.get(category_label, category_label)
+    answer = (
+        f"{evidence_label} jelenleg {len(titles)} partneres {category_label} látok a publikus katalógusban:\n- "
+        + "\n- ".join(visible_titles)
+    )
+    if len(titles) > len(visible_titles):
+        answer += f"\n- ... és még {len(titles) - len(visible_titles)} további tételt."
+    return {
+        "ok": True,
+        "answer": answer,
+        "sources": [page.label for page in matching_pages[:8]],
+    }
+
+
+def _divian_ai_partner_offer_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    folded_question = _divian_ai_fold_text(question)
+    if "akcio" in folded_question:
+        offer_key = "akcio"
+        intro = "akciós terméket"
+    elif "uj termek" in folded_question or "ujdonsag" in folded_question:
+        offer_key = "uj termek"
+        intro = "új terméket"
+    else:
+        return None
+
+    partner_pages = [
+        page
+        for page in knowledge.pages
+        if "divian partner" in _divian_ai_fold_text(page.source_name)
+        and "szoveg" in _divian_ai_fold_text(page.label)
+        and offer_key in _divian_ai_fold_text(page.source_name)
+    ]
+    if not partner_pages:
+        return None
+
+    titles = _divian_ai_partner_product_titles(partner_pages)
+    if not titles:
+        return None
+
+    visible_titles = titles[:18]
+    answer = (
+        f"{evidence_label} jelenleg {len(titles)} {intro} látok a publikus partneres oldalon:\n- "
+        + "\n- ".join(visible_titles)
+    )
+    if len(titles) > len(visible_titles):
+        answer += f"\n- ... és még {len(titles) - len(visible_titles)} további tételt."
+
+    return {
+        "ok": True,
+        "answer": answer,
+        "sources": [page.label for page in partner_pages[:8]],
+    }
+
+
+def _divian_ai_lighting_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    folded_question = _divian_ai_fold_text(question)
+    subject_keys = _divian_ai_detect_subject_keys(question)
+    if "vilagitas" not in subject_keys and "led" not in folded_question and "vilagitas" not in folded_question:
+        return None
+
+    items: list[str] = []
+    seen_items: set[str] = set()
+    sources: list[str] = []
+    seen_sources: set[str] = set()
+
+    def add_item(value: str) -> None:
+        clean_value = _clean_spaces(value).strip(" .,-")
+        if not clean_value:
+            return
+        folded_value = _divian_ai_fold_text(clean_value)
+        if folded_value in seen_items:
+            return
+        seen_items.add(folded_value)
+        items.append(clean_value)
+
+    def add_source(value: str) -> None:
+        if not value or value in seen_sources:
+            return
+        seen_sources.add(value)
+        sources.append(value)
+
+    for page in knowledge.pages:
+        folded_source = _divian_ai_fold_text(page.source_name)
+        folded_text = _divian_ai_fold_text(page.text)
+        if not any(token in folded_text or token in folded_source for token in ("led", "vilagitas", "paraelszivo", "páraelszívó")):
+            continue
+
+        if "divian partner - termek - kiegeszitok" in folded_source or "divian partner - akcios termek - kiegeszitok" in folded_source:
+            if "konyhai vilagitas" in folded_text:
+                add_item("Konyhai világítás kategória")
+                add_source(page.label)
+
+            for match in re.finditer(r"Divian kiegészítő LED profil 2 m [^\n,]+", page.text, flags=re.IGNORECASE):
+                add_item(match.group(0))
+                add_source(page.label)
+
+        if "divian_katalogus" in folded_source:
+            for phrase in (
+                "Divian konyhai LED szett",
+                "Divian kiegészítő LED profil 2 m Eloxált",
+                "Divian kiegészítő LED profil 2 m Fehér",
+                "Divian kiegészítő LED profil 2 m Fekete",
+            ):
+                if _divian_ai_fold_text(phrase) in folded_text:
+                    add_item(phrase)
+                    add_source(page.label)
+
+            if "vilagitas:" in folded_text and "led" in folded_text and "paraelszivo" in folded_text:
+                add_item("Beépített LED világítású páraelszívók")
+                add_source(page.label)
+
+        if "elemjegyzek" in folded_source:
+            for phrase in ("Vonalas led", "Kocka led", "Karos led", "Távirányítós színváltós"):
+                if _divian_ai_fold_text(phrase) in folded_text:
+                    add_item(phrase)
+                    add_source(page.label)
+
+    if not items:
+        return None
+
+    answer_lines = "\n- ".join(items[:8])
+    answer = f"{evidence_label} ezek a világítási megoldások látszanak a jelenlegi Divian-forrásokban:\n- {answer_lines}"
+    return {
+        "ok": True,
+        "answer": answer,
+        "sources": sources[:6],
+    }
+
+
+def _divian_ai_company_web_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    if not _divian_ai_is_company_info_question(question):
+        return None
+
+    official_pages = _divian_ai_official_web_pages(knowledge)
+    if not official_pages:
+        return None
+
+    folded_question = _divian_ai_fold_text(question)
+    about_pages = [page for page in official_pages if "rolunk" in _divian_ai_fold_text(page.source_name)]
+    partner_pages = [page for page in official_pages if "partner - fooldal" in _divian_ai_fold_text(page.source_name)]
+    partner_action_pages = [page for page in official_pages if "partner - akciok" in _divian_ai_fold_text(page.source_name)]
+    partner_new_pages = [page for page in official_pages if "partner - uj termekek" in _divian_ai_fold_text(page.source_name)]
+    partner_action_product_pages = [page for page in official_pages if "partner - akcios termek" in _divian_ai_fold_text(page.source_name)]
+    partner_new_product_pages = [page for page in official_pages if "partner - uj termek" in _divian_ai_fold_text(page.source_name)]
+    legal_pages = [
+        page
+        for page in official_pages
+        if any(term in _divian_ai_fold_text(page.source_name) for term in ("adatkezeles", "aszf"))
+    ]
+
+    if "szekhely" in folded_question:
+        for page in legal_pages:
+            value = _divian_ai_extract_web_field_value(page, ("SZÉKHELY",))
+            if value:
+                return {
+                    "ok": True,
+                    "answer": f"{evidence_label} a cég székhelye: {value}.",
+                    "sources": [page.label],
+                }
+
+    if "cegjegyzek" in folded_question or "cegjegyzek" in folded_question:
+        for page in legal_pages:
+            value = _divian_ai_extract_web_field_value(page, ("CÉGJEGYZÉKSZÁM", "CÉGJEGYZÉK SZÁM"))
+            if value:
+                return {
+                    "ok": True,
+                    "answer": f"{evidence_label} a cég cégjegyzékszáma: {value}.",
+                    "sources": [page.label],
+                }
+
+    if "adoszam" in folded_question:
+        for page in legal_pages:
+            value = _divian_ai_extract_web_field_value(page, ("ADÓSZÁM",))
+            if value:
+                return {
+                    "ok": True,
+                    "answer": f"{evidence_label} a cég adószáma: {value}.",
+                    "sources": [page.label],
+                }
+
+    if "telephely" in folded_question:
+        for page in legal_pages:
+            values = _divian_ai_extract_web_field_list(page, ("A CÉG TELEPHELYEI", "TELEPHELYEI"))
+            if values:
+                return {
+                    "ok": True,
+                    "answer": f"{evidence_label} a jelenleg beolvasott telephelyek:\n- " + "\n- ".join(values),
+                    "sources": [page.label],
+                }
+
+    if "fotevekenyseg" in folded_question or "főtevékenys" in folded_question or "mivel foglalkozik" in folded_question or "mivel foglalkoznak" in folded_question:
+        for page in legal_pages:
+            value = _divian_ai_extract_web_field_value(page, ("FŐTEVÉKENYSÉGE", "FŐ TEVÉKENYSÉGE"))
+            if value:
+                extra = ""
+                for about_page in about_pages:
+                    sentence_match = re.search(r"A Divian-Mega Kft\.\s+\d{4}-ben alakult\s+([^.]*)\.", about_page.text, flags=re.IGNORECASE)
+                    if sentence_match:
+                        extra = _divian_ai_normalize_text(sentence_match.group(1))
+                        break
+                answer = f"{evidence_label} a cég főtevékenysége: {value}."
+                if extra:
+                    answer += f" A hivatalos bemutatkozás szerint {extra}."
+                return {
+                    "ok": True,
+                    "answer": answer,
+                    "sources": [page.label] + ([about_pages[0].label] if about_pages else []),
+                }
+
+    if "akcio" in folded_question:
+        action_titles = _divian_ai_partner_product_titles(partner_action_product_pages)
+        if action_titles:
+            visible_titles = action_titles[:18]
+            answer = (
+                f"{evidence_label} jelenleg {len(action_titles)} akciós terméket látok a partnerfelület publikus katalógusából:\n- "
+                + "\n- ".join(visible_titles)
+            )
+            if len(action_titles) > len(visible_titles):
+                answer += f"\n- ... és még {len(action_titles) - len(visible_titles)} további tételt."
+            source_labels = [page.label for page in partner_action_product_pages[:6]]
+            if partner_action_pages:
+                source_labels = [partner_action_pages[0].label] + source_labels
+            return {
+                "ok": True,
+                "answer": answer,
+                "sources": source_labels,
+            }
+        return {
+            "ok": True,
+            "answer": "A partneres akcióoldal be van kötve, de most még nem jött ki belőle használható akciós terméklista.",
+            "sources": ["Divian partner - Akciók"],
+        }
+
+    if "uj termek" in folded_question:
+        new_titles = _divian_ai_partner_product_titles(partner_new_product_pages)
+        if new_titles:
+            visible_titles = new_titles[:18]
+            answer = (
+                f"{evidence_label} jelenleg {len(new_titles)} új terméket látok a partnerfelület publikus katalógusából:\n- "
+                + "\n- ".join(visible_titles)
+            )
+            if len(new_titles) > len(visible_titles):
+                answer += f"\n- ... és még {len(new_titles) - len(visible_titles)} további tételt."
+            source_labels = [page.label for page in partner_new_product_pages[:6]]
+            if partner_new_pages:
+                source_labels = [partner_new_pages[0].label] + source_labels
+            return {
+                "ok": True,
+                "answer": answer,
+                "sources": source_labels,
+            }
+        return {
+            "ok": True,
+            "answer": "A partneres új termékek oldal be van kötve, de most még nem jött ki belőle használható terméklista.",
+            "sources": ["Divian partner - Új termékek"],
+        }
+
+    if "partner felulet" in folded_question or "partner oldal" in folded_question or "viszontelado" in folded_question:
+        for page in partner_pages:
+            lines = [line.strip() for line in page.lines if line.strip()]
+            summary_lines = [
+                line
+                for line in lines
+                if any(term in _divian_ai_fold_text(line) for term in ("viszontelado", "akcio", "garancia", "kapcsolat", "uj termekek"))
+            ]
+            if summary_lines:
+                answer = (
+                    f"{evidence_label} a partner.divian.hu a viszonteladói partnerfelület. "
+                    + "A beolvasott tartalom alapján itt ilyen fő részek érhetők el: "
+                    + ", ".join(summary_lines[:4])
+                    + "."
+                )
+                return {
+                    "ok": True,
+                    "answer": answer,
+                    "sources": [page.label],
+                }
+
+    return _divian_ai_company_founding_answer(question, knowledge, evidence_label=evidence_label)
+
+
+def _divian_ai_element_catalog_answer(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    evidence_label: str = "A Divian források alapján",
+) -> dict | None:
+    folded_question = _divian_ai_fold_text(question)
+    product_keys = _divian_ai_detect_product_keys(question)
+    asks_element_catalog = (
+        "elemjegyz" in folded_question
+        or "elemkinal" in folded_question
+        or "elemvalasz" in folded_question
+        or "elemei" in folded_question
+        or ("elemek" in folded_question and any(term in folded_question for term in ("milyen", "sorold", "listaz", "teljes", "elerheto")))
+        or (bool(product_keys) and "elem" in folded_question and "konyha" in folded_question)
+    )
+    if not asks_element_catalog:
+        return None
+
+    source_records = [
+        record
+        for record in knowledge.records
+        if _divian_ai_is_elemjegyzek_source(record.source_name)
+        and any(_divian_ai_fold_text(key) == "kod" for key, _ in record.fields)
+    ]
+    if not source_records:
+        return None
+
+    if product_keys:
+        product_key = product_keys[0]
+        product_label = _divian_ai_product_label(product_key) or product_key.capitalize()
+        product_label_folded = _divian_ai_fold_text(product_label)
+        filtered = [
+            record
+            for record in source_records
+            if any(
+                _divian_ai_fold_text(key) == "konyhak" and product_label_folded in _divian_ai_fold_text(value)
+                for key, value in record.fields
+            )
+        ]
+        if filtered:
+            source_records = filtered
+        elif product_key in {"kinga", "kata", "kira"}:
+            filtered = [
+                record
+                for record in source_records
+                if any(
+                    _divian_ai_fold_text(key) == "konyhak" and product_label_folded in _divian_ai_fold_text(value)
+                    for key, value in record.fields
+                )
+            ]
+            if filtered:
+                source_records = filtered
+        elif product_key in {"doroti", "antonia", "laura", "zille", "anna"}:
+            filtered = [
+                record
+                for record in source_records
+                if any(
+                    _divian_ai_fold_text(key) == "konyhacsoport" and "elemes konyh" in _divian_ai_fold_text(value)
+                    for key, value in record.fields
+                )
+            ]
+            if filtered:
+                source_records = filtered
+
+    if "also" in folded_question:
+        filtered = [
+            record
+            for record in source_records
+            if any(
+                _divian_ai_fold_text(key) == "elemcsoport" and "also" in _divian_ai_fold_text(value)
+                for key, value in record.fields
+            )
+        ]
+        if filtered:
+            source_records = filtered
+    elif "felso" in folded_question:
+        filtered = [
+            record
+            for record in source_records
+            if any(
+                _divian_ai_fold_text(key) == "elemcsoport" and "felso" in _divian_ai_fold_text(value)
+                for key, value in record.fields
+            )
+        ]
+        if filtered:
+            source_records = filtered
+    elif "oldaltakaro" in folded_question:
+        filtered = [
+            record
+            for record in source_records
+            if any(
+                _divian_ai_fold_text(key) == "elemcsoport" and "oldaltakaro" in _divian_ai_fold_text(value)
+                for key, value in record.fields
+            )
+        ]
+        if filtered:
+            source_records = filtered
+
+    if not source_records:
+        return None
+
+    def field_value(record: DivianAIRecord, field_name: str) -> str:
+        target = _divian_ai_fold_text(field_name)
+        for key, value in record.fields:
+            if _divian_ai_fold_text(key) == target:
+                return value
+        return ""
+
+    unique_records: list[DivianAIRecord] = []
+    seen_codes: set[tuple[str, str]] = set()
+    for record in source_records:
+        code = field_value(record, "Kód")
+        group_name = field_value(record, "Elemcsoport") or "Elemek"
+        code_key = (_divian_ai_fold_text(group_name), _divian_ai_fold_text(code))
+        if code_key[1] and code_key in seen_codes:
+            continue
+        if code_key[1]:
+            seen_codes.add(code_key)
+        unique_records.append(record)
+
+    grouped_records: dict[str, list[DivianAIRecord]] = {}
+    for record in unique_records:
+        group_name = field_value(record, "Elemcsoport") or "Elemek"
+        grouped_records.setdefault(group_name, []).append(record)
+
+    asks_list = any(term in folded_question for term in ("sorold", "listaz", "melyek", "milyen"))
+    asks_count = any(term in folded_question for term in ("hany", "mennyi", "darab"))
+    summary_parts = [f"{group_name} ({len(records)} db)" for group_name, records in grouped_records.items()]
+    summary_text = ", ".join(summary_parts)
+    subject_prefix = "az elemjegyzékből"
+    if product_keys:
+        product_label = _divian_ai_product_label(product_keys[0]) or product_keys[0].capitalize()
+        subject_prefix = f"{product_label} konyhához az elemjegyzék alapján"
+
+    if asks_count and not asks_list:
+        answer = f"{evidence_label} {subject_prefix} {len(unique_records)} beolvasható tételt látok. Fő csoportok: {summary_text}."
+        return {
+            "ok": True,
+            "answer": answer,
+            "sources": ["elemjegyzek.pdf"],
+        }
+
+    if asks_list:
+        group_lines: list[str] = []
+        include_all_items = len(unique_records) <= 24
+        for group_name, records in grouped_records.items():
+            items: list[str] = []
+            for record in records:
+                name = field_value(record, "Megnevezés")
+                code = field_value(record, "Kód")
+                dimensions = field_value(record, "Méretek")
+                item = name
+                if code:
+                    item += f" ({code}"
+                    if dimensions:
+                        item += f", {dimensions}"
+                    item += ")"
+                elif dimensions:
+                    item += f" ({dimensions})"
+                items.append(item)
+                if not include_all_items and len(items) == 6:
+                    break
+            suffix = ""
+            if not include_all_items and len(records) > len(items):
+                suffix = f" + még {len(records) - len(items)} tétel"
+            group_lines.append(f"- {group_name}: " + ", ".join(items) + suffix)
+
+        answer = f"{evidence_label} {subject_prefix} {len(unique_records)} tételt látok. Fő csoportok: {summary_text}.\n" + "\n".join(group_lines)
+        return {
+            "ok": True,
+            "answer": answer,
+            "sources": ["elemjegyzek.pdf"],
+        }
+
+    answer = f"{evidence_label} {subject_prefix} {len(unique_records)} beolvasható tételt látok. Fő csoportok: {summary_text}."
+    return {
+        "ok": True,
+        "answer": answer,
+        "sources": ["elemjegyzek.pdf"],
+    }
+
+
 def _divian_ai_record_color_answer(
     question: str,
     knowledge: DivianAIKnowledgeCache,
-    evidence_label: str = "A tudástár alapján",
+    evidence_label: str = "A Divian források alapján",
 ) -> dict | None:
     if not _divian_ai_is_color_question(question):
         return None
@@ -11699,6 +14872,8 @@ def _divian_ai_record_color_answer(
     if preferred_source:
         selected_records = [item for item in selected_records if item[1].source_name == preferred_source]
 
+    subject_keys = _divian_ai_detect_subject_keys(question)
+    material_subjects = {"butorlap", "front", "munkalap", "falipanel"} & set(subject_keys)
     colors: list[str] = []
     seen_colors: set[str] = set()
     sources: list[str] = []
@@ -11712,13 +14887,27 @@ def _divian_ai_record_color_answer(
         key, value = display_field
         folded_key = _divian_ai_fold_text(key)
         candidate_values: list[str] = []
+        if "butorlap" in subject_keys and "front" in folded_key and "butorlap" not in folded_key:
+            continue
+        if "front" in subject_keys and "butorlap" in folded_key and "front" not in folded_key:
+            continue
+        if "munkalap" in subject_keys and "munkalap" not in folded_key and "dekor" not in folded_key:
+            continue
+
         if any(term in folded_key for term in ("szin", "dekor")):
             candidate_values.append(value)
 
         parts = [part.strip() for part in _divian_ai_normalize_text(value).split(" - ") if part.strip()]
         if len(parts) >= 2 and any(term in _divian_ai_fold_text(parts[0]) for term in ("butorlap", "munkalap", "front")):
+            part_subject = _divian_ai_fold_text(parts[0])
+            if "butorlap" in subject_keys and "butorlap" not in part_subject:
+                continue
+            if "front" in subject_keys and "front" not in part_subject:
+                continue
+            if "munkalap" in subject_keys and "munkalap" not in part_subject:
+                continue
             candidate_values.append(parts[1])
-        elif any(term in folded_key for term in ("megnevezes", "leiras")):
+        elif not material_subjects and any(term in folded_key for term in ("megnevezes", "leiras")):
             candidate_values.append(value)
 
         for candidate in candidate_values:
@@ -11748,7 +14937,7 @@ def _divian_ai_record_color_answer(
 def _divian_ai_structured_answer(
     question: str,
     knowledge: DivianAIKnowledgeCache,
-    evidence_label: str = "A tudástár alapján",
+    evidence_label: str = "A Divian források alapján",
 ) -> dict | None:
     subject_keys = _divian_ai_detect_subject_keys(question)
     if not subject_keys:
@@ -11793,7 +14982,7 @@ def _divian_ai_sentence_answer(
     question: str,
     knowledge: DivianAIKnowledgeCache,
     selected_chunks: list[DivianAIChunk],
-    evidence_label: str = "A tudástár alapján",
+    evidence_label: str = "A Divian források alapján",
 ) -> tuple[str, list[str]] | None:
     focus_tokens = _divian_ai_focus_tokens(question)
     question_tokens = focus_tokens or _divian_ai_tokens(question)
@@ -11882,14 +15071,22 @@ def _build_local_divian_ai_answer(
     knowledge: DivianAIKnowledgeCache,
     selected_chunks: list[DivianAIChunk],
     *,
-    allow_profile_answers: bool = True,
-    evidence_label: str = "A tudástár alapján",
+    allow_profile_answers: bool = False,
+    evidence_label: str = "A Divian források alapján",
     no_answer_message: str | None = None,
 ) -> dict:
     if allow_profile_answers:
         lineup_answer = _divian_ai_profile_lineup_answer(question)
         if lineup_answer is not None:
             return lineup_answer
+
+        catalog_surface_answer = _divian_ai_catalog_surface_answer(question, knowledge, evidence_label=evidence_label)
+        if catalog_surface_answer is not None:
+            return catalog_surface_answer
+
+        structured_catalog_material_answer = _divian_ai_structured_catalog_material_answer(question, knowledge, evidence_label=evidence_label)
+        if structured_catalog_material_answer is not None:
+            return structured_catalog_material_answer
 
         material_answer = _divian_ai_profile_material_answer(question)
         if material_answer is not None:
@@ -11898,6 +15095,18 @@ def _build_local_divian_ai_answer(
         kitchen_answer = _divian_ai_profile_kitchen_answer(question)
         if kitchen_answer is not None:
             return kitchen_answer
+
+    lighting_answer = _divian_ai_lighting_answer(question, knowledge, evidence_label=evidence_label)
+    if lighting_answer is not None:
+        return lighting_answer
+
+    partner_catalog_answer = _divian_ai_partner_catalog_answer(question, knowledge, evidence_label=evidence_label)
+    if partner_catalog_answer is not None:
+        return partner_catalog_answer
+
+    element_catalog_answer = _divian_ai_element_catalog_answer(question, knowledge, evidence_label=evidence_label)
+    if element_catalog_answer is not None:
+        return element_catalog_answer
 
     source_summary_answer = _divian_ai_source_summary_answer(question, knowledge, evidence_label=evidence_label)
     if source_summary_answer is not None:
@@ -11944,36 +15153,119 @@ def _build_local_divian_ai_answer(
     }
 
 
+def _build_high_confidence_divian_ai_fallback(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+    selected_chunks: list[DivianAIChunk],
+) -> dict | None:
+    structured_catalog_material_answer = _divian_ai_structured_catalog_material_answer(
+        question,
+        knowledge,
+        evidence_label="A Divian források alapján",
+    )
+    if structured_catalog_material_answer is not None:
+        return structured_catalog_material_answer
+
+    partner_offer_answer = _divian_ai_partner_offer_answer(question, knowledge)
+    if partner_offer_answer is not None:
+        return partner_offer_answer
+
+    lighting_answer = _divian_ai_lighting_answer(question, knowledge)
+    if lighting_answer is not None:
+        return lighting_answer
+
+    company_web_answer = _divian_ai_company_web_answer(question, knowledge)
+    if company_web_answer is not None:
+        return company_web_answer
+
+    partner_catalog_answer = _divian_ai_partner_catalog_answer(question, knowledge, evidence_label="A Divian források alapján")
+    if partner_catalog_answer is not None:
+        return partner_catalog_answer
+
+    element_catalog_answer = _divian_ai_element_catalog_answer(question, knowledge, evidence_label="A Divian források alapján")
+    if element_catalog_answer is not None:
+        return element_catalog_answer
+
+    sentence_answer = _divian_ai_sentence_answer(question, knowledge, selected_chunks, evidence_label="A Divian források alapján")
+    if sentence_answer:
+        answer, sources = sentence_answer
+        return {
+            "ok": True,
+            "answer": answer,
+            "sources": sources,
+        }
+
+    return None
+
+
+def _divian_ai_smalltalk_response(question: str) -> dict | None:
+    folded_question = _divian_ai_fold_text(question).strip(" .!?")
+    if not folded_question:
+        return None
+
+    if folded_question in {"szia", "hello", "hali", "helo", "jó reggelt", "jo reggelt", "jó napot", "jo napot", "jó estét", "jo estet"}:
+        return {
+            "ok": True,
+            "answer": "Szia! Miben segíthetek?",
+            "sources": [],
+        }
+
+    if folded_question in {"koszi", "köszi", "koszonom", "köszönöm"}:
+        return {
+            "ok": True,
+            "answer": "Szívesen.",
+            "sources": [],
+        }
+
+    if folded_question in {"viszlát", "viszlat", "szia!", "bye", "viszlatasra"}:
+        return {
+            "ok": True,
+            "answer": "Rendben, ha kellek még, írj nyugodtan.",
+            "sources": [],
+        }
+
+    return None
+
+
 def _divian_ai_status_payload() -> dict:
     knowledge = _load_divian_ai_knowledge()
-    uploaded_file_count = len(_divian_ai_read_upload_manifest())
     registry_totals = _divian_ai_registry_totals()
+    provider = _divian_ai_provider()
+    provider_key = _divian_ai_provider_api_key(provider)
+    provider_model = _divian_ai_provider_model(provider)
+    openai_temporarily_blocked = DIVIAN_AI_OPENAI_DISABLED_UNTIL > time.time()
     openai_ready = (
         DIVIAN_AI_REMOTE_ENABLED
-        and not DIVIAN_AI_OPENAI_DISABLED_REASON
-        and
-        OpenAI is not None
-        and bool(_read_env_value("OPENAI_API_KEY", "").strip())
+        and not openai_temporarily_blocked
+        and ((provider in {"openai", "groq"} and OpenAI is not None) or provider == "gemini")
+        and bool(provider_key)
     )
     knowledge_ready = bool(knowledge.chunks)
 
+    blocked_reason = DIVIAN_AI_OPENAI_DISABLED_REASON.lower()
+
     if knowledge_ready and openai_ready:
-        message = f"{len(knowledge.sources)} tudástár-forrás betöltve, Divian-AI készen áll."
+        message = f"{len(knowledge.sources)} nyilvános webforrás betöltve, a Divian-AI {provider} modellen válaszol."
     elif knowledge_ready and not DIVIAN_AI_REMOTE_ENABLED:
-        message = "A tudástár be van töltve, a Divian-AI helyi tudástár alapú módban válaszol."
-    elif knowledge_ready and DIVIAN_AI_OPENAI_DISABLED_REASON:
-        message = "A tudástár be van töltve, a Divian-AI jelenleg helyi tudástár alapú módban válaszol."
+        message = "A nyilvános webes források be vannak töltve, de a GPT válaszmotor ki van kapcsolva."
+    elif knowledge_ready and openai_temporarily_blocked:
+        if "quota" in blocked_reason:
+            message = f"A nyilvános webes források be vannak töltve, de a {provider} free kerete most elfogyott."
+        else:
+            message = f"A nyilvános webes források be vannak töltve, de a {provider} válaszmotor jelenleg nem elérhető."
     elif knowledge_ready:
-        message = "A tudástár be van töltve, de az OPENAI_API_KEY még hiányzik."
+        message = f"A nyilvános webes források be vannak töltve, de a {provider} API még nincs készen."
     else:
-        message = knowledge.errors[0] if knowledge.errors else "A tudástár még nem áll készen."
+        message = knowledge.errors[0] if knowledge.errors else "A nyilvános webes források még nem állnak készen."
 
     return {
         "ok": True,
         "knowledge_ready": knowledge_ready,
         "openai_ready": openai_ready,
+        "provider": provider,
+        "model": provider_model,
         "source_count": len(knowledge.sources),
-        "uploaded_file_count": uploaded_file_count,
+        "uploaded_file_count": 0,
         "sources": knowledge.sources,
         "chunk_count": registry_totals["chunk_count"],
         "record_count": registry_totals["record_count"],
@@ -11995,8 +15287,320 @@ def _divian_ai_response_text(response) -> str:
     return "\n\n".join(part for part in parts if part).strip()
 
 
+def _divian_ai_chat_completion_text(response) -> str:
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        return ""
+    first_choice = choices[0]
+    message = getattr(first_choice, "message", None)
+    if message is None:
+        return ""
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            text = getattr(item, "text", None)
+            if text:
+                parts.append(str(text).strip())
+            elif isinstance(item, dict) and item.get("text"):
+                parts.append(str(item.get("text")).strip())
+        return "\n\n".join(part for part in parts if part).strip()
+    return str(content).strip()
+
+
+def _divian_ai_gemini_response_text(payload: dict) -> str:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list):
+        return ""
+
+    parts: list[str] = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        content = candidate.get("content")
+        if not isinstance(content, dict):
+            continue
+        content_parts = content.get("parts")
+        if not isinstance(content_parts, list):
+            continue
+        for part in content_parts:
+            if not isinstance(part, dict):
+                continue
+            text = str(part.get("text", "")).strip()
+            if text:
+                parts.append(text)
+    return "\n\n".join(part for part in parts if part).strip()
+
+
+def _divian_ai_call_gemini(
+    *,
+    api_key: str,
+    model: str,
+    instructions: str,
+    history_items: list[dict[str, str]],
+    prompt: str,
+) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(model, safe='')}:generateContent"
+    contents: list[dict[str, object]] = []
+    for item in history_items[-6:]:
+        role = "user" if item.get("role") == "user" else "model"
+        contents.append(
+            {
+                "role": role,
+                "parts": [{"text": str(item.get("content", ""))}],
+            }
+        )
+    contents.append({"role": "user", "parts": [{"text": prompt}]})
+
+    payload = {
+        "system_instruction": {
+            "parts": [{"text": instructions}],
+        },
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.2,
+        },
+    }
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        response_body = exc.read().decode("utf-8", errors="ignore")
+        try:
+            error_payload = json.loads(response_body)
+            error_message = str(error_payload.get("error", {}).get("message", "")).strip()
+        except Exception:
+            error_message = response_body.strip()
+        raise RuntimeError(error_message or str(exc)) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(str(exc.reason or exc)) from exc
+
+    return _divian_ai_gemini_response_text(result)
+
+
+def _divian_ai_is_company_question(question: str) -> bool:
+    folded_question = _divian_ai_fold_text(question)
+    return (
+        _divian_ai_is_company_info_question(question)
+        or _divian_ai_is_partner_offer_question(question)
+        or bool(_divian_ai_detect_product_keys(question))
+        or _divian_ai_is_partner_catalog_question(question)
+        or bool(_divian_ai_detect_partner_category_keys(question))
+        or bool(_divian_ai_detect_subject_keys(question))
+        or any(term in folded_question for term in DIVIAN_AI_COMPANY_TERM_HINTS)
+    )
+
+
+def _divian_ai_source_is_official(source_name: str) -> bool:
+    folded_source = _divian_ai_fold_text(source_name)
+    return "divian hivatalos" in folded_source or "divian partner" in folded_source
+
+
+def _divian_ai_source_is_catalog(source_name: str) -> bool:
+    folded_source = _divian_ai_fold_text(source_name)
+    return any(term in folded_source for term in ("katalogus", "katalógus", "kezikonyv", "kézikönyv"))
+
+
+def _divian_ai_source_is_elemjegyzek(source_name: str) -> bool:
+    return _divian_ai_is_elemjegyzek_source(source_name)
+
+
+def _divian_ai_expand_search_query(question: str) -> str:
+    parts: list[str] = [question]
+    folded_question = _divian_ai_fold_text(question)
+
+    for product_key in _divian_ai_detect_product_keys(question):
+        parts.extend(DIVIAN_AI_PRODUCT_ALIASES.get(product_key, ()))
+        product_label = _divian_ai_product_label(product_key)
+        if product_label:
+            parts.append(product_label)
+
+    for subject_key in _divian_ai_detect_subject_keys(question):
+        parts.extend(DIVIAN_AI_SUBJECT_ALIASES.get(subject_key, ()))
+
+    for category_key in _divian_ai_detect_partner_category_keys(question):
+        parts.extend(DIVIAN_AI_PARTNER_CATEGORY_ALIASES.get(category_key, ()))
+
+    if "akcio" in folded_question or "akció" in question.lower():
+        parts.extend(("akciók", "akciós termékek"))
+    if "uj termek" in folded_question or "új termék" in question.lower():
+        parts.extend(("új termékek", "új termék"))
+    if "vilagit" in folded_question or "led" in folded_question:
+        parts.extend(("konyhai világítás", "led", "led profil", "led szett"))
+    if "elemjegy" in folded_question or "elem" in folded_question:
+        parts.extend(("elemjegyzék", "elemkínálat", "elemek"))
+
+    unique_parts: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        clean_part = _divian_ai_normalize_text(part)
+        folded_part = _divian_ai_fold_text(clean_part)
+        if not clean_part or not folded_part or folded_part in seen:
+            continue
+        seen.add(folded_part)
+        unique_parts.append(clean_part)
+
+    return "\n".join(unique_parts)
+
+
+def _divian_ai_company_allowed_sources(question: str, knowledge: DivianAIKnowledgeCache) -> set[str]:
+    folded_question = _divian_ai_fold_text(question)
+    category_keys = _divian_ai_detect_partner_category_keys(question)
+    product_keys = _divian_ai_detect_product_keys(question)
+    subject_keys = set(_divian_ai_detect_subject_keys(question))
+    allowed_sources: set[str] = set()
+
+    if _divian_ai_is_partner_offer_question(question):
+        for source_name in knowledge.sources:
+            folded_source = _divian_ai_fold_text(source_name)
+            if "divian partner" not in folded_source:
+                continue
+            if "akcio" in folded_question and "akcio" in folded_source:
+                allowed_sources.add(source_name)
+            if ("uj termek" in folded_question or "ujdonsag" in folded_question) and "uj termek" in folded_source:
+                allowed_sources.add(source_name)
+        if allowed_sources:
+            return allowed_sources
+
+    if _divian_ai_is_company_info_question(question):
+        for source_name in knowledge.sources:
+            if _divian_ai_source_is_official(source_name):
+                allowed_sources.add(source_name)
+        return allowed_sources
+
+    asks_element_catalog = (
+        "elemjegyz" in folded_question
+        or "elemkinal" in folded_question
+        or "elemvalasz" in folded_question
+        or "elemei" in folded_question
+        or ("elem" in folded_question and "konyha" in folded_question)
+    )
+
+    material_subjects = {"butorlap", "front", "munkalap", "falipanel"} & subject_keys
+    if material_subjects:
+        structured_catalog_sources = _divian_ai_preferred_structured_sources(knowledge, source_type="catalog", limit=3)
+        if structured_catalog_sources:
+            allowed_sources.update(structured_catalog_sources)
+            return allowed_sources
+
+    if asks_element_catalog:
+        structured_elemjegyzek_sources = _divian_ai_preferred_structured_sources(knowledge, source_type="elemjegyzek", limit=2)
+        if structured_elemjegyzek_sources:
+            allowed_sources.update(structured_elemjegyzek_sources)
+            if product_keys:
+                allowed_sources.update(_divian_ai_preferred_structured_sources(knowledge, source_type="catalog", limit=2))
+            return allowed_sources
+
+    if product_keys:
+        allowed_sources.update(_divian_ai_preferred_structured_sources(knowledge, source_type="catalog", limit=3))
+        if asks_element_catalog:
+            allowed_sources.update(_divian_ai_preferred_structured_sources(knowledge, source_type="elemjegyzek", limit=2))
+        if allowed_sources:
+            return allowed_sources
+
+    if category_keys:
+        for source_name in knowledge.sources:
+            folded_source = _divian_ai_fold_text(source_name)
+            if "divian partner" not in folded_source:
+                continue
+
+            matches_category = any(
+                any(_divian_ai_partner_alias_match(folded_source, alias) for alias in DIVIAN_AI_PARTNER_CATEGORY_ALIASES.get(category_key, ()))
+                for category_key in category_keys
+            )
+
+            if not matches_category and "vilagitas" in category_keys:
+                matches_category = any(
+                    term in folded_source
+                    for term in ("led", "vilagitas", "kiegeszito", "kiegészítő", "paraelszivo", "páraelszívó")
+                )
+
+            if matches_category:
+                allowed_sources.add(source_name)
+
+        if allowed_sources:
+            return allowed_sources
+
+    for source_name in knowledge.sources:
+        if _divian_ai_source_is_official(source_name) or _divian_ai_source_is_catalog(source_name):
+            allowed_sources.add(source_name)
+
+    if _divian_ai_source_affinity_score(question, "elemjegyzek") >= 10 or "elemjegy" in folded_question or "elem " in f"{folded_question} ":
+        for source_name in knowledge.sources:
+            if _divian_ai_source_is_elemjegyzek(source_name):
+                allowed_sources.add(source_name)
+
+    for source_name in knowledge.sources:
+        if _divian_ai_source_affinity_score(question, source_name) >= 10:
+            allowed_sources.add(source_name)
+
+    return allowed_sources
+
+
+def _divian_ai_record_context_block(record: DivianAIRecord) -> str:
+    lines = [f"{key}: {value}" for key, value in record.fields if key.strip() and value.strip()]
+    if not lines:
+        return ""
+    return f"[{record.label}]\n" + "\n".join(lines)
+
+
+def _divian_ai_build_openai_context(
+    question: str,
+    knowledge: DivianAIKnowledgeCache,
+) -> tuple[str, list[str]]:
+    search_query = _divian_ai_expand_search_query(question)
+    working_knowledge = knowledge
+    if _divian_ai_is_company_question(question):
+        allowed_sources = _divian_ai_company_allowed_sources(search_query, knowledge)
+        filtered_knowledge = _divian_ai_filter_knowledge_sources(knowledge, allowed_sources)
+        if filtered_knowledge.chunks:
+            working_knowledge = filtered_knowledge
+
+    selected_records = _divian_ai_select_records(search_query, working_knowledge.records, limit=10)
+    selected_chunks = _divian_ai_select_chunks(search_query, working_knowledge.chunks, limit=12)
+
+    source_labels: list[str] = []
+    seen_labels: set[str] = set()
+    context_blocks: list[str] = []
+    remaining_chars = DIVIAN_AI_MAX_CONTEXT_CHARS
+
+    for _, record in selected_records:
+        block = _divian_ai_record_context_block(record)
+        if not block or len(block) > remaining_chars:
+            continue
+        context_blocks.append(block)
+        remaining_chars -= len(block)
+        if record.label not in seen_labels:
+            seen_labels.add(record.label)
+            source_labels.append(record.label)
+
+    for chunk in selected_chunks:
+        block = f"[{chunk.label}]\n{chunk.text}"
+        if len(block) > remaining_chars:
+            continue
+        context_blocks.append(block)
+        remaining_chars -= len(block)
+        if chunk.label not in seen_labels:
+            seen_labels.add(chunk.label)
+            source_labels.append(chunk.label)
+
+    return "\n\n".join(context_blocks).strip(), source_labels
+
+
 def _ask_divian_ai(question: str, history: object = None) -> dict:
-    global DIVIAN_AI_OPENAI_DISABLED_REASON
+    global DIVIAN_AI_OPENAI_DISABLED_REASON, DIVIAN_AI_OPENAI_DISABLED_UNTIL
 
     question = question.strip()
     if not question:
@@ -12006,117 +15610,224 @@ def _ask_divian_ai(question: str, history: object = None) -> dict:
         return {"ok": False, "error": f"A kérdés legfeljebb {DIVIAN_AI_MAX_QUESTION_CHARS} karakter lehet."}
 
     history_items = _divian_ai_sanitize_history(history)
-    feedback_response = _divian_ai_feedback_response(question, history_items)
-    if feedback_response is not None:
-        return feedback_response
-
     effective_question = _divian_ai_contextualize_question(question, history_items)
-    knowledge = _load_divian_ai_knowledge()
-    if not knowledge.chunks:
-        message = knowledge.errors[0] if knowledge.errors else "Még nincs betöltött tudástár."
-        return {"ok": False, "error": message}
+    is_company_question = _divian_ai_is_company_question(effective_question)
 
-    uploaded_source_names = _divian_ai_uploaded_source_names()
-    if uploaded_source_names:
-        uploaded_knowledge = _divian_ai_filter_knowledge_sources(knowledge, uploaded_source_names)
-        uploaded_chunks = _divian_ai_select_chunks(effective_question, uploaded_knowledge.chunks, limit=8)
-        uploaded_records = _divian_ai_select_records(effective_question, uploaded_knowledge.records, limit=6)
-        has_record_evidence = bool(uploaded_records and uploaded_records[0][0] >= 6)
-        if not has_record_evidence and not _divian_ai_has_confident_evidence(effective_question, uploaded_chunks):
-            return _divian_ai_no_confident_answer(effective_question, prefer_uploaded_sources=True)
+    if not is_company_question:
+        smalltalk_response = _divian_ai_smalltalk_response(effective_question)
+        if smalltalk_response is not None:
+            return smalltalk_response
 
-        local_result = _build_local_divian_ai_answer(
-            effective_question,
-            uploaded_knowledge,
-            uploaded_chunks,
-            allow_profile_answers=False,
-            evidence_label="A feltöltött fájlok alapján",
-            no_answer_message=_divian_ai_no_confident_answer(effective_question, prefer_uploaded_sources=True)["answer"],
-        )
-        selected_chunks = uploaded_chunks
-    else:
+    knowledge: DivianAIKnowledgeCache | None = None
+    context_text = ""
+    source_labels: list[str] = []
+    selected_chunks: list[DivianAIChunk] = []
+
+    if is_company_question:
+        knowledge = _load_divian_ai_knowledge()
+        if not knowledge.chunks:
+            message = knowledge.errors[0] if knowledge.errors else "Még nincs elérhető nyilvános webforrás."
+            return {"ok": False, "error": message}
+        context_text, source_labels = _divian_ai_build_openai_context(effective_question, knowledge)
         selected_chunks = _divian_ai_select_chunks(effective_question, knowledge.chunks)
-        local_result = _build_local_divian_ai_answer(effective_question, knowledge, selected_chunks)
 
-    if _divian_ai_is_color_question(effective_question) or not DIVIAN_AI_REMOTE_ENABLED:
-        return local_result
+        direct_company_answer = _divian_ai_company_web_answer(effective_question, knowledge)
+        if direct_company_answer is not None:
+            return direct_company_answer
 
-    if OpenAI is None:
-        return local_result
+        direct_profile_lineup = _divian_ai_profile_lineup_answer(effective_question)
+        if direct_profile_lineup is not None:
+            return direct_profile_lineup
 
-    api_key = _read_env_value("OPENAI_API_KEY", "").strip()
+        direct_catalog_surface_answer = _divian_ai_catalog_surface_answer(effective_question, knowledge, evidence_label="A Divian források alapján")
+        if direct_catalog_surface_answer is not None:
+            return direct_catalog_surface_answer
+
+        direct_structured_catalog_material = _divian_ai_structured_catalog_material_answer(
+            effective_question,
+            knowledge,
+            evidence_label="A Divian források alapján",
+        )
+        if direct_structured_catalog_material is not None:
+            return direct_structured_catalog_material
+
+        direct_profile_material = _divian_ai_profile_material_answer(effective_question)
+        if direct_profile_material is not None:
+            return direct_profile_material
+
+        direct_profile_kitchen = _divian_ai_profile_kitchen_answer(effective_question)
+        if direct_profile_kitchen is not None:
+            return direct_profile_kitchen
+
+        direct_offer_answer = _divian_ai_partner_offer_answer(effective_question, knowledge, evidence_label="A Divian források alapján")
+        if direct_offer_answer is not None:
+            return direct_offer_answer
+
+        direct_lighting_answer = _divian_ai_lighting_answer(effective_question, knowledge, evidence_label="A Divian források alapján")
+        if direct_lighting_answer is not None:
+            return direct_lighting_answer
+
+        direct_element_answer = _divian_ai_element_catalog_answer(effective_question, knowledge, evidence_label="A Divian források alapján")
+        if direct_element_answer is not None:
+            return direct_element_answer
+
+        if _divian_ai_is_partner_catalog_question(effective_question):
+            direct_catalog_answer = _divian_ai_partner_catalog_answer(effective_question, knowledge, evidence_label="A Divian források alapján")
+            if direct_catalog_answer is not None:
+                return direct_catalog_answer
+
+    if is_company_question and not context_text:
+        return {
+            "ok": True,
+            "answer": (
+                "Erre most nincs elég biztos nyilvános céges forrásom a weben. "
+                "Inkább nem találgatok."
+            ),
+            "sources": [],
+        }
+
+    if not DIVIAN_AI_REMOTE_ENABLED:
+        return {
+            "ok": False,
+            "error": "A Divian-AI GPT válaszmotor jelenleg ki van kapcsolva.",
+        }
+
+    provider = _divian_ai_provider()
+    model_name = _divian_ai_provider_model(provider)
+    api_key = _divian_ai_provider_api_key(provider)
     if not api_key:
-        return local_result
+        return {
+            "ok": False,
+            "error": f"Hiányzik a {provider.upper()} API kulcs, ezért a Divian-AI nem tud ezen a provideren válaszolni.",
+        }
 
+    cache_key = _divian_ai_response_cache_key(
+        provider=provider,
+        model=model_name,
+        question=question,
+        effective_question=effective_question,
+        is_company_question=is_company_question,
+        history_items=history_items,
+        context_text=context_text,
+    )
+    cached_response = _divian_ai_cached_response(cache_key)
+    if cached_response is not None:
+        if is_company_question and source_labels:
+            cached_response["sources"] = source_labels
+        return cached_response
+
+    if DIVIAN_AI_OPENAI_DISABLED_UNTIL > time.time():
+        if is_company_question:
+            fallback = _build_high_confidence_divian_ai_fallback(effective_question, knowledge, selected_chunks)
+            if fallback is not None:
+                fallback["answer"] += f"\n\nMegjegyzés: a {provider} most átmenetileg nem elérhető, ezért ezt a választ a nyilvános webes forrásokból állítottam össze."
+                return fallback
+        return {
+            "ok": False,
+            "error": f"A {provider} válaszmotor jelenleg nem elérhető. Ellenőrizni kell a kvótát vagy a billinget.",
+        }
     if DIVIAN_AI_OPENAI_DISABLED_REASON:
-        return local_result
-
-    if not selected_chunks:
-        return local_result
-
-    context_blocks: list[str] = []
-    remaining_chars = DIVIAN_AI_MAX_CONTEXT_CHARS
-    for chunk in selected_chunks:
-        block = f"[{chunk.label}]\n{chunk.text}"
-        if len(block) > remaining_chars:
-            break
-        context_blocks.append(block)
-        remaining_chars -= len(block)
-    context_text = "\n\n".join(context_blocks)
+        DIVIAN_AI_OPENAI_DISABLED_REASON = ""
+        DIVIAN_AI_OPENAI_DISABLED_UNTIL = 0.0
 
     instructions = (
         "Te vagy Divian-AI, a Divian belső céges asszisztense. "
-        "Csak a megadott tudástári részletek alapján válaszolj. "
-        "Ha a kérdésre a tudástár nem ad elég biztos alapot, ezt mondd ki egyértelműen. "
-        "Ne találj ki adatot, szabályt, termékjellemzőt vagy folyamatot. "
-        "Válaszolj magyarul, közérthetően, röviden és kollégabarát nyelven."
+        "Általános kérdéseknél természetesen, intelligensen és röviden válaszolj magyarul, mint egy modern chat asszisztens. "
+        "Ha a kérdés céges vagy Divian-specifikus, akkor csak a megadott céges forrásokra támaszkodhatsz. "
+        "Céges kérdésnél ha a forrás nem elég biztos, ezt mondd ki egyértelműen, és ne találj ki adatot. "
+        "Ne ismételd meg automatikusan az előző válasz témáját, ha az új kérdés önálló. "
+        "A forrásokat nem kell a válasz végére kiírnod, azt a felület külön kezeli."
     )
     history_text = ""
     if history_items:
         history_lines = [
             f"{'Felhasználó' if item['role'] == 'user' else 'Divian-AI'}: {item['content']}"
-            for item in history_items[-4:]
+            for item in history_items[-6:]
         ]
         history_text = "Aktuális beszélgetés:\n" + "\n".join(history_lines) + "\n\n"
 
+    company_mode = "igen" if is_company_question else "nem"
+    context_section = context_text if context_text else "Nincs céges kontextus megadva ehhez a kérdéshez."
     prompt = (
         f"{history_text}"
         f"Aktuális kérdés:\n{question}\n\n"
         f"Értelmezett kérdés:\n{effective_question}\n\n"
-        f"Tudástári részletek:\n{context_text}\n\n"
-        "Ha tudsz válaszolni, a végén röviden nevezd meg a használt forrásoldalakat."
+        f"Céges kérdés:\n{company_mode}\n\n"
+        f"Céges webes forrásrészletek:\n{context_section}\n\n"
+        "Válaszolj közvetlenül a kérdésre. "
+        "Ha céges kérdésre nincs elég biztos adat, ezt mondd ki egyértelműen."
     )
 
     try:
-        client = OpenAI(api_key=api_key, timeout=8.0)
-        response = client.responses.create(
-            model=DIVIAN_AI_MODEL,
-            instructions=instructions,
-            input=prompt,
-        )
+        if provider == "gemini":
+            answer = _divian_ai_call_gemini(
+                api_key=api_key,
+                model=model_name,
+                instructions=instructions,
+                history_items=history_items,
+                prompt=prompt,
+            )
+        else:
+            if OpenAI is None:
+                return {
+                    "ok": False,
+                    "error": f"Az OpenAI kompatibilis kliens nincs telepítve, ezért a Divian-AI nem tud {provider} alapon válaszolni.",
+                }
+            base_url = _divian_ai_provider_base_url(provider)
+            client = OpenAI(api_key=api_key, timeout=8.0, base_url=base_url)
+            if provider == "groq":
+                messages = [{"role": "system", "content": instructions}]
+                for item in history_items[-6:]:
+                    role = "user" if item.get("role") == "user" else "assistant"
+                    messages.append({"role": role, "content": str(item.get("content", ""))})
+                messages.append({"role": "user", "content": prompt})
+                response = client.chat.completions.create(
+                    model=model_name,
+                    temperature=0.2,
+                    messages=messages,
+                )
+                answer = _divian_ai_chat_completion_text(response)
+            else:
+                response = client.responses.create(
+                    model=model_name,
+                    instructions=instructions,
+                    input=prompt,
+                )
+                answer = _divian_ai_response_text(response)
     except Exception as exc:
         error_message = str(exc)
-        if "insufficient_quota" in error_message or "429" in error_message:
+        lowered_message = error_message.lower()
+        if "insufficient_quota" in lowered_message or "429" in lowered_message or "quota" in lowered_message:
             DIVIAN_AI_OPENAI_DISABLED_REASON = error_message
-        return local_result
+            DIVIAN_AI_OPENAI_DISABLED_UNTIL = time.time() + DIVIAN_AI_OPENAI_RETRY_SECONDS
+            if is_company_question:
+                fallback = _build_high_confidence_divian_ai_fallback(effective_question, knowledge, selected_chunks)
+                if fallback is not None:
+                    fallback["answer"] += f"\n\nMegjegyzés: a {provider} free kerete most elfogyott, ezért ezt a választ a nyilvános webes forrásokból állítottam össze."
+                    return fallback
+        if is_company_question:
+            fallback = _build_high_confidence_divian_ai_fallback(effective_question, knowledge, selected_chunks)
+            if fallback is not None:
+                fallback["answer"] += f"\n\nMegjegyzés: a {provider} most átmenetileg nem válaszolt, ezért ezt a választ a nyilvános webes forrásokból állítottam össze."
+                return fallback
+        return {
+            "ok": False,
+            "error": f"A Divian-AI hívás nem sikerült: {error_message}",
+        }
 
-    answer = _divian_ai_response_text(response)
     if not answer:
-        return local_result
+        return {
+            "ok": False,
+            "error": "A GPT válaszmotor üres választ adott vissza.",
+        }
 
-    source_labels: list[str] = []
-    seen_labels: set[str] = set()
-    for chunk in selected_chunks:
-        if chunk.label in seen_labels:
-            continue
-        seen_labels.add(chunk.label)
-        source_labels.append(chunk.label)
-
-    return {
+    result = {
         "ok": True,
         "answer": answer,
-        "sources": source_labels,
+        "sources": source_labels if is_company_question else [],
     }
+    _divian_ai_store_cached_response(cache_key, answer, result["sources"])
+    return result
 
 
 def _normalize_path(raw_path: str) -> str:
@@ -12463,6 +16174,11 @@ def _download_payload_for_kind(kind: str, job_id: str, artifact: str) -> tuple[b
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 metadata.get("approved_file", "rendeles-jovahagyott.xlsx"),
             ),
+            "import-csv": (
+                metadata.get("import_file", "rendeles_sima.csv"),
+                "text/csv; charset=utf-8",
+                metadata.get("import_file", "rendeles_sima.csv"),
+            ),
             "source-stock": (
                 source_stock_file,
                 guessed_stock_type,
@@ -12595,6 +16311,17 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == MANUFACTURING_ROUTE:
+            query = _manufacturing_query_params(self.path)
+            body = render_manufacturing_module(production_number=query.get("production", ""))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == VACATION_CALENDAR_ROUTE:
             query = _vacation_query_params(self.path)
             body = render_vacation_calendar(
@@ -12611,33 +16338,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == DIVIAN_AI_KNOWLEDGE_ROUTE:
-            body = render_divian_ai_knowledge_form()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if path.startswith(DIVIAN_AI_KNOWLEDGE_FILE_PREFIX + "/"):
-            tail = path[len(DIVIAN_AI_KNOWLEDGE_FILE_PREFIX) + 1 :]
-            entry_id, _, action = tail.partition("/")
-            payload = _divian_ai_upload_payload(entry_id, download=action == "download")
-            if not payload:
-                self.send_error(404)
-                return
-
-            body, content_type, download_name, disposition = payload
-            quoted_name = urllib.parse.quote(download_name)
-            self.send_response(200)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Disposition", f"{disposition}; filename*=UTF-8''{quoted_name}")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        if path == DIVIAN_AI_KNOWLEDGE_ROUTE or path.startswith(DIVIAN_AI_KNOWLEDGE_FILE_PREFIX + "/"):
+            self.send_error(404)
             return
 
         if path.startswith(NETTFRONT_PROCUREMENT_DOWNLOAD_PREFIX + "/"):
@@ -12735,6 +16437,46 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = _normalize_path(self.path)
+        if path == MANUFACTURING_STATE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+
+            production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
+            row_id = str(payload.get("row_id", "")).strip()
+            state = str(payload.get("state", "")).strip().lower()
+
+            if not production_number:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártási szám."})
+                return
+            if not row_id:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a sorazonosító."})
+                return
+            if state not in {"green", "red", "clear", "none", ""}:
+                self.respond_json(400, {"ok": False, "error": "Érvénytelen sorállapot."})
+                return
+
+            try:
+                current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, row_id, state)
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
+                return
+
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "production_number": production_number,
+                    "row_id": row_id,
+                    "state": current_state.get(row_id, ""),
+                },
+            )
+            return
+
         if path == DIVIAN_AI_CHAT_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
@@ -12750,36 +16492,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.respond_json(status_code, result)
             return
 
-        if path == DIVIAN_AI_KNOWLEDGE_PROCESS_ROUTE:
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length)
-            upload_parts = [
-                (file_name, payload)
-                for field_name, file_name, payload in _extract_uploaded_file_parts(self.headers, raw_body)
-                if field_name == "knowledge_files"
-            ]
-
-            if not upload_parts:
-                self.respond_divian_ai_knowledge_form("Legalább egy fájlt fel kell tölteni a tudástárba.")
-                return
-
-            accepted_entries, warnings = _store_divian_ai_uploads(upload_parts)
-            if not accepted_entries:
-                message = warnings[0] if warnings else "A feltöltés nem sikerült."
-                self.respond_divian_ai_knowledge_form(message)
-                return
-
-            success_message = f"{len(accepted_entries)} fájl bekerült az AI-tudásbázisba."
-            if warnings:
-                success_message += " " + " ".join(warnings[:2])
-
-            body = render_divian_ai_knowledge_form(success_message, success=True)
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        if path == DIVIAN_AI_KNOWLEDGE_PROCESS_ROUTE or path.startswith(DIVIAN_AI_KNOWLEDGE_DELETE_PREFIX + "/"):
+            self.send_error(404)
             return
 
         if path == VACATION_CALENDAR_DEPARTMENT_SAVE_ROUTE:
@@ -12933,6 +16647,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             raw_body = self.rfile.read(content_length)
             files = _extract_uploaded_files(self.headers, raw_body)
             stock_file = files.get("stock_file")
+            parts_file = files.get("parts_file")
 
             if stock_file is None:
                 self.respond_nettfront_order_form("A raktár Excel feltöltése kötelező.")
@@ -12943,12 +16658,36 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_nettfront_order_form("A raktárfájl csak XLSX, XLSM vagy CSV lehet.")
                 return
 
+            uploaded_parts_name = ""
+            uploaded_parts_bytes: bytes | None = None
+            uploaded_parts_count = 0
+            if parts_file is not None:
+                uploaded_parts_name, uploaded_parts_bytes = parts_file
+                if uploaded_parts_name and not uploaded_parts_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
+                    self.respond_nettfront_order_form("A friss alkatrészlista csak XLSX, XLSM vagy CSV lehet.")
+                    return
+                try:
+                    uploaded_parts_count = len(_load_nettfront_parts_list_from_bytes(uploaded_parts_bytes or b"", uploaded_parts_name))
+                except Exception as exc:
+                    self.respond_nettfront_order_form(f"A friss alkatrészlista feldolgozása nem sikerült: {exc}")
+                    return
+                if uploaded_parts_count == 0:
+                    self.respond_nettfront_order_form("A friss alkatrészlista üres, így nem tudom felhasználni a jóváhagyásnál.")
+                    return
+
             try:
                 result = build_order_suggestions(
                     stock_bytes,
                     default_avg_path=NETTFRONT_ORDER_DEFAULT_AVG_PATH,
                 )
-                job_id, metadata = _write_nettfront_order_job(result, stock_name, stock_bytes)
+                job_id, metadata = _write_nettfront_order_job(
+                    result,
+                    stock_name,
+                    stock_bytes,
+                    uploaded_parts_name,
+                    uploaded_parts_bytes,
+                    uploaded_parts_count,
+                )
             except Exception as exc:
                 self.respond_nettfront_order_form(f"Hiba a rendelési javaslat készítése közben: {exc}")
                 return
@@ -13019,6 +16758,79 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+
+            source_parts_file = str(metadata.get("source_parts_file", "")).strip() or str(metadata.get("source_average_file", "")).strip()
+            if source_parts_file:
+                parts_path = job_dir / source_parts_file
+                if not parts_path.exists():
+                    body = render_nettfront_order_result(
+                        job_id,
+                        metadata,
+                        message="A feltöltött friss alkatrészlistát nem találom, ezért a jóváhagyást most nem tudom ellenőrizni.",
+                    )
+                    self.send_response(400)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
+                try:
+                    allowed_parts = {
+                        _normalize_nettfront_part_number(item)
+                        for item in _load_nettfront_parts_list_from_bytes(parts_path.read_bytes(), parts_path.name)
+                    }
+                except Exception as exc:
+                    body = render_nettfront_order_result(
+                        job_id,
+                        metadata,
+                        message=f"A friss alkatrészlista ellenőrzése nem sikerült: {exc}",
+                    )
+                    self.send_response(400)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+
+                missing_parts: list[str] = []
+                seen_missing: set[str] = set()
+                for row in rows:
+                    if _order_safe_number(row.order_qty) <= 0:
+                        continue
+                    aliases = _nettfront_order_part_number_aliases(row.part_number)
+                    if not aliases:
+                        continue
+                    if any(alias in allowed_parts for alias in aliases):
+                        continue
+                    display_part = _nettfront_order_display_part_number(row.part_number) or row.part_number or row.description or row.row_id
+                    normalized_display = _normalize_nettfront_part_number(display_part)
+                    if normalized_display in seen_missing:
+                        continue
+                    seen_missing.add(normalized_display)
+                    missing_parts.append(display_part)
+
+                if missing_parts:
+                    missing_preview = ", ".join(missing_parts[:4])
+                    if len(missing_parts) > 4:
+                        missing_preview += f" és még {len(missing_parts) - 4} tétel"
+                    body = render_nettfront_order_result(
+                        job_id,
+                        metadata,
+                        message=(
+                            "A jóváhagyás most nem ment végig, mert ezek a cikkszámok nem szerepelnek a friss alkatrészlistában: "
+                            f"{missing_preview}."
+                        ),
+                    )
+                    self.send_response(400)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
 
             try:
                 metadata = _persist_nettfront_order_approval(job_dir, metadata, rows)
@@ -13106,6 +16918,70 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     success = False
 
             body = render_nettfront_procurement_result(job_id, metadata, message=message, success=success)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_ORDER_LAUNCH_PREFIX + "/"):
+            job_id = path[len(NETTFRONT_ORDER_LAUNCH_PREFIX) + 1 :]
+            job_dir, metadata = _read_nettfront_job("order", job_id)
+            if job_dir is None or metadata is None:
+                self.send_error(404)
+                return
+
+            if not str(metadata.get("approved_file", "")).strip():
+                body = render_nettfront_order_result(
+                    job_id,
+                    metadata,
+                    message="Előbb jóvá kell hagynod a rendelést, és csak utána indítható a bevételezés.",
+                )
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            try:
+                success, messages = launch_procurement_helper(job_dir)
+                message = " ".join(messages) if messages else "A bevételezési segéd elindult."
+                body = render_nettfront_order_result(job_id, metadata, message=message, success=success)
+            except Exception as exc:
+                body = render_nettfront_order_result(
+                    job_id,
+                    metadata,
+                    message=f"A bevételezési segéd indítása nem sikerült: {exc}",
+                )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_ORDER_STOP_PREFIX + "/"):
+            job_id = path[len(NETTFRONT_ORDER_STOP_PREFIX) + 1 :]
+            job_dir, metadata = _read_nettfront_job("order", job_id)
+            if job_dir is None or metadata is None:
+                self.send_error(404)
+                return
+
+            try:
+                success, messages = stop_procurement_helper(job_dir)
+                message = " ".join(messages) if messages else "A bevételezési segéd leállt."
+                body = render_nettfront_order_result(job_id, metadata, message=message, success=success)
+            except Exception as exc:
+                body = render_nettfront_order_result(
+                    job_id,
+                    metadata,
+                    message=f"A leállítás nem sikerült: {exc}",
+                )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -13373,10 +17249,27 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def _prime_divian_ai_cache_worker() -> None:
+    try:
+        _load_divian_ai_knowledge()
+    except Exception:
+        pass
+
+
+def _prime_divian_ai_cache_async() -> None:
+    global DIVIAN_AI_PRIME_STARTED
+    with DIVIAN_AI_PRIME_LOCK:
+        if DIVIAN_AI_PRIME_STARTED:
+            return
+        DIVIAN_AI_PRIME_STARTED = True
+    threading.Thread(target=_prime_divian_ai_cache_worker, name="divian-ai-prime", daemon=True).start()
+
+
 if __name__ == "__main__":
     if DEV_RELOAD_ENABLED and os.getenv(DEV_CHILD_ENV) != "1":
         _run_dev_supervisor()
     else:
+        _prime_divian_ai_cache_async()
         server = ReusableThreadingHTTPServer((HOST, PORT), InvoiceHandler)
         print(f"Server running on http://localhost:{PORT} (bind: {HOST}:{PORT})")
         server.serve_forever()

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "2ee260beccf1",
+    "stored_name": "20260309-134526-666e7d92-Lapanyagok.xlsx",
+    "original_name": "Lapanyagok.xlsx",
+    "uploaded_at": "2026-03-09T13:45:26",
+    "size_bytes": 6364,
+    "kind": "Excel",
+    "status": "indexed",
+    "note": ""
+  },
+  {
+    "id": "f18b166daf82",
+    "stored_name": "20260309-134545-02b00586-Munkalapok.xlsx",
+    "original_name": "Munkalapok.xlsx",
+    "uploaded_at": "2026-03-09T13:45:45",
+    "size_bytes": 5844,
+    "kind": "Excel",
+    "status": "indexed",
+    "note": ""
+  },
+  {
+    "id": "11067c114a31",
+    "stored_name": "20260309-140250-fdf2979e-elemjegyzek.pdf",
+    "original_name": "elemjegyzek.pdf",
+    "uploaded_at": "2026-03-09T14:02:50",
+    "size_bytes": 8646150,
+    "kind": "PDF",
+    "status": "indexed",
+    "note": ""
+  },
+  {
+    "id": "ad66d4bfcf94",
+    "stored_name": "20260309-140534-5654c761-Divian_katalogus-1.pdf",
+    "original_name": "Divian_katalogus (1).pdf",
+    "uploaded_at": "2026-03-09T14:05:36",
+    "size_bytes": 24045998,
+    "kind": "PDF",
+    "status": "indexed",
+    "note": ""
+  }
+]
