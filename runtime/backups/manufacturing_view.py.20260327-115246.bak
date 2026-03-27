@@ -590,20 +590,19 @@ def render_manufacturing_page(
     }}
     .mfg-content.is-split .mfg-section-card {{
       align-self: start;
-      max-height: calc(100vh - 244px);
-      max-height: calc(100dvh - 244px);
+      max-height: calc(100vh - 228px);
+      max-height: calc(100dvh - 228px);
       grid-template-rows: auto auto auto;
     }}
     .mfg-content.is-split .mfg-row-list {{
-      max-height: calc(100vh - 338px);
-      max-height: calc(100dvh - 338px);
+      max-height: calc(100vh - 314px);
+      max-height: calc(100dvh - 314px);
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
       scrollbar-width: thin;
       box-sizing: border-box;
-      padding-bottom: 40px;
-      scroll-padding-bottom: 40px;
+      padding-bottom: 16px;
     }}
     .mfg-row {{
       width: 100%;
@@ -784,51 +783,6 @@ def render_manufacturing_page(
       .mfg-table-head,
       .mfg-row {{
         grid-template-columns: 0.96fr 0.66fr 0.66fr 0.38fr 0.46fr 1.88fr;
-      }}
-    }}
-    @media (orientation: portrait) {{
-      .mfg-content.is-split .mfg-table-head {{
-        font-size: 0.58rem;
-        gap: 4px;
-        padding: 0 8px;
-      }}
-      .mfg-content.is-split .mfg-table-head [data-sort-key="color"] {{
-        padding-left: 10px;
-      }}
-      .mfg-content.is-split .mfg-row {{
-        padding: 6px 8px;
-        gap: 4px;
-      }}
-      .mfg-content.is-split .mfg-row-title {{
-        font-size: 0.72rem;
-      }}
-      .mfg-content.is-split .mfg-row-meta span {{
-        font-size: 0.76rem;
-        min-height: 24px;
-      }}
-      .mfg-content.is-split .mfg-row-meta span.is-size {{
-        font-size: 0.72rem;
-        transform: translateY(1px);
-      }}
-      .mfg-content.is-split .mfg-row-meta span.is-color {{
-        padding-left: 10px;
-        line-height: 1.08;
-      }}
-      .mfg-content.is-split .mfg-row-qty {{
-        min-height: 24px;
-        padding: 0 6px;
-        font-size: 0.76rem;
-      }}
-      .mfg-content.is-split .mfg-row-barcode {{
-        min-height: 34px;
-        padding: 3px 8px;
-      }}
-      .mfg-content.is-split .mfg-row-barcode svg {{
-        height: 26px;
-      }}
-      .mfg-content.is-split .mfg-row-code {{
-        font-size: 0.58rem;
-        min-height: 14px;
       }}
     }}
   </style>
