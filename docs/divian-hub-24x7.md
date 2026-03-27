@@ -6,7 +6,7 @@ Ha a fejlesztői gép ki van kapcsolva, a Divian-HUB nem tud futni. A valódi 0-
 
 A gyártási modul jelenleg innen olvas:
 
-- alapból: `V:\Output\Gyartasi_papirok`
+- alapból: `J:\inSightData\Output\Gyartasi_papirok`
 
 24/7 futtatásnál ezt **nem érdemes** meghajtóbetűvel használni, mert a háttérfolyamatok és a startup taskok nem mindig látják a felcsatolt `V:` meghajtót.
 

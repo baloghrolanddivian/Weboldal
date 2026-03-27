@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html
 import hashlib
@@ -48,6 +48,7 @@ from nettfront_order_module import (
     rows_to_suggestion_workbook,
 )
 from manufacturing_module import (
+    available_production_entries,
     available_production_numbers,
     latest_production_number,
     load_production_bundle,
@@ -9548,6 +9549,7 @@ def render_vacation_calendar(
 def render_manufacturing_module(production_number: str = "", message: str = "", success: bool = False) -> bytes:
     requested_number = _manufacturing_normalize_number(production_number)
     recent_numbers = available_production_numbers(limit=80, ready_only=True)
+    recent_productions = available_production_entries(limit=80, ready_only=True)
     selected_number = requested_number if requested_number in recent_numbers else (recent_numbers[0] if recent_numbers else "")
     if requested_number and requested_number not in recent_numbers:
         combined_prefix = f"A {requested_number} gyártásban nem található meg mindkét szükséges PDF, ezért a legfrissebb használható gyártást nyitottam meg."
@@ -9560,7 +9562,7 @@ def render_manufacturing_module(production_number: str = "", message: str = "", 
     combined_success = success
 
     if not selected_number:
-        combined_message = "Nem találok gyártási mappát a V meghajtón."
+        combined_message = "Nem találok használható gyártási mappát a beállított gyártási útvonalon."
         combined_success = False
     else:
         try:
@@ -9581,7 +9583,7 @@ def render_manufacturing_module(production_number: str = "", message: str = "", 
         route=MANUFACTURING_ROUTE,
         state_route=MANUFACTURING_STATE_ROUTE,
         selected_number=selected_number,
-        recent_numbers=recent_numbers,
+        recent_productions=recent_productions,
         bundle=bundle,
         selection_state=selection_state,
         message=combined_message,

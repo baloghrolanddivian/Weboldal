@@ -5,6 +5,7 @@ import json
 import os
 import re
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 try:
@@ -13,7 +14,7 @@ except Exception:  # pragma: no cover - optional dependency handling
     PdfReader = None
 
 
-MANUFACTURING_ROOT = Path(os.getenv("DIVIAN_MANUFACTURING_ROOT", r"V:\Output\Gyartasi_papirok"))
+MANUFACTURING_ROOT = Path(os.getenv("DIVIAN_MANUFACTURING_ROOT", r"J:\inSightData\Output\Gyartasi_papirok"))
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,47 @@ def _row_hash(*parts: str) -> str:
     return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
 
 
+def _pair_info_for_section_label(label: str) -> tuple[str, str] | None:
+    text = _clean_text(label)
+    if text.startswith("1-es "):
+        return ("1", text[5:])
+    if text.startswith("2-es "):
+        return ("2", text[5:])
+    return None
+
+
+def _pair_sections_in_display_order(sections: list[ManufacturingSection]) -> list[ManufacturingSection]:
+    if not sections:
+        return []
+    by_label = {_clean_text(section.label): section for section in sections}
+    used: set[str] = set()
+    ordered: list[ManufacturingSection] = []
+
+    for section in sections:
+        if section.key in used:
+            continue
+        pair_info = _pair_info_for_section_label(section.label)
+        if pair_info and pair_info[0] == "2":
+            first_pair = by_label.get(f"1-es {pair_info[1]}")
+            if first_pair and first_pair.key not in used:
+                continue
+        used.add(section.key)
+        ordered.append(section)
+        if pair_info and pair_info[0] == "1":
+            second_pair = by_label.get(f"2-es {pair_info[1]}")
+            if second_pair and second_pair.key not in used:
+                used.add(second_pair.key)
+                ordered.append(second_pair)
+
+    for section in sections:
+        if section.key in used:
+            continue
+        used.add(section.key)
+        ordered.append(section)
+
+    return ordered
+
+
 def _pdf_lines(path: Path) -> list[list[str]]:
     if PdfReader is None:
         raise RuntimeError("A gyártási PDF-ek olvasásához a pypdf csomag szükséges.")
@@ -75,6 +117,17 @@ def _pdf_lines(path: Path) -> list[list[str]]:
         lines = [line for line in lines if line]
         pages.append(lines)
     return pages
+
+
+def _pdf_first_page_lines(path: Path) -> list[str]:
+    if PdfReader is None:
+        raise RuntimeError("A gyártási PDF-ek olvasásához a pypdf csomag szükséges.")
+    reader = PdfReader(str(path))
+    if not reader.pages:
+        return []
+    raw_text = reader.pages[0].extract_text() or ""
+    lines = [_clean_text(line) for line in raw_text.splitlines()]
+    return [line for line in lines if line]
 
 
 def _find_osszekeszito_path(folder: Path) -> Path | None:
@@ -119,6 +172,52 @@ def available_production_numbers(limit: int = 60, ready_only: bool = False) -> l
     return numbers
 
 
+def _extract_production_date_label(lines: list[str]) -> str:
+    for index, line in enumerate(lines):
+        if "Termelési rendelés dátuma" not in line:
+            continue
+        window = [line]
+        if index + 1 < len(lines):
+            window.append(lines[index + 1])
+        joined = " ".join(window)
+        match = re.search(r"\b(\d{4}\.\d{2}\.\d{2})\b", joined)
+        if match:
+            return f"{match.group(1)}."
+    for line in lines[:12]:
+        match = re.search(r"\b(\d{4}\.\d{2}\.\d{2})\b", line)
+        if match:
+            return f"{match.group(1)}."
+    return ""
+
+
+def _production_date_label(folder: Path) -> str:
+    for candidate in (_find_osszekeszito_path(folder), _find_alkatresz_kesz_path(folder)):
+        if candidate is None:
+            continue
+        try:
+            lines = _pdf_first_page_lines(candidate)
+        except Exception:
+            continue
+        date_label = _extract_production_date_label(lines)
+        if date_label:
+            return date_label
+    return ""
+
+
+def available_production_entries(limit: int = 60, ready_only: bool = False) -> list[dict[str, str]]:
+    numbers = available_production_numbers(limit=limit, ready_only=ready_only)
+    entries: list[dict[str, str]] = []
+    for number in numbers:
+        folder = production_folder(number)
+        entries.append(
+            {
+                "number": number,
+                "date_label": _production_date_label(folder),
+            }
+        )
+    return entries
+
+
 def latest_production_number() -> str:
     numbers = available_production_numbers(limit=1, ready_only=True)
     return numbers[0] if numbers else ""
@@ -154,7 +253,7 @@ def _consume_dimension(tokens: list[str], index: int) -> tuple[str, int]:
 
 
 def _looks_like_edge(token: str) -> bool:
-    return re.fullmatch(r"(?:N|\d+[HR](?:\d+[HR])*)", token) is not None
+    return re.fullmatch(r"(?:N|\d+[HR](?:\d+[HR])*|[A-Z]{2,4})", token) is not None
 
 
 def _is_final_code(token: str) -> bool:
@@ -197,13 +296,18 @@ def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number:
             break
 
         color_parts: list[str] = []
-        while index < len(tokens) and not _looks_like_edge(tokens[index]):
-            color_parts.append(tokens[index])
+        edge = "-"
+        while index < len(tokens):
+            token = tokens[index]
+            next_token = tokens[index + 1] if index + 1 < len(tokens) else ""
+            if _looks_like_edge(token) and re.fullmatch(r"\d+", next_token):
+                edge = token
+                index += 1
+                break
+            if re.fullmatch(r"\d+", token):
+                break
+            color_parts.append(token)
             index += 1
-        if index >= len(tokens):
-            break
-        edge = tokens[index]
-        index += 1
 
         if index >= len(tokens) or re.fullmatch(r"\d+", tokens[index]) is None:
             break
@@ -279,12 +383,13 @@ def parse_osszekeszito(path: Path) -> ManufacturingDocument:
 
     if current_rows:
         sections.append(ManufacturingSection(key=current_key, label=current_label, rows=tuple(current_rows)))
+    sections = _pair_sections_in_display_order([section for section in sections if section.rows])
 
     return ManufacturingDocument(
         key="osszekeszito",
         label="Összekészítő",
         file_name=path.name,
-        sections=tuple(section for section in sections if section.rows),
+        sections=tuple(sections),
         row_count=sum(len(section.rows) for section in sections),
     )
 

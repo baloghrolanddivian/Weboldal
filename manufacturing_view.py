@@ -14,7 +14,7 @@ def render_manufacturing_page(
     route: str,
     state_route: str,
     selected_number: str,
-    recent_numbers: list[str],
+    recent_productions: list[dict[str, str]],
     bundle: dict,
     selection_state: dict[str, str],
     message: str = "",
@@ -30,10 +30,15 @@ def render_manufacturing_page(
         notice_class = "mfg-notice is-success" if success else "mfg-notice is-error"
         notice_markup = f'<div class="{notice_class}">{html.escape(message)}</div>'
 
-    recent_options_html = "".join(f'<option value="{html.escape(number)}"></option>' for number in recent_numbers)
     recent_chips_html = "".join(
-        f'<a class="mfg-chip-link{" is-active" if number == selected_number else ""}" href="{route}?production={urllib.parse.quote(number)}">{html.escape(number)}</a>'
-        for number in recent_numbers[:10]
+        (
+            f'<a class="mfg-chip-link{" is-active" if str(entry.get("number", "")) == selected_number else ""}" '
+            f'href="{route}?production={urllib.parse.quote(str(entry.get("number", "")))}">'
+            f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
+            f'<span class="mfg-chip-number">{html.escape(str(entry.get("number", "")))}</span>'
+            f"</a>"
+        )
+        for entry in recent_productions[:10]
     )
     payload_json = _json_script_payload(
         {
@@ -107,32 +112,17 @@ def render_manufacturing_page(
     }}
     .mfg-toolbar {{
       padding: 8px 10px;
-      height: 98px;
-      min-height: 98px;
-      max-height: 98px;
+      height: 52px;
+      min-height: 52px;
+      max-height: 52px;
       border-radius: 18px 18px 0 0;
       background: rgba(255, 255, 255, 0.96);
       border: 1px solid rgba(18, 20, 23, 0.08);
       border-bottom: 0;
       box-shadow: 0 10px 22px rgba(17, 24, 39, 0.05);
-      display: grid;
-      gap: 8px;
-      grid-template-rows: 38px 28px;
-      align-content: start;
-      overflow: hidden;
-    }}
-    .mfg-toolbar-form {{
       display: flex;
-      gap: 6px;
       align-items: center;
-      min-height: 38px;
-    }}
-    .mfg-toolbar-label {{
-      font-size: 0.78rem;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--mfg-muted);
+      overflow: hidden;
     }}
     .mfg-topbar {{
       display: flex;
@@ -292,16 +282,15 @@ def render_manufacturing_page(
       flex-wrap: nowrap;
     }}
     .mfg-chip-link {{
-      min-height: 28px;
-      padding: 0 9px;
-      display: inline-flex;
-      align-items: center;
+      min-height: 36px;
+      padding: 5px 10px 4px;
+      display: inline-grid;
+      align-content: center;
+      gap: 1px;
       border-radius: 999px;
       background: #f5f7f9;
       border: 1px solid transparent;
       color: var(--mfg-muted);
-      font-size: 0.74rem;
-      font-weight: 800;
       white-space: nowrap;
       flex: 0 0 auto;
     }}
@@ -309,6 +298,20 @@ def render_manufacturing_page(
       border-color: #111827;
       color: #111827;
       background: #eef2f6;
+    }}
+    .mfg-chip-date {{
+      font-size: 0.67rem;
+      line-height: 1;
+      font-weight: 800;
+    }}
+    .mfg-chip-number {{
+      font-size: 0.62rem;
+      line-height: 1;
+      font-weight: 700;
+      color: var(--mfg-muted);
+    }}
+    .mfg-chip-link.is-active .mfg-chip-number {{
+      color: #4b5563;
     }}
     .mfg-stats {{
       display: grid;
@@ -332,12 +335,21 @@ def render_manufacturing_page(
     }}
     .mfg-board {{
       padding: 8px;
-      grid-template-rows: 50px 36px 20px auto;
+      grid-template-rows: 50px 36px 28px auto;
       display: grid;
       gap: 8px;
       align-content: start;
       border-top-left-radius: 0;
       border-top-right-radius: 0;
+    }}
+    .mfg-status-row {{
+      min-height: 28px;
+      max-height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      overflow: hidden;
     }}
     .mfg-status {{
       font-size: 0.76rem;
@@ -347,6 +359,38 @@ def render_manufacturing_page(
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1 1 auto;
+    }}
+    .mfg-layout-toggle {{
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px;
+      border-radius: 999px;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      background: #f7f9fb;
+    }}
+    .mfg-layout-button {{
+      width: 30px;
+      min-width: 30px;
+      height: 22px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--mfg-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+      font-size: 0.82rem;
+      font-weight: 800;
+      line-height: 1;
+    }}
+    .mfg-layout-button.is-active {{
+      background: #111827;
+      color: #fff;
     }}
     .mfg-tab-row,
     .mfg-section-tab-row {{
@@ -419,15 +463,39 @@ def render_manufacturing_page(
       font-size: 0.72rem;
       flex: 0 0 auto;
     }}
-    .mfg-tab.is-active,
-    .mfg-section-tab.is-active {{
+    .mfg-tab.is-active {{
       border-color: #111827;
       background: #111827;
       color: #fff;
     }}
-    .mfg-tab.is-active span,
-    .mfg-section-tab.is-active small {{
+    .mfg-tab.is-active span {{
       color: rgba(255, 255, 255, 0.76);
+    }}
+    .mfg-section-tab.is-active {{
+      border-color: #111827;
+      box-shadow: inset 0 0 0 1px #111827;
+    }}
+    .mfg-section-tab.is-secondary {{
+      border-color: #64748b;
+      box-shadow: inset 0 0 0 1px #64748b;
+    }}
+    .mfg-section-tab.is-complete {{
+      border-color: var(--mfg-green-line);
+      background: var(--mfg-green-bg);
+      color: var(--mfg-green-text);
+    }}
+    .mfg-section-tab.is-complete small {{
+      color: var(--mfg-green-text);
+      opacity: 0.82;
+    }}
+    .mfg-section-tab.is-alert {{
+      border-color: var(--mfg-red-line);
+      background: var(--mfg-red-bg);
+      color: var(--mfg-red-text);
+    }}
+    .mfg-section-tab.is-alert small {{
+      color: var(--mfg-red-text);
+      opacity: 0.82;
     }}
     .mfg-content {{
       min-height: 220px;
@@ -435,6 +503,10 @@ def render_manufacturing_page(
       gap: 8px;
     }}
     .mfg-content.is-overview {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }}
+    .mfg-content.is-split {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
     }}
@@ -515,6 +587,22 @@ def render_manufacturing_page(
     .mfg-row-list {{
       display: grid;
       gap: 0;
+    }}
+    .mfg-content.is-split .mfg-section-card {{
+      align-self: start;
+      max-height: calc(100vh - 228px);
+      max-height: calc(100dvh - 228px);
+      grid-template-rows: auto auto auto;
+    }}
+    .mfg-content.is-split .mfg-row-list {{
+      max-height: calc(100vh - 314px);
+      max-height: calc(100dvh - 314px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      box-sizing: border-box;
+      padding-bottom: 16px;
     }}
     .mfg-row {{
       width: 100%;
@@ -704,20 +792,6 @@ def render_manufacturing_page(
     {notice_markup}
 
     <section class="mfg-toolbar">
-      <form class="mfg-picker mfg-toolbar-form" method="get" action="{route}">
-        <span class="mfg-toolbar-label">Gyártás</span>
-        <input
-          type="text"
-          name="production"
-          value="{html.escape(selected_number)}"
-          list="manufacturing-production-list"
-          inputmode="numeric"
-          placeholder="Gyártási szám"
-          aria-label="Gyártási szám"
-        />
-        <datalist id="manufacturing-production-list">{recent_options_html}</datalist>
-        <button class="mfg-button" type="submit">Megnyitás</button>
-      </form>
       <div class="mfg-chip-row">{recent_chips_html}</div>
     </section>
 
@@ -725,7 +799,13 @@ def render_manufacturing_page(
 
       <div class="mfg-tab-row" id="mfg-doc-tabs"></div>
       <div class="mfg-section-tab-row" id="mfg-section-tabs"></div>
-      <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
+      <div class="mfg-status-row">
+        <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
+        <div class="mfg-layout-toggle" id="mfg-layout-toggle" aria-label="Nézet mód">
+          <button class="mfg-layout-button is-active" type="button" data-layout-mode="single" title="Egy kategória">▣</button>
+          <button class="mfg-layout-button" type="button" data-layout-mode="double" title="Két kategória">▥</button>
+        </div>
+      </div>
       <div class="mfg-content" id="mfg-content"></div>
     </section>
 
@@ -740,7 +820,8 @@ def render_manufacturing_page(
       const sectionTabsNode = document.getElementById("mfg-section-tabs");
       const contentNode = document.getElementById("mfg-content");
       const statusNode = document.getElementById("mfg-status");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !contentNode || !statusNode) return;
+      const layoutToggleNode = document.getElementById("mfg-layout-toggle");
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !contentNode || !statusNode || !layoutToggleNode) return;
 
       let payload = {{}};
       try {{
@@ -755,6 +836,8 @@ def render_manufacturing_page(
       const productionNumber = String(payload.productionNumber || "");
       let currentDocKey = documents[0]?.key || "";
       let currentViewKey = "all";
+      let secondaryViewKey = "";
+      let layoutMode = "single";
       let currentSortKey = "pdf";
       let currentSortDirection = "asc";
 
@@ -763,6 +846,9 @@ def render_manufacturing_page(
       const flattenRows = (document) => (document?.sections || []).flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
       const currentDocument = () => documents.find((document) => document.key === currentDocKey) || documents[0] || null;
       const countStateInDocument = (document, wanted) => flattenRows(document).filter((row) => selectionState[row.row_id] === wanted).length;
+      const countPlainInDocument = (document) => flattenRows(document).filter((row) => !selectionState[row.row_id]).length;
+      const specialViewKeys = new Set(["all", "plain", "green", "red"]);
+      const isSpecialViewKey = (key) => specialViewKeys.has(String(key || ""));
       const barcodePatternFor = (value) => {{
         const source = String(value || "").trim() || "EMPTY";
         let bits = "1010";
@@ -897,18 +983,81 @@ def render_manufacturing_page(
         `;
       }};
 
+      const sectionTabStateClass = (section) => {{
+        const rows = Array.isArray(section?.rows) ? section.rows : [];
+        if (!rows.length) return "";
+        if (rows.some((row) => !selectionState[row.row_id])) return "";
+        if (rows.every((row) => selectionState[row.row_id] === "green")) return " is-complete";
+        if (rows.some((row) => selectionState[row.row_id] === "red")) return " is-alert";
+        return "";
+      }};
+      const pairInfoForLabel = (label) => {{
+        const text = String(label || "").trim();
+        if (text.startsWith("1-es ")) return {{ side: "1", base: text.slice(5) }};
+        if (text.startsWith("2-es ")) return {{ side: "2", base: text.slice(5) }};
+        return null;
+      }};
+      const normalizedSectionLabel = (label) => String(label || "").trim();
+      const pairedSectionKey = (document, sourceKey) => {{
+        const sections = Array.isArray(document?.sections) ? document.sections : [];
+        const currentSection = sections.find((section) => section.key === sourceKey);
+        if (!currentSection) return "";
+        const pairInfo = pairInfoForLabel(currentSection.label);
+        if (!pairInfo) return "";
+        const targetLabel = pairInfo.side === "1" ? `2-es ${{pairInfo.base}}` : `1-es ${{pairInfo.base}}`;
+        const pairSection = sections.find((section) => normalizedSectionLabel(section.label) === targetLabel);
+        return pairSection?.key || "";
+      }};
+      const orderedSectionsForTabs = (sections) => {{
+        const items = Array.isArray(sections) ? sections : [];
+        const labelMap = new Map(items.map((section) => [normalizedSectionLabel(section.label), section]));
+        const used = new Set();
+        const ordered = [];
+        for (const section of items) {{
+          if (!section || used.has(section.key)) continue;
+          const pairInfo = pairInfoForLabel(section.label);
+          if (pairInfo?.side === "2") {{
+            const firstPair = labelMap.get(`1-es ${{pairInfo.base}}`);
+            if (firstPair && !used.has(firstPair.key)) continue;
+          }}
+          used.add(section.key);
+          ordered.push(section);
+          if (pairInfo?.side === "1") {{
+            const secondPair = labelMap.get(`2-es ${{pairInfo.base}}`);
+            if (secondPair && !used.has(secondPair.key)) {{
+              used.add(secondPair.key);
+              ordered.push(secondPair);
+            }}
+          }}
+        }}
+        for (const section of items) {{
+          if (!section || used.has(section.key)) continue;
+          used.add(section.key);
+          ordered.push(section);
+        }}
+        return ordered;
+      }};
+
       const buildGroupsForView = (document) => {{
         if (!document) return [];
-        const sections = Array.isArray(document.sections) ? document.sections : [];
+        const sections = orderedSectionsForTabs(Array.isArray(document.sections) ? document.sections : []);
+        if (layoutMode === "double" && !isSpecialViewKey(currentViewKey)) {{
+          const selectedKeys = [currentViewKey, secondaryViewKey].filter((key, index, items) => key && items.indexOf(key) === index);
+          return selectedKeys
+            .map((key) => sections.find((section) => section.key === key))
+            .filter((section) => section && Array.isArray(section.rows) && section.rows.length);
+        }}
         if (currentViewKey === "all") {{
           return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
         }}
-        if (currentViewKey === "green" || currentViewKey === "red") {{
+        if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
           return sections
             .map((section) => ({{
               key: section.key,
               label: section.label,
-              rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) => selectionState[row.row_id] === currentViewKey),
+              rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
+                currentViewKey === "plain" ? !selectionState[row.row_id] : selectionState[row.row_id] === currentViewKey
+              ),
             }}))
             .filter((section) => section.rows.length);
         }}
@@ -933,6 +1082,7 @@ def render_manufacturing_page(
         const sections = Array.isArray(document.sections) ? document.sections : [];
         const specialTabs = [
           {{ key: "all", label: "Összes", count: flattenRows(document).length }},
+          {{ key: "plain", label: "Simák", count: countPlainInDocument(document) }},
           {{ key: "green", label: "Zöldek", count: countStateInDocument(document, "green") }},
           {{ key: "red", label: "Pirosak", count: countStateInDocument(document, "red") }},
         ];
@@ -940,9 +1090,11 @@ def render_manufacturing_page(
           key: section.key,
           label: section.label,
           count: Array.isArray(section.rows) ? section.rows.length : 0,
+          stateClass: sectionTabStateClass(section),
+          selectedClass: section.key === currentViewKey ? " is-active" : (layoutMode === "double" && section.key === secondaryViewKey ? " is-secondary" : ""),
         }}));
         sectionTabsNode.innerHTML = [...specialTabs, ...sectionTabs].map((item) => `
-          <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+          <button class="mfg-section-tab${{item.selectedClass || (item.key === currentViewKey ? " is-active" : "")}}${{item.stateClass || ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
             <strong>${{escapeHtml(item.label)}}</strong>
             <small>${{item.count}}</small>
           </button>
@@ -950,13 +1102,18 @@ def render_manufacturing_page(
       }};
 
       const renderRows = (groups) => {{
-        contentNode.classList.toggle("is-overview", currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red");
+        const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red";
+        const isSplitMode = layoutMode === "double" && !isSpecialViewKey(currentViewKey) && groups.length > 1;
+        contentNode.classList.toggle("is-overview", isOverviewMode);
+        contentNode.classList.toggle("is-split", isSplitMode);
         if (!groups.length) {{
           const emptyLabel = currentViewKey === "green"
             ? "Még nincs zöldre jelölt sor."
             : currentViewKey === "red"
               ? "Még nincs pirosra jelölt sor."
-              : "Ehhez a nézethez nincs megjeleníthető sor.";
+              : currentViewKey === "plain"
+                ? "Minden sor kapott már kijelölést."
+                : "Ehhez a nézethez nincs megjeleníthető sor.";
           contentNode.innerHTML = `
             <div class="mfg-empty">
               <div class="mfg-empty-copy">
@@ -969,7 +1126,7 @@ def render_manufacturing_page(
         }}
 
         contentNode.innerHTML = groups.map((group) => {{
-          const showSectionHeader = currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red";
+          const showSectionHeader = isOverviewMode || isSplitMode;
           const headMarkup = showSectionHeader
             ? `
               <div class="mfg-section-head">
@@ -1019,16 +1176,46 @@ def render_manufacturing_page(
               </button>
             `;
           }}).join("");
-          return `<section class="mfg-section-card">${{headMarkup}}${{tableHeadMarkup}}<div class="mfg-row-list">${{rowMarkup}}</div></section>`;
+          return `<section class="mfg-section-card" data-section-key="${{escapeHtml(group.key || "")}}">${{headMarkup}}${{tableHeadMarkup}}<div class="mfg-row-list" data-section-key="${{escapeHtml(group.key || "")}}">${{rowMarkup}}</div></section>`;
         }}).join("");
       }};
 
-      const renderAll = () => {{
+      const captureScrollState = () => {{
+        const listScroll = {{}};
+        Array.from(contentNode.querySelectorAll(".mfg-row-list[data-section-key]")).forEach((node) => {{
+          const key = node.getAttribute("data-section-key") || "";
+          if (key) listScroll[key] = node.scrollTop;
+        }});
+        return {{
+          pageY: window.scrollY || window.pageYOffset || 0,
+          listScroll,
+        }};
+      }};
+
+      const restoreScrollState = (snapshot) => {{
+        if (!snapshot) return;
+        const listScroll = snapshot.listScroll || {{}};
+        Array.from(contentNode.querySelectorAll(".mfg-row-list[data-section-key]")).forEach((node) => {{
+          const key = node.getAttribute("data-section-key") || "";
+          if (key && Object.prototype.hasOwnProperty.call(listScroll, key)) {{
+            node.scrollTop = Number(listScroll[key] || 0);
+          }}
+        }});
+        window.scrollTo(0, Number(snapshot.pageY || 0));
+      }};
+
+      const renderAll = (snapshot = null) => {{
+        const scrollState = snapshot || captureScrollState();
         const document = currentDocument();
         renderDocTabs();
         renderSectionTabs(document);
+        Array.from(layoutToggleNode.querySelectorAll("[data-layout-mode]")).forEach((button) => {{
+          const mode = button.getAttribute("data-layout-mode") || "single";
+          button.classList.toggle("is-active", mode === layoutMode);
+        }});
         renderRows(buildGroupsForView(document));
         renderBarcodes();
+        requestAnimationFrame(() => restoreScrollState(scrollState));
       }};
 
       const persistRowState = async (rowId, nextState, previousState) => {{
@@ -1056,10 +1243,11 @@ def render_manufacturing_page(
       }};
 
       const applyRowState = (rowId, targetState) => {{
+        const scrollState = captureScrollState();
         const previousState = selectionState[rowId] || "";
         if (targetState === "clear") delete selectionState[rowId];
         else selectionState[rowId] = targetState;
-        renderAll();
+        renderAll(scrollState);
         setStatus("Mentés...");
         void persistRowState(rowId, targetState, previousState);
       }};
@@ -1071,6 +1259,7 @@ def render_manufacturing_page(
         if (!nextDocKey || nextDocKey === currentDocKey) return;
         currentDocKey = nextDocKey;
         currentViewKey = "all";
+        secondaryViewKey = "";
         renderAll();
       }});
 
@@ -1078,8 +1267,46 @@ def render_manufacturing_page(
         const button = event.target.closest("[data-view-key]");
         if (!(button instanceof HTMLElement)) return;
         const nextViewKey = button.getAttribute("data-view-key") || "all";
-        if (nextViewKey === currentViewKey) return;
-        currentViewKey = nextViewKey;
+        if (isSpecialViewKey(nextViewKey)) {{
+          if (nextViewKey === currentViewKey && !secondaryViewKey) return;
+          currentViewKey = nextViewKey;
+          secondaryViewKey = "";
+          renderAll();
+          return;
+        }}
+        if (layoutMode === "double") {{
+          const activeDocument = currentDocument();
+          if (isSpecialViewKey(currentViewKey)) {{
+            currentViewKey = nextViewKey;
+            secondaryViewKey = pairedSectionKey(activeDocument, nextViewKey);
+          }} else if (nextViewKey === currentViewKey || nextViewKey === secondaryViewKey) {{
+            return;
+          }} else {{
+            currentViewKey = nextViewKey;
+            secondaryViewKey = pairedSectionKey(activeDocument, nextViewKey);
+          }}
+        }} else {{
+          if (nextViewKey === currentViewKey) return;
+          currentViewKey = nextViewKey;
+          secondaryViewKey = "";
+        }}
+        renderAll();
+      }});
+
+      layoutToggleNode.addEventListener("click", (event) => {{
+        const button = event.target.closest("[data-layout-mode]");
+        if (!(button instanceof HTMLElement)) return;
+        const nextMode = button.getAttribute("data-layout-mode") || "single";
+        if (nextMode === layoutMode) return;
+        layoutMode = nextMode === "double" ? "double" : "single";
+        if (layoutMode === "single") {{
+          secondaryViewKey = "";
+        }} else if (isSpecialViewKey(currentViewKey)) {{
+          currentViewKey = "all";
+          secondaryViewKey = "";
+        }} else {{
+          secondaryViewKey = pairedSectionKey(currentDocument(), currentViewKey);
+        }}
         renderAll();
       }});
 
