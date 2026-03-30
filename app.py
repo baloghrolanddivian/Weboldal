@@ -57,6 +57,30 @@ from manufacturing_module import (
     save_selection_state,
 )
 from manufacturing_view import render_manufacturing_page
+from matt_inventory_module import (
+    MattInventoryReport,
+    build_matt_inventory_alert_workbook,
+    build_matt_inventory_report,
+    file_name_allowed as matt_inventory_file_name_allowed,
+    load_report_from_path as load_matt_inventory_report_from_path,
+    read_bytes_if_exists as matt_inventory_read_bytes_if_exists,
+    save_report_to_path as save_matt_inventory_report_to_path,
+    write_runtime_upload as write_matt_inventory_runtime_upload,
+)
+from front_inventory_module import (
+    build_inventory_check_workbook,
+    build_front_inventory_session,
+    summarize_missing_inputs,
+    build_front_inventory_view_model,
+    file_name_allowed as front_inventory_file_name_allowed,
+    finalize_inventory,
+    load_session_from_path as load_front_inventory_session_from_path,
+    read_bytes_if_exists as front_inventory_read_bytes_if_exists,
+    run_inventory_check,
+    save_session_to_path as save_front_inventory_session_to_path,
+    update_row_input,
+    write_runtime_upload as write_front_inventory_runtime_upload,
+)
 from procurement_helper import (
     get_procurement_helper_state,
     launch_procurement_helper,
@@ -123,6 +147,18 @@ VACATION_CALENDAR_LEAVE_SAVE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/men
 VACATION_CALENDAR_LEAVE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/torles"
 MANUFACTURING_ROUTE = "/apps/gyartasi-papirok"
 MANUFACTURING_STATE_ROUTE = f"{MANUFACTURING_ROUTE}/state"
+MATT_INVENTORY_ROUTE = "/apps/matt-raktarertek"
+MATT_INVENTORY_PROCESS_ROUTE = f"{MATT_INVENTORY_ROUTE}/process"
+MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
+FRONT_INVENTORY_ROUTE = "/apps/front-leltar"
+FRONT_INVENTORY_PROCESS_ROUTE = f"{FRONT_INVENTORY_ROUTE}/process"
+FRONT_INVENTORY_STATE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/state"
+FRONT_INVENTORY_CHECK_ROUTE = f"{FRONT_INVENTORY_ROUTE}/ellenorzes"
+FRONT_INVENTORY_FINALIZE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/veglegesites"
+FRONT_INVENTORY_PRESENCE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/presence"
+FRONT_INVENTORY_MISSING_ROUTE = f"{FRONT_INVENTORY_ROUTE}/hianyzo-darabszamok"
+FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/ellenorzes"
+FRONT_INVENTORY_ALERT_CLEAR_ROUTE = f"{FRONT_INVENTORY_ROUTE}/alert-clear"
 DIVIAN_AI_KNOWLEDGE_ROUTE = "/apps/ai-tudasbazis"
 DIVIAN_AI_KNOWLEDGE_PROCESS_ROUTE = f"{DIVIAN_AI_KNOWLEDGE_ROUTE}/upload"
 DIVIAN_AI_KNOWLEDGE_FILE_PREFIX = f"{DIVIAN_AI_KNOWLEDGE_ROUTE}/file"
@@ -197,6 +233,17 @@ DIVIAN_AI_OCR_SCRIPT = BASE_DIR / "tools" / "windows_ocr.ps1"
 VACATION_CALENDAR_RUNTIME_DIR = RUNTIME_DIR / "szabadsag-naptar"
 VACATION_CALENDAR_DB = VACATION_CALENDAR_RUNTIME_DIR / "calendar.db"
 MANUFACTURING_RUNTIME_DIR = RUNTIME_DIR / "gyartasi-papirok"
+MATT_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "matt-raktarertek"
+MATT_INVENTORY_REPORT_PATH = MATT_INVENTORY_RUNTIME_DIR / "latest-report.json"
+MATT_INVENTORY_PRICE_META_PATH = MATT_INVENTORY_RUNTIME_DIR / "latest-price.json"
+MATT_INVENTORY_STOCK_META_PATH = MATT_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+MATT_INVENTORY_ALERT_WORKBOOK_PATH = MATT_INVENTORY_RUNTIME_DIR / "matt-keszlet-riport.xlsx"
+FRONT_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "front-leltar"
+FRONT_INVENTORY_SESSION_PATH = FRONT_INVENTORY_RUNTIME_DIR / "session.json"
+FRONT_INVENTORY_STOCK_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+FRONT_INVENTORY_PRESENCE_PATH = FRONT_INVENTORY_RUNTIME_DIR / "presence.json"
+FRONT_INVENTORY_CHECK_REPORT_PATH = FRONT_INVENTORY_RUNTIME_DIR / "ellenorzes-riport.xlsx"
+FRONT_INVENTORY_CHECK_REPORT_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "ellenorzes-riport.json"
 DIVIAN_AI_DEFAULT_KNOWLEDGE_FILES = [
     Path.home() / "Downloads" / "ceges_termekinformacios_kezikonyv.pdf",
 ]
@@ -9591,6 +9638,2105 @@ def render_manufacturing_module(production_number: str = "", message: str = "", 
     )
 
 
+def _matt_inventory_read_meta(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _matt_inventory_write_meta(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _matt_inventory_saved_price_payload() -> tuple[str, bytes] | None:
+    meta = _matt_inventory_read_meta(MATT_INVENTORY_PRICE_META_PATH)
+    stored_name = str(meta.get("stored_name", "")).strip()
+    original_name = str(meta.get("original_name", "")).strip() or stored_name
+    if not stored_name:
+        return None
+    payload = matt_inventory_read_bytes_if_exists(MATT_INVENTORY_RUNTIME_DIR / stored_name)
+    if payload is None:
+        return None
+    return original_name, payload
+
+
+def _matt_inventory_saved_price_name() -> str:
+    meta = _matt_inventory_read_meta(MATT_INVENTORY_PRICE_META_PATH)
+    return str(meta.get("original_name", "")).strip()
+
+
+def _matt_inventory_saved_stock_name() -> str:
+    meta = _matt_inventory_read_meta(MATT_INVENTORY_STOCK_META_PATH)
+    return str(meta.get("original_name", "")).strip()
+
+
+def _matt_inventory_format_money(value: Decimal | float | int) -> str:
+    number = float(value or 0)
+    return f"{_format_eu_number(number, 0)} Ft"
+
+
+def _matt_inventory_format_quantity(value: Decimal | float | int) -> str:
+    number = float(value or 0)
+    if abs(number - round(number)) < 1e-9:
+        return f"{int(round(number))} db"
+    return f"{_format_eu_number(number, 2)} db"
+
+
+def _matt_inventory_format_generated_at(value: str) -> str:
+    clean_value = str(value or "").strip()
+    if not clean_value:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(clean_value)
+    except ValueError:
+        return clean_value
+    return parsed.strftime("%Y.%m.%d. %H:%M")
+
+
+def render_matt_inventory_form(message: str = "", success: bool = False) -> bytes:
+    notice_html = ""
+    if message:
+        extra_class = " success" if success else ""
+        notice_html = f'<div class="notice-banner{extra_class}">{html.escape(message)}</div>'
+
+    report = load_matt_inventory_report_from_path(MATT_INVENTORY_REPORT_PATH)
+    saved_price_name = _matt_inventory_saved_price_name()
+    saved_stock_name = _matt_inventory_saved_stock_name()
+
+    report_html = """
+      <section class="matt-report-card is-empty">
+        <div class="matt-report-empty">
+          <strong>Még nincs napi matt készletérték.</strong>
+          <p>Töltsd fel a fix ártáblát és az aktuális készletfájlt, utána itt jelenik meg a kompakt összesítő.</p>
+        </div>
+      </section>
+    """
+    if report is not None:
+        rows_html = "".join(
+            f"""
+              <tr>
+                <td>
+                  <strong>{html.escape(group.family)}</strong>
+                </td>
+                <td><span class="matt-color-cell">{html.escape(group.color)}</span></td>
+                <td>{html.escape(_matt_inventory_format_quantity(group.quantity))}</td>
+                <td class="value-cell">{html.escape(_matt_inventory_format_money(group.total_value))}</td>
+              </tr>
+            """
+            for group in report.groups
+        )
+        missing_html = ""
+        if report.missing_codes:
+            preview = ", ".join(html.escape(code) for code in report.missing_codes[:6])
+            extra = ""
+            if len(report.missing_codes) > 6:
+                extra = f" +{len(report.missing_codes) - 6} további"
+            missing_html = f"""
+              <div class="matt-warning">
+                <strong>Hiányzó anyagköltség</strong>
+                <p>Ezekhez a cikkszámokhoz nincs ár a fix táblában: {preview}{html.escape(extra)}</p>
+              </div>
+            """
+
+        report_html = f"""
+          <section class="matt-report-card">
+            <div class="matt-report-head">
+              <div class="matt-head-copy">
+                <span class="matt-tag">Napi összesítő</span>
+                <strong>Matt front raktárérték</strong>
+                <p>Forrás: {html.escape(report.stock_source_name)} · Árforrás: {html.escape(report.price_source_name)}</p>
+              </div>
+              <div class="matt-head-side">
+                <div class="matt-report-stamp">{html.escape(_matt_inventory_format_generated_at(report.generated_at))}</div>
+                <div class="matt-head-caption">Napi készletből frissítve</div>
+              </div>
+            </div>
+
+            <div class="matt-stats">
+              <article>
+                <span>Összérték</span>
+                <strong>{html.escape(_matt_inventory_format_money(report.total_value))}</strong>
+              </article>
+              <article>
+                <span>Összes darab</span>
+                <strong>{html.escape(_matt_inventory_format_quantity(report.total_quantity))}</strong>
+              </article>
+              <article>
+                <span>Színcsoport</span>
+                <strong>{len(report.groups)}</strong>
+              </article>
+              <article>
+                <span>Talált cikkszám</span>
+                <strong>{report.matched_row_count}</strong>
+              </article>
+            </div>
+
+            <div class="matt-thresholds">
+              <article class="matt-threshold-card is-safety">
+                <span>Biztonsági készlet felett</span>
+                <strong>{report.safety_exceeded_count} front</strong>
+                <p>Azok a frontok, ahol a bent maradt készlet már a biztonsági szint fölött van.</p>
+              </article>
+              <article class="matt-threshold-card is-storage">
+                <span>Tárolható mennyiség felett</span>
+                <strong>{report.storage_exceeded_count} front</strong>
+                <p>Azok a frontok, amelyekből több van bent, mint a tárolható mennyiség.</p>
+              </article>
+              <article class="matt-threshold-card is-action">
+                <span>Küszöbriport</span>
+                <strong>Excel export</strong>
+                <p>Két munkalapon adja le a biztonsági és tárolható mennyiség feletti frontokat.</p>
+                <a class="button button-primary matt-download-button" href="{MATT_INVENTORY_DOWNLOAD_ROUTE}">Riport letöltése</a>
+              </article>
+            </div>
+
+            <div class="matt-table-wrap">
+              <table class="matt-table">
+                <thead>
+                  <tr>
+                    <th>Modell</th>
+                    <th>Szín</th>
+                    <th>Darabszám</th>
+                    <th>Raktárérték</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows_html}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>Összesen</td>
+                    <td>—</td>
+                    <td>{html.escape(_matt_inventory_format_quantity(report.total_quantity))}</td>
+                    <td class="value-cell">{html.escape(_matt_inventory_format_money(report.total_value))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {missing_html}
+            <div class="matt-generated-by">generated by Divian-HUB</div>
+          </section>
+        """
+
+    price_meta_html = ""
+    if saved_price_name:
+        price_meta_html = f'<div class="matt-meta-chip">Aktív fix árforrás: {html.escape(saved_price_name)}</div>'
+
+    stock_meta_html = ""
+    if saved_stock_name:
+        stock_meta_html = f'<div class="matt-meta-chip">Utolsó készletállás: {html.escape(saved_stock_name)}</div>'
+
+    content_html = f"""
+      <div class="matt-shell">
+        <section class="matt-upload-card">
+          <div class="matt-upload-head">
+            <div class="matt-copy">
+              <span class="matt-tag">Napi készletérték</span>
+              <strong>Matt front raktárérték.</strong>
+              <p>Feltöltöd a fix anyagköltség táblát és a napi készletállást, a rendszer pedig front- és színszinten összesíti a bent maradt értéket.</p>
+            </div>
+            <div class="matt-visual" aria-hidden="true">
+              <div class="matt-visual-pill">Fix ár</div>
+              <div class="matt-visual-line"></div>
+              <div class="matt-visual-pill">Napi állás</div>
+              <div class="matt-visual-line"></div>
+              <div class="matt-visual-pill is-strong">Érték</div>
+            </div>
+          </div>
+
+          <div class="matt-meta-row">
+            {price_meta_html}
+            {stock_meta_html}
+          </div>
+
+          <form class="matt-upload-form" method="post" action="{MATT_INVENTORY_PROCESS_ROUTE}" enctype="multipart/form-data">
+            <div class="matt-upload-grid">
+              <label class="matt-field">
+                <span>Fix ártábla</span>
+                <strong>Alkatrészszám + anyagköltség</strong>
+                <input type="file" name="price_file" accept=".xlsx,.xlsm,.csv" />
+                <small>Első alkalommal kötelező. Utána csak akkor töltsd újra, ha frissült.</small>
+              </label>
+
+              <label class="matt-field">
+                <span>Napi készlet</span>
+                <strong>Alkatrészszám + leírás + mennyiség + szín</strong>
+                <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+                <small>Ezt elég naponta frissíteni az aktuális állással.</small>
+              </label>
+            </div>
+
+            <div class="matt-action-row">
+              <span class="inline-note">A fix árforrás megmarad, így napi használatra elég az aktuális készletfájlt feltölteni.</span>
+              <button class="button button-primary matt-submit-button" type="submit">Érték kiszámítása</button>
+            </div>
+          </form>
+        </section>
+
+        {report_html}
+      </div>
+    """
+
+    extra_script = """
+<style>
+  .matt-shell {
+    display: grid;
+    gap: 18px;
+  }
+  .matt-upload-card,
+  .matt-report-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    border: 1px solid rgba(7, 16, 24, 0.08);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    color: #0f172a;
+    box-shadow: 0 20px 44px rgba(10, 18, 30, 0.08);
+  }
+  .matt-upload-card::before,
+  .matt-report-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(15, 23, 42, 0.04), transparent 28%);
+    pointer-events: none;
+  }
+  .matt-upload-card {
+    padding: 22px;
+  }
+  .matt-upload-head {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 20px;
+  }
+  .matt-copy {
+    display: grid;
+    gap: 10px;
+    max-width: 660px;
+  }
+  .matt-copy strong,
+  .matt-report-head strong {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: clamp(1.35rem, 2.8vw, 2rem);
+    line-height: 1;
+    color: #0f172a;
+  }
+  .matt-copy p,
+  .matt-report-head p,
+  .matt-field small,
+  .matt-report-stamp,
+  .matt-generated-by,
+  .matt-warning p {
+    margin: 0;
+    color: #5b6777;
+    line-height: 1.55;
+  }
+  .matt-tag {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #243b53;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .matt-visual {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+  .matt-visual-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+  .matt-visual-pill.is-strong {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #ffffff;
+  }
+  .matt-visual-line {
+    width: 18px;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0.2), rgba(15, 23, 42, 0.55));
+  }
+  .matt-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .matt-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    color: #475569;
+    font-size: 0.84rem;
+    font-weight: 600;
+  }
+  .matt-upload-form {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .matt-upload-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .matt-field {
+    display: grid;
+    gap: 8px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+  .matt-field span {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .matt-field strong {
+    color: #0f172a;
+    font-size: 1rem;
+  }
+  .matt-field input[type="file"] {
+    width: 100%;
+    min-height: 54px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px dashed rgba(15, 23, 42, 0.18);
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #0f172a;
+  }
+  .matt-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+    padding: 6px 2px 0;
+  }
+  .matt-submit-button {
+    min-width: 210px;
+    min-height: 52px;
+    border-radius: 16px;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+  }
+  .matt-report-card {
+    padding: 22px;
+  }
+  .matt-report-head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .matt-report-stamp {
+    white-space: nowrap;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .matt-head-copy {
+    display: grid;
+    gap: 10px;
+  }
+  .matt-head-side {
+    display: grid;
+    justify-items: end;
+    gap: 6px;
+    padding: 10px 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .matt-head-caption {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .matt-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .matt-stats article {
+    padding: 16px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    display: grid;
+    gap: 6px;
+  }
+  .matt-stats span {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .matt-stats strong {
+    color: #0f172a;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.18rem;
+  }
+  .matt-table-wrap {
+    margin-top: 16px;
+    overflow: auto;
+    border-radius: 20px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+  .matt-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+  }
+  .matt-table thead th {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .matt-table tbody td,
+  .matt-table tfoot td {
+    padding: 16px 18px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+    vertical-align: middle;
+  }
+  .matt-table tbody tr:nth-child(2n) {
+    background: rgba(248, 250, 252, 0.7);
+  }
+  .matt-table tbody td:first-child strong {
+    display: block;
+    font-size: 0.98rem;
+  }
+  .matt-color-cell {
+    display: inline-block;
+    color: #64748b;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+  .matt-table .value-cell {
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .matt-table tfoot td {
+    background: #f8fafc;
+    font-weight: 800;
+  }
+  .matt-warning {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(220, 38, 38, 0.16);
+    background: rgba(254, 242, 242, 0.9);
+  }
+  .matt-warning strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #991b1b;
+  }
+  .matt-generated-by {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(15, 23, 42, 0.12);
+    text-align: right;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .matt-thresholds {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .matt-threshold-card {
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    min-height: 148px;
+  }
+  .matt-threshold-card span {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .matt-threshold-card strong {
+    color: #0f172a;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.02rem;
+  }
+  .matt-threshold-card p {
+    margin: 0;
+    color: #64748b;
+    line-height: 1.45;
+    font-size: 0.86rem;
+  }
+  .matt-threshold-card.is-safety {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+  .matt-threshold-card.is-storage {
+    background: linear-gradient(180deg, #ffffff 0%, #fffaf5 100%);
+  }
+  .matt-threshold-card.is-action {
+    background: linear-gradient(180deg, #0f172a 0%, #162033 100%);
+    border-color: rgba(15, 23, 42, 0.55);
+  }
+  .matt-threshold-card.is-action span,
+  .matt-threshold-card.is-action strong,
+  .matt-threshold-card.is-action p {
+    color: #ffffff;
+  }
+  .matt-download-button {
+    min-height: 50px;
+    width: 100%;
+    justify-content: center;
+    margin-top: 10px;
+    border-radius: 14px;
+    box-shadow: 0 16px 28px rgba(15, 23, 42, 0.18);
+  }
+  .matt-report-card.is-empty {
+    padding: 32px 24px;
+  }
+  .matt-report-empty {
+    display: grid;
+    gap: 8px;
+  }
+  .matt-report-empty strong {
+    color: #0f172a;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.2rem;
+  }
+  @media (max-width: 900px) {
+    .matt-upload-head,
+    .matt-report-head {
+      grid-template-columns: minmax(0, 1fr);
+      display: grid;
+    }
+    .matt-upload-grid,
+    .matt-thresholds {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .matt-visual {
+      flex-wrap: wrap;
+      width: fit-content;
+    }
+    .matt-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .matt-head-side {
+      justify-items: start;
+    }
+  }
+  @media (max-width: 640px) {
+    .matt-upload-card,
+    .matt-report-card {
+      border-radius: 22px;
+    }
+    .matt-upload-card {
+      padding: 18px;
+    }
+    .matt-report-card {
+      padding: 18px;
+    }
+    .matt-stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .matt-upload-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .matt-action-row .button {
+      width: 100%;
+    }
+    .matt-download-button {
+      width: 100%;
+      justify-content: center;
+    }
+    .matt-submit-button {
+      min-width: 0;
+    }
+  }
+</style>
+"""
+
+    return _render_nettfront_layout(
+        heading="Napi matt front készletérték",
+        lead="Fix árforrásból és napi készletállásból kiszámolt, kompakt raktárérték összesítő.",
+        intro_label="Value snapshot",
+        content_html=content_html,
+        side_html="",
+        notice_html=notice_html,
+        extra_script=extra_script,
+        single_column=True,
+    )
+
+
+def _front_inventory_saved_stock_name() -> str:
+    meta = _matt_inventory_read_meta(FRONT_INVENTORY_STOCK_META_PATH)
+    return str(meta.get("original_name", "")).strip()
+
+
+def _front_inventory_saved_check_report_name() -> str:
+    meta = _matt_inventory_read_meta(FRONT_INVENTORY_CHECK_REPORT_META_PATH)
+    return str(meta.get("download_name", "")).strip()
+
+
+def _front_inventory_format_timestamp(value: str) -> str:
+    clean_value = str(value or "").strip()
+    if not clean_value:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(clean_value)
+    except ValueError:
+        return clean_value
+    return parsed.strftime("%Y.%m.%d. %H:%M")
+
+
+def _front_inventory_load_presence() -> dict:
+    if not FRONT_INVENTORY_PRESENCE_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(FRONT_INVENTORY_PRESENCE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _front_inventory_save_presence(payload: dict) -> None:
+    FRONT_INVENTORY_PRESENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    FRONT_INVENTORY_PRESENCE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _front_inventory_active_presence_categories() -> set[str]:
+    snapshot = _front_inventory_load_presence()
+    now = datetime.now()
+    active_categories: set[str] = set()
+    dirty = False
+    for token, item in list(snapshot.items()):
+        if not isinstance(item, dict):
+            snapshot.pop(token, None)
+            dirty = True
+            continue
+        try:
+            updated_at = datetime.fromisoformat(str(item.get("updated_at", "")))
+        except ValueError:
+            snapshot.pop(token, None)
+            dirty = True
+            continue
+        if (now - updated_at).total_seconds() > 20:
+            snapshot.pop(token, None)
+            dirty = True
+            continue
+        if str(item.get("view", "")).strip() == "leltar":
+            category = str(item.get("category", "")).strip()
+            if category:
+                active_categories.add(category)
+    if dirty:
+        _front_inventory_save_presence(snapshot)
+    return active_categories
+
+
+def _front_inventory_touch_presence(token: str, category: str, view_mode: str, clear: bool = False) -> list[str]:
+    clean_token = str(token or "").strip()
+    snapshot = _front_inventory_load_presence()
+    if clean_token:
+        if clear:
+            snapshot.pop(clean_token, None)
+        else:
+            snapshot[clean_token] = {
+                "category": str(category or "").strip(),
+                "view": _front_inventory_normalize_view(view_mode),
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+            }
+
+    now = datetime.now()
+    active_categories: list[str] = []
+    for key, item in list(snapshot.items()):
+        if not isinstance(item, dict):
+            snapshot.pop(key, None)
+            continue
+        try:
+            updated_at = datetime.fromisoformat(str(item.get("updated_at", "")))
+        except ValueError:
+            snapshot.pop(key, None)
+            continue
+        if (now - updated_at).total_seconds() > 20:
+            snapshot.pop(key, None)
+            continue
+        if str(item.get("view", "")).strip() == "leltar":
+            category_value = str(item.get("category", "")).strip()
+            if category_value:
+                active_categories.append(category_value)
+
+    _front_inventory_save_presence(snapshot)
+    return sorted(set(active_categories))
+
+
+def _front_inventory_build_sync_payload(selected_category: str) -> dict:
+    session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+    if session is None:
+        return {"category_states": {}, "row_inputs": {}, "updated_at": ""}
+    view_model = build_front_inventory_view_model(session, selected_category)
+    row_inputs: dict[str, str] = {}
+    for row in view_model.get("visible_rows", []):
+        row_inputs[str(row.get("row_id", ""))] = str(row.get("input_qty", "") or "")
+    category_states = {
+        str(item.get("key", "")): bool(item.get("complete"))
+        for item in view_model.get("categories", [])
+    }
+    return {
+        "category_states": category_states,
+        "row_inputs": row_inputs,
+        "updated_at": str(session.get("updated_at", "")),
+        "worker_alert": session.get("worker_alert") if isinstance(session.get("worker_alert"), dict) else {},
+    }
+
+
+def _front_inventory_normalize_view(value: str) -> str:
+    return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
+
+
+def render_front_inventory_form(
+    message: str = "",
+    success: bool = False,
+    selected_category: str = "",
+    view_mode: str = "admin",
+    missing_summary: dict | None = None,
+    auto_download_href: str = "",
+) -> bytes:
+    notice_html = ""
+    if message:
+        extra_class = " success" if success else ""
+        notice_html = f'<div class="notice-banner{extra_class}">{html.escape(message)}</div>'
+
+    session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+    saved_stock_name = _front_inventory_saved_stock_name()
+    saved_check_report_name = _front_inventory_saved_check_report_name()
+    active_view = _front_inventory_normalize_view(view_mode)
+    active_presence_categories = _front_inventory_active_presence_categories()
+
+    admin_href = FRONT_INVENTORY_ROUTE
+    inventory_href = FRONT_INVENTORY_ROUTE if session is None else f"{FRONT_INVENTORY_ROUTE}?view=leltar"
+    view_switch_html = f"""
+      <div class="frontinv-view-switch">
+        <a class="frontinv-view-tab{' is-active' if active_view == 'admin' else ''}" href="{admin_href}">Kezelő</a>
+        <a class="frontinv-view-tab{' is-active' if active_view == 'leltar' else ''}" href="{inventory_href}">Leltár nézet</a>
+      </div>
+    """
+
+    admin_session_html = ""
+    inventory_html = """
+      <section class="frontinv-board is-empty">
+        <div class="frontinv-empty">
+          <strong>Még nincs aktív frontleltár.</strong>
+          <p>Töltsd fel az aktuális frontkészletet, és utána indulhat a külön leltárnézet.</p>
+        </div>
+      </section>
+    """
+    if session:
+        view_model = build_front_inventory_view_model(session, selected_category)
+        phase_value = str(session.get("phase", "0"))
+        finalized = view_model["finalized"]
+        categories_html = "".join(
+            f"""
+              <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-live' if item['key'] in active_presence_categories else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
+                 href="{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(item['key'])}">
+                <span>{html.escape(item['label'])}</span>
+                <strong>{item['count']}</strong>
+              </a>
+            """
+            for item in view_model["categories"]
+            if item["count"] > 0 or item["key"] in {"all", "egyedi"}
+        )
+
+        stats_html = f"""
+          <article>
+            <span>Aktív sor</span>
+            <strong>{view_model['active_row_count']}</strong>
+          </article>
+          <article>
+            <span>Széria</span>
+            <strong>{view_model['serial_row_count']}</strong>
+          </article>
+          <article>
+            <span>Egyedi</span>
+            <strong>{view_model['custom_row_count']}</strong>
+          </article>
+          <article>
+            <span>Állapot</span>
+            <strong>{html.escape(str(session.get('phase_label', 'Számlálás')))}</strong>
+          </article>
+        """
+
+        inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}"
+
+        missing_html = ""
+        if missing_summary and active_view == "admin":
+            missing_category_html = "".join(
+                f'<span class="frontinv-meta-chip">{html.escape(str(item.get("key", "")))} · {int(item.get("count", 0))} sor</span>'
+                for item in missing_summary.get("categories", [])
+            )
+            missing_rows_html = "".join(
+                f"""
+                  <tr>
+                    <td>{html.escape(str(row.get('category', '')))}</td>
+                    <td>{html.escape(str(row.get('description', '')))}</td>
+                    <td>{html.escape(str(row.get('color', '') or '-'))}</td>
+                  </tr>
+                """
+                for row in missing_summary.get("rows", [])
+            )
+            if not missing_rows_html:
+                missing_rows_html = '<tr><td colspan="3" class="frontinv-empty-row">Nincs hiányzó darabszám.</td></tr>'
+            missing_html = f"""
+              <section class="frontinv-board frontinv-admin-board">
+                <div class="frontinv-board-head">
+                  <div>
+                    <span class="frontinv-tag">Hiányellenőrzés</span>
+                    <strong>Hiányzó darabszámok</strong>
+                    <p>Jelenleg {int(missing_summary.get('total_missing', 0))} frontnál nincs kitöltve a darabszám.</p>
+                  </div>
+                </div>
+                <div class="frontinv-meta-row">
+                  {missing_category_html or '<span class="frontinv-meta-chip">Nincs hiányzó sor</span>'}
+                </div>
+                <div class="frontinv-table-wrap">
+                  <table class="frontinv-table frontinv-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Kategória</th>
+                        <th>Leírás</th>
+                        <th>Szín</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missing_rows_html}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            """
+
+        if finalized:
+            admin_action_html = f"""
+              <div class="frontinv-phase-callout is-complete">
+                <div>
+                  <strong>Leltár lezárva</strong>
+                  <p>A végleges darabszámok már rögzítve vannak. Lezárás ideje: {html.escape(_front_inventory_format_timestamp(str(session.get('finalized_at', ''))))}</p>
+                </div>
+                <a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>
+              </div>
+            """
+            rows_html = "".join(
+                f"""
+                  <tr class="frontinv-row is-final">
+                    <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
+                    <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color', '') or '-'))}</span></td>
+                    <td class="is-count"><span class="frontinv-count-pill">{int(row.get('counted_qty', 0) or 0)}</span></td>
+                  </tr>
+                """
+                for row in view_model["finalized_rows"]
+                if (
+                    view_model["selected_category"] == "all"
+                    and row.get("is_serial")
+                    or view_model["selected_category"] == "egyedi"
+                    and not row.get("is_serial")
+                    or view_model["selected_category"] not in {"all", "egyedi"}
+                    and row.get("category") == view_model["selected_category"]
+                )
+            )
+            if not rows_html:
+                rows_html = '<tr><td colspan="3" class="frontinv-empty-row">Ehhez a kategóriához nincs lezárt front.</td></tr>'
+            inventory_status_html = f"""
+              <div class="frontinv-phase-callout is-complete">
+                <div>
+                  <strong>Leltár lezárva</strong>
+                  <p>A végleges darabszámok már rögzítve vannak. Lezárás ideje: {html.escape(_front_inventory_format_timestamp(str(session.get('finalized_at', ''))))}</p>
+                </div>
+              </div>
+            """
+        else:
+            rows_html = "".join(
+                f"""
+                  <tr class="frontinv-row{' is-counted' if str(row.get('input_qty', '')).strip() else ''}" data-frontinv-row>
+                    <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
+                    <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color', '') or '-'))}</span></td>
+                    <td class="is-count">
+                      <input
+                        class="frontinv-input"
+                        type="number"
+                        min="0"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        value="{html.escape(str(row.get('input_qty', '')))}"
+                        data-frontinv-input
+                        data-row-id="{html.escape(str(row.get('row_id', '')))}"
+                      />
+                    </td>
+                  </tr>
+                """
+                for row in view_model["visible_rows"]
+            )
+            if not rows_html:
+                rows_html = '<tr><td colspan="3" class="frontinv-empty-row">Ehhez a kategóriához most nincs megjeleníthető front.</td></tr>'
+
+            if phase_value == "0":
+                phase_title = "Első számlálás"
+                phase_copy = "Írják be minden front tényleges darabszámát. Ha van beírt szám, a sor zöldre vált."
+            elif phase_value == "1":
+                phase_title = "Eltérő frontok újraszámolása"
+                phase_copy = "Most csak azok a frontok maradtak, ahol eltérés volt. A korábbi készlet és az előző beírás itt már nem látszik."
+            else:
+                phase_title = "Végső ellenőrzés"
+                phase_copy = "Csak az 5 darabnál nagyobb eltérésű frontok maradtak. Ezeket még egyszer kell beírni, utána lezárható a leltár."
+
+            action_route = FRONT_INVENTORY_CHECK_ROUTE if phase_value in {"0", "1"} else FRONT_INVENTORY_FINALIZE_ROUTE
+            action_label = "Ellenőrzés" if phase_value in {"0", "1"} else "Véglegesítés"
+            admin_action_html = f"""
+              <div class="frontinv-phase-callout{' is-final' if phase_value == '2' else ''}">
+                <div>
+                  <strong>{html.escape(phase_title)}</strong>
+                  <p>{html.escape(phase_copy)}</p>
+                </div>
+                <div class="frontinv-admin-actions">
+                  <a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>
+                  <form method="post" action="{FRONT_INVENTORY_MISSING_ROUTE}">
+                    <button class="button button-secondary frontinv-open-button" type="submit">Hiányzó darabszámok</button>
+                  </form>
+                  {f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}">Legutóbbi ellenőrzési riport</a>' if saved_check_report_name else ''}
+                  <form method="post" action="{action_route}">
+                    <input type="hidden" name="selected_view" value="admin" />
+                    <button class="button button-primary frontinv-action-button" type="submit">{html.escape(action_label)}</button>
+                  </form>
+                </div>
+              </div>
+            """
+            inventory_status_html = f"""
+              <div class="frontinv-phase-callout{' is-final' if phase_value == '2' else ''}">
+                <div>
+                  <strong>{html.escape(phase_title)}</strong>
+                  <p>{html.escape(phase_copy)}</p>
+                </div>
+              </div>
+            """
+
+        admin_session_html = f"""
+          <section class="frontinv-board frontinv-admin-board">
+            <div class="frontinv-board-head">
+              <div>
+                <span class="frontinv-tag">Kezelő felület</span>
+                <strong>Aktív frontleltár</strong>
+                <p>Forrás: {html.escape(str(session.get('source_name', '')))} · Utoljára frissítve: {html.escape(_front_inventory_format_timestamp(str(session.get('updated_at', ''))))}</p>
+              </div>
+              <div class="frontinv-board-stamp">{html.escape(str(session.get('phase_label', 'Számlálás')))}</div>
+            </div>
+
+            <div class="frontinv-stats">
+              {stats_html}
+            </div>
+
+            {admin_action_html}
+          </section>
+        """
+
+        inventory_html = f"""
+          <section class="frontinv-board is-worker" data-front-inventory-root data-state-route="{FRONT_INVENTORY_STATE_ROUTE}" data-presence-route="{FRONT_INVENTORY_PRESENCE_ROUTE}" data-alert-clear-route="{FRONT_INVENTORY_ALERT_CLEAR_ROUTE}" data-category="{html.escape(view_model['selected_category'])}">
+            <div class="frontinv-board-head">
+              <div>
+                <span class="frontinv-tag">Leltár nézet</span>
+                <strong>Front számlálás</strong>
+                <p>Forrás: {html.escape(str(session.get('source_name', '')))} · Utoljára frissítve: {html.escape(_front_inventory_format_timestamp(str(session.get('updated_at', ''))))}</p>
+              </div>
+              <div class="frontinv-board-stamp">{html.escape(str(session.get('phase_label', 'Számlálás')))}</div>
+            </div>
+
+            <div class="frontinv-category-row">
+              {categories_html}
+            </div>
+
+            {inventory_status_html}
+
+            <div class="frontinv-table-wrap">
+              <table class="frontinv-table">
+                <thead>
+                  <tr>
+                    <th>Alkatrész leírás</th>
+                    <th>Szín</th>
+                    <th>Darabszám</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows_html}
+                </tbody>
+              </table>
+            </div>
+            <div class="frontinv-generated-by">generated by Divian-HUB</div>
+          </section>
+          <div class="frontinv-alert-modal" data-frontinv-alert hidden>
+            <div class="frontinv-alert-card">
+              <strong data-frontinv-alert-title>Ellenőrzés kész</strong>
+              <p data-frontinv-alert-message></p>
+              <button class="button button-primary" type="button" data-frontinv-alert-close>Rendben</button>
+            </div>
+          </div>
+        """
+
+    stock_meta_html = ""
+    if saved_stock_name:
+        stock_meta_html = f'<div class="frontinv-meta-chip">Aktív készletforrás: {html.escape(saved_stock_name)}</div>'
+
+    admin_html = f"""
+      <section class="frontinv-upload-card">
+        <div class="frontinv-upload-head">
+          <div class="frontinv-copy">
+            <span class="frontinv-tag">Tablet leltár</span>
+            <strong>Front készlet leltározás.</strong>
+            <p>Feltöltöd az aktuális frontkészletet, a kollégák pedig külön leltár nézetben, gyorsan tudják írni a darabszámokat.</p>
+          </div>
+          <div class="frontinv-visual" aria-hidden="true">
+            <div class="frontinv-visual-pill">Készlet</div>
+            <div class="frontinv-visual-line"></div>
+            <div class="frontinv-visual-pill">Számlálás</div>
+            <div class="frontinv-visual-line"></div>
+            <div class="frontinv-visual-pill is-strong">Ellenőrzés</div>
+          </div>
+        </div>
+
+        <div class="frontinv-meta-row">
+          {stock_meta_html}
+        </div>
+
+        <form class="frontinv-upload-form" method="post" action="{FRONT_INVENTORY_PROCESS_ROUTE}" enctype="multipart/form-data">
+          <label class="frontinv-field">
+            <span>Aktuális készlet</span>
+            <strong>Front készletfájl</strong>
+            <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+            <small>Alkatrészszám, leírás, készlet és lehetőleg szín oszlop kell hozzá. A feltöltés új leltármenetet indít.</small>
+          </label>
+
+          <div class="frontinv-action-row">
+            <span class="inline-note">A feltöltés után az új leltár azonnal mentődik, és külön gombbal megnyitható a kollégák leltárnézete.</span>
+            <button class="button button-primary frontinv-submit-button" type="submit">Új leltár indítása</button>
+          </div>
+        </form>
+      </section>
+    """
+
+    content_html = f"""
+      <div class="frontinv-shell">
+        {view_switch_html}
+        {admin_html if active_view == 'admin' else ''}
+        {admin_session_html if active_view == 'admin' and session else ''}
+        {missing_html if active_view == 'admin' and session else ''}
+        {inventory_html if active_view == 'leltar' else ''}
+      </div>
+      {f'<iframe hidden src="{html.escape(auto_download_href)}"></iframe>' if auto_download_href and active_view == 'admin' else ''}
+    """
+
+    extra_script = """
+<style>
+  .frontinv-shell {
+    display: grid;
+    gap: 16px;
+  }
+  .frontinv-view-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    padding: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 10px 24px rgba(10, 18, 30, 0.06);
+  }
+  .frontinv-view-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    color: #1e293b;
+    background: #e2e8f0;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    text-decoration: none;
+    font-weight: 800;
+  }
+  .frontinv-view-tab.is-active {
+    background: #0f172a;
+    color: #ffffff;
+  }
+  .frontinv-upload-card,
+  .frontinv-board {
+    position: relative;
+    overflow: hidden;
+    border-radius: 26px;
+    border: 1px solid rgba(7, 16, 24, 0.08);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    color: #0f172a;
+    box-shadow: 0 18px 40px rgba(10, 18, 30, 0.08);
+  }
+  .frontinv-upload-card::before,
+  .frontinv-board::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, rgba(15, 23, 42, 0.04), transparent 28%);
+    pointer-events: none;
+  }
+  .frontinv-upload-card {
+    padding: 22px;
+  }
+  .frontinv-upload-head,
+  .frontinv-board-head {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: start;
+  }
+  .frontinv-copy {
+    display: grid;
+    gap: 10px;
+    max-width: 720px;
+  }
+  .frontinv-copy strong,
+  .frontinv-board-head strong,
+  .frontinv-empty strong,
+  .frontinv-phase-callout strong {
+    font-family: "Space Grotesk", sans-serif;
+    color: #0f172a;
+  }
+  .frontinv-copy strong,
+  .frontinv-board-head strong {
+    font-size: clamp(1.35rem, 2.8vw, 2rem);
+    line-height: 1;
+  }
+  .frontinv-copy p,
+  .frontinv-board-head p,
+  .frontinv-field small,
+  .frontinv-empty p,
+  .frontinv-phase-callout p,
+  .frontinv-generated-by {
+    margin: 0;
+    color: #64748b;
+    line-height: 1.55;
+  }
+  .frontinv-tag {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #243b53;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .frontinv-visual {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .frontinv-visual-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+  .frontinv-visual-pill.is-strong {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #ffffff;
+  }
+  .frontinv-visual-line {
+    width: 18px;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0.2), rgba(15, 23, 42, 0.55));
+  }
+  .frontinv-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .frontinv-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    color: #475569;
+    font-size: 0.84rem;
+    font-weight: 600;
+  }
+  .frontinv-upload-form {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .frontinv-field {
+    display: grid;
+    gap: 8px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .frontinv-field span {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .frontinv-field strong {
+    color: #0f172a;
+    font-size: 1rem;
+  }
+  .frontinv-field input[type="file"] {
+    width: 100%;
+    min-height: 54px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px dashed rgba(15, 23, 42, 0.18);
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #0f172a;
+  }
+  .frontinv-action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .frontinv-submit-button,
+  .frontinv-action-button {
+    min-width: 210px;
+    min-height: 52px;
+    border-radius: 16px;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+  }
+  .frontinv-open-button {
+    min-width: 190px;
+    min-height: 52px;
+    border-radius: 16px;
+    background: #e2e8f0;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    color: #0f172a;
+    font-weight: 800;
+  }
+  .frontinv-open-button:hover,
+  .frontinv-open-button:focus-visible {
+    background: #cbd5e1;
+    color: #020617;
+  }
+  .frontinv-board {
+    padding: 22px;
+  }
+  .frontinv-board.is-worker {
+    min-height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
+    padding: 18px 20px 24px;
+  }
+  .frontinv-board.is-worker .frontinv-table-wrap {
+    overflow-x: hidden;
+  }
+  .frontinv-board.is-worker .frontinv-table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .frontinv-admin-board {
+    display: grid;
+    gap: 0;
+  }
+  .frontinv-board-stamp {
+    white-space: nowrap;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 10px 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    color: #475569;
+  }
+  .frontinv-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .frontinv-stats article {
+    padding: 16px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    display: grid;
+    gap: 6px;
+  }
+  .frontinv-stats span {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .frontinv-stats strong {
+    color: #0f172a;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.08rem;
+  }
+  .frontinv-category-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .frontinv-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    color: #0f172a;
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  .frontinv-chip strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    font-size: 0.84rem;
+  }
+  .frontinv-chip.is-active {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+  }
+  .frontinv-chip.is-active strong {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+  }
+  .frontinv-chip.is-complete {
+    background: rgba(22, 163, 74, 0.12);
+    border-color: rgba(22, 163, 74, 0.38);
+    color: #166534;
+  }
+  .frontinv-chip.is-complete strong {
+    background: rgba(22, 163, 74, 0.16);
+    color: #166534;
+  }
+  .frontinv-chip.is-complete.is-active {
+    background: #166534;
+    border-color: #166534;
+    color: #ffffff;
+  }
+  .frontinv-chip.is-complete.is-active strong {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+  }
+  .frontinv-chip.is-live:not(.is-active) {
+    background: rgba(37, 99, 235, 0.10);
+    border-color: rgba(37, 99, 235, 0.34);
+    color: #1d4ed8;
+  }
+  .frontinv-chip.is-live:not(.is-active) strong {
+    background: rgba(37, 99, 235, 0.14);
+    color: #1d4ed8;
+  }
+  .frontinv-phase-callout {
+    margin-top: 14px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+  }
+  .frontinv-admin-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .frontinv-admin-actions form {
+    margin: 0;
+  }
+  .frontinv-phase-callout.is-final {
+    background: linear-gradient(180deg, #fffaf5 0%, #ffffff 100%);
+  }
+  .frontinv-phase-callout.is-complete {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  }
+  .frontinv-table-wrap {
+    margin-top: 14px;
+    overflow: auto;
+    border-radius: 20px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+  }
+  .frontinv-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1040px;
+  }
+  .frontinv-table thead th {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .frontinv-table tbody td {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+    vertical-align: middle;
+  }
+  .frontinv-table tbody tr:nth-child(2n) {
+    background: rgba(248, 250, 252, 0.72);
+  }
+  .frontinv-row.is-counted {
+    background: rgba(22, 163, 74, 0.10) !important;
+  }
+  .frontinv-row.is-final {
+    background: rgba(15, 23, 42, 0.03) !important;
+  }
+  .frontinv-table td.is-code {
+    width: 260px;
+    font-weight: 700;
+    font-family: "JetBrains Mono", "Consolas", monospace;
+    font-size: 0.9rem;
+  }
+  .frontinv-table td.is-description {
+    min-width: 320px;
+    font-weight: 700;
+  }
+  .frontinv-table td.is-color {
+    width: 220px;
+  }
+  .frontinv-table td.is-count {
+    width: 190px;
+  }
+  .frontinv-board.is-worker .frontinv-table td.is-description {
+    min-width: 0;
+    width: auto;
+  }
+  .frontinv-board.is-worker .frontinv-table td.is-color {
+    width: 180px;
+  }
+  .frontinv-board.is-worker .frontinv-table td.is-count {
+    width: 150px;
+  }
+  .frontinv-color-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    color: #1d4ed8;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .frontinv-input {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-align: center;
+  }
+  .frontinv-input:focus {
+    outline: none;
+    border-color: #0f172a;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  }
+  .frontinv-count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #0f172a;
+    color: #ffffff;
+    font-weight: 800;
+  }
+  .frontinv-generated-by {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(15, 23, 42, 0.12);
+    text-align: right;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .frontinv-alert-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.24);
+    backdrop-filter: blur(3px);
+  }
+  .frontinv-alert-modal[hidden] {
+    display: none !important;
+  }
+  .frontinv-alert-card {
+    width: min(100%, 420px);
+    padding: 24px 24px 20px;
+    border-radius: 24px;
+    background: #ffffff;
+    box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+    display: grid;
+    gap: 12px;
+    text-align: center;
+  }
+  .frontinv-alert-card strong {
+    color: #0f172a;
+    font-size: 1.22rem;
+    font-weight: 800;
+  }
+  .frontinv-alert-card p {
+    margin: 0;
+    color: #475569;
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+  .frontinv-alert-card .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .frontinv-empty {
+    display: grid;
+    gap: 8px;
+    padding: 34px 28px;
+  }
+  .frontinv-empty-row {
+    color: #64748b;
+    text-align: center;
+    padding: 26px 18px !important;
+  }
+  .frontinv-worker-stage {
+    min-height: 100dvh;
+    background: #f8fafc;
+  }
+  @media (orientation: portrait) and (max-width: 1100px) {
+    .frontinv-board.is-worker .frontinv-table thead th,
+    .frontinv-board.is-worker .frontinv-table tbody td {
+      padding: 12px 10px;
+    }
+    .frontinv-board.is-worker .frontinv-table thead th {
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+    }
+    .frontinv-board.is-worker .frontinv-table td.is-description {
+      font-size: 0.92rem;
+      line-height: 1.25;
+    }
+    .frontinv-board.is-worker .frontinv-table td.is-color {
+      width: 146px;
+    }
+    .frontinv-board.is-worker .frontinv-color-chip {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 0.8rem;
+      line-height: 1.15;
+      white-space: normal;
+      text-align: center;
+      justify-content: center;
+    }
+    .frontinv-board.is-worker .frontinv-table td.is-count {
+      width: 118px;
+    }
+    .frontinv-board.is-worker .frontinv-input {
+      min-height: 44px;
+      font-size: 1rem;
+      padding: 0 10px;
+    }
+  }
+  @media (max-width: 1100px) {
+    .frontinv-upload-head,
+    .frontinv-board-head,
+    .frontinv-phase-callout {
+      grid-template-columns: minmax(0, 1fr);
+      display: grid;
+    }
+    .frontinv-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .frontinv-view-switch {
+      width: 100%;
+    }
+  }
+  @media (max-width: 720px) {
+    .frontinv-upload-card,
+    .frontinv-board {
+      border-radius: 22px;
+    }
+    .frontinv-upload-card,
+    .frontinv-board {
+      padding: 18px;
+    }
+    .frontinv-stats {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .frontinv-action-row .button,
+    .frontinv-submit-button,
+    .frontinv-action-button {
+      width: 100%;
+      min-width: 0;
+    }
+    .frontinv-table {
+      min-width: 920px;
+    }
+    .frontinv-board.is-worker {
+      padding: 14px 14px 20px;
+    }
+  }
+</style>
+<script>
+(() => {
+  const run = () => {
+  const root = document.querySelector("[data-front-inventory-root]");
+  if (!root) {
+    return;
+  }
+  const stateRoute = root.getAttribute("data-state-route");
+  const presenceRoute = root.getAttribute("data-presence-route");
+  const alertClearRoute = root.getAttribute("data-alert-clear-route");
+  const categoryValue = root.getAttribute("data-category") || "";
+  if (!stateRoute) {
+    return;
+  }
+
+  const timers = new Map();
+  const categoryRow = root.querySelector(".frontinv-category-row");
+  const scrollStorageKey = "frontinv-category-scroll";
+  const alertModal = document.querySelector("[data-frontinv-alert]");
+  const alertTitle = alertModal ? alertModal.querySelector("[data-frontinv-alert-title]") : null;
+  const alertMessage = alertModal ? alertModal.querySelector("[data-frontinv-alert-message]") : null;
+  const alertClose = alertModal ? alertModal.querySelector("[data-frontinv-alert-close]") : null;
+  const alertStorageKey = "frontinv-last-alert-id";
+  let currentAlertId = "";
+  const currentCategoryChip = categoryRow
+    ? Array.from(categoryRow.querySelectorAll(".frontinv-chip")).find((chip) => chip.classList.contains("is-active"))
+    : null;
+  let audioContext = null;
+
+  const ensureAudioContext = () => {
+    if (audioContext) {
+      return audioContext;
+    }
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtor) {
+      return null;
+    }
+    try {
+      audioContext = new AudioCtor();
+    } catch {
+      audioContext = null;
+    }
+    return audioContext;
+  };
+
+  const unlockAudio = () => {
+    const context = ensureAudioContext();
+    if (context && context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+  };
+
+  const playAlertSound = () => {
+    const context = ensureAudioContext();
+    if (!context) {
+      return;
+    }
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+    const pattern = [
+      { delay: 0.00, duration: 0.16, frequency: 880 },
+      { delay: 0.24, duration: 0.16, frequency: 740 },
+      { delay: 0.48, duration: 0.24, frequency: 880 },
+    ];
+    const startAt = context.currentTime + 0.02;
+    pattern.forEach((tone) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = tone.frequency;
+      gain.gain.setValueAtTime(0.0001, startAt + tone.delay);
+      gain.gain.exponentialRampToValueAtTime(0.18, startAt + tone.delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + tone.delay + tone.duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startAt + tone.delay);
+      oscillator.stop(startAt + tone.delay + tone.duration + 0.04);
+    });
+  };
+
+  const hideAlert = () => {
+    if (alertModal) {
+      alertModal.hidden = true;
+    }
+    if (alertClearRoute && currentAlertId) {
+      const formData = new URLSearchParams();
+      formData.set("alert_id", currentAlertId);
+      fetch(alertClearRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: formData.toString(),
+        credentials: "same-origin",
+        cache: "no-store",
+      }).catch(() => {});
+    }
+  };
+
+  const showAlert = (payload) => {
+    if (!alertModal || !payload || !payload.id) {
+      return;
+    }
+    const nextId = String(payload.id || "");
+    if (!nextId || window.sessionStorage.getItem(alertStorageKey) === nextId) {
+      return;
+    }
+    window.sessionStorage.setItem(alertStorageKey, nextId);
+    currentAlertId = nextId;
+    if (alertTitle) {
+      alertTitle.textContent = payload.title || "Ellenőrzés kész";
+    }
+    if (alertMessage) {
+      alertMessage.textContent = payload.message || "";
+    }
+    alertModal.hidden = false;
+    playAlertSound();
+  };
+
+  if (alertClose) {
+    alertClose.addEventListener("click", hideAlert);
+  }
+  if (alertModal) {
+    alertModal.addEventListener("click", (event) => {
+      if (event.target === alertModal) {
+        hideAlert();
+      }
+    });
+  }
+  window.addEventListener("pointerdown", unlockAudio, { passive: true });
+  window.addEventListener("keydown", unlockAudio, { passive: true });
+
+  const syncRowState = (input) => {
+    const row = input.closest("[data-frontinv-row]");
+    if (!row) {
+      return;
+    }
+    row.classList.toggle("is-counted", input.value.trim() !== "");
+  };
+
+  const syncCurrentCategoryState = () => {
+    if (!currentCategoryChip) {
+      return;
+    }
+    const inputs = Array.from(root.querySelectorAll("[data-frontinv-input]"));
+    const hasRows = inputs.length > 0;
+    const isComplete = hasRows && inputs.every((input) => input.value.trim() !== "");
+    currentCategoryChip.classList.toggle("is-complete", isComplete);
+  };
+
+  const saveValue = (input) => {
+    const formData = new URLSearchParams();
+    formData.set("row_id", input.getAttribute("data-row-id") || "");
+    formData.set("value", input.value);
+    fetch(stateRoute, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: formData.toString(),
+      credentials: "same-origin",
+      cache: "no-store",
+    }).catch(() => {});
+  };
+
+  if (categoryRow) {
+    const savedScroll = Number(window.sessionStorage.getItem(scrollStorageKey) || "0");
+    if (savedScroll > 0) {
+      categoryRow.scrollLeft = savedScroll;
+    }
+    categoryRow.addEventListener("scroll", () => {
+      window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft));
+    }, { passive: true });
+    categoryRow.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => {
+        window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft));
+      });
+    });
+  }
+
+  if (presenceRoute && categoryValue) {
+    const presenceTokenKey = "frontinv-presence-token";
+    let presenceToken = window.sessionStorage.getItem(presenceTokenKey);
+    if (!presenceToken) {
+      presenceToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      window.sessionStorage.setItem(presenceTokenKey, presenceToken);
+    }
+
+    const applyRemoteState = (payload) => {
+      const activeSet = new Set(Array.isArray(payload && payload.active_categories) ? payload.active_categories : []);
+      const categoryStates = payload && payload.category_states && typeof payload.category_states === "object"
+        ? payload.category_states
+        : {};
+      root.querySelectorAll(".frontinv-chip").forEach((chip) => {
+        const href = chip.getAttribute("href") || "";
+        let chipCategory = "";
+        try {
+          chipCategory = new URL(href, window.location.origin).searchParams.get("category") || "all";
+        } catch {
+          chipCategory = "";
+        }
+        chip.classList.toggle("is-live", activeSet.has(chipCategory));
+        chip.classList.toggle("is-complete", Boolean(categoryStates[chipCategory]));
+      });
+
+      const rowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object"
+        ? payload.row_inputs
+        : {};
+      root.querySelectorAll("[data-frontinv-input]").forEach((input) => {
+        const rowId = input.getAttribute("data-row-id") || "";
+        const nextValue = Object.prototype.hasOwnProperty.call(rowInputs, rowId) ? String(rowInputs[rowId] || "") : "";
+        if (document.activeElement !== input && input.value !== nextValue) {
+          input.value = nextValue;
+        }
+        syncRowState(input);
+      });
+      syncCurrentCategoryState();
+      showAlert(payload && payload.worker_alert && typeof payload.worker_alert === "object" ? payload.worker_alert : null);
+    };
+
+    const syncPresence = (clear = false) => {
+      const formData = new URLSearchParams();
+      formData.set("token", presenceToken || "");
+      formData.set("category", categoryValue);
+      formData.set("view", "leltar");
+      if (clear) {
+        formData.set("clear", "1");
+      }
+      fetch(presenceRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: formData.toString(),
+        credentials: "same-origin",
+        cache: "no-store",
+        keepalive: clear,
+      })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => {
+          if (payload) {
+            applyRemoteState(payload);
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncPresence(false);
+    const heartbeatId = window.setInterval(() => syncPresence(false), 2500);
+    window.addEventListener("pagehide", () => {
+      window.clearInterval(heartbeatId);
+      syncPresence(true);
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        syncPresence(false);
+      }
+    });
+  }
+
+  root.querySelectorAll("[data-frontinv-input]").forEach((input) => {
+    syncRowState(input);
+    syncCurrentCategoryState();
+    input.addEventListener("input", () => {
+      syncRowState(input);
+      syncCurrentCategoryState();
+      const key = input.getAttribute("data-row-id") || "";
+      if (timers.has(key)) {
+        clearTimeout(timers.get(key));
+      }
+      timers.set(
+        key,
+        window.setTimeout(() => {
+          saveValue(input);
+          timers.delete(key);
+        }, 240),
+      );
+    });
+    input.addEventListener("blur", () => {
+      syncCurrentCategoryState();
+      const key = input.getAttribute("data-row-id") || "";
+      if (timers.has(key)) {
+        clearTimeout(timers.get(key));
+        timers.delete(key);
+      }
+      saveValue(input);
+    });
+    input.addEventListener("change", () => {
+      syncCurrentCategoryState();
+      const key = input.getAttribute("data-row-id") || "";
+      if (timers.has(key)) {
+        clearTimeout(timers.get(key));
+        timers.delete(key);
+      }
+      saveValue(input);
+    });
+  });
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+})();
+</script>
+"""
+
+    if active_view == "leltar":
+        worker_page = f"""<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Divian-HUB | Front leltár</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles.css" />
+  {extra_script}
+</head>
+<body class="frontinv-worker-page">
+  {notice_html}
+  <main class="frontinv-worker-stage">
+    {inventory_html}
+  </main>
+</body>
+</html>
+"""
+        return worker_page.encode("utf-8")
+
+    return _render_nettfront_layout(
+        heading="Front leltár",
+        lead="Tablet-optimalizált leltárnézet széria és egyedi frontokhoz, több lépcsős ellenőrzéssel.",
+        intro_label="Inventory",
+        content_html=content_html,
+        side_html="",
+        notice_html=notice_html,
+        extra_script=extra_script,
+        single_column=True,
+    )
+
+
 def _divian_ai_format_file_size(size_bytes: int) -> str:
     size = max(0, int(size_bytes))
     units = ["B", "KB", "MB", "GB"]
@@ -16324,6 +18470,61 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == MATT_INVENTORY_ROUTE:
+            body = render_matt_inventory_form()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            selected_view = _front_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
+            body = render_front_inventory_form(selected_category=selected_category, view_mode=selected_view)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == MATT_INVENTORY_DOWNLOAD_ROUTE:
+            if not MATT_INVENTORY_ALERT_WORKBOOK_PATH.exists():
+                self.send_error(404)
+                return
+            body = MATT_INVENTORY_ALERT_WORKBOOK_PATH.read_bytes()
+            download_name = "matt-keszlet-kuszobriport.xlsx"
+            quoted_name = urllib.parse.quote(download_name)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted_name}")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE:
+            if not FRONT_INVENTORY_CHECK_REPORT_PATH.exists():
+                self.send_error(404)
+                return
+            body = FRONT_INVENTORY_CHECK_REPORT_PATH.read_bytes()
+            download_name = _front_inventory_saved_check_report_name() or "front-leltar-ellenorzes.xlsx"
+            quoted_name = urllib.parse.quote(download_name)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted_name}")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == VACATION_CALENDAR_ROUTE:
             query = _vacation_query_params(self.path)
             body = render_vacation_calendar(
@@ -16622,6 +18823,310 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 month_value=_vacation_form_value(form_data, "return_month"),
                 message=message,
                 success=success,
+            )
+            self.send_response(200 if success else 400)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == MATT_INVENTORY_PROCESS_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            files = _extract_uploaded_files(self.headers, raw_body)
+            price_file = files.get("price_file")
+            stock_file = files.get("stock_file")
+
+            if stock_file is None:
+                self.respond_matt_inventory_form("A napi készletfájl feltöltése kötelező.")
+                return
+
+            stock_name, stock_bytes = stock_file
+            if not matt_inventory_file_name_allowed(stock_name):
+                self.respond_matt_inventory_form("A napi készletfájl csak XLSX, XLSM vagy CSV lehet.")
+                return
+
+            price_name = ""
+            price_bytes: bytes | None = None
+            if price_file is not None:
+                price_name, price_bytes = price_file
+                if not matt_inventory_file_name_allowed(price_name):
+                    self.respond_matt_inventory_form("A fix ártábla csak XLSX, XLSM vagy CSV lehet.")
+                    return
+            else:
+                saved_price_payload = _matt_inventory_saved_price_payload()
+                if saved_price_payload is None:
+                    self.respond_matt_inventory_form("Első alkalommal a fix ártáblát is fel kell tölteni.")
+                    return
+                price_name, price_bytes = saved_price_payload
+
+            assert price_bytes is not None
+
+            try:
+                report = build_matt_inventory_report(
+                    price_name=price_name,
+                    price_bytes=price_bytes,
+                    stock_name=stock_name,
+                    stock_bytes=stock_bytes,
+                )
+                alert_workbook = build_matt_inventory_alert_workbook(
+                    price_name=price_name,
+                    price_bytes=price_bytes,
+                    stock_name=stock_name,
+                    stock_bytes=stock_bytes,
+                )
+            except Exception as exc:
+                self.respond_matt_inventory_form(f"A matt készletérték számolása nem sikerült: {exc}")
+                return
+
+            MATT_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+
+            if price_file is not None:
+                stored_price_path = write_matt_inventory_runtime_upload(
+                    MATT_INVENTORY_RUNTIME_DIR / "latest-price",
+                    price_name,
+                    price_bytes,
+                )
+                _matt_inventory_write_meta(
+                    MATT_INVENTORY_PRICE_META_PATH,
+                    {
+                        "original_name": Path(price_name).name,
+                        "stored_name": stored_price_path.name,
+                        "updated_at": datetime.now().isoformat(timespec="seconds"),
+                    },
+                )
+
+            stored_stock_path = write_matt_inventory_runtime_upload(
+                MATT_INVENTORY_RUNTIME_DIR / "latest-stock",
+                stock_name,
+                stock_bytes,
+            )
+            _matt_inventory_write_meta(
+                MATT_INVENTORY_STOCK_META_PATH,
+                {
+                    "original_name": Path(stock_name).name,
+                    "stored_name": stored_stock_path.name,
+                    "updated_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+            save_matt_inventory_report_to_path(MATT_INVENTORY_REPORT_PATH, report)
+            MATT_INVENTORY_ALERT_WORKBOOK_PATH.write_bytes(alert_workbook)
+
+            body = render_matt_inventory_form(
+                message="A napi matt front készletérték elkészült.",
+                success=True,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_PROCESS_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            files = _extract_uploaded_files(self.headers, raw_body)
+            stock_file = files.get("stock_file")
+
+            if stock_file is None:
+                self.respond_front_inventory_form("A front készletfájl feltöltése kötelező.")
+                return
+
+            stock_name, stock_bytes = stock_file
+            if not front_inventory_file_name_allowed(stock_name):
+                self.respond_front_inventory_form("A front készletfájl csak XLSX, XLSM vagy CSV lehet.")
+                return
+
+            try:
+                session = build_front_inventory_session(stock_name, stock_bytes)
+            except Exception as exc:
+                self.respond_front_inventory_form(f"A frontleltár előkészítése nem sikerült: {exc}")
+                return
+
+            FRONT_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+            stored_stock_path = write_front_inventory_runtime_upload(
+                FRONT_INVENTORY_RUNTIME_DIR / "latest-stock",
+                stock_name,
+                stock_bytes,
+            )
+            _matt_inventory_write_meta(
+                FRONT_INVENTORY_STOCK_META_PATH,
+                {
+                    "original_name": Path(stock_name).name,
+                    "stored_name": stored_stock_path.name,
+                    "updated_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+            save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+
+            body = render_front_inventory_form(
+                message="A frontleltár nézet elkészült.",
+                success=True,
+                view_mode="admin",
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_STATE_ROUTE:
+            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+            if session is None:
+                self.send_error(404)
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            success, message = update_row_input(
+                session,
+                form_data.get("row_id", ""),
+                form_data.get("value", ""),
+            )
+            if not success:
+                self.send_response(400)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                payload = message.encode("utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+            self.send_response(204)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+
+        if path == FRONT_INVENTORY_PRESENCE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            active_categories = _front_inventory_touch_presence(
+                form_data.get("token", ""),
+                form_data.get("category", ""),
+                form_data.get("view", "leltar"),
+                clear=form_data.get("clear", "") == "1",
+            )
+            sync_payload = _front_inventory_build_sync_payload(form_data.get("category", ""))
+            self.respond_json(200, {"ok": True, "active_categories": active_categories, **sync_payload})
+            return
+
+        if path == FRONT_INVENTORY_ALERT_CLEAR_ROUTE:
+            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+            if session is None:
+                self.send_error(404)
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            alert_id = str(form_data.get("alert_id", "")).strip()
+            current_alert = session.get("worker_alert") if isinstance(session.get("worker_alert"), dict) else None
+            if current_alert and (not alert_id or str(current_alert.get("id", "")).strip() == alert_id):
+                session.pop("worker_alert", None)
+                save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+            self.send_response(204)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+
+        if path == FRONT_INVENTORY_MISSING_ROUTE:
+            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+            if session is None:
+                self.respond_front_inventory_form("Nincs aktív frontleltár.")
+                return
+            summary = summarize_missing_inputs(session)
+            success = int(summary.get("total_missing", 0)) == 0
+            message = "Nincs hiányzó darabszám." if success else f"Még {int(summary.get('total_missing', 0))} frontnál nincs kitöltve a darabszám."
+            body = render_front_inventory_form(message=message, success=success, view_mode="admin", missing_summary=summary)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_CHECK_ROUTE:
+            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+            if session is None:
+                self.respond_front_inventory_form("Nincs aktív frontleltár.")
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            selected_view = _front_inventory_normalize_view(form_data.get("selected_view", "admin"))
+            report_body, report_name, report_count = build_inventory_check_workbook(session, mode="check", treat_missing_as_zero=True)
+            auto_download_href = ""
+            if report_body:
+                FRONT_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+                FRONT_INVENTORY_CHECK_REPORT_PATH.write_bytes(report_body)
+                _matt_inventory_write_meta(
+                    FRONT_INVENTORY_CHECK_REPORT_META_PATH,
+                    {
+                        "download_name": report_name,
+                        "row_count": report_count,
+                        "updated_at": datetime.now().isoformat(timespec="seconds"),
+                    },
+                )
+                auto_download_href = f"{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}?t={int(time.time() * 1000)}"
+            success, message = run_inventory_check(session, allow_missing=True)
+            save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+            body = render_front_inventory_form(
+                message=message,
+                success=success,
+                selected_category="",
+                view_mode=selected_view,
+                auto_download_href=auto_download_href,
+            )
+            self.send_response(200 if success else 400)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_FINALIZE_ROUTE:
+            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+            if session is None:
+                self.respond_front_inventory_form("Nincs aktív frontleltár.")
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            selected_view = _front_inventory_normalize_view(form_data.get("selected_view", "admin"))
+            success, message = finalize_inventory(session, allow_missing=True)
+            auto_download_href = ""
+            report_body = None
+            report_name = ""
+            report_count = 0
+            if success:
+                report_body, report_name, report_count = build_inventory_check_workbook(session, mode="finalize", treat_missing_as_zero=True)
+            if report_body:
+                FRONT_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+                FRONT_INVENTORY_CHECK_REPORT_PATH.write_bytes(report_body)
+                _matt_inventory_write_meta(
+                    FRONT_INVENTORY_CHECK_REPORT_META_PATH,
+                    {
+                        "download_name": report_name,
+                        "row_count": report_count,
+                        "updated_at": datetime.now().isoformat(timespec="seconds"),
+                    },
+                )
+                auto_download_href = f"{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}?t={int(time.time() * 1000)}"
+            save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+            body = render_front_inventory_form(
+                message=message,
+                success=success,
+                selected_category="",
+                view_mode=selected_view,
+                auto_download_href=auto_download_href,
             )
             self.send_response(200 if success else 400)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -17211,6 +19716,22 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
     def respond_nettfront_order_form(self, message: str):
         body = render_nettfront_order_form(message)
+        self.send_response(400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def respond_matt_inventory_form(self, message: str):
+        body = render_matt_inventory_form(message)
+        self.send_response(400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def respond_front_inventory_form(self, message: str):
+        body = render_front_inventory_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
