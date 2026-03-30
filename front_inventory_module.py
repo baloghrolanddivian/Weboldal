@@ -528,6 +528,8 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
             continue
         if not _looks_like_front(part_number, description):
             continue
+        if not _looks_like_sm_matt_front(description, color_value):
+            continue
         items.append(
             {
                 "part_number": part_number,
@@ -549,6 +551,12 @@ def _looks_like_front(part_number: str, description: str) -> bool:
         or "folias fr" in folded_description
         or "front" in folded_description
     )
+
+
+def _looks_like_sm_matt_front(description: object, explicit_color: object) -> bool:
+    combined = f"{description or ''} {explicit_color or ''}"
+    folded = _fold_text(combined)
+    return "sm." in folded or "sm " in folded or folded.startswith("sm")
 
 
 def _load_serial_sizes() -> set[str]:
