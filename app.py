@@ -1878,6 +1878,210 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
     return dict(bundle)
 
 
+MANUFACTURING_OPERATION_DEFINITIONS = (
+    ("korpusz_osszekeszites", "Korpusz összekészítés"),
+    ("front_osszekeszites", "Front összekészítés"),
+    ("cnc_furas", "CNC fúrás"),
+    ("pantolas", "Pántolás"),
+)
+MANUFACTURING_OPERATION_HINTS = {
+    "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
+    "front_osszekeszites": "Placeholder, a PDF logika a holnapi papír után kerül be.",
+    "cnc_furas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
+    "pantolas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
+}
+MANUFACTURING_SOURCE_LABELS = {
+    "osszekeszito": "Összekészítő",
+    "alkatresz_kesz": "Alkatrész kész",
+}
+
+
+def _manufacturing_state_key(production_number: str, row_id: str) -> str:
+    normalized_number = _manufacturing_normalize_number(production_number)
+    return f"{normalized_number}::{str(row_id or '').strip()}"
+
+
+def _manufacturing_normalize_operation(value: object) -> str:
+    normalized = str(value or "").strip().lower()
+    allowed_keys = {key for key, _label in MANUFACTURING_OPERATION_DEFINITIONS}
+    return normalized if normalized in allowed_keys else ""
+
+
+def _manufacturing_selection_state_payload(production_number: str, raw_state: dict[str, str]) -> dict[str, str]:
+    normalized_number = _manufacturing_normalize_number(production_number)
+    result: dict[str, str] = {}
+    for row_id, state in raw_state.items():
+        clean_state = str(state or "").strip().lower()
+        if clean_state not in {"green", "red"}:
+            continue
+        result[_manufacturing_state_key(normalized_number, row_id)] = clean_state
+    return result
+
+
+def _manufacturing_row_with_context(row: dict, production_number: str, detail_suffix: str = "") -> dict:
+    row_payload = dict(row)
+    detail_text = str(row_payload.get("detail", "")).strip()
+    if detail_suffix:
+        row_payload["detail"] = f"{detail_text} · {detail_suffix}" if detail_text else detail_suffix
+    row_payload["production_number"] = _manufacturing_normalize_number(production_number)
+    row_payload["state_key"] = _manufacturing_state_key(production_number, str(row_payload.get("row_id", "")))
+    return row_payload
+
+
+def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    sections: list[dict] = []
+    row_count = 0
+    for document in bundle.get("documents", []):
+        if not isinstance(document, dict):
+            continue
+        document_key = str(document.get("key", "")).strip()
+        source_label = MANUFACTURING_SOURCE_LABELS.get(document_key, str(document.get("label", "")).strip() or document_key)
+        document_sections = document.get("sections", [])
+        if not isinstance(document_sections, list):
+            continue
+        for section in document_sections:
+            if not isinstance(section, dict):
+                continue
+            rows = [
+                _manufacturing_row_with_context(row, production_number)
+                for row in section.get("rows", [])
+                if isinstance(row, dict)
+            ]
+            if not rows:
+                continue
+            section_label = str(section.get("label", "")).strip() or source_label
+            sections.append(
+                {
+                    "key": f"{document_key}::{str(section.get('key', '')).strip() or 'section'}",
+                    "label": f"{source_label} · {section_label}",
+                    "rows": rows,
+                }
+            )
+            row_count += len(rows)
+    return sections, row_count
+
+
+def _manufacturing_current_red_special_view(sections: list[dict], raw_state: dict[str, str]) -> dict:
+    return {
+        "key": "current-production-red",
+        "label": "Aktuális gyártás összes piros eleme",
+        "count": sum(
+            1
+            for section in sections
+            for row in section.get("rows", [])
+            if isinstance(row, dict) and raw_state.get(str(row.get("row_id", "")).strip()) == "red"
+        ),
+        "sections": sections,
+    }
+
+
+def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
+    numbers: list[str] = []
+    for path in sorted(runtime_root.glob("*/state.json"), key=lambda item: item.parent.name, reverse=True):
+        number = _manufacturing_normalize_number(path.parent.name)
+        if not number:
+            continue
+        state = load_selection_state(runtime_root, number)
+        if any(value == "red" for value in state.values()):
+            numbers.append(number)
+    return numbers
+
+
+def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict[str, str]]:
+    sections: list[dict] = []
+    selection_state: dict[str, str] = {}
+    for production_number in _manufacturing_red_state_numbers(MANUFACTURING_RUNTIME_DIR):
+        raw_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, production_number)
+        red_row_ids = {str(row_id).strip() for row_id, state in raw_state.items() if state == "red"}
+        if not red_row_ids:
+            continue
+        selection_state.update(_manufacturing_selection_state_payload(production_number, raw_state))
+        try:
+            bundle = _load_manufacturing_bundle_cached(production_number)
+        except Exception:
+            continue
+        korpusz_sections, _ = _manufacturing_korpusz_sections(bundle, production_number)
+        rows: list[dict] = []
+        for section in korpusz_sections:
+            section_label = str(section.get("label", "")).strip()
+            for row in section.get("rows", []):
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("row_id", "")).strip() not in red_row_ids:
+                    continue
+                suffix_parts = [f"Gyártás {production_number}"]
+                if section_label:
+                    suffix_parts.append(section_label)
+                rows.append(_manufacturing_row_with_context(row, production_number, " · ".join(suffix_parts)))
+        if rows:
+            section_title = f"Gyártás {production_number}"
+            if production_number == _manufacturing_normalize_number(current_number):
+                section_title += " (aktuális)"
+            sections.append(
+                {
+                    "key": f"all-red::{production_number}",
+                    "label": section_title,
+                    "rows": rows,
+                }
+            )
+    return (
+        {
+            "key": "all-productions-red",
+            "label": "Összes gyártás összes piros eleme",
+            "count": sum(len(section.get("rows", [])) for section in sections),
+            "sections": sections,
+        },
+        selection_state,
+    )
+
+
+def _manufacturing_placeholder_document(key: str, label: str) -> dict:
+    return {
+        "key": key,
+        "label": label,
+        "file_name": "",
+        "sections": [],
+        "row_count": 0,
+        "placeholderMessage": f"A {label.lower()} PDF feldolgozási logikája még nincs kialakítva.",
+        "specialViews": [],
+    }
+
+
+def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current_selection_state: dict[str, str]) -> tuple[dict, dict[str, str]]:
+    current_number = _manufacturing_normalize_number(production_number)
+    documents: list[dict] = []
+    selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
+
+    korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
+    current_red_view = _manufacturing_current_red_special_view(korpusz_sections, current_selection_state)
+    all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
+    selection_state_payload.update(all_red_selection_state)
+
+    documents.append(
+        {
+            "key": "korpusz_osszekeszites",
+            "label": "Korpusz összekészítés",
+            "file_name": "",
+            "sections": korpusz_sections,
+            "row_count": korpusz_row_count,
+            "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
+            "specialViews": [current_red_view, all_red_view],
+        }
+    )
+
+    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS[1:]:
+        documents.append(_manufacturing_placeholder_document(operation_key, operation_label))
+
+    return (
+        {
+            "production_number": current_number,
+            "folder": str(raw_bundle.get("folder", "")),
+            "documents": documents,
+        },
+        selection_state_payload,
+    )
+
+
 ITEM_PATTERN_FULL = re.compile(
     r"^\s*(\d+)\s+([A-Z0-9\-/]+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+([0-9][0-9.,]*)\s+([A-Z]{1,6})\s+([0-9][0-9.,]*)\s+([0-9][0-9.,]*)\s*$",
     re.IGNORECASE,
@@ -9599,11 +9803,25 @@ def render_vacation_calendar(
     )
 
 
-def render_manufacturing_module(production_number: str = "", message: str = "", success: bool = False) -> bytes:
+def render_manufacturing_module(
+    production_number: str = "",
+    operation: str = "",
+    message: str = "",
+    success: bool = False,
+) -> bytes:
     requested_number = _manufacturing_normalize_number(production_number)
+    selected_operation = _manufacturing_normalize_operation(operation)
     recent_numbers = available_production_numbers(limit=80, ready_only=True)
     recent_productions = available_production_entries(limit=80, ready_only=True)
     selected_number = requested_number if requested_number in recent_numbers else (recent_numbers[0] if recent_numbers else "")
+    operations = [
+        {
+            "key": operation_key,
+            "label": operation_label,
+            "hint": MANUFACTURING_OPERATION_HINTS.get(operation_key, ""),
+        }
+        for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS
+    ]
     if requested_number and requested_number not in recent_numbers:
         combined_prefix = f"A {requested_number} gyártásban nem található meg mindkét szükséges PDF, ezért a legfrissebb használható gyártást nyitottam meg."
         message = f"{combined_prefix} {message}".strip() if message else combined_prefix
@@ -9619,8 +9837,9 @@ def render_manufacturing_module(production_number: str = "", message: str = "", 
         combined_success = False
     else:
         try:
-            bundle = _load_manufacturing_bundle_cached(selected_number)
-            selection_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, selected_number)
+            raw_bundle = _load_manufacturing_bundle_cached(selected_number)
+            current_selection_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, selected_number)
+            bundle, selection_state = _manufacturing_view_bundle(raw_bundle, selected_number, current_selection_state)
         except Exception as exc:
             combined_message = f"A gyártási papírok betöltése nem sikerült: {exc}"
             combined_success = False
@@ -9636,6 +9855,8 @@ def render_manufacturing_module(production_number: str = "", message: str = "", 
         route=MANUFACTURING_ROUTE,
         state_route=MANUFACTURING_STATE_ROUTE,
         selected_number=selected_number,
+        operations=operations,
+        selected_operation=selected_operation,
         recent_productions=recent_productions,
         bundle=bundle,
         selection_state=selection_state,
@@ -18641,7 +18862,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
         if path == MANUFACTURING_ROUTE:
             query = _manufacturing_query_params(self.path)
-            body = render_manufacturing_module(production_number=query.get("production", ""))
+            body = render_manufacturing_module(
+                production_number=query.get("production", ""),
+                operation=query.get("operation", ""),
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
