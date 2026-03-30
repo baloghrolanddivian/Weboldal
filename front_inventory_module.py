@@ -61,12 +61,16 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
     for item in stock_rows:
         size = _extract_front_size(item["description"], item["part_number"])
         is_serial = size in serial_sizes
+        model = _extract_model_value(item["description"], item["part_number"])
+        color = item.get("color", "")
         rows.append(
             {
                 "row_id": item["part_number"],
                 "part_number": item["part_number"],
                 "description": item["description"],
-                "color": item.get("color", ""),
+                "model": model,
+                "color": color,
+                "color_label": _compose_color_label(model, color),
                 "stock_qty": item["quantity"],
                 "size": size,
                 "category": size if is_serial else "egyedi",
@@ -168,7 +172,7 @@ def build_inventory_check_workbook(session: dict, mode: str = "check", treat_mis
 
     phase_value = session.get("phase", 0)
     phase = 2 if str(phase_value) == "finalized" else int(phase_value or 0)
-    all_rows = sorted(list(session.get("rows", [])), key=_row_sort_key)
+    all_rows = sorted([row for row in session.get("rows", []) if _is_visible_inventory_row(row)], key=_row_sort_key)
     if mode == "finalize":
         report_label = "veglegesites"
     elif phase == 0:
@@ -404,13 +408,16 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
             sheet.column_dimensions[column].width = width
 
 
-def build_front_inventory_view_model(session: dict, selected_category: str = "") -> dict:
+def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default") -> dict:
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
     for row in source_rows:
         if not str(row.get("color", "")).strip():
             row["color"] = _extract_color_value(row.get("description", ""), "")
-    active_rows = _active_rows_for_phase(session, int(session.get("phase", 0) or 0)) if not finalized else list(source_rows)
+        if not str(row.get("model", "")).strip():
+            row["model"] = _extract_model_value(row.get("description", ""), row.get("part_number", ""))
+        row["color_label"] = _compose_color_label(str(row.get("model", "")).strip(), str(row.get("color", "")).strip())
+    active_rows = _active_rows_for_phase(session, int(session.get("phase", 0) or 0)) if not finalized else [row for row in source_rows if _is_visible_inventory_row(row)]
     active_rows = list(active_rows)
 
     serial_rows = [row for row in active_rows if row.get("is_serial")]
@@ -440,10 +447,17 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "")
     else:
         visible_rows = [row for row in serial_rows if row.get("category") == active_category]
 
+    active_sort = _normalize_inventory_sort_mode(sort_mode)
+    if active_sort != "default":
+        reverse = active_sort.endswith("_desc")
+        base_sort = active_sort[:-5] if reverse else active_sort
+        visible_rows = sorted(visible_rows, key=lambda row: _inventory_sort_key(row, base_sort, finalized), reverse=reverse)
+
     finalized_rows = _finalized_rows(session) if finalized else []
 
     return {
         "selected_category": active_category,
+        "sort_mode": active_sort,
         "categories": categories,
         "visible_rows": visible_rows,
         "active_row_count": len(active_rows),
@@ -457,14 +471,20 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "")
 def _finalized_rows(session: dict) -> list[dict]:
     rows = []
     for row in session.get("rows", []):
+        if not _is_visible_inventory_row(row):
+            continue
         resolved_qty = row.get("resolved_qty")
         if resolved_qty is None:
             continue
+        model = str(row.get("model", "")).strip() or _extract_model_value(row.get("description", ""), row.get("part_number", ""))
+        color = str(row.get("color", "")).strip() or _extract_color_value(row.get("description", ""), "")
         rows.append(
             {
                 "part_number": row.get("part_number", ""),
                 "description": row.get("description", ""),
-                "color": row.get("color", ""),
+                "model": model,
+                "color": color,
+                "color_label": _compose_color_label(model, color),
                 "counted_qty": int(resolved_qty or 0),
                 "size": row.get("size", ""),
                 "category": row.get("category", ""),
@@ -480,6 +500,8 @@ def _active_rows_for_phase(session: dict, phase: int) -> list[dict]:
         return []
     rows = []
     for row in session.get("rows", []):
+        if not _is_visible_inventory_row(row):
+            continue
         if row.get("status") == "resolved":
             continue
         if int(row.get("review_level", 0) or 0) == phase:
@@ -528,13 +550,16 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
             continue
         if not _looks_like_front(part_number, description):
             continue
-        if _is_legacy_matt_front(description, color_value):
+        model = _extract_model_value(description, part_number)
+        color = _extract_color_value(description, color_value)
+        if _is_excluded_inventory_color(model, color):
             continue
         items.append(
             {
                 "part_number": part_number,
                 "description": description,
-                "color": _extract_color_value(description, color_value),
+                "model": model,
+                "color": color,
                 "quantity": quantity,
             }
         )
@@ -551,16 +576,6 @@ def _looks_like_front(part_number: str, description: str) -> bool:
         or "folias fr" in folded_description
         or "front" in folded_description
     )
-
-
-def _is_legacy_matt_front(description: object, explicit_color: object) -> bool:
-    combined = f"{description or ''} {explicit_color or ''}"
-    folded = _fold_text(combined)
-    has_sm = "sm." in folded or "sm " in folded or folded.startswith("sm")
-    has_gloss = "fenyes" in folded or "magasfeny" in folded
-    has_zille = "zille" in folded
-    has_matt = " matt " in f" {folded} " or folded.endswith(" matt") or folded.startswith("matt ")
-    return has_matt and not has_sm and not has_gloss and not has_zille
 
 
 def _load_serial_sizes() -> set[str]:
@@ -668,6 +683,78 @@ def _extract_color_value(description: object, explicit_color: object) -> str:
     if len(parts) <= 1:
         return text
     return " ".join(parts[1:]).strip()
+
+
+def _extract_model_value(description: object, part_number: object = "") -> str:
+    text = str(description or "").strip()
+    if text:
+        text = re.sub(r"^F[oó]li[aá]s\s*fr\.?", "", text, flags=re.IGNORECASE).strip()
+        if text:
+            return text.split()[0].strip()
+
+    tokens = str(part_number or "").strip().upper().split("_")
+    if len(tokens) > 1:
+        return {
+            "ANT": "Antónia",
+            "LU": "Laura",
+            "ZI": "Zille",
+        }.get(tokens[1], "")
+    return ""
+
+
+def _compose_color_label(model: str, color: str) -> str:
+    clean_model = str(model or "").strip()
+    clean_color = str(color or "").strip()
+    if clean_model and clean_color and not _fold_text(clean_color).startswith(_fold_text(clean_model)):
+        return f"{clean_model} {clean_color}".strip()
+    return clean_color or clean_model
+
+
+def _normalized_inventory_color(value: object) -> str:
+    normalized = _fold_text(value).replace(".", " ").replace("-", " ").replace("_", " ")
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _is_excluded_inventory_color(model: object, color: object) -> bool:
+    model_key = _fold_text(model)
+    color_key = _normalized_inventory_color(color)
+    if not color_key or color_key.startswith("sm "):
+        return False
+
+    if color_key.startswith("mf ") or color_key.startswith("matt "):
+        if any(token in color_key for token in ("beige", "capuccino", "cappuccino", "feher", "grafit", "szurke")):
+            return True
+        if "provance" in color_key and model_key == "laura":
+            return True
+    return False
+
+
+def _is_visible_inventory_row(row: dict) -> bool:
+    model = str(row.get("model", "")).strip() or _extract_model_value(row.get("description", ""), row.get("part_number", ""))
+    color = str(row.get("color", "")).strip() or _extract_color_value(row.get("description", ""), "")
+    row["model"] = model
+    row["color"] = color
+    row["color_label"] = _compose_color_label(model, color)
+    return not _is_excluded_inventory_color(model, color)
+
+
+def _normalize_inventory_sort_mode(value: object) -> str:
+    clean = str(value or "").strip().lower()
+    allowed = {"default", "color", "color_desc", "description", "description_desc", "count", "count_desc"}
+    return clean if clean in allowed else "default"
+
+
+def _inventory_sort_key(row: dict, mode: str, finalized: bool) -> tuple:
+    if mode == "description":
+        return (_fold_text(row.get("description", "")), _fold_text(row.get("color_label", row.get("color", ""))), str(row.get("part_number", "")))
+    if mode == "count":
+        if finalized:
+            count_value = int(row.get("counted_qty", 0) or 0)
+        else:
+            parsed = _row_input_value(row)
+            count_value = parsed if parsed is not None else -1
+        return (count_value, _fold_text(row.get("description", "")), str(row.get("part_number", "")))
+    return (_fold_text(row.get("color_label", row.get("color", ""))), _fold_text(row.get("description", "")), str(row.get("part_number", "")))
 
 
 def _normalize_front_size(value: object) -> str:

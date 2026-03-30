@@ -10454,6 +10454,7 @@ def render_front_inventory_form(
     message: str = "",
     success: bool = False,
     selected_category: str = "",
+    sort_mode: str = "default",
     view_mode: str = "admin",
     missing_summary: dict | None = None,
     auto_download_href: str = "",
@@ -10469,8 +10470,12 @@ def render_front_inventory_form(
     active_view = _front_inventory_normalize_view(view_mode)
     active_presence_categories = _front_inventory_active_presence_categories()
 
-    admin_href = FRONT_INVENTORY_ROUTE
-    inventory_href = FRONT_INVENTORY_ROUTE if session is None else f"{FRONT_INVENTORY_ROUTE}?view=leltar"
+    admin_href = FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
+    inventory_href = (
+        FRONT_INVENTORY_ROUTE
+        if session is None
+        else f"{FRONT_INVENTORY_ROUTE}?view=leltar&sort={urllib.parse.quote(sort_mode)}"
+    )
     view_switch_html = f"""
       <div class="frontinv-view-switch">
         <a class="frontinv-view-tab{' is-active' if active_view == 'admin' else ''}" href="{admin_href}">Kezelő</a>
@@ -10488,13 +10493,13 @@ def render_front_inventory_form(
       </section>
     """
     if session:
-        view_model = build_front_inventory_view_model(session, selected_category)
+        view_model = build_front_inventory_view_model(session, selected_category, sort_mode)
         phase_value = str(session.get("phase", "0"))
         finalized = view_model["finalized"]
         categories_html = "".join(
             f"""
               <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-live' if item['key'] in active_presence_categories else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                 href="{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(item['key'])}">
+                  href="{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
                 <span>{html.escape(item['label'])}</span>
                 <strong>{item['count']}</strong>
               </a>
@@ -10522,7 +10527,31 @@ def render_front_inventory_form(
           </article>
         """
 
-        inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}"
+        inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
+        sort_default_href = f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort=default"
+        sort_color_href = f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort=color"
+        current_sort_mode = str(view_model.get("sort_mode", "default") or "default")
+
+        def frontinv_sort_href(sort_key: str) -> str:
+            if current_sort_mode == sort_key:
+                next_sort = f"{sort_key}_desc"
+            elif current_sort_mode == f"{sort_key}_desc":
+                next_sort = "default"
+            else:
+                next_sort = sort_key
+            return f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
+
+        def frontinv_sort_label(label: str, sort_key: str) -> str:
+            indicator = ""
+            if current_sort_mode == sort_key:
+                indicator = " ↑"
+            elif current_sort_mode == f"{sort_key}_desc":
+                indicator = " ↓"
+            return f'<a class="frontinv-sort-head" href="{frontinv_sort_href(sort_key)}">{html.escape(label)}{indicator}</a>'
+
+        description_header_html = frontinv_sort_label("Alkatrész leírás", "description")
+        color_header_html = frontinv_sort_label("Szín", "color")
+        count_header_html = frontinv_sort_label("Darabszám", "count")
 
         missing_html = ""
         if missing_summary and active_view == "admin":
@@ -10585,7 +10614,7 @@ def render_front_inventory_form(
                 f"""
                   <tr class="frontinv-row is-final">
                     <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
-                    <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color', '') or '-'))}</span></td>
+                    <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color_label', row.get('color', '')) or '-'))}</span></td>
                     <td class="is-count"><span class="frontinv-count-pill">{int(row.get('counted_qty', 0) or 0)}</span></td>
                   </tr>
                 """
@@ -10614,7 +10643,7 @@ def render_front_inventory_form(
                 f"""
                   <tr class="frontinv-row{' is-counted' if str(row.get('input_qty', '')).strip() else ''}" data-frontinv-row>
                     <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
-                    <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color', '') or '-'))}</span></td>
+                    <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color_label', row.get('color', '')) or '-'))}</span></td>
                     <td class="is-count">
                       <input
                         class="frontinv-input"
@@ -10655,16 +10684,18 @@ def render_front_inventory_form(
                 <div class="frontinv-admin-actions">
                   <a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>
                   <form method="post" action="{FRONT_INVENTORY_MISSING_ROUTE}">
+                    <input type="hidden" name="sort_mode" value="{html.escape(view_model['sort_mode'])}" />
                     <button class="button button-secondary frontinv-open-button" type="submit">Hiányzó darabszámok</button>
                   </form>
                   {f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}">Legutóbbi ellenőrzési riport</a>' if saved_check_report_name else ''}
-                  <form method="post" action="{action_route}">
-                    <input type="hidden" name="selected_view" value="admin" />
-                    <button class="button button-primary frontinv-action-button" type="submit">{html.escape(action_label)}</button>
-                  </form>
+                    <form method="post" action="{action_route}">
+                      <input type="hidden" name="selected_view" value="admin" />
+                      <input type="hidden" name="sort_mode" value="{html.escape(view_model['sort_mode'])}" />
+                      <button class="button button-primary frontinv-action-button" type="submit">{html.escape(action_label)}</button>
+                    </form>
+                  </div>
                 </div>
-              </div>
-            """
+              """
             inventory_status_html = f"""
               <div class="frontinv-phase-callout{' is-final' if phase_value == '2' else ''}">
                 <div>
@@ -10708,17 +10739,22 @@ def render_front_inventory_form(
               {categories_html}
             </div>
 
+            <div class="frontinv-sort-row">
+              <a class="frontinv-sort-chip{' is-active' if view_model['sort_mode'] == 'default' else ''}" href="{sort_default_href}">PDF sorrend</a>
+              <a class="frontinv-sort-chip{' is-active' if view_model['sort_mode'] == 'color' else ''}" href="{sort_color_href}">Szín szerint</a>
+            </div>
+
             {inventory_status_html}
 
             <div class="frontinv-table-wrap">
-              <table class="frontinv-table">
-                <thead>
-                  <tr>
-                    <th>Alkatrész leírás</th>
-                    <th>Szín</th>
-                    <th>Darabszám</th>
-                  </tr>
-                </thead>
+                <table class="frontinv-table">
+                  <thead>
+                    <tr>
+                      <th>{description_header_html}</th>
+                      <th>{color_header_html}</th>
+                      <th>{count_header_html}</th>
+                    </tr>
+                  </thead>
                 <tbody>
                   {rows_html}
                 </tbody>
@@ -11060,15 +11096,22 @@ def render_front_inventory_form(
     font-size: 1.08rem;
   }
   .frontinv-category-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 14px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-  .frontinv-chip {
-    display: inline-flex;
-    align-items: center;
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .frontinv-sort-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .frontinv-chip {
+      display: inline-flex;
+      align-items: center;
     gap: 10px;
     min-height: 42px;
     padding: 0 14px;
@@ -11123,10 +11166,29 @@ def render_front_inventory_form(
     border-color: rgba(37, 99, 235, 0.34);
     color: #1d4ed8;
   }
-  .frontinv-chip.is-live:not(.is-active) strong {
-    background: rgba(37, 99, 235, 0.14);
-    color: #1d4ed8;
-  }
+    .frontinv-chip.is-live:not(.is-active) strong {
+      background: rgba(37, 99, 235, 0.14);
+      color: #1d4ed8;
+    }
+    .frontinv-sort-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: #e2e8f0;
+      color: #0f172a;
+      font-size: 0.94rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .frontinv-sort-chip.is-active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
   .frontinv-phase-callout {
     margin-top: 14px;
     padding: 16px 18px;
@@ -11166,20 +11228,27 @@ def render_front_inventory_form(
     min-width: 1040px;
   }
   .frontinv-table thead th {
-    padding: 14px 18px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-    background: #f8fafc;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      background: #f8fafc;
     color: #475569;
     font-size: 0.8rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    text-align: left;
-    white-space: nowrap;
-  }
-  .frontinv-table tbody td {
-    padding: 14px 18px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .frontinv-sort-head {
+      color: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .frontinv-table tbody td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.06);
     color: #0f172a;
     vertical-align: middle;
   }
@@ -18484,7 +18553,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _front_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
-            body = render_front_inventory_form(selected_category=selected_category, view_mode=selected_view)
+            selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            body = render_front_inventory_form(selected_category=selected_category, sort_mode=selected_sort, view_mode=selected_view)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -19040,10 +19110,14 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if session is None:
                 self.respond_front_inventory_form("Nincs aktív frontleltár.")
                 return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
             summary = summarize_missing_inputs(session)
             success = int(summary.get("total_missing", 0)) == 0
             message = "Nincs hiányzó darabszám." if success else f"Még {int(summary.get('total_missing', 0))} frontnál nincs kitöltve a darabszám."
-            body = render_front_inventory_form(message=message, success=success, view_mode="admin", missing_summary=summary)
+            selected_sort = str(form_data.get("sort_mode", "default") or "default").strip()
+            body = render_front_inventory_form(message=message, success=success, sort_mode=selected_sort, view_mode="admin", missing_summary=summary)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -19061,6 +19135,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             raw_body = self.rfile.read(content_length)
             form_data = _parse_urlencoded_body(raw_body)
             selected_view = _front_inventory_normalize_view(form_data.get("selected_view", "admin"))
+            selected_sort = str(form_data.get("sort_mode", "default") or "default").strip()
             report_body, report_name, report_count = build_inventory_check_workbook(session, mode="check", treat_missing_as_zero=True)
             auto_download_href = ""
             if report_body:
@@ -19081,6 +19156,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 message=message,
                 success=success,
                 selected_category="",
+                sort_mode=selected_sort,
                 view_mode=selected_view,
                 auto_download_href=auto_download_href,
             )
@@ -19101,6 +19177,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             raw_body = self.rfile.read(content_length)
             form_data = _parse_urlencoded_body(raw_body)
             selected_view = _front_inventory_normalize_view(form_data.get("selected_view", "admin"))
+            selected_sort = str(form_data.get("sort_mode", "default") or "default").strip()
             success, message = finalize_inventory(session, allow_missing=True)
             auto_download_href = ""
             report_body = None
@@ -19125,6 +19202,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 message=message,
                 success=success,
                 selected_category="",
+                sort_mode=selected_sort,
                 view_mode=selected_view,
                 auto_download_href=auto_download_href,
             )
