@@ -528,7 +528,7 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
             continue
         if not _looks_like_front(part_number, description):
             continue
-        if not _looks_like_inventory_front_variant(description, color_value):
+        if _is_legacy_matt_front(description, color_value):
             continue
         items.append(
             {
@@ -553,16 +553,14 @@ def _looks_like_front(part_number: str, description: str) -> bool:
     )
 
 
-def _looks_like_inventory_front_variant(description: object, explicit_color: object) -> bool:
+def _is_legacy_matt_front(description: object, explicit_color: object) -> bool:
     combined = f"{description or ''} {explicit_color or ''}"
     folded = _fold_text(combined)
-    return (
-        "sm." in folded
-        or "sm " in folded
-        or folded.startswith("sm")
-        or "fenyes" in folded
-        or "magasfeny" in folded
-    )
+    has_sm = "sm." in folded or "sm " in folded or folded.startswith("sm")
+    has_gloss = "fenyes" in folded or "magasfeny" in folded
+    has_zille = "zille" in folded
+    has_matt = " matt " in f" {folded} " or folded.endswith(" matt") or folded.startswith("matt ")
+    return has_matt and not has_sm and not has_gloss and not has_zille
 
 
 def _load_serial_sizes() -> set[str]:
