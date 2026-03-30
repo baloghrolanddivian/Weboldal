@@ -68,6 +68,7 @@ from matt_inventory_module import (
     write_runtime_upload as write_matt_inventory_runtime_upload,
 )
 from front_inventory_module import (
+    build_front_inventory_insight_artifacts,
     build_inventory_check_workbook,
     build_front_inventory_session,
     summarize_missing_inputs,
@@ -158,6 +159,8 @@ FRONT_INVENTORY_FINALIZE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/veglegesites"
 FRONT_INVENTORY_PRESENCE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/presence"
 FRONT_INVENTORY_MISSING_ROUTE = f"{FRONT_INVENTORY_ROUTE}/hianyzo-darabszamok"
 FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/ellenorzes"
+FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/insight-excel"
+FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/insight-script"
 FRONT_INVENTORY_ALERT_CLEAR_ROUTE = f"{FRONT_INVENTORY_ROUTE}/alert-clear"
 DIVIAN_AI_KNOWLEDGE_ROUTE = "/apps/ai-tudasbazis"
 DIVIAN_AI_KNOWLEDGE_PROCESS_ROUTE = f"{DIVIAN_AI_KNOWLEDGE_ROUTE}/upload"
@@ -244,6 +247,9 @@ FRONT_INVENTORY_STOCK_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "latest-stock.js
 FRONT_INVENTORY_PRESENCE_PATH = FRONT_INVENTORY_RUNTIME_DIR / "presence.json"
 FRONT_INVENTORY_CHECK_REPORT_PATH = FRONT_INVENTORY_RUNTIME_DIR / "ellenorzes-riport.xlsx"
 FRONT_INVENTORY_CHECK_REPORT_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "ellenorzes-riport.json"
+FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH = FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
+FRONT_INVENTORY_INSIGHT_SCRIPT_PATH = FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.ahk"
+FRONT_INVENTORY_INSIGHT_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 DIVIAN_AI_DEFAULT_KNOWLEDGE_FILES = [
     Path.home() / "Downloads" / "ceges_termekinformacios_kezikonyv.pdf",
 ]
@@ -10335,6 +10341,72 @@ def _front_inventory_saved_check_report_name() -> str:
     return str(meta.get("download_name", "")).strip()
 
 
+def _front_inventory_saved_insight_meta() -> dict:
+    meta = _matt_inventory_read_meta(FRONT_INVENTORY_INSIGHT_META_PATH)
+    return meta if isinstance(meta, dict) else {}
+
+
+def _front_inventory_saved_insight_workbook_name() -> str:
+    return str(_front_inventory_saved_insight_meta().get("workbook_name", "")).strip()
+
+
+def _front_inventory_saved_insight_script_name() -> str:
+    return str(_front_inventory_saved_insight_meta().get("script_name", "")).strip()
+
+
+def _front_inventory_clear_generated_artifacts() -> None:
+    for path in (
+        FRONT_INVENTORY_CHECK_REPORT_PATH,
+        FRONT_INVENTORY_CHECK_REPORT_META_PATH,
+        FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH,
+        FRONT_INVENTORY_INSIGHT_SCRIPT_PATH,
+        FRONT_INVENTORY_INSIGHT_META_PATH,
+    ):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue
+
+
+def _front_inventory_store_insight_artifacts(session: dict) -> str:
+    insight_artifacts = build_front_inventory_insight_artifacts(session)
+    workbook_body = insight_artifacts.get("workbook")
+    script_body = insight_artifacts.get("script")
+    if not isinstance(workbook_body, (bytes, bytearray)) or not isinstance(script_body, (bytes, bytearray)):
+        raise ValueError("Az inSight export ures maradt.")
+
+    FRONT_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH.write_bytes(bytes(workbook_body))
+    FRONT_INVENTORY_INSIGHT_SCRIPT_PATH.write_bytes(bytes(script_body))
+    missing_parts = list(insight_artifacts.get("missing_parts", []) or [])
+    _matt_inventory_write_meta(
+        FRONT_INVENTORY_INSIGHT_META_PATH,
+        {
+            "workbook_name": str(insight_artifacts.get("workbook_name", "")).strip(),
+            "script_name": str(insight_artifacts.get("script_name", "")).strip(),
+            "row_count": int(insight_artifacts.get("row_count", 0) or 0),
+            "matched_count": int(insight_artifacts.get("matched_count", 0) or 0),
+            "missing_count": len(missing_parts),
+            "template_name": str(insight_artifacts.get("template_name", "")).strip(),
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        },
+    )
+    if missing_parts:
+        return f" {len(missing_parts)} alkatrész nem szerepel a mintában, ezeket külön munkalapra tettem."
+    return ""
+
+
+def _front_inventory_ensure_insight_artifacts(session: dict | None) -> None:
+    if session is None or str(session.get("phase")) != "finalized":
+        return
+    if FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH.exists() and FRONT_INVENTORY_INSIGHT_SCRIPT_PATH.exists():
+        return
+    try:
+        _front_inventory_store_insight_artifacts(session)
+    except Exception:
+        return
+
+
 def _front_inventory_format_timestamp(value: str) -> str:
     clean_value = str(value or "").strip()
     if not clean_value:
@@ -10467,6 +10539,8 @@ def render_front_inventory_form(
     session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
     saved_stock_name = _front_inventory_saved_stock_name()
     saved_check_report_name = _front_inventory_saved_check_report_name()
+    saved_insight_workbook_name = _front_inventory_saved_insight_workbook_name()
+    saved_insight_script_name = _front_inventory_saved_insight_script_name()
     active_view = _front_inventory_normalize_view(view_mode)
     active_presence_categories = _front_inventory_active_presence_categories()
 
@@ -10528,8 +10602,6 @@ def render_front_inventory_form(
         """
 
         inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
-        sort_default_href = f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort=default"
-        sort_color_href = f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort=color"
         current_sort_mode = str(view_model.get("sort_mode", "default") or "default")
 
         def frontinv_sort_href(sort_key: str) -> str:
@@ -10601,13 +10673,25 @@ def render_front_inventory_form(
             """
 
         if finalized:
+            finalized_downloads_html = "".join(
+                part
+                for part in (
+                    f'<a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>',
+                    f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}">Végleges riport</a>' if saved_check_report_name else "",
+                    f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE}">inSight Excel</a>' if saved_insight_workbook_name else "",
+                    f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE}">inSight AHK</a>' if saved_insight_script_name else "",
+                )
+                if part
+            )
             admin_action_html = f"""
               <div class="frontinv-phase-callout is-complete">
                 <div>
                   <strong>Leltár lezárva</strong>
                   <p>A végleges darabszámok már rögzítve vannak. Lezárás ideje: {html.escape(_front_inventory_format_timestamp(str(session.get('finalized_at', ''))))}</p>
                 </div>
-                <a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>
+                <div class="frontinv-admin-actions">
+                  {finalized_downloads_html}
+                </div>
               </div>
             """
             rows_html = "".join(
@@ -10738,12 +10822,6 @@ def render_front_inventory_form(
             <div class="frontinv-category-row">
               {categories_html}
             </div>
-
-            <div class="frontinv-sort-row">
-              <a class="frontinv-sort-chip{' is-active' if view_model['sort_mode'] == 'default' else ''}" href="{sort_default_href}">PDF sorrend</a>
-              <a class="frontinv-sort-chip{' is-active' if view_model['sort_mode'] == 'color' else ''}" href="{sort_color_href}">Szín szerint</a>
-            </div>
-
             {inventory_status_html}
 
             <div class="frontinv-table-wrap">
@@ -11102,13 +11180,6 @@ def render_front_inventory_form(
       overflow-x: auto;
       padding-bottom: 4px;
     }
-    .frontinv-sort-row {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
     .frontinv-chip {
       display: inline-flex;
       align-items: center;
@@ -11169,25 +11240,6 @@ def render_front_inventory_form(
     .frontinv-chip.is-live:not(.is-active) strong {
       background: rgba(37, 99, 235, 0.14);
       color: #1d4ed8;
-    }
-    .frontinv-sort-chip {
-      display: inline-flex;
-      align-items: center;
-      min-height: 38px;
-      padding: 0 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(15, 23, 42, 0.12);
-      background: #e2e8f0;
-      color: #0f172a;
-      font-size: 0.94rem;
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
-    }
-    .frontinv-sort-chip.is-active {
-      background: #0f172a;
-      border-color: #0f172a;
-      color: #ffffff;
     }
   .frontinv-phase-callout {
     margin-top: 14px;
@@ -11481,7 +11533,11 @@ def render_front_inventory_form(
   }
 
   const timers = new Map();
+  const draftValues = new Map();
+  const inFlightSaves = new Map();
   const categoryRow = root.querySelector(".frontinv-category-row");
+  const categoryChips = Array.from(root.querySelectorAll(".frontinv-chip"));
+  const inputFields = Array.from(root.querySelectorAll("[data-frontinv-input]"));
   const scrollStorageKey = "frontinv-category-scroll";
   const alertModal = document.querySelector("[data-frontinv-alert]");
   const alertTitle = alertModal ? alertModal.querySelector("[data-frontinv-alert-title]") : null;
@@ -11596,35 +11652,73 @@ def render_front_inventory_form(
   window.addEventListener("pointerdown", unlockAudio, { passive: true });
   window.addEventListener("keydown", unlockAudio, { passive: true });
 
+  const getRowId = (input) => input.getAttribute("data-row-id") || "";
+  let countedRowCount = 0;
+
   const syncRowState = (input) => {
+    const isCounted = input.value.trim() !== "";
+    const wasCounted = input.dataset.frontinvCounted === "1";
+    if (isCounted !== wasCounted) {
+      countedRowCount += isCounted ? 1 : -1;
+    }
+    input.dataset.frontinvCounted = isCounted ? "1" : "0";
     const row = input.closest("[data-frontinv-row]");
     if (!row) {
       return;
     }
-    row.classList.toggle("is-counted", input.value.trim() !== "");
+    row.classList.toggle("is-counted", isCounted);
   };
 
   const syncCurrentCategoryState = () => {
     if (!currentCategoryChip) {
       return;
     }
-    const inputs = Array.from(root.querySelectorAll("[data-frontinv-input]"));
-    const hasRows = inputs.length > 0;
-    const isComplete = hasRows && inputs.every((input) => input.value.trim() !== "");
+    const hasRows = inputFields.length > 0;
+    const isComplete = hasRows && countedRowCount === inputFields.length;
     currentCategoryChip.classList.toggle("is-complete", isComplete);
   };
 
-  const saveValue = (input) => {
+  const submitValue = (rowId, value) => {
+    if (!rowId) {
+      return;
+    }
     const formData = new URLSearchParams();
-    formData.set("row_id", input.getAttribute("data-row-id") || "");
-    formData.set("value", input.value);
+    formData.set("row_id", rowId);
+    formData.set("value", value);
+    inFlightSaves.set(rowId, value);
     fetch(stateRoute, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
       body: formData.toString(),
       credentials: "same-origin",
       cache: "no-store",
-    }).catch(() => {});
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("save failed");
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        inFlightSaves.delete(rowId);
+        const latestDraft = draftValues.get(rowId);
+        if (latestDraft !== undefined && latestDraft !== value) {
+          submitValue(rowId, latestDraft);
+        }
+      });
+  };
+
+  const saveValue = (input) => {
+    const rowId = getRowId(input);
+    if (!rowId) {
+      return;
+    }
+    const value = input.value;
+    draftValues.set(rowId, value);
+    if (inFlightSaves.has(rowId)) {
+      return;
+    }
+    submitValue(rowId, value);
   };
 
   if (categoryRow) {
@@ -11645,6 +11739,8 @@ def render_front_inventory_form(
   if (presenceRoute && categoryValue) {
     const presenceTokenKey = "frontinv-presence-token";
     let presenceToken = window.sessionStorage.getItem(presenceTokenKey);
+    let presenceRequestSeq = 0;
+    let lastAppliedPresenceSeq = 0;
     if (!presenceToken) {
       presenceToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
       window.sessionStorage.setItem(presenceTokenKey, presenceToken);
@@ -11655,7 +11751,7 @@ def render_front_inventory_form(
       const categoryStates = payload && payload.category_states && typeof payload.category_states === "object"
         ? payload.category_states
         : {};
-      root.querySelectorAll(".frontinv-chip").forEach((chip) => {
+      categoryChips.forEach((chip) => {
         const href = chip.getAttribute("href") || "";
         let chipCategory = "";
         try {
@@ -11667,22 +11763,35 @@ def render_front_inventory_form(
         chip.classList.toggle("is-complete", Boolean(categoryStates[chipCategory]));
       });
 
-      const rowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object"
+      const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object"
         ? payload.row_inputs
         : {};
-      root.querySelectorAll("[data-frontinv-input]").forEach((input) => {
-        const rowId = input.getAttribute("data-row-id") || "";
-        const nextValue = Object.prototype.hasOwnProperty.call(rowInputs, rowId) ? String(rowInputs[rowId] || "") : "";
+      inputFields.forEach((input) => {
+        const rowId = getRowId(input);
+        const nextValue = Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId) ? String(remoteRowInputs[rowId] || "") : "";
+        const draftValue = draftValues.get(rowId);
+        if (draftValue !== undefined) {
+          if (draftValue === nextValue) {
+            draftValues.delete(rowId);
+          } else {
+            if (document.activeElement !== input && input.value !== draftValue) {
+              input.value = draftValue;
+              syncRowState(input);
+            }
+            return;
+          }
+        }
         if (document.activeElement !== input && input.value !== nextValue) {
           input.value = nextValue;
+          syncRowState(input);
         }
-        syncRowState(input);
       });
       syncCurrentCategoryState();
       showAlert(payload && payload.worker_alert && typeof payload.worker_alert === "object" ? payload.worker_alert : null);
     };
 
     const syncPresence = (clear = false) => {
+      const requestSeq = ++presenceRequestSeq;
       const formData = new URLSearchParams();
       formData.set("token", presenceToken || "");
       formData.set("category", categoryValue);
@@ -11700,7 +11809,8 @@ def render_front_inventory_form(
       })
         .then((response) => response.ok ? response.json() : null)
         .then((payload) => {
-          if (payload) {
+          if (payload && requestSeq >= lastAppliedPresenceSeq) {
+            lastAppliedPresenceSeq = requestSeq;
             applyRemoteState(payload);
           }
         })
@@ -11720,13 +11830,13 @@ def render_front_inventory_form(
     });
   }
 
-  root.querySelectorAll("[data-frontinv-input]").forEach((input) => {
+  inputFields.forEach((input) => {
     syncRowState(input);
-    syncCurrentCategoryState();
     input.addEventListener("input", () => {
+      draftValues.set(getRowId(input), input.value);
       syncRowState(input);
       syncCurrentCategoryState();
-      const key = input.getAttribute("data-row-id") || "";
+      const key = getRowId(input);
       if (timers.has(key)) {
         clearTimeout(timers.get(key));
       }
@@ -11735,12 +11845,12 @@ def render_front_inventory_form(
         window.setTimeout(() => {
           saveValue(input);
           timers.delete(key);
-        }, 240),
+        }, 360),
       );
     });
     input.addEventListener("blur", () => {
       syncCurrentCategoryState();
-      const key = input.getAttribute("data-row-id") || "";
+      const key = getRowId(input);
       if (timers.has(key)) {
         clearTimeout(timers.get(key));
         timers.delete(key);
@@ -11749,7 +11859,7 @@ def render_front_inventory_form(
     });
     input.addEventListener("change", () => {
       syncCurrentCategoryState();
-      const key = input.getAttribute("data-row-id") || "";
+      const key = getRowId(input);
       if (timers.has(key)) {
         clearTimeout(timers.get(key));
         timers.delete(key);
@@ -11757,6 +11867,7 @@ def render_front_inventory_form(
       saveValue(input);
     });
   });
+  syncCurrentCategoryState();
   };
 
   if (document.readyState === "loading") {
@@ -18554,6 +18665,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _front_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
             selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            _front_inventory_ensure_insight_artifacts(load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH))
             body = render_front_inventory_form(selected_category=selected_category, sort_mode=selected_sort, view_mode=selected_view)
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -18588,6 +18700,40 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             quoted_name = urllib.parse.quote(download_name)
             self.send_response(200)
             self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted_name}")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE:
+            _front_inventory_ensure_insight_artifacts(load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH))
+            if not FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH.exists():
+                self.send_error(404)
+                return
+            body = FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH.read_bytes()
+            download_name = _front_inventory_saved_insight_workbook_name() or "front-leltar-insight-bevetelezes.xlsx"
+            quoted_name = urllib.parse.quote(download_name)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted_name}")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE:
+            _front_inventory_ensure_insight_artifacts(load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH))
+            if not FRONT_INVENTORY_INSIGHT_SCRIPT_PATH.exists():
+                self.send_error(404)
+                return
+            body = FRONT_INVENTORY_INSIGHT_SCRIPT_PATH.read_bytes()
+            download_name = _front_inventory_saved_insight_script_name() or "front-leltar-insight-bevetelezes.ahk"
+            quoted_name = urllib.parse.quote(download_name)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted_name}")
             self.send_header("Content-Length", str(len(body)))
@@ -19031,6 +19177,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "updated_at": datetime.now().isoformat(timespec="seconds"),
                 },
             )
+            _front_inventory_clear_generated_artifacts()
             save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
 
             body = render_front_inventory_form(
@@ -19183,6 +19330,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             report_body = None
             report_name = ""
             report_count = 0
+            insight_warning = ""
             if success:
                 report_body, report_name, report_count = build_inventory_check_workbook(session, mode="finalize", treat_missing_as_zero=True)
             if report_body:
@@ -19197,9 +19345,14 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     },
                 )
                 auto_download_href = f"{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}?t={int(time.time() * 1000)}"
+            if success:
+                try:
+                    insight_warning = _front_inventory_store_insight_artifacts(session)
+                except Exception as exc:
+                    insight_warning = f" Az inSight export nem készült el: {exc}"
             save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
             body = render_front_inventory_form(
-                message=message,
+                message=f"{message}{insight_warning}",
                 success=success,
                 selected_category="",
                 sort_mode=selected_sort,

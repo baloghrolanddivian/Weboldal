@@ -18,6 +18,9 @@ except Exception:  # pragma: no cover
 
 FRONT_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
 SERIAL_SIZES_DATA_PATH = Path(__file__).resolve().parent / "data" / "front-inventory-serial-sizes.json"
+NETTFRONT_TRANSLATIONS_DATA_PATH = Path(__file__).resolve().parent / "data" / "nettfront-translations.json"
+FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = Path(__file__).resolve().parent / "runtime" / "front-leltar" / "insight-minta.xlsx"
+FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = Path(__file__).resolve().parent / "data" / "nettfront-alkatreszek.xlsx"
 
 
 def file_name_allowed(file_name: str) -> bool:
@@ -45,7 +48,11 @@ def load_session_from_path(path: Path) -> dict | None:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    return payload if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return None
+    if _repair_session(payload, path):
+        save_session_to_path(path, payload)
+    return payload
 
 
 def save_session_to_path(path: Path, payload: dict) -> None:
@@ -54,36 +61,12 @@ def save_session_to_path(path: Path, payload: dict) -> None:
 
 
 def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
-    stock_rows = _read_stock_rows(file_name, payload)
     serial_sizes = _load_serial_sizes()
+    stock_rows = _read_stock_rows(file_name, payload, serial_sizes)
 
     rows: list[dict] = []
     for item in stock_rows:
-        size = _extract_front_size(item["description"], item["part_number"])
-        is_serial = size in serial_sizes
-        model = _extract_model_value(item["description"], item["part_number"])
-        color = item.get("color", "")
-        rows.append(
-            {
-                "row_id": item["part_number"],
-                "part_number": item["part_number"],
-                "description": item["description"],
-                "model": model,
-                "color": color,
-                "color_label": _compose_color_label(model, color),
-                "stock_qty": item["quantity"],
-                "size": size,
-                "category": size if is_serial else "egyedi",
-                "is_serial": is_serial,
-                "input_qty": "",
-                "resolved_qty": None,
-                "first_check_qty": None,
-                "second_check_qty": None,
-                "final_check_qty": None,
-                "review_level": 0,
-                "status": "pending",
-            }
-        )
+        rows.append(_build_inventory_session_row(item, serial_sizes))
 
     rows.sort(key=_row_sort_key)
 
@@ -225,6 +208,59 @@ def build_inventory_check_workbook(session: dict, mode: str = "check", treat_mis
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue(), f"front-leltar-{report_label}.xlsx", len(all_rows)
+
+
+def build_front_inventory_insight_artifacts(session: dict) -> dict[str, object]:
+    if load_workbook is None:
+        raise RuntimeError("Az inSight Excel generalasahoz hianyzik az openpyxl csomag.")
+
+    template_path = _resolve_front_inventory_insight_template_path()
+    if template_path is None:
+        raise FileNotFoundError("Nem talaltam az inSight minta Excelt.")
+
+    workbook = load_workbook(template_path)
+    sheet = workbook.active
+    part_column_index, qty_column_index = _front_inventory_insight_columns(sheet)
+    final_counts = _front_inventory_final_count_map(session)
+    ordered_quantities: list[int] = []
+    ordered_parts: list[str] = []
+    seen_parts: set[str] = set()
+
+    qty_header = sheet.cell(row=1, column=qty_column_index + 1).value
+    if not str(qty_header or "").strip():
+        sheet.cell(row=1, column=qty_column_index + 1).value = "Szamolt mennyiseg"
+
+    for row_index in range(2, sheet.max_row + 1):
+        part_value = sheet.cell(row=row_index, column=part_column_index + 1).value
+        part_number = _normalize_part_number(part_value)
+        if not part_number:
+            continue
+        quantity = int(final_counts.get(part_number, 0) or 0)
+        sheet.cell(row=row_index, column=qty_column_index + 1).value = quantity
+        ordered_parts.append(part_number)
+        ordered_quantities.append(quantity)
+        seen_parts.add(part_number)
+
+    missing_parts = sorted(part_number for part_number in final_counts if part_number not in seen_parts)
+    if missing_parts:
+        missing_sheet = workbook.create_sheet("Nincs a mintaban")
+        missing_sheet.append(["Alkatresz szam", "Darabszam"])
+        for part_number in missing_parts:
+            missing_sheet.append([part_number, int(final_counts.get(part_number, 0) or 0)])
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return {
+        "workbook": buffer.getvalue(),
+        "workbook_name": f"front-leltar-insight-bevetelezes-{stamp}.xlsx",
+        "script": _build_front_inventory_insight_ahk_script(ordered_quantities).encode("utf-8"),
+        "script_name": f"front-leltar-insight-bevetelezes-{stamp}.ahk",
+        "row_count": len(ordered_parts),
+        "matched_count": len(final_counts) - len(missing_parts),
+        "missing_parts": missing_parts,
+        "template_name": template_path.name,
+    }
 
 
 def run_inventory_check(session: dict, allow_missing: bool = False) -> tuple[bool, str]:
@@ -373,6 +409,102 @@ def _final_effective_qty(row: dict) -> int:
     return 0
 
 
+def _front_inventory_final_count_map(session: dict) -> dict[str, int]:
+    final_counts: dict[str, int] = {}
+    for row in session.get("rows", []):
+        if not isinstance(row, dict) or not _is_visible_inventory_row(row):
+            continue
+        part_number = _normalize_part_number(row.get("part_number"))
+        if not part_number:
+            continue
+        final_counts[part_number] = _final_effective_qty(row)
+    return final_counts
+
+
+def _resolve_front_inventory_insight_template_path() -> Path | None:
+    for candidate in (FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH, FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _front_inventory_insight_columns(sheet) -> tuple[int, int]:
+    header_values = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+    header_map = _build_header_map(header_values)
+    part_index = (
+        _find_header_index(header_map, ("alkatr", "szam"))
+        or _find_header_index(header_map, ("cikk", "szam"))
+        or _find_header_index(header_map, ("part", "number"))
+    )
+    if part_index is None:
+        part_index = 0
+    qty_index = (
+        _find_header_index(header_map, ("darab",))
+        or _find_header_index(header_map, ("menny",))
+        or _find_header_index(header_map, ("qty",))
+        or _find_header_index(header_map, ("quantity",))
+    )
+    if qty_index is None:
+        qty_index = part_index + 1
+    return part_index, qty_index
+
+
+def _build_front_inventory_insight_ahk_script(quantities: list[int]) -> str:
+    values_text = "\n".join(str(max(0, int(quantity or 0))) for quantity in quantities)
+    return f"""; AutoHotkey v2.0+
+#SingleInstance Force
+Persistent
+
+stepDelay := 220
+startupDelay := 420
+valuesText :=
+(
+{values_text}
+)
+isRunning := false
+
+Esc::
+{{
+    ExitApp
+}}
+
++Space::
+{{
+    global valuesText, stepDelay, startupDelay, isRunning
+    if (isRunning)
+        return
+    isRunning := true
+
+    while GetKeyState("Shift", "P") or GetKeyState("Space", "P")
+    {{
+        Sleep 40
+    }}
+    Sleep startupDelay
+
+    values := StrSplit(valuesText, "`n", "`r")
+    for _, quantity in values
+    {{
+        quantity := Trim(quantity)
+        if (quantity = "")
+            continue
+        if GetKeyState("Esc", "P")
+            ExitApp
+
+        A_Clipboard := quantity
+        Send "^v"
+        Sleep stepDelay
+
+        if GetKeyState("Esc", "P")
+            ExitApp
+        Send "{{Tab 2}}"
+        Sleep stepDelay
+    }}
+
+    ExitApp
+}}
+"""
+
+
 def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None:
     summary_sheet = workbook.active
     summary_sheet.title = "Vegleges darabszamok"
@@ -416,7 +548,16 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
             row["color"] = _extract_color_value(row.get("description", ""), "")
         if not str(row.get("model", "")).strip():
             row["model"] = _extract_model_value(row.get("description", ""), row.get("part_number", ""))
-        row["color_label"] = _compose_color_label(str(row.get("model", "")).strip(), str(row.get("color", "")).strip())
+        row["color"] = _normalize_inventory_row_color(
+            str(row.get("model", "")).strip(),
+            str(row.get("color", "")).strip(),
+            str(row.get("description", "")).strip(),
+        )
+        row["color_label"] = _inventory_color_label(
+            str(row.get("model", "")).strip(),
+            str(row.get("color", "")).strip(),
+            bool(row.get("is_serial")),
+        )
     active_rows = _active_rows_for_phase(session, int(session.get("phase", 0) or 0)) if not finalized else [row for row in source_rows if _is_visible_inventory_row(row)]
     active_rows = list(active_rows)
 
@@ -484,7 +625,7 @@ def _finalized_rows(session: dict) -> list[dict]:
                 "description": row.get("description", ""),
                 "model": model,
                 "color": color,
-                "color_label": _compose_color_label(model, color),
+                "color_label": _inventory_color_label(model, color, bool(row.get("is_serial"))),
                 "counted_qty": int(resolved_qty or 0),
                 "size": row.get("size", ""),
                 "category": row.get("category", ""),
@@ -522,7 +663,7 @@ def _touch_session(session: dict) -> None:
     session["updated_at"] = datetime.now().isoformat(timespec="seconds")
 
 
-def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
+def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | None = None) -> list[dict]:
     rows = _read_rows(file_name, payload)
     if not rows:
         raise ValueError("A front készletfájl üres.")
@@ -551,8 +692,10 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
         if not _looks_like_front(part_number, description):
             continue
         model = _extract_model_value(description, part_number)
-        color = _extract_color_value(description, color_value)
-        if _is_excluded_inventory_color(model, color):
+        color = _normalize_inventory_row_color(model, _extract_color_value(description, color_value), description)
+        size = _extract_front_size(description, part_number)
+        is_serial = bool(serial_sizes) and size in serial_sizes
+        if _is_excluded_inventory_row(model, color, is_serial):
             continue
         items.append(
             {
@@ -560,6 +703,8 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
                 "description": description,
                 "model": model,
                 "color": color,
+                "size": size,
+                "is_serial": is_serial,
                 "quantity": quantity,
             }
         )
@@ -579,15 +724,120 @@ def _looks_like_front(part_number: str, description: str) -> bool:
 
 
 def _load_serial_sizes() -> set[str]:
-    if SERIAL_SIZES_DATA_PATH.exists():
+    result: set[str] = set()
+    for path, field_name in (
+        (SERIAL_SIZES_DATA_PATH, "sizes"),
+        (NETTFRONT_TRANSLATIONS_DATA_PATH, "standard_sizes"),
+    ):
+        if not path.exists():
+            continue
         try:
-            payload = json.loads(SERIAL_SIZES_DATA_PATH.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            payload = {}
-        values = payload.get("sizes", []) if isinstance(payload, dict) else []
-        result = {_normalize_front_size(value) for value in values}
-        return {value for value in result if value}
-    return set()
+            continue
+        values = payload.get(field_name, []) if isinstance(payload, dict) else []
+        result.update(_normalize_front_size(value) for value in values)
+    return {value for value in result if value}
+
+
+def _repair_session(session: dict, session_path: Path | None = None) -> bool:
+    changed = False
+    serial_sizes = _load_serial_sizes()
+    serial_size_list = sorted(serial_sizes, key=_size_sort_key)
+    if session.get("serial_sizes") != serial_size_list:
+        session["serial_sizes"] = serial_size_list
+        changed = True
+
+    for row in session.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        description = str(row.get("description", ""))
+        part_number = str(row.get("part_number", ""))
+        size = _extract_front_size(description, part_number)
+        is_serial = bool(size) and size in serial_sizes
+        model = str(row.get("model", "")).strip() or _extract_model_value(description, part_number)
+        color = _normalize_inventory_row_color(model, str(row.get("color", "")).strip(), description)
+        color_label = _inventory_color_label(model, color, is_serial)
+        category = size if is_serial else "egyedi"
+
+        for key, value in (
+            ("size", size),
+            ("is_serial", is_serial),
+            ("category", category),
+            ("model", model),
+            ("color", color),
+            ("color_label", color_label),
+        ):
+            if row.get(key) != value:
+                row[key] = value
+                changed = True
+    if _merge_saved_stock_rows(session, session_path, serial_sizes):
+        changed = True
+    return changed
+
+
+def _merge_saved_stock_rows(session: dict, session_path: Path | None, serial_sizes: set[str]) -> bool:
+    if session_path is None:
+        return False
+    stock_path = _find_saved_stock_upload_path(session_path.parent)
+    if stock_path is None or not stock_path.exists():
+        return False
+
+    try:
+        stock_rows = _read_stock_rows(stock_path.name, stock_path.read_bytes(), serial_sizes)
+    except Exception:
+        return False
+
+    current_rows = [row for row in session.get("rows", []) if isinstance(row, dict)]
+    existing_parts = {str(row.get("part_number", "")).strip().upper() for row in current_rows}
+    added = False
+    for item in stock_rows:
+        part_number = str(item.get("part_number", "")).strip().upper()
+        if not part_number or part_number in existing_parts:
+            continue
+        current_rows.append(_build_inventory_session_row(item, serial_sizes))
+        existing_parts.add(part_number)
+        added = True
+
+    if added:
+        current_rows.sort(key=_row_sort_key)
+        session["rows"] = current_rows
+    return added
+
+
+def _find_saved_stock_upload_path(runtime_dir: Path) -> Path | None:
+    for candidate in sorted(runtime_dir.glob("latest-stock.*")):
+        if candidate.suffix.lower() in FRONT_INVENTORY_ALLOWED_EXTENSIONS:
+            return candidate
+    return None
+
+
+def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
+    description = str(item.get("description", "")).strip()
+    part_number = str(item.get("part_number", "")).strip()
+    model = str(item.get("model", "")).strip() or _extract_model_value(description, part_number)
+    color = _normalize_inventory_row_color(model, str(item.get("color", "")).strip(), description)
+    size = str(item.get("size", "")).strip() or _extract_front_size(description, part_number)
+    is_serial = bool(size) and size in serial_sizes
+    return {
+        "row_id": part_number,
+        "part_number": part_number,
+        "description": description,
+        "model": model,
+        "color": color,
+        "color_label": _inventory_color_label(model, color, is_serial),
+        "stock_qty": int(item.get("quantity", 0) or 0),
+        "size": size,
+        "category": size if is_serial else "egyedi",
+        "is_serial": is_serial,
+        "input_qty": "",
+        "resolved_qty": None,
+        "first_check_qty": None,
+        "second_check_qty": None,
+        "final_check_qty": None,
+        "review_level": 0,
+        "status": "pending",
+    }
 
 
 def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
@@ -710,6 +960,38 @@ def _compose_color_label(model: str, color: str) -> str:
     return clean_color or clean_model
 
 
+def _inventory_color_label(model: str, color: str, is_serial: bool) -> str:
+    clean_color = str(color or "").strip()
+    if not is_serial:
+        return clean_color
+    return _compose_color_label(model, clean_color)
+
+
+def _normalize_inventory_row_color(model: str, color: str, description: str = "") -> str:
+    clean_color = _cleanup_inventory_color_text(color)
+    if not clean_color:
+        clean_color = _cleanup_inventory_color_text(_extract_color_value(description, ""))
+    if not clean_color:
+        return ""
+    candidates = [str(model or "").strip(), "Antónia", "Laura", "Zille"]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        clean_color = re.sub(rf"^{re.escape(candidate)}\b[\s.:/-]*", "", clean_color, flags=re.IGNORECASE).strip()
+    return clean_color
+
+
+def _cleanup_inventory_color_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"^(?:EGYEDI|ROSSZ)\b[\s.:/-]*", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"^F[oó]li[aá]s\s*fr\.?", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"\b\d{2,4}\s*x\s*\d{2,4}\s*x\s*\d{1,2}\b", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"\b\d{2,4}\s*x\s*\d{2,4}\b", "", text, flags=re.IGNORECASE).strip()
+    return re.sub(r"\s+", " ", text).strip(" -")
+
+
 def _normalized_inventory_color(value: object) -> str:
     normalized = _fold_text(value).replace(".", " ").replace("-", " ").replace("_", " ")
     return re.sub(r"\s+", " ", normalized).strip()
@@ -729,13 +1011,18 @@ def _is_excluded_inventory_color(model: object, color: object) -> bool:
     return False
 
 
+def _is_excluded_inventory_row(model: object, color: object, is_serial: bool) -> bool:
+    return bool(is_serial) and _is_excluded_inventory_color(model, color)
+
+
 def _is_visible_inventory_row(row: dict) -> bool:
     model = str(row.get("model", "")).strip() or _extract_model_value(row.get("description", ""), row.get("part_number", ""))
-    color = str(row.get("color", "")).strip() or _extract_color_value(row.get("description", ""), "")
+    color = _normalize_inventory_row_color(model, str(row.get("color", "")).strip(), str(row.get("description", "")))
+    is_serial = bool(row.get("is_serial"))
     row["model"] = model
     row["color"] = color
-    row["color_label"] = _compose_color_label(model, color)
-    return not _is_excluded_inventory_color(model, color)
+    row["color_label"] = _inventory_color_label(model, color, is_serial)
+    return not _is_excluded_inventory_row(model, color, is_serial)
 
 
 def _normalize_inventory_sort_mode(value: object) -> str:
