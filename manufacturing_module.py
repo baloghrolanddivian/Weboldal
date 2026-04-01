@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import re
+import threading
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +17,10 @@ except Exception:  # pragma: no cover - optional dependency handling
 
 
 MANUFACTURING_ROOT = Path(os.getenv("DIVIAN_MANUFACTURING_ROOT", r"J:\inSightData\Output\Gyartasi_papirok"))
+MANUFACTURING_ENTRIES_CACHE_LOCK = threading.Lock()
+MANUFACTURING_ENTRIES_CACHE: dict[tuple[int, bool], dict[str, object]] = {}
+MANUFACTURING_DATE_LABEL_CACHE: dict[str, dict[str, object]] = {}
+MANUFACTURING_ENTRIES_CACHE_TTL_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -152,24 +158,101 @@ def _find_alkatresz_kesz_path(folder: Path) -> Path | None:
     return None
 
 
+def _find_front_osszekeszito_path(folder: Path) -> Path | None:
+    if not folder.exists():
+        return None
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file():
+            continue
+        name = path.name.lower()
+        if "front" in name and "sszek" in name and "hettich" not in name:
+            return path
+    return None
+
+
 def has_required_manufacturing_pdfs(folder: Path) -> bool:
     return _find_osszekeszito_path(folder) is not None and _find_alkatresz_kesz_path(folder) is not None
 
 
-def available_production_numbers(limit: int = 60, ready_only: bool = False) -> list[str]:
+def _entries_cache_signature() -> tuple[tuple[str, int], ...]:
+    if not MANUFACTURING_ROOT.exists():
+        return tuple()
+    entries: list[tuple[str, int]] = []
+    for item in MANUFACTURING_ROOT.iterdir():
+        if not item.is_dir() or not item.name.isdigit():
+            continue
+        try:
+            stat = item.stat()
+        except OSError:
+            continue
+        entries.append((item.name, stat.st_mtime_ns))
+    entries.sort(key=lambda pair: int(pair[0]), reverse=True)
+    return tuple(entries[:200])
+
+
+def _production_pdf_signature(folder: Path) -> tuple[tuple[str, int, int], ...]:
+    signatures: list[tuple[str, int, int]] = []
+    for path in (_find_osszekeszito_path(folder), _find_alkatresz_kesz_path(folder), _find_front_osszekeszito_path(folder)):
+        if path is None:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        signatures.append((path.name, stat.st_mtime_ns, stat.st_size))
+    return tuple(signatures)
+
+
+def _production_date_label_cached(folder: Path) -> str:
+    signature = _production_pdf_signature(folder)
+    with MANUFACTURING_ENTRIES_CACHE_LOCK:
+        cached = MANUFACTURING_DATE_LABEL_CACHE.get(str(folder))
+        if cached and cached.get("signature") == signature:
+            return str(cached.get("value", ""))
+    value = _production_date_label(folder)
+    with MANUFACTURING_ENTRIES_CACHE_LOCK:
+        MANUFACTURING_DATE_LABEL_CACHE[str(folder)] = {"signature": signature, "value": value}
+    return value
+
+
+def available_production_entries(limit: int = 60, ready_only: bool = False) -> list[dict[str, str]]:
+    cache_key = (int(limit), bool(ready_only))
+    with MANUFACTURING_ENTRIES_CACHE_LOCK:
+        cached = MANUFACTURING_ENTRIES_CACHE.get(cache_key)
+        if cached and (time.time() - float(cached.get("created_at", 0.0) or 0.0)) < MANUFACTURING_ENTRIES_CACHE_TTL_SECONDS:
+            return [dict(item) for item in cached.get("entries", []) if isinstance(item, dict)]
+    signature = _entries_cache_signature()
+    with MANUFACTURING_ENTRIES_CACHE_LOCK:
+        cached = MANUFACTURING_ENTRIES_CACHE.get(cache_key)
+        if cached and cached.get("signature") == signature:
+            return [dict(item) for item in cached.get("entries", []) if isinstance(item, dict)]
+
     if not MANUFACTURING_ROOT.exists():
         return []
+
     candidates = [path for path in MANUFACTURING_ROOT.iterdir() if path.is_dir() and path.name.isdigit()]
     candidates.sort(key=lambda path: int(path.name), reverse=True)
 
-    numbers: list[str] = []
-    for path in candidates:
-        if ready_only and not has_required_manufacturing_pdfs(path):
+    entries: list[dict[str, str]] = []
+    for folder in candidates:
+        if ready_only and not has_required_manufacturing_pdfs(folder):
             continue
-        numbers.append(path.name)
-        if len(numbers) >= limit:
+        entries.append(
+            {
+                "number": folder.name,
+                "date_label": _production_date_label_cached(folder),
+            }
+        )
+        if len(entries) >= limit:
             break
-    return numbers
+
+    with MANUFACTURING_ENTRIES_CACHE_LOCK:
+        MANUFACTURING_ENTRIES_CACHE[cache_key] = {
+            "signature": signature,
+            "created_at": time.time(),
+            "entries": [dict(item) for item in entries],
+        }
+    return entries
 
 
 def _extract_production_date_label(lines: list[str]) -> str:
@@ -202,20 +285,8 @@ def _production_date_label(folder: Path) -> str:
         if date_label:
             return date_label
     return ""
-
-
-def available_production_entries(limit: int = 60, ready_only: bool = False) -> list[dict[str, str]]:
-    numbers = available_production_numbers(limit=limit, ready_only=ready_only)
-    entries: list[dict[str, str]] = []
-    for number in numbers:
-        folder = production_folder(number)
-        entries.append(
-            {
-                "number": number,
-                "date_label": _production_date_label(folder),
-            }
-        )
-    return entries
+def available_production_numbers(limit: int = 60, ready_only: bool = False) -> list[str]:
+    return [str(item.get("number", "")) for item in available_production_entries(limit=limit, ready_only=ready_only) if str(item.get("number", "")).isdigit()]
 
 
 def latest_production_number() -> str:
@@ -515,6 +586,256 @@ def parse_alkatresz_kesz(path: Path) -> ManufacturingDocument:
     )
 
 
+def _looks_like_front_color(value: str) -> bool:
+    folded = _clean_text(value).lower()
+    return any(
+        marker in folded
+        for marker in (
+            "mf.",
+            "sm.",
+            "fóliás",
+            "folias",
+            "fényes",
+            "fenyes",
+            "matt",
+            "antracit",
+            "beige",
+            "fehér",
+            "feher",
+            "szürke",
+            "szurke",
+            "tölgy",
+            "tolgy",
+            "kasmír",
+            "kasmir",
+            "provance",
+            "remo",
+            "agyag",
+        )
+    )
+
+
+def _parse_front_section_meta(side: str, meta_lines: list[str]) -> tuple[str, str, str]:
+    cleaned_meta = [_clean_text(line) for line in meta_lines if _clean_text(line) and _clean_text(line) not in {"-", ":"}]
+    descriptor = ""
+    color = ""
+    if len(cleaned_meta) >= 2:
+        descriptor = " - ".join(cleaned_meta[:-1])
+        color = cleaned_meta[-1]
+    elif len(cleaned_meta) == 1:
+        if _looks_like_front_color(cleaned_meta[0]):
+            color = cleaned_meta[0]
+        else:
+            descriptor = cleaned_meta[0]
+
+    label_parts = [side]
+    if descriptor:
+        label_parts.append(descriptor)
+    if color:
+        label_parts.append(color)
+    return descriptor, color, " - ".join(part for part in label_parts if part)
+
+
+def _front_row_segments(lines: list[str]) -> list[list[str]]:
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        token = _clean_text(line)
+        if not token:
+            continue
+        current.append(token)
+        if _is_final_code(token):
+            segments.append(current)
+            current = []
+    return segments
+
+
+def _parse_front_rows(
+    row_lines: list[str],
+    *,
+    section_label: str,
+    section_descriptor: str,
+    section_color: str,
+    page_number: int,
+) -> list[ManufacturingRow]:
+    rows: list[ManufacturingRow] = []
+    section_key = _slugify(section_label)
+    row_index = 0
+
+    for segment in _front_row_segments(row_lines):
+        cleaned_segment = [
+            token
+            for token in segment
+            if _clean_text(token) and (_is_final_code(token) or "CON" not in token.upper())
+        ]
+        if len(cleaned_segment) < 8:
+            continue
+        code = next((token for token in reversed(cleaned_segment) if _is_final_code(token)), "")
+        if not code:
+            continue
+        code_index = cleaned_segment.index(code)
+        payload = cleaned_segment[:code_index]
+        quantity_index = -1
+        for index in range(len(payload) - 1, -1, -1):
+            if re.fullmatch(r"-?\d+", payload[index]):
+                quantity_index = index
+                break
+        if quantity_index == -1:
+            continue
+        quantity = int(payload[quantity_index])
+        payload = payload[:quantity_index]
+
+        dimension_index = -1
+        for index in range(len(payload)):
+            if _looks_like_dimension_start(payload, index):
+                dimension_index = index
+                break
+        if dimension_index == -1:
+            continue
+
+        size, size_end = _consume_dimension(payload, dimension_index)
+        if not size:
+            continue
+
+        pre_tokens = [_clean_text(token) for token in payload[:dimension_index] if _clean_text(token) and token != "-"]
+        post_tokens = [_clean_text(token) for token in payload[size_end:] if _clean_text(token)]
+
+        edge = "-"
+        detail_tokens = list(post_tokens)
+        if detail_tokens and (detail_tokens[0] == "-" or _looks_like_edge(detail_tokens[0])):
+            edge = detail_tokens[0]
+            detail_tokens = detail_tokens[1:]
+        detail_tokens = [token for token in detail_tokens if token != "-"]
+
+        model = ""
+        name_tokens = list(pre_tokens)
+        if name_tokens:
+            model = name_tokens[-1]
+            name_tokens = name_tokens[:-1]
+
+        name = _clean_text(" ".join(name_tokens))
+        if not name:
+            name = section_descriptor or "Front"
+
+        detail_parts = [part for part in (model, _clean_text(" ".join(detail_tokens))) if part]
+        detail = " · ".join(detail_parts)
+
+        row_index += 1
+        rows.append(
+            ManufacturingRow(
+                row_id=_row_hash("front_osszekeszito", section_label, code, name, size, str(row_index)),
+                name=name,
+                detail=detail,
+                size=size,
+                color=section_color,
+                edge=edge,
+                quantity=quantity,
+                code=code,
+                doc_key="front_osszekeszito",
+                section_key=section_key,
+                section_label=section_label,
+                page_number=page_number,
+            )
+        )
+
+    return rows
+
+
+def parse_front_osszekeszito(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    section_map: dict[str, list[ManufacturingRow]] = {}
+
+    for page_number, lines in enumerate(pages, start=1):
+        footer_index = _footer_index(lines)
+        content_lines = lines[:footer_index]
+        if not content_lines:
+            continue
+
+        index = 0
+        while index < len(content_lines):
+            if content_lines[index] not in {"Front tÃ­pus:", "Front típus:"}:
+                index += 1
+                continue
+
+            side = _clean_text(content_lines[index + 1] if index + 1 < len(content_lines) else "") or "Front"
+            index += 2
+            meta_lines: list[str] = []
+            while index < len(content_lines) and content_lines[index] != "Leiras":
+                meta_lines.append(content_lines[index])
+                index += 1
+            if index >= len(content_lines):
+                break
+            while index < len(content_lines) and content_lines[index] != "ME":
+                index += 1
+            if index < len(content_lines) and content_lines[index] == "ME":
+                index += 1
+
+            row_lines: list[str] = []
+            while index < len(content_lines) and content_lines[index] not in {"Front tÃ­pus:", "Front típus:"}:
+                row_lines.append(content_lines[index])
+                index += 1
+
+            descriptor, color, section_label = _parse_front_section_meta(side, meta_lines)
+            rows = _parse_front_rows(
+                row_lines,
+                section_label=section_label,
+                section_descriptor=descriptor,
+                section_color=color,
+                page_number=page_number,
+            )
+            if not rows:
+                continue
+
+            if not descriptor:
+                inferred_descriptor = rows[0].name
+                label_parts = [side, inferred_descriptor]
+                if color:
+                    label_parts.append(color)
+                section_label = " - ".join(part for part in label_parts if part)
+                rows = [
+                    ManufacturingRow(
+                        row_id=row.row_id,
+                        name=row.name,
+                        detail=row.detail,
+                        size=row.size,
+                        color=row.color,
+                        edge=row.edge,
+                        quantity=row.quantity,
+                        code=row.code,
+                        doc_key=row.doc_key,
+                        section_key=_slugify(section_label),
+                        section_label=section_label,
+                        page_number=row.page_number,
+                    )
+                    for row in rows
+                ]
+
+            section_map.setdefault(section_label, []).extend(rows)
+
+    sections = [
+        ManufacturingSection(
+            key=_slugify(section_label),
+            label=section_label,
+            rows=tuple(rows),
+        )
+        for section_label, rows in section_map.items()
+        if rows
+    ]
+    sections = _pair_sections_in_display_order(
+        sorted(
+            sections,
+            key=lambda section: (_pair_info_for_section_label(section.label) or ("9", section.label.lower())),
+        )
+    )
+    return ManufacturingDocument(
+        key="front_osszekeszito",
+        label="Front összekészítő",
+        file_name=path.name,
+        sections=tuple(sections),
+        row_count=sum(len(section.rows) for section in sections),
+    )
+
+
 def load_production_bundle(production_number: str) -> dict:
     folder = production_folder(production_number)
     if not folder.exists():
@@ -527,11 +848,20 @@ def load_production_bundle(production_number: str) -> dict:
 
     osszek_doc = parse_osszekeszito(osszek_path)
     alkatresz_doc = parse_alkatresz_kesz(alkatresz_path)
+    documents = [asdict(osszek_doc), asdict(alkatresz_doc)]
+    front_path = _find_front_osszekeszito_path(folder)
+    if front_path is not None:
+        try:
+            front_doc = parse_front_osszekeszito(front_path)
+        except Exception:
+            front_doc = None
+        if front_doc is not None:
+            documents.append(asdict(front_doc))
 
     return {
         "production_number": production_number,
         "folder": str(folder),
-        "documents": [asdict(osszek_doc), asdict(alkatresz_doc)],
+        "documents": documents,
     }
 
 

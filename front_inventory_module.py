@@ -123,7 +123,7 @@ def summarize_missing_inputs(session: dict) -> dict:
 
     categories = [
         {"key": key, "count": count}
-        for key, count in sorted(category_counts.items(), key=lambda item: (_size_sort_key(item[0]) if item[0] != "egyedi" else (9999, 9999, item[0])))
+        for key, count in sorted(category_counts.items(), key=lambda item: _inventory_category_sort_key(item[0]))
     ]
     rows = [
         {
@@ -574,7 +574,7 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
         if category_key:
             size_buckets.setdefault(category_key, []).append(row)
 
-    for size_key in sorted(size_buckets, key=_size_sort_key):
+    for size_key in sorted(size_buckets, key=_inventory_category_sort_key):
         bucket_rows = size_buckets[size_key]
         categories.append({"key": size_key, "label": size_key, "count": len(bucket_rows), "complete": bool(bucket_rows) and all(str(row.get("input_qty", "")).strip() for row in bucket_rows)})
 
@@ -695,7 +695,8 @@ def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | No
         color = _normalize_inventory_row_color(model, _extract_color_value(description, color_value), description)
         size = _extract_front_size(description, part_number)
         is_serial = bool(serial_sizes) and size in serial_sizes
-        if _is_excluded_inventory_row(model, color, is_serial):
+        is_glass = _is_glass_front(part_number, description)
+        if (not is_glass) and _is_excluded_inventory_row(model, color, is_serial):
             continue
         items.append(
             {
@@ -705,6 +706,7 @@ def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | No
                 "color": color,
                 "size": size,
                 "is_serial": is_serial,
+                "is_glass": is_glass,
                 "quantity": quantity,
             }
         )
@@ -718,8 +720,14 @@ def _looks_like_front(part_number: str, description: str) -> bool:
     folded_description = _fold_text(description)
     return (
         str(part_number or "").strip().upper().startswith("NFA_")
+        or str(part_number or "").strip().upper().startswith("NFAU_")
+        or str(part_number or "").strip().upper().startswith("NFAH_")
+        or str(part_number or "").strip().upper().startswith("NFAL_")
         or "folias fr" in folded_description
         or "front" in folded_description
+        or "fo fr uv" in folded_description
+        or "tak.s" in str(description or "").lower()
+        or "sarok tak" in folded_description
     )
 
 
@@ -755,14 +763,16 @@ def _repair_session(session: dict, session_path: Path | None = None) -> bool:
         part_number = str(row.get("part_number", ""))
         size = _extract_front_size(description, part_number)
         is_serial = bool(size) and size in serial_sizes
+        is_glass = _is_glass_front(part_number, description)
         model = str(row.get("model", "")).strip() or _extract_model_value(description, part_number)
         color = _normalize_inventory_row_color(model, str(row.get("color", "")).strip(), description)
         color_label = _inventory_color_label(model, color, is_serial)
-        category = size if is_serial else "egyedi"
+        category = _inventory_category_key(size, is_serial, is_glass)
 
         for key, value in (
             ("size", size),
             ("is_serial", is_serial),
+            ("is_glass", is_glass),
             ("category", category),
             ("model", model),
             ("color", color),
@@ -819,6 +829,7 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
     color = _normalize_inventory_row_color(model, str(item.get("color", "")).strip(), description)
     size = str(item.get("size", "")).strip() or _extract_front_size(description, part_number)
     is_serial = bool(size) and size in serial_sizes
+    is_glass = bool(item.get("is_glass")) or _is_glass_front(part_number, description)
     return {
         "row_id": part_number,
         "part_number": part_number,
@@ -828,8 +839,9 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
         "color_label": _inventory_color_label(model, color, is_serial),
         "stock_qty": int(item.get("quantity", 0) or 0),
         "size": size,
-        "category": size if is_serial else "egyedi",
+        "category": _inventory_category_key(size, is_serial, is_glass),
         "is_serial": is_serial,
+        "is_glass": is_glass,
         "input_qty": "",
         "resolved_qty": None,
         "first_check_qty": None,
@@ -1003,7 +1015,7 @@ def _is_excluded_inventory_color(model: object, color: object) -> bool:
     if not color_key or color_key.startswith("sm "):
         return False
 
-    if color_key.startswith("mf ") or color_key.startswith("matt "):
+    if color_key.startswith("matt "):
         if any(token in color_key for token in ("beige", "capuccino", "cappuccino", "feher", "grafit", "szurke")):
             return True
         if "provance" in color_key and model_key == "laura":
@@ -1019,10 +1031,14 @@ def _is_visible_inventory_row(row: dict) -> bool:
     model = str(row.get("model", "")).strip() or _extract_model_value(row.get("description", ""), row.get("part_number", ""))
     color = _normalize_inventory_row_color(model, str(row.get("color", "")).strip(), str(row.get("description", "")))
     is_serial = bool(row.get("is_serial"))
+    is_glass = bool(row.get("is_glass")) or _is_glass_front(row.get("part_number", ""), row.get("description", ""))
+    size = _normalize_front_size(row.get("size", "")) or _extract_front_size(row.get("description", ""), row.get("part_number", ""))
     row["model"] = model
     row["color"] = color
+    row["is_glass"] = is_glass
+    row["size"] = size
     row["color_label"] = _inventory_color_label(model, color, is_serial)
-    return not _is_excluded_inventory_row(model, color, is_serial)
+    return not (not is_glass and _is_excluded_inventory_row(model, color, is_serial))
 
 
 def _normalize_inventory_sort_mode(value: object) -> str:
@@ -1059,9 +1075,40 @@ def _size_sort_key(value: str) -> tuple[int, int, str]:
     return (int(match.group(1)), int(match.group(2)), str(value or ""))
 
 
+def _inventory_category_key(size: str, is_serial: bool, is_glass: bool) -> str:
+    if not is_serial:
+        return "egyedi"
+    clean_size = str(size or "").strip()
+    if is_glass and clean_size:
+        return f"Üveges - {clean_size}"
+    return clean_size
+
+
+def _inventory_category_sort_key(value: str) -> tuple[int, int, int, str]:
+    clean_value = str(value or "").strip()
+    if clean_value == "egyedi":
+        return (2, 9999, 9999, clean_value)
+    if clean_value.lower().startswith("üveges - ".lower()):
+        base_size = clean_value.split("-", 1)[1].strip()
+        w, h, _ = _size_sort_key(base_size)
+        return (1, w, h, clean_value)
+    w, h, _ = _size_sort_key(clean_value)
+    if w != 9999 or h != 9999:
+        return (0, w, h, clean_value)
+    return (3, 9999, 9999, clean_value)
+
+
+def _is_glass_front(part_number: object, description: object = "") -> bool:
+    clean_part = str(part_number or "").strip().upper()
+    if clean_part.startswith("NFAU_"):
+        return True
+    folded_description = _fold_text(description)
+    return "fo fr uv" in folded_description or "fo fr.uv" in folded_description or "fo früv" in folded_description
+
+
 def _row_category_sort_key(row: dict) -> tuple[int, tuple[int, int, str] | tuple[int, int, str], str]:
     if row.get("is_serial"):
-        return (0, _size_sort_key(str(row.get("category", ""))), str(row.get("part_number", "")))
+        return (0, _inventory_category_sort_key(str(row.get("category", ""))), str(row.get("part_number", "")))
     return (1, (9999, 9999, "egyedi"), str(row.get("part_number", "")))
 
 

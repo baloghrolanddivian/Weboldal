@@ -1886,13 +1886,14 @@ MANUFACTURING_OPERATION_DEFINITIONS = (
 )
 MANUFACTURING_OPERATION_HINTS = {
     "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
-    "front_osszekeszites": "Placeholder, a PDF logika a holnapi papír után kerül be.",
+    "front_osszekeszites": "A front összekészítő PDF sorai és kategóriái.",
     "cnc_furas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
     "pantolas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
 }
 MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
     "alkatresz_kesz": "Alkatrész kész",
+    "front_osszekeszito": "Front összekészítő",
 }
 
 
@@ -1928,16 +1929,24 @@ def _manufacturing_row_with_context(row: dict, production_number: str, detail_su
     return row_payload
 
 
-def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+def _manufacturing_local_slug(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower())
+    cleaned = cleaned.strip("-")
+    return cleaned or "szakasz"
+
+
+def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...]) -> tuple[list[dict], int]:
     sections: list[dict] = []
     row_count = 0
     for document in bundle.get("documents", []):
         if not isinstance(document, dict):
             continue
         document_key = str(document.get("key", "")).strip()
+        if document_key not in allowed_document_keys:
+            continue
         source_label = MANUFACTURING_SOURCE_LABELS.get(document_key, str(document.get("label", "")).strip() or document_key)
         document_sections = document.get("sections", [])
-        if not isinstance(document_sections, list):
+        if not isinstance(document_sections, (list, tuple)):
             continue
         for section in document_sections:
             if not isinstance(section, dict):
@@ -1959,6 +1968,109 @@ def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tup
             )
             row_count += len(rows)
     return sections, row_count
+
+
+def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    return _manufacturing_document_sections(bundle, production_number, ("osszekeszito", "alkatresz_kesz"))
+
+
+def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito",))
+
+    def size_sort_key(size_label: str) -> tuple[int, ...]:
+        parts = [
+            int(part.strip())
+            for part in re.split(r"[xX]", str(size_label or ""))
+            if part.strip().isdigit()
+        ]
+        return tuple(parts or [9999, 9999, 9999])
+
+    def front_group_size_label(row: dict, size_label: str, type_label: str) -> str:
+        source = " ".join(
+            [
+                str(row.get("section_label", "")).strip().lower(),
+                str(row.get("name", "")).strip().lower(),
+                str(type_label or "").strip().lower(),
+            ]
+        )
+        if "as takar" not in source:
+            return str(size_label or "").strip()
+
+        parts = [part.strip() for part in re.split(r"[xX]", str(size_label or "")) if part.strip()]
+        if len(parts) < 3:
+            return str(size_label or "").strip()
+
+        pair_values = {"81", "165"}
+        if parts[0] in pair_values and parts[1] not in pair_values:
+            parts[0] = "81/165"
+        elif parts[1] in pair_values and parts[0] not in pair_values:
+            parts[1] = "81/165"
+
+        return " x ".join(parts)
+
+    def front_material_label(row: dict) -> str:
+        source = f"{row.get('color', '')} {row.get('name', '')} {row.get('detail', '')}".strip().lower()
+        if "mf." in source or "sm." in source or "matt" in source:
+            return "Fóliás"
+        return "Bútorlapos"
+
+    def front_type_label(row: dict) -> str:
+        section_label = str(row.get("section_label", "")).strip()
+        if "·" in section_label:
+            section_label = section_label.split("·", 1)[1].strip()
+        parts = [part.strip() for part in section_label.split(" - ") if part.strip()]
+        if len(parts) >= 2:
+            return f"{parts[0]} - {parts[1]}"
+        name = str(row.get("name", "")).strip()
+        return parts[0] if parts else (name or "Front")
+
+    grouped_sections: dict[str, dict] = {}
+    for section in raw_sections:
+        for raw_row in section.get("rows", []):
+            if not isinstance(raw_row, dict):
+                continue
+            row = dict(raw_row)
+            size = str(row.get("size", "")).strip() or "Méret nélkül"
+            material = front_material_label(row)
+            type_label = front_type_label(row)
+            group_size = front_group_size_label(row, size, type_label) or size
+            section_key = f"{group_size}::{material}"
+            section_slug = _manufacturing_local_slug(section_key)
+            if section_slug not in grouped_sections:
+                grouped_sections[section_slug] = {
+                    "key": f"front_osszekeszito::{section_slug}",
+                    "label": f"{size} · {material}",
+                    "rows": [],
+                }
+            grouped_sections[section_slug]["label"] = f"{group_size} Â· {material}"
+            row["name"] = type_label
+            grouped_sections[section_slug]["rows"].append(row)
+
+    material_order = {"Fóliás": 0, "Bútorlapos": 1}
+    sorted_sections = list(grouped_sections.values())
+    for section in sorted_sections:
+        rows = [row for row in section.get("rows", []) if isinstance(row, dict)]
+        rows.sort(
+            key=lambda row: (
+                str(row.get("name", "")).lower(),
+                size_sort_key(str(row.get("size", "")).strip()),
+                str(row.get("color", "")).lower(),
+                str(row.get("detail", "")).lower(),
+                str(row.get("code", "")).lower(),
+            )
+        )
+        section["rows"] = rows
+
+    sorted_sections.sort(
+        key=lambda section: (
+            size_sort_key(str(section.get("label", "")).split("·", 1)[0].strip()),
+            material_order.get(str(section.get("label", "")).split("·", 1)[1].strip(), 9)
+            if "·" in str(section.get("label", ""))
+            else 9,
+            str(section.get("label", "")),
+        )
+    )
+    return sorted_sections, row_count
 
 
 def _manufacturing_current_red_special_view(sections: list[dict], raw_state: dict[str, str]) -> dict:
@@ -2053,7 +2165,6 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
     selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
 
     korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
-    current_red_view = _manufacturing_current_red_special_view(korpusz_sections, current_selection_state)
     all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
     selection_state_payload.update(all_red_selection_state)
 
@@ -2065,11 +2176,41 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
             "sections": korpusz_sections,
             "row_count": korpusz_row_count,
             "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
-            "specialViews": [current_red_view, all_red_view],
+            "specialViews": [all_red_view],
         }
     )
 
-    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS[1:]:
+    front_sections, front_row_count = _manufacturing_front_sections(raw_bundle, current_number)
+    front_folias_sections = [dict(section) for section in front_sections if "· Fóliás" in str(section.get("label", ""))]
+    front_butorlapos_sections = [dict(section) for section in front_sections if "· Bútorlapos" in str(section.get("label", ""))]
+    documents.append(
+        {
+            "key": "front_osszekeszites",
+            "label": "Front összekészítés",
+            "file_name": "",
+            "sections": front_sections,
+            "row_count": front_row_count,
+            "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
+            "specialViews": [
+                {
+                    "key": "front-folias",
+                    "label": "Fóliás",
+                    "count": sum(len(section.get("rows", [])) for section in front_folias_sections),
+                    "sections": front_folias_sections,
+                },
+                {
+                    "key": "front-butorlapos",
+                    "label": "Bútorlapos",
+                    "count": sum(len(section.get("rows", [])) for section in front_butorlapos_sections),
+                    "sections": front_butorlapos_sections,
+                },
+            ],
+            "allowSplit": False,
+            "singleColumnOverview": True,
+        }
+    )
+
+    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS[2:]:
         documents.append(_manufacturing_placeholder_document(operation_key, operation_label))
 
     return (
@@ -9811,8 +9952,8 @@ def render_manufacturing_module(
 ) -> bytes:
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
-    recent_numbers = available_production_numbers(limit=80, ready_only=True)
-    recent_productions = available_production_entries(limit=80, ready_only=True)
+    recent_productions = available_production_entries(limit=12, ready_only=True)
+    recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
     selected_number = requested_number if requested_number in recent_numbers else (recent_numbers[0] if recent_numbers else "")
     operations = [
         {
@@ -20234,6 +20375,16 @@ def _prime_divian_ai_cache_worker() -> None:
         pass
 
 
+def _prime_manufacturing_cache_worker() -> None:
+    try:
+        available_production_entries(limit=12, ready_only=True)
+        latest_number = latest_production_number()
+        if latest_number:
+            _load_manufacturing_bundle_cached(latest_number)
+    except Exception:
+        pass
+
+
 def _prime_divian_ai_cache_async() -> None:
     global DIVIAN_AI_PRIME_STARTED
     with DIVIAN_AI_PRIME_LOCK:
@@ -20243,11 +20394,16 @@ def _prime_divian_ai_cache_async() -> None:
     threading.Thread(target=_prime_divian_ai_cache_worker, name="divian-ai-prime", daemon=True).start()
 
 
+def _prime_manufacturing_cache_async() -> None:
+    threading.Thread(target=_prime_manufacturing_cache_worker, name="manufacturing-prime", daemon=True).start()
+
+
 if __name__ == "__main__":
     if DEV_RELOAD_ENABLED and os.getenv(DEV_CHILD_ENV) != "1":
         _run_dev_supervisor()
     else:
         _prime_divian_ai_cache_async()
+        _prime_manufacturing_cache_async()
         server = ReusableThreadingHTTPServer((HOST, PORT), InvoiceHandler)
         print(f"Server running on http://localhost:{PORT} (bind: {HOST}:{PORT})")
         server.serve_forever()

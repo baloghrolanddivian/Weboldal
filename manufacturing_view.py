@@ -32,8 +32,9 @@ def render_manufacturing_page(
         ),
         None,
     )
-    active_documents = [active_document] if active_document else []
-    total_rows = sum(int(document.get("row_count", 0) or 0) for document in active_documents if isinstance(document, dict))
+    all_documents = [document for document in documents if isinstance(document, dict)]
+    visible_documents = [active_document] if isinstance(active_document, dict) else all_documents
+    total_rows = int(active_document.get("row_count", 0) or 0) if isinstance(active_document, dict) else 0
     green_count = sum(1 for value in selection_state.values() if value == "green")
     red_count = sum(1 for value in selection_state.values() if value == "red")
 
@@ -96,7 +97,8 @@ def render_manufacturing_page(
         {
             "productionNumber": selected_number,
             "folder": bundle.get("folder", ""),
-            "documents": active_documents,
+            "documents": visible_documents,
+            "currentDocumentKey": selected_operation_key,
             "selectionState": selection_state,
             "stateRoute": state_route,
         }
@@ -483,12 +485,13 @@ def render_manufacturing_page(
     }}
     .mfg-board {{
       padding: 8px;
-      grid-template-rows: 50px 36px 28px auto;
-      display: grid;
-      gap: 8px;
-      align-content: start;
+      display: block;
       border-top-left-radius: 0;
       border-top-right-radius: 0;
+      overflow: hidden;
+    }}
+    .mfg-board > * + * {{
+      margin-top: 8px;
     }}
     .mfg-board.is-hidden {{
       display: none;
@@ -650,10 +653,38 @@ def render_manufacturing_page(
       min-height: 220px;
       display: grid;
       gap: 8px;
+      min-width: 0;
+      width: 100%;
     }}
     .mfg-content.is-overview {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
+    }}
+    .mfg-content.is-single-column-overview {{
+      display: block;
+      min-width: 0;
+      width: 100%;
+    }}
+    .mfg-content.is-single-column-overview .mfg-section-card {{
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      display: block;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }}
+    .mfg-content.is-single-column-overview .mfg-row-list {{
+      display: block;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head {{
+      grid-template-columns: 1.08fr 0.74fr 0.82fr 0.5fr 2.06fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-row {{
+      grid-template-columns: 1.08fr 0.74fr 0.82fr 0.5fr 2.06fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head > :nth-child(4),
+    .mfg-content.is-single-column-overview .mfg-row > :nth-child(4) {{
+      display: none;
     }}
     .mfg-content.is-split {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -994,7 +1025,7 @@ def render_manufacturing_page(
 
     <section class="{board_class}">
 
-      <div class="mfg-tab-row" id="mfg-doc-tabs"></div>
+      <div class="mfg-tab-row" id="mfg-doc-tabs" style="display:none"></div>
       <div class="mfg-section-tab-row" id="mfg-section-tabs"></div>
       <div class="mfg-status-row">
         <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
@@ -1032,17 +1063,32 @@ def render_manufacturing_page(
       const selectionState = Object.assign({{}}, payload.selectionState || {{}});
       const stateRoute = String(payload.stateRoute || "");
       const productionNumber = String(payload.productionNumber || "");
-      let currentDocKey = documents[0]?.key || "";
+      let currentDocKey = String(payload.currentDocumentKey || documents[0]?.key || "");
+      if (!documents.some((document) => document.key === currentDocKey)) {{
+        currentDocKey = String(documents[0]?.key || "");
+      }}
       let currentViewKey = "all";
       let secondaryViewKey = "";
       let layoutMode = "single";
       let currentSortKey = "pdf";
       let currentSortDirection = "asc";
 
+      const syncUrlForDocument = () => {{
+        try {{
+          const url = new URL(window.location.href);
+          if (productionNumber) url.searchParams.set("production", productionNumber);
+          if (currentDocKey) url.searchParams.set("operation", currentDocKey);
+          window.history.replaceState({{}}, "", url.toString());
+        }} catch (_error) {{
+        }}
+      }};
+
       const escapeHtml = (value) =>
         String(value ?? "").replace(/[&<>"']/g, (character) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[character] || character);
       const flattenRows = (document) => (document?.sections || []).flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
       const currentDocument = () => documents.find((document) => document.key === currentDocKey) || documents[0] || null;
+      const documentAllowsSplit = (document) => document?.allowSplit !== false;
+      const documentUsesSingleColumnOverview = (document) => document?.singleColumnOverview === true;
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
@@ -1266,6 +1312,41 @@ def render_manufacturing_page(
             .filter((section) => section.rows.length);
         }}
         const sections = orderedSectionsForTabs(Array.isArray(document.sections) ? document.sections : []);
+        if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
+          if (currentViewKey === "all") {{
+            return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
+          }}
+          if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
+            return sections
+              .map((section) => ({{
+                key: section.key,
+                label: section.label,
+                rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
+                  currentViewKey === "plain" ? !rowStateValue(row) : rowStateValue(row) === currentViewKey
+                ),
+              }}))
+              .filter((section) => section.rows.length);
+          }}
+          return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
+        }}
+        if (false && documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
+          const combinedRows = sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []).filter((row) => {{
+            if (currentViewKey === "plain") return !rowStateValue(row);
+            if (currentViewKey === "green" || currentViewKey === "red") return rowStateValue(row) === currentViewKey;
+            return true;
+          }});
+          if (!combinedRows.length) return [];
+          const combinedLabel =
+            currentViewKey === "plain" ? "Sima front tételek" :
+            currentViewKey === "green" ? "Zöld front tételek" :
+            currentViewKey === "red" ? "Piros front tételek" :
+            String(document.label || "Front összekészítés");
+          return [{{
+            key: `overview-${{currentViewKey}}`,
+            label: combinedLabel,
+            rows: combinedRows,
+          }}];
+        }}
         if (layoutMode === "double" && !isSpecialViewKey(currentViewKey)) {{
           const selectedKeys = [currentViewKey, secondaryViewKey].filter((key, index, items) => key && items.indexOf(key) === index);
           return selectedKeys
@@ -1319,6 +1400,15 @@ def render_manufacturing_page(
               : Number(view?.count || 0),
           }})),
         ];
+        if (documentUsesSingleColumnOverview(document)) {{
+          sectionTabsNode.innerHTML = specialTabs.map((item) => `
+            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+              <strong>${{escapeHtml(item.label)}}</strong>
+              <small>${{item.count}}</small>
+            </button>
+          `).join("");
+          return;
+        }}
         const sectionTabs = sections.map((section) => ({{
           key: section.key,
           label: section.label,
@@ -1339,7 +1429,9 @@ def render_manufacturing_page(
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red" || Boolean(currentSpecialView);
         const isSplitMode = layoutMode === "double" && !isSpecialViewKey(currentViewKey) && groups.length > 1;
+        const useSingleColumnOverview = documentUsesSingleColumnOverview(document) && isOverviewMode;
         contentNode.classList.toggle("is-overview", isOverviewMode);
+        contentNode.classList.toggle("is-single-column-overview", useSingleColumnOverview);
         contentNode.classList.toggle("is-split", isSplitMode);
         if (!groups.length) {{
           const emptyLabel = currentSpecialView
@@ -1444,8 +1536,16 @@ def render_manufacturing_page(
       const renderAll = (snapshot = null) => {{
         const scrollState = snapshot || captureScrollState();
         const document = currentDocument();
+        if (documentUsesSingleColumnOverview(document) && !isSpecialViewKey(currentViewKey, document)) {{
+          currentViewKey = "all";
+          secondaryViewKey = "";
+        }}
         renderDocTabs();
         renderSectionTabs(document);
+        layoutToggleNode.style.display = documentAllowsSplit(document) ? "" : "none";
+        if (!documentAllowsSplit(document)) {{
+          layoutMode = "single";
+        }}
         Array.from(layoutToggleNode.querySelectorAll("[data-layout-mode]")).forEach((button) => {{
           const mode = button.getAttribute("data-layout-mode") || "single";
           button.classList.toggle("is-active", mode === layoutMode);
@@ -1497,6 +1597,7 @@ def render_manufacturing_page(
         currentDocKey = nextDocKey;
         currentViewKey = "all";
         secondaryViewKey = "";
+        syncUrlForDocument();
         renderAll();
       }});
 
@@ -1507,6 +1608,13 @@ def render_manufacturing_page(
         const activeDocument = currentDocument();
         if (isSpecialViewKey(nextViewKey, activeDocument)) {{
           if (nextViewKey === currentViewKey && !secondaryViewKey) return;
+          currentViewKey = nextViewKey;
+          secondaryViewKey = "";
+          renderAll();
+          return;
+        }}
+        if (!documentAllowsSplit(activeDocument)) {{
+          if (nextViewKey === currentViewKey) return;
           currentViewKey = nextViewKey;
           secondaryViewKey = "";
           renderAll();
@@ -1534,6 +1642,7 @@ def render_manufacturing_page(
         const button = event.target.closest("[data-layout-mode]");
         if (!(button instanceof HTMLElement)) return;
         const nextMode = button.getAttribute("data-layout-mode") || "single";
+        if (!documentAllowsSplit(currentDocument())) return;
         if (nextMode === layoutMode) return;
         layoutMode = nextMode === "double" ? "double" : "single";
         if (layoutMode === "single") {{
