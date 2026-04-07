@@ -552,7 +552,7 @@ def render_manufacturing_page(
       gap: 6px;
       overflow-x: auto;
       overflow-y: hidden;
-      padding-bottom: 2px;
+      padding-bottom: 8px;
       scrollbar-width: thin;
       align-items: stretch;
       flex-wrap: nowrap;
@@ -562,8 +562,20 @@ def render_manufacturing_page(
       max-height: 50px;
     }}
     .mfg-section-tab-row {{
-      min-height: 36px;
-      max-height: 36px;
+      min-height: 42px;
+      max-height: 42px;
+    }}
+    .mfg-subsection-tab-row {{
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 6px 0 10px;
+      scrollbar-width: thin;
+      align-items: stretch;
+      flex-wrap: nowrap;
+      min-height: 42px;
+      max-height: 42px;
     }}
     .mfg-tab,
     .mfg-section-tab {{
@@ -614,6 +626,43 @@ def render_manufacturing_page(
       color: var(--mfg-muted);
       font-size: 0.72rem;
       flex: 0 0 auto;
+    }}
+    .mfg-subsection-tab {{
+      flex: 0 0 auto;
+      min-height: 32px;
+      max-height: 32px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(17, 24, 39, 0.1);
+      background: #f8fafc;
+      color: #334155;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 700;
+      overflow: hidden;
+      transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+    }}
+    .mfg-subsection-tab strong {{
+      font-size: 0.82rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .mfg-subsection-tab small {{
+      color: #64748b;
+      font-size: 0.7rem;
+      flex: 0 0 auto;
+    }}
+    .mfg-subsection-tab.is-active {{
+      border-color: #0f172a;
+      background: #0f172a;
+      color: #fff;
+    }}
+    .mfg-subsection-tab.is-active small {{
+      color: rgba(255, 255, 255, 0.76);
     }}
     .mfg-tab.is-active {{
       border-color: #111827;
@@ -850,6 +899,10 @@ def render_manufacturing_page(
     .mfg-row.is-muted {{
       background: #f3f4f6;
     }}
+    .mfg-row.is-glass {{
+      background: #eef6ff;
+      box-shadow: inset 3px 0 0 #2563eb;
+    }}
     .mfg-row.is-green .mfg-row-meta span,
     .mfg-row.is-green .mfg-row-code {{
       color: var(--mfg-green-text);
@@ -865,9 +918,29 @@ def render_manufacturing_page(
       align-content: center;
     }}
     .mfg-row-title {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
       font-size: 0.78rem;
       font-weight: 800;
       line-height: 1.1;
+    }}
+    .mfg-row-badge {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }}
+    .mfg-row-badge.is-glass {{
+      background: #dbeafe;
+      color: #1d4ed8;
+      border: 1px solid rgba(37, 99, 235, 0.16);
     }}
     .mfg-row-subtitle {{
       font-size: 0.7rem;
@@ -1076,6 +1149,7 @@ def render_manufacturing_page(
 
       <div class="mfg-tab-row" id="mfg-doc-tabs" style="display:none"></div>
       <div class="mfg-section-tab-row" id="mfg-section-tabs"></div>
+      <div class="mfg-subsection-tab-row" id="mfg-subsection-tabs" style="display:none"></div>
       <div class="mfg-status-row">
         <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
         <div class="mfg-layout-toggle" id="mfg-layout-toggle" aria-label="Nézet mód">
@@ -1095,10 +1169,11 @@ def render_manufacturing_page(
       const dataNode = document.getElementById("manufacturing-data");
       const docTabsNode = document.getElementById("mfg-doc-tabs");
       const sectionTabsNode = document.getElementById("mfg-section-tabs");
+      const subsectionTabsNode = document.getElementById("mfg-subsection-tabs");
       const contentNode = document.getElementById("mfg-content");
       const statusNode = document.getElementById("mfg-status");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !contentNode || !statusNode || !layoutToggleNode) return;
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !layoutToggleNode) return;
 
       let payload = {{}};
       try {{
@@ -1117,6 +1192,7 @@ def render_manufacturing_page(
         currentDocKey = String(documents[0]?.key || "");
       }}
       let currentViewKey = "all";
+      let currentSubcategoryKey = "all";
       let secondaryViewKey = "";
       let layoutMode = "single";
       const sectionSortState = Object.create(null);
@@ -1142,6 +1218,27 @@ def render_manufacturing_page(
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
+      const frontSubcategoriesForView = (document, viewKey) => {{
+        if (String(document?.key || "") !== "front_osszekeszites") return [];
+        if (!["front-folias", "front-butorlapos"].includes(String(viewKey || ""))) return [];
+        const specialView = specialViewForKey(document, viewKey);
+        const sections = Array.isArray(specialView?.sections) ? specialView.sections : [];
+        const grouped = new Map();
+        for (const section of sections) {{
+          const label = String(section?.label || "");
+          const sizeLabel = label.includes("·") ? label.split("·", 1)[0].trim() : label.trim();
+          if (!sizeLabel) continue;
+          const count = Array.isArray(section?.rows) ? section.rows.length : 0;
+          grouped.set(sizeLabel, (grouped.get(sizeLabel) || 0) + count);
+        }}
+        return Array.from(grouped.entries())
+          .sort((left, right) => String(left[0]).localeCompare(String(right[0]), "hu-HU", {{ numeric: true, sensitivity: "base" }}))
+          .map(([label, count]) => ({{
+            key: label,
+            label,
+            count,
+          }}));
+      }};
       const specialViewUsesRedFilter = (view) => ["current-production-red", "all-productions-red"].includes(String(view?.key || ""));
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
@@ -1360,7 +1457,14 @@ def render_manufacturing_page(
         if (!document) return [];
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         if (currentSpecialView) {{
-          const specialSections = Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : [];
+          let specialSections = Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : [];
+          if (currentSubcategoryKey !== "all") {{
+            specialSections = specialSections.filter((section) => {{
+              const label = String(section?.label || "");
+              const sizeLabel = label.includes("·") ? label.split("·", 1)[0].trim() : label.trim();
+              return sizeLabel === currentSubcategoryKey;
+            }});
+          }}
           if (!specialViewUsesRedFilter(currentSpecialView)) {{
             return specialSections;
           }}
@@ -1442,6 +1546,8 @@ def render_manufacturing_page(
       const renderSectionTabs = (document) => {{
         if (!document) {{
           sectionTabsNode.innerHTML = "";
+          subsectionTabsNode.innerHTML = "";
+          subsectionTabsNode.style.display = "none";
           return;
         }}
         const sections = Array.isArray(document.sections) ? document.sections : [];
@@ -1466,8 +1572,30 @@ def render_manufacturing_page(
               <small>${{item.count}}</small>
             </button>
           `).join("");
+          const subcategories = frontSubcategoriesForView(document, currentViewKey);
+          if (!subcategories.length) {{
+            currentSubcategoryKey = "all";
+            subsectionTabsNode.innerHTML = "";
+            subsectionTabsNode.style.display = "none";
+          }} else {{
+            if (!["all", ...subcategories.map((item) => item.key)].includes(currentSubcategoryKey)) {{
+              currentSubcategoryKey = "all";
+            }}
+            subsectionTabsNode.style.display = "";
+            subsectionTabsNode.innerHTML = [
+              {{ key: "all", label: "Összes méret", count: subcategories.reduce((total, item) => total + Number(item.count || 0), 0) }},
+              ...subcategories,
+            ].map((item) => `
+              <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : ""}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+                <strong>${{escapeHtml(item.label)}}</strong>
+                <small>${{item.count}}</small>
+              </button>
+            `).join("");
+          }}
           return;
         }}
+        subsectionTabsNode.innerHTML = "";
+        subsectionTabsNode.style.display = "none";
         const sectionTabs = sections.map((section) => ({{
           key: section.key,
           label: section.label,
@@ -1542,48 +1670,49 @@ def render_manufacturing_page(
           const tableHeadMarkup = columnLayout === "cnc-lower"
             ? `
               <div class="mfg-table-head${{tableHeadClass}}">
-                ${{sortButtonMarkup("name", "Megnevezés")}}
-                ${{sortButtonMarkup("size", "Méret")}}
-                ${{sortButtonMarkup("color", "Szín")}}
-                ${{sortButtonMarkup("drawer_drill", "Fióksín fúrás")}}
-                ${{sortButtonMarkup("side_type", "Oldal típus")}}
-                ${{sortButtonMarkup("edge", "Élzárás")}}
+                ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
+                ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                ${{sortButtonMarkup(group.key, "drawer_drill", "Fióksín fúrás")}}
+                ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
+                ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
                 ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
               </div>
             `
             : columnLayout === "cnc-upper"
               ? `
                 <div class="mfg-table-head${{tableHeadClass}}">
-                  ${{sortButtonMarkup("name", "Megnevezés")}}
-                  ${{sortButtonMarkup("size", "Méret")}}
-                  ${{sortButtonMarkup("color", "Szín")}}
-                  ${{sortButtonMarkup("hardware_type", "Vasalat típusa")}}
-                  ${{sortButtonMarkup("side_type", "Oldal típus")}}
-                  ${{sortButtonMarkup("edge", "Élzárás")}}
+                  ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat típusa")}}
+                  ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
+                  ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                 </div>
               `
               : `
                 <div class="mfg-table-head${{tableHeadClass}}">
-                  ${{sortButtonMarkup("name", "Megnevezés")}}
-                  ${{sortButtonMarkup("size", "Méret")}}
-                  ${{sortButtonMarkup("color", "Szín")}}
-                  ${{sortButtonMarkup("edge", "Él")}}
+                  ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "edge", "Él")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
-                  ${{hideBarcode ? "" : sortButtonMarkup("code", "Vonalkód")}}
+                  ${{hideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `;
           const rowMarkup = sortedRowsForView(group.rows, group.key).map((row) => {{
             const rowState = rowStateValue(row);
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
+            const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
             return `
-              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
+              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
                         <div class="mfg-row-main">
-                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
+                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
                           ${{subtitleMarkup}}
                         </div>
                         <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -1596,7 +1725,7 @@ def render_manufacturing_page(
                     : columnLayout === "cnc-upper"
                       ? `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -1608,7 +1737,7 @@ def render_manufacturing_page(
                         `
                       : `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta">
@@ -1731,6 +1860,7 @@ def render_manufacturing_page(
         if (!nextDocKey || nextDocKey === currentDocKey) return;
         currentDocKey = nextDocKey;
         currentViewKey = "all";
+        currentSubcategoryKey = "all";
         secondaryViewKey = "";
         syncUrlForDocument();
         renderAll();
@@ -1744,6 +1874,7 @@ def render_manufacturing_page(
         if (isSpecialViewKey(nextViewKey, activeDocument)) {{
           if (nextViewKey === currentViewKey && !secondaryViewKey) return;
           currentViewKey = nextViewKey;
+          currentSubcategoryKey = "all";
           secondaryViewKey = "";
           renderAll();
           return;
@@ -1751,6 +1882,7 @@ def render_manufacturing_page(
         if (!documentAllowsSplit(activeDocument)) {{
           if (nextViewKey === currentViewKey) return;
           currentViewKey = nextViewKey;
+          currentSubcategoryKey = "all";
           secondaryViewKey = "";
           renderAll();
           return;
@@ -1758,18 +1890,30 @@ def render_manufacturing_page(
         if (layoutMode === "double") {{
           if (isSpecialViewKey(currentViewKey, activeDocument)) {{
             currentViewKey = nextViewKey;
+            currentSubcategoryKey = "all";
             secondaryViewKey = pairedSectionKey(activeDocument, nextViewKey);
           }} else if (nextViewKey === currentViewKey || nextViewKey === secondaryViewKey) {{
             return;
           }} else {{
             currentViewKey = nextViewKey;
+            currentSubcategoryKey = "all";
             secondaryViewKey = pairedSectionKey(activeDocument, nextViewKey);
           }}
         }} else {{
           if (nextViewKey === currentViewKey) return;
           currentViewKey = nextViewKey;
+          currentSubcategoryKey = "all";
           secondaryViewKey = "";
         }}
+        renderAll();
+      }});
+
+      subsectionTabsNode.addEventListener("click", (event) => {{
+        const button = event.target.closest("[data-subcategory-key]");
+        if (!(button instanceof HTMLElement)) return;
+        const nextSubcategoryKey = button.getAttribute("data-subcategory-key") || "all";
+        if (nextSubcategoryKey === currentSubcategoryKey) return;
+        currentSubcategoryKey = nextSubcategoryKey;
         renderAll();
       }});
 

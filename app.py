@@ -1981,6 +1981,44 @@ def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tup
 def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
     raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito",))
 
+    def folded(value: object) -> str:
+        text = str(value or "").strip().lower()
+        for source, target in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ö", "o"), ("ő", "o"), ("ú", "u"), ("ü", "u"), ("ű", "u"), ("õ", "o"), ("û", "u")):
+            text = text.replace(source, target)
+        return text
+
+    def clean_text(value: object) -> str:
+        text = (
+            str(value or "")
+            .strip()
+            .replace("õ", "ő")
+            .replace("Õ", "Ő")
+            .replace("û", "ű")
+            .replace("Û", "Ű")
+        )
+        fixes = {
+            "fehé r": "fehér",
+            "fehé r fóliás": "fehér fóliás",
+            "kas mír": "kasmír",
+            "kas mír fóliás": "kasmír fóliás",
+            "prov ance": "provance",
+            "prov ance fóliás": "provance fóliás",
+            "beig e": "beige",
+            "beig e fóliás": "beige fóliás",
+            "Sonom a": "Sonoma",
+            "sonom a": "sonoma",
+            "capucci no": "cappuccino",
+            "SM.fehé r": "SM.fehér",
+            "SM.kas mír": "SM.kasmír",
+            "SM.pro vance": "SM.provance",
+            "SM.beig e": "SM.beige",
+            "Mf. fehé r": "Mf. fehér",
+            "Mf. capucci no": "Mf. cappuccino",
+        }
+        for source, target in fixes.items():
+            text = text.replace(source, target)
+        return text
+
     def size_sort_key(size_label: str) -> tuple[int, ...]:
         parts = [
             int(part.strip())
@@ -2013,20 +2051,56 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return " x ".join(parts)
 
     def front_material_label(row: dict) -> str:
-        source = f"{row.get('color', '')} {row.get('name', '')} {row.get('detail', '')}".strip().lower()
+        source = clean_text(f"{row.get('color', '')} {row.get('name', '')} {row.get('detail', '')}").lower()
         if "mf." in source or "sm." in source or "matt" in source:
             return "Fóliás"
         return "Bútorlapos"
 
+    def display_row_name(row: dict) -> str:
+        name = clean_text(row.get("name"))
+        color = clean_text(row.get("color"))
+        if not name:
+            return "Front"
+        if not color:
+            return name
+        name_parts = [part for part in name.split() if part]
+        color_parts = [part for part in color.split() if part]
+        if len(name_parts) > len(color_parts):
+            if [folded(part) for part in name_parts[-len(color_parts):]] == [folded(part) for part in color_parts]:
+                trimmed = " ".join(name_parts[:-len(color_parts)]).strip()
+                if trimmed:
+                    return trimmed
+        return name
+
     def front_type_label(row: dict) -> str:
-        section_label = str(row.get("section_label", "")).strip()
-        if "·" in section_label:
-            section_label = section_label.split("·", 1)[1].strip()
-        parts = [part.strip() for part in section_label.split(" - ") if part.strip()]
-        if len(parts) >= 2:
-            return f"{parts[0]} - {parts[1]}"
-        name = str(row.get("name", "")).strip()
-        return parts[0] if parts else (name or "Front")
+        section_label = clean_text(row.get("section_label"))
+        parts = [clean_text(part) for part in section_label.split(" - ") if clean_text(part)]
+        if parts and folded(parts[0]).startswith("front "):
+            parts = parts[1:]
+        if parts and re.fullmatch(r"[12]-es", folded(parts[0])):
+            parts = parts[1:]
+        color = clean_text(row.get("color"))
+        if parts and color and folded(parts[-1]) == folded(color):
+            parts = parts[:-1]
+        return " - ".join(parts) if parts else display_row_name(row)
+
+    def front_box_type_label(type_label: str) -> str:
+        clean_type = clean_text(type_label)
+        for suffix in (" - Oldalra", " - Nincs"):
+            if clean_type.endswith(suffix):
+                return clean_type[: -len(suffix)].strip()
+        return clean_type
+
+    def is_glass_row(row: dict, type_label: str) -> bool:
+        combined = " ".join(
+            [
+                clean_text(row.get("name")),
+                clean_text(row.get("detail")),
+                clean_text(row.get("section_label")),
+                clean_text(type_label),
+            ]
+        )
+        return "uveges" in folded(combined) or "uveg" in folded(combined)
 
     grouped_sections: dict[str, dict] = {}
     for section in raw_sections:
@@ -2034,20 +2108,24 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             if not isinstance(raw_row, dict):
                 continue
             row = dict(raw_row)
-            size = str(row.get("size", "")).strip() or "Méret nélkül"
+            size = clean_text(row.get("size")) or "Méret nélkül"
             material = front_material_label(row)
             type_label = front_type_label(row)
-            group_size = front_group_size_label(row, size, type_label) or size
-            section_key = f"{group_size}::{material}"
+            box_type_label = front_box_type_label(type_label)
+            group_size = front_group_size_label(row, size, box_type_label) or size
+            section_key = f"{group_size}::{material}::{box_type_label}"
             section_slug = _manufacturing_local_slug(section_key)
             if section_slug not in grouped_sections:
                 grouped_sections[section_slug] = {
                     "key": f"front_osszekeszito::{section_slug}",
-                    "label": f"{size} · {material}",
+                    "label": f"{size} · {material} · {box_type_label}",
                     "rows": [],
                 }
-            grouped_sections[section_slug]["label"] = f"{group_size} · {material}"
-            row["name"] = type_label
+            grouped_sections[section_slug]["label"] = f"{group_size} · {material} · {box_type_label}"
+            row["name"] = clean_text(raw_row.get("name")) or display_row_name(row)
+            row["detail"] = type_label
+            row["hideSubtitle"] = True
+            row["isGlass"] = is_glass_row(row, type_label)
             grouped_sections[section_slug]["rows"].append(row)
 
     material_order = {"Fóliás": 0, "Bútorlapos": 1}
@@ -2056,9 +2134,9 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         rows = [row for row in section.get("rows", []) if isinstance(row, dict)]
         rows.sort(
             key=lambda row: (
+                str(row.get("color", "")).lower(),
                 str(row.get("name", "")).lower(),
                 size_sort_key(str(row.get("size", "")).strip()),
-                str(row.get("color", "")).lower(),
                 str(row.get("detail", "")).lower(),
                 str(row.get("code", "")).lower(),
             )
@@ -2068,9 +2146,12 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
     sorted_sections.sort(
         key=lambda section: (
             size_sort_key(str(section.get("label", "")).split("·", 1)[0].strip()),
-            material_order.get(str(section.get("label", "")).split("·", 1)[1].strip(), 9)
+            material_order.get(str(section.get("label", "")).split("·", 2)[1].strip(), 9)
             if "·" in str(section.get("label", ""))
             else 9,
+            str(section.get("label", "")).split("·", 2)[2].strip().lower()
+            if str(section.get("label", "")).count("·") >= 2
+            else "",
             str(section.get("label", "")),
         )
     )
