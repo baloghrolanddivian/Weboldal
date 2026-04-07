@@ -686,6 +686,22 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row > :nth-child(4) {{
       display: none;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower,
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-lower {{
+      grid-template-columns: 1.1fr 0.72fr 0.78fr 0.78fr 0.92fr 0.5fr 0.48fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper,
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper {{
+      grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4) {{
+      display: inline-flex;
+    }}
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-lower > :nth-child(4),
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper > :nth-child(4) {{
+      display: grid;
+    }}
     .mfg-content.is-split {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
@@ -760,6 +776,15 @@ def render_manufacturing_page(
       background: #f5f7fa;
       border-bottom: 1px solid rgba(17, 24, 39, 0.06);
     }}
+    .mfg-table-head.is-no-barcode {{
+      grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
+    }}
+    .mfg-table-head.is-cnc-lower {{
+      grid-template-columns: 1.1fr 0.72fr 0.78fr 0.78fr 0.92fr 0.5fr 0.48fr;
+    }}
+    .mfg-table-head.is-cnc-upper {{
+      grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
+    }}
     .mfg-section-title {{
       font-size: 0.82rem;
       font-weight: 800;
@@ -805,6 +830,15 @@ def render_manufacturing_page(
       -webkit-user-select: none;
       -webkit-touch-callout: none;
     }}
+    .mfg-row.is-no-barcode {{
+      grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
+    }}
+    .mfg-row.is-cnc-lower {{
+      grid-template-columns: 1.1fr 0.72fr 0.78fr 0.78fr 0.92fr 0.5fr 0.48fr;
+    }}
+    .mfg-row.is-cnc-upper {{
+      grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
+    }}
     .mfg-row.is-green {{
       background: var(--mfg-green-bg);
       box-shadow: inset 3px 0 0 var(--mfg-green-line);
@@ -812,6 +846,9 @@ def render_manufacturing_page(
     .mfg-row.is-red {{
       background: var(--mfg-red-bg);
       box-shadow: inset 3px 0 0 var(--mfg-red-line);
+    }}
+    .mfg-row.is-muted {{
+      background: #f3f4f6;
     }}
     .mfg-row.is-green .mfg-row-meta span,
     .mfg-row.is-green .mfg-row-code {{
@@ -965,6 +1002,18 @@ def render_manufacturing_page(
       .mfg-row {{
         grid-template-columns: 0.96fr 0.66fr 0.66fr 0.38fr 0.46fr 1.88fr;
       }}
+      .mfg-table-head.is-no-barcode,
+      .mfg-row.is-no-barcode {{
+        grid-template-columns: 1.02fr 0.7fr 0.72fr 0.42fr 0.54fr;
+      }}
+      .mfg-table-head.is-cnc-lower,
+      .mfg-row.is-cnc-lower {{
+        grid-template-columns: 1.04fr 0.7fr 0.72fr 0.74fr 0.86fr 0.48fr 0.46fr;
+      }}
+      .mfg-table-head.is-cnc-upper,
+      .mfg-row.is-cnc-upper {{
+        grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.76fr 0.48fr 0.46fr;
+      }}
     }}
     @media (orientation: portrait) {{
       .mfg-content.is-split .mfg-table-head {{
@@ -1070,8 +1119,7 @@ def render_manufacturing_page(
       let currentViewKey = "all";
       let secondaryViewKey = "";
       let layoutMode = "single";
-      let currentSortKey = "pdf";
-      let currentSortDirection = "asc";
+      const sectionSortState = Object.create(null);
 
       const syncUrlForDocument = () => {{
         try {{
@@ -1089,6 +1137,8 @@ def render_manufacturing_page(
       const currentDocument = () => documents.find((document) => document.key === currentDocKey) || documents[0] || null;
       const documentAllowsSplit = (document) => document?.allowSplit !== false;
       const documentUsesSingleColumnOverview = (document) => document?.singleColumnOverview === true;
+      const documentHidesBarcode = (document) => document?.hideBarcodeColumn === true;
+      const groupColumnLayout = (group) => String(group?.columnLayout || "");
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
@@ -1195,15 +1245,24 @@ def render_manufacturing_page(
         if (sortKey === "name") return normalizeSortText(row.name);
         if (sortKey === "size") return parseSizeParts(row.size);
         if (sortKey === "color") return normalizeSortText(row.color);
+        if (sortKey === "drawer_drill") return normalizeSortText(row.drawer_drill);
+        if (sortKey === "side_type") return normalizeSortText(row.side_type);
+        if (sortKey === "hardware_type") return normalizeSortText(row.hardware_type);
         if (sortKey === "edge") return normalizeSortText(row.edge);
         if (sortKey === "quantity") return Number(row.quantity || 0);
         if (sortKey === "code") return normalizeSortText(row.code || row.detail || row.row_id);
         return 0;
       }};
-      const compareRowsBySort = (leftRow, rightRow) => {{
-        if (currentSortKey === "pdf") return 0;
-        const leftValue = rowSortValue(leftRow, currentSortKey);
-        const rightValue = rowSortValue(rightRow, currentSortKey);
+      const normalizedSectionSortKey = (sectionKey) => String(sectionKey || "__default__");
+      const getSectionSortState = (sectionKey) => {{
+        const normalizedKey = normalizedSectionSortKey(sectionKey);
+        return sectionSortState[normalizedKey] || {{ key: "pdf", direction: "asc" }};
+      }};
+      const compareRowsBySort = (leftRow, rightRow, sectionKey) => {{
+        const sortState = getSectionSortState(sectionKey);
+        if (sortState.key === "pdf") return 0;
+        const leftValue = rowSortValue(leftRow, sortState.key);
+        const rightValue = rowSortValue(rightRow, sortState.key);
         let result = 0;
         if (Array.isArray(leftValue) && Array.isArray(rightValue)) {{
           result = compareArrays(leftValue, rightValue);
@@ -1217,23 +1276,25 @@ def render_manufacturing_page(
           const rightFallback = normalizeSortText(rightRow.code || rightRow.row_id);
           result = leftFallback.localeCompare(rightFallback, "hu-HU", {{ numeric: true, sensitivity: "base" }});
         }}
-        return currentSortDirection === "desc" ? -result : result;
+        return sortState.direction === "desc" ? -result : result;
       }};
-      const sortedRowsForView = (rows) => {{
+      const sortedRowsForView = (rows, sectionKey) => {{
         const items = Array.isArray(rows) ? [...rows] : [];
-        if (currentSortKey === "pdf") return items;
-        items.sort(compareRowsBySort);
+        if (getSectionSortState(sectionKey).key === "pdf") return items;
+        items.sort((leftRow, rightRow) => compareRowsBySort(leftRow, rightRow, sectionKey));
         return items;
       }};
-      const sortArrowFor = (sortKey) => {{
-        if (currentSortKey !== sortKey) return "";
-        return currentSortDirection === "desc" ? "↓" : "↑";
+      const sortArrowFor = (sectionKey, sortKey) => {{
+        const sortState = getSectionSortState(sectionKey);
+        if (sortState.key != sortKey) return "";
+        return sortState.direction === "desc" ? "v" : "^";
       }};
-      const sortButtonMarkup = (sortKey, label) => {{
-        const activeClass = currentSortKey === sortKey ? " is-active" : "";
-        const arrow = sortArrowFor(sortKey);
+      const sortButtonMarkup = (sectionKey, sortKey, label) => {{
+        const sortState = getSectionSortState(sectionKey);
+        const activeClass = sortState.key === sortKey ? " is-active" : "";
+        const arrow = sortArrowFor(sectionKey, sortKey);
         return `
-          <button class="mfg-sort-head${{activeClass}}" type="button" data-sort-key="${{escapeHtml(sortKey)}}" title="${{escapeHtml(label)}}">
+          <button class="mfg-sort-head${{activeClass}}" type="button" data-sort-key="${{escapeHtml(sortKey)}}" data-section-key="${{escapeHtml(sectionKey)}}" title="${{escapeHtml(label)}}">
             <span class="mfg-sort-head-label">${{escapeHtml(label)}}</span>
             <span class="mfg-sort-head-arrow">${{escapeHtml(arrow)}}</span>
           </button>
@@ -1305,8 +1366,7 @@ def render_manufacturing_page(
           }}
           return specialSections
             .map((section) => ({{
-              key: section.key,
-              label: section.label,
+              ...section,
               rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) => rowStateValue(row) === "red"),
             }}))
             .filter((section) => section.rows.length);
@@ -1319,8 +1379,7 @@ def render_manufacturing_page(
           if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
             return sections
               .map((section) => ({{
-                key: section.key,
-                label: section.label,
+                ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
                   currentViewKey === "plain" ? !rowStateValue(row) : rowStateValue(row) === currentViewKey
                 ),
@@ -1456,6 +1515,22 @@ def render_manufacturing_page(
 
         contentNode.innerHTML = groups.map((group) => {{
           const showSectionHeader = isOverviewMode || isSplitMode;
+          const hideBarcode = documentHidesBarcode(document);
+          const columnLayout = groupColumnLayout(group);
+          const tableHeadClass = columnLayout === "cnc-lower"
+            ? " is-cnc-lower"
+            : columnLayout === "cnc-upper"
+              ? " is-cnc-upper"
+              : hideBarcode
+                ? " is-no-barcode"
+                : "";
+          const rowClass = columnLayout === "cnc-lower"
+            ? " is-cnc-lower"
+            : columnLayout === "cnc-upper"
+              ? " is-cnc-upper"
+              : hideBarcode
+                ? " is-no-barcode"
+                : "";
           const headMarkup = showSectionHeader
             ? `
               <div class="mfg-section-head">
@@ -1464,44 +1539,104 @@ def render_manufacturing_page(
               </div>
             `
             : "";
-          const tableHeadMarkup = `
-            <div class="mfg-table-head">
-              ${{sortButtonMarkup("name", "Megnevezés")}}
-              ${{sortButtonMarkup("size", "Méret")}}
-              ${{sortButtonMarkup("color", "Szín")}}
-              ${{sortButtonMarkup("edge", "Él")}}
-              ${{sortButtonMarkup("quantity", "Menny.")}}
-              ${{sortButtonMarkup("code", "Vonalkód")}}
-            </div>
-          `;
-          const rowMarkup = sortedRowsForView(group.rows).map((row) => {{
+          const tableHeadMarkup = columnLayout === "cnc-lower"
+            ? `
+              <div class="mfg-table-head${{tableHeadClass}}">
+                ${{sortButtonMarkup("name", "Megnevezés")}}
+                ${{sortButtonMarkup("size", "Méret")}}
+                ${{sortButtonMarkup("color", "Szín")}}
+                ${{sortButtonMarkup("drawer_drill", "Fióksín fúrás")}}
+                ${{sortButtonMarkup("side_type", "Oldal típus")}}
+                ${{sortButtonMarkup("edge", "Élzárás")}}
+                ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+              </div>
+            `
+            : columnLayout === "cnc-upper"
+              ? `
+                <div class="mfg-table-head${{tableHeadClass}}">
+                  ${{sortButtonMarkup("name", "Megnevezés")}}
+                  ${{sortButtonMarkup("size", "Méret")}}
+                  ${{sortButtonMarkup("color", "Szín")}}
+                  ${{sortButtonMarkup("hardware_type", "Vasalat típusa")}}
+                  ${{sortButtonMarkup("side_type", "Oldal típus")}}
+                  ${{sortButtonMarkup("edge", "Élzárás")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                </div>
+              `
+              : `
+                <div class="mfg-table-head${{tableHeadClass}}">
+                  ${{sortButtonMarkup("name", "Megnevezés")}}
+                  ${{sortButtonMarkup("size", "Méret")}}
+                  ${{sortButtonMarkup("color", "Szín")}}
+                  ${{sortButtonMarkup("edge", "Él")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{hideBarcode ? "" : sortButtonMarkup("code", "Vonalkód")}}
+                </div>
+              `;
+          const rowMarkup = sortedRowsForView(group.rows, group.key).map((row) => {{
             const rowState = rowStateValue(row);
             const detailText = row.detail || "";
-            const subtitleMarkup = detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "";
+            const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             return `
-              <button class="mfg-row${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
-                <div class="mfg-row-main">
-                  <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
-                  ${{subtitleMarkup}}
-                </div>
-                <div class="mfg-row-meta">
-                  <span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>
-                </div>
-                <div class="mfg-row-meta">
-                  <span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span>
-                </div>
-                <div class="mfg-row-meta">
-                  <span>${{escapeHtml(row.edge || "Él nélkül")}}</span>
-                </div>
-                <div class="mfg-row-side">
-                  <div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div>
-                </div>
-                <div class="mfg-row-barcode-wrap">
-                  <div class="mfg-row-barcode">
-                    <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.detail || row.row_id)}}"></svg>
-                  </div>
-                  <div class="mfg-row-code">${{escapeHtml(row.code || row.detail || "Kód nélkül")}}</div>
-                </div>
+              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
+                ${{
+                  columnLayout === "cnc-lower"
+                    ? `
+                        <div class="mfg-row-main">
+                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
+                          ${{subtitleMarkup}}
+                        </div>
+                        <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
+                        <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
+                        <div class="mfg-row-meta"><span>${{escapeHtml(row.drawer_drill || "-")}}</span></div>
+                        <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
+                        <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
+                        <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                      `
+                    : columnLayout === "cnc-upper"
+                      ? `
+                          <div class="mfg-row-main">
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
+                            ${{subtitleMarkup}}
+                          </div>
+                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
+                          <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                        `
+                      : `
+                          <div class="mfg-row-main">
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}</div>
+                            ${{subtitleMarkup}}
+                          </div>
+                          <div class="mfg-row-meta">
+                            <span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>
+                          </div>
+                          <div class="mfg-row-meta">
+                            <span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span>
+                          </div>
+                          <div class="mfg-row-meta">
+                            <span>${{escapeHtml(row.edge || "Él nélkül")}}</span>
+                          </div>
+                          <div class="mfg-row-side">
+                            <div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div>
+                          </div>
+                          ${{
+                            hideBarcode
+                              ? ""
+                              : `
+                                  <div class="mfg-row-barcode-wrap">
+                                    <div class="mfg-row-barcode">
+                                      <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.detail || row.row_id)}}"></svg>
+                                    </div>
+                                    <div class="mfg-row-code">${{escapeHtml(row.code || row.detail || "Kód nélkül")}}</div>
+                                  </div>
+                                `
+                          }}
+                        `
+                }}
               </button>
             `;
           }}).join("");
@@ -1662,14 +1797,15 @@ def render_manufacturing_page(
           event.preventDefault();
           event.stopPropagation();
           const nextSortKey = sortButton.getAttribute("data-sort-key") || "pdf";
-          if (currentSortKey !== nextSortKey) {{
-            currentSortKey = nextSortKey;
-            currentSortDirection = "asc";
-          }} else if (currentSortDirection === "asc") {{
-            currentSortDirection = "desc";
+          const sectionKey = sortButton.getAttribute("data-section-key") || "__default__";
+          const normalizedKey = normalizedSectionSortKey(sectionKey);
+          const currentSectionSortState = getSectionSortState(sectionKey);
+          if (currentSectionSortState.key !== nextSortKey) {{
+            sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "asc" }};
+          }} else if (currentSectionSortState.direction === "asc") {{
+            sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "desc" }};
           }} else {{
-            currentSortKey = "pdf";
-            currentSortDirection = "asc";
+            sectionSortState[normalizedKey] = {{ key: "pdf", direction: "asc" }};
           }}
           renderAll();
           return;

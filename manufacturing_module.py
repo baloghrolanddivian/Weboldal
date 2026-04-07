@@ -170,6 +170,30 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
     return None
 
 
+def _find_cnc_path(folder: Path) -> Path | None:
+    candidate = folder / "CNC.pdf"
+    if candidate.exists():
+        return candidate
+    if not folder.exists():
+        return None
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if path.is_file() and path.name.lower() == "cnc.pdf":
+            return path
+    return None
+
+
+def _find_fiokelo_furas_path(folder: Path) -> Path | None:
+    if not folder.exists():
+        return None
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file():
+            continue
+        name = path.name.lower()
+        if "fiokelo" in name and "furas" in name:
+            return path
+    return None
+
+
 def has_required_manufacturing_pdfs(folder: Path) -> bool:
     return _find_osszekeszito_path(folder) is not None and _find_alkatresz_kesz_path(folder) is not None
 
@@ -300,7 +324,7 @@ def production_folder(production_number: str) -> Path:
 
 def _footer_index(lines: list[str]) -> int:
     for index, line in enumerate(lines):
-        if line.startswith("Oldal "):
+        if re.fullmatch(r"Oldal \d+/\d+", _clean_text(line)):
             return index
     return len(lines)
 
@@ -836,6 +860,360 @@ def parse_front_osszekeszito(path: Path) -> ManufacturingDocument:
     )
 
 
+def _fold_hu(value: str) -> str:
+    text = _clean_text(value).lower()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ö": "o",
+        "ő": "o",
+        "ú": "u",
+        "ü": "u",
+        "ű": "u",
+        "õ": "o",
+        "û": "u",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text
+
+
+def _looks_like_cnc_section_header(line: str) -> bool:
+    folded = _fold_hu(line)
+    return bool(re.fullmatch(r"[12]-es\s+als.*", folded) or re.fullmatch(r"[12]-es\s+fels.*", folded))
+
+
+def _looks_like_fiokelo_header(line: str) -> bool:
+    return _fold_hu(line) == "front tipus:"
+
+
+def _looks_like_potential_row_start(tokens: list[str], index: int, max_name_tokens: int) -> bool:
+    token = _clean_text(tokens[index] if index < len(tokens) else "")
+    if not token or token in {":", "-"} or token.lower() == "x":
+        return False
+    if token.startswith("Oldal ") or _looks_like_cnc_section_header(token) or _looks_like_fiokelo_header(token):
+        return False
+    if re.fullmatch(r"-?\d+", token):
+        return False
+    if any(character.isdigit() for character in token):
+        return False
+    folded = _fold_hu(token)
+    if folded in {"te", "ri", "jo", "n"}:
+        return False
+    if re.fullmatch(r"[A-Z]{1,4}", token):
+        return False
+    for offset in range(1, max_name_tokens + 1):
+        if _looks_like_dimension_start(tokens, index + offset):
+            return True
+    return False
+
+
+def _next_segment_start(tokens: list[str], start_index: int, max_name_tokens: int) -> int:
+    for index in range(start_index, len(tokens)):
+        token = _clean_text(tokens[index])
+        if token.startswith("Oldal ") or _looks_like_cnc_section_header(token) or _looks_like_fiokelo_header(token):
+            return index
+        if _looks_like_potential_row_start(tokens, index, max_name_tokens):
+            return index
+    return len(tokens)
+
+
+def _split_cnc_color_and_detail(tokens: list[str]) -> tuple[str, str]:
+    if not tokens:
+        return "", ""
+    marker_tokens = {
+        "nincs",
+        "teleszkop",
+        "box hettich",
+        "normal",
+        "also",
+        "as vt",
+        "as magic",
+        "aaf fiokos",
+        "af 1+2",
+        "atf",
+        "ar",
+        "akl",
+        "aszb",
+        "eft 68",
+        "ffm",
+        "sarok felso",
+        "avz b",
+        "kmtb60",
+        "kmth75",
+        "kmth60",
+        "kmth60w",
+        "kmtb602f",
+        "kesb",
+        "gtel",
+        "n",
+    }
+    color_tokens: list[str] = []
+    detail_tokens: list[str] = []
+    marker_seen = False
+    for token in tokens:
+        folded = _fold_hu(token)
+        if not marker_seen and folded not in marker_tokens:
+            color_tokens.append(token)
+            continue
+        marker_seen = True
+        detail_tokens.append(token)
+    if not color_tokens and tokens:
+        color_tokens = [tokens[0]]
+        detail_tokens = tokens[1:]
+    return _clean_text(" ".join(color_tokens)), _clean_text(" ".join(detail_tokens))
+
+
+def _parse_cnc_row_segment(segment: list[str], section_label: str, page_number: int, row_index: int) -> ManufacturingRow | None:
+    dimension_index = -1
+    for index in range(len(segment)):
+        if _looks_like_dimension_start(segment, index):
+            dimension_index = index
+            break
+    if dimension_index <= 0:
+        return None
+
+    name = _clean_text(" ".join(segment[:dimension_index]))
+    size, tail_start = _consume_dimension(segment, dimension_index)
+    if not size or not name:
+        return None
+
+    tail_tokens = [_clean_text(token) for token in segment[tail_start:] if _clean_text(token)]
+    if not tail_tokens:
+        return None
+
+    quantity_index = -1
+    for index in range(len(tail_tokens) - 1, -1, -1):
+        if re.fullmatch(r"-?\d+", tail_tokens[index]):
+            quantity_index = index
+            break
+    if quantity_index == -1:
+        return None
+
+    quantity = int(tail_tokens[quantity_index])
+    before_quantity = tail_tokens[:quantity_index]
+    after_quantity = tail_tokens[quantity_index + 1 :]
+    edge = "-"
+    if before_quantity and (before_quantity[-1] == "-" or _looks_like_edge(before_quantity[-1])):
+        edge = before_quantity[-1]
+        before_quantity = before_quantity[:-1]
+
+    color, detail = _split_cnc_color_and_detail(before_quantity)
+    if after_quantity:
+        detail = _clean_text(" ".join([detail, *after_quantity]))
+
+    code = f"CNC-{_row_hash(section_label, name, size, color, detail, str(row_index))[:10].upper()}"
+    return ManufacturingRow(
+        row_id=_row_hash("cnc", section_label, name, size, code, str(row_index)),
+        name=name,
+        detail=detail,
+        size=size,
+        color=color,
+        edge=edge,
+        quantity=quantity,
+        code=code,
+        doc_key="cnc",
+        section_key=_slugify(section_label),
+        section_label=section_label,
+        page_number=page_number,
+    )
+
+
+def parse_cnc(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    section_map: dict[str, list[ManufacturingRow]] = {}
+    current_label = ""
+    row_index = 0
+
+    for page_number, lines in enumerate(pages, start=1):
+        footer_index = _footer_index(lines)
+        content_lines = lines[:footer_index]
+        if not content_lines:
+            continue
+
+        index = 0
+        while index < len(content_lines):
+            token = _clean_text(content_lines[index])
+            if _looks_like_cnc_section_header(token):
+                current_label = token
+                index += 1
+                continue
+            if not current_label:
+                index += 1
+                continue
+            if not _looks_like_potential_row_start(content_lines, index, 4):
+                index += 1
+                continue
+
+            dimension_index = -1
+            for offset in range(1, 5):
+                if _looks_like_dimension_start(content_lines, index + offset):
+                    dimension_index = index + offset
+                    break
+            if dimension_index == -1:
+                index += 1
+                continue
+
+            row_end = _next_segment_start(content_lines, dimension_index + 5, 4)
+            segment = content_lines[index:row_end]
+            row_index += 1
+            row = _parse_cnc_row_segment(segment, current_label, page_number, row_index)
+            if row is not None:
+                section_map.setdefault(current_label, []).append(row)
+            index = row_end
+
+    sections = [
+        ManufacturingSection(
+            key=_slugify(section_label),
+            label=section_label,
+            rows=tuple(rows),
+        )
+        for section_label, rows in section_map.items()
+        if rows
+    ]
+    sections = _pair_sections_in_display_order(
+        sorted(sections, key=lambda section: (_pair_info_for_section_label(section.label) or ("9", section.label.lower())))
+    )
+    return ManufacturingDocument(
+        key="cnc",
+        label="CNC",
+        file_name=path.name,
+        sections=tuple(sections),
+        row_count=sum(len(section.rows) for section in sections),
+    )
+
+
+def _fiokelo_model_index(tokens: list[str]) -> int:
+    known_models = {"anna", "antonia", "laura", "kinga", "zille", "doroti", "petra", "ibiza", "etna"}
+    for index, token in enumerate(tokens):
+        if _fold_hu(token) in known_models:
+            return index
+    return -1
+
+
+def _parse_fiokelo_row_segment(segment: list[str], section_label: str, page_number: int, row_index: int) -> ManufacturingRow | None:
+    dimension_index = -1
+    for index in range(len(segment)):
+        if _looks_like_dimension_start(segment, index):
+            dimension_index = index
+            break
+    if dimension_index <= 0:
+        return None
+
+    pre_tokens = [_clean_text(token) for token in segment[:dimension_index] if _clean_text(token)]
+    size, tail_start = _consume_dimension(segment, dimension_index)
+    if not size or not pre_tokens:
+        return None
+
+    model_index = _fiokelo_model_index(pre_tokens)
+    if model_index != -1:
+        name = _clean_text(" ".join(pre_tokens[:model_index])) or section_label
+        model = _clean_text(pre_tokens[model_index])
+        color = _clean_text(" ".join(pre_tokens[model_index + 1 :]))
+    else:
+        name = _clean_text(pre_tokens[0]) or section_label
+        model = _clean_text(pre_tokens[1]) if len(pre_tokens) > 1 else ""
+        color = _clean_text(" ".join(pre_tokens[2:])) if len(pre_tokens) > 2 else ""
+
+    tail_tokens = [_clean_text(token) for token in segment[tail_start:] if _clean_text(token)]
+    if not tail_tokens:
+        return None
+
+    quantity_index = -1
+    for index in range(len(tail_tokens) - 1, -1, -1):
+        if re.fullmatch(r"-?\d+", tail_tokens[index]):
+            quantity_index = index
+            break
+    if quantity_index == -1:
+        return None
+
+    quantity = int(tail_tokens[quantity_index])
+    detail = _clean_text(" ".join([part for part in [model, *tail_tokens[:quantity_index]] if part]))
+    code = f"FIOK-{_row_hash(section_label, name, size, color, detail, str(row_index))[:10].upper()}"
+    return ManufacturingRow(
+        row_id=_row_hash("fiokelo_furas", section_label, name, size, code, str(row_index)),
+        name=name,
+        detail=detail,
+        size=size,
+        color=color,
+        edge="-",
+        quantity=quantity,
+        code=code,
+        doc_key="fiokelo_furas",
+        section_key=_slugify(section_label),
+        section_label=section_label,
+        page_number=page_number,
+    )
+
+
+def parse_fiokelo_furas(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    section_map: dict[str, list[ManufacturingRow]] = {}
+    current_label = ""
+    row_index = 0
+
+    for page_number, lines in enumerate(pages, start=1):
+        footer_index = _footer_index(lines)
+        content_lines = lines[:footer_index]
+        if not content_lines:
+            continue
+
+        index = 0
+        while index < len(content_lines):
+            token = _clean_text(content_lines[index])
+            if _looks_like_fiokelo_header(token):
+                side = _clean_text(content_lines[index + 1] if index + 1 < len(content_lines) else "")
+                descriptor = _clean_text(content_lines[index + 2] if index + 2 < len(content_lines) else "")
+                current_label = " - ".join(part for part in (side, descriptor) if part) or "Front összekészítés"
+                index += 2
+                continue
+            if not current_label:
+                index += 1
+                continue
+            if not _looks_like_potential_row_start(content_lines, index, 6):
+                index += 1
+                continue
+
+            dimension_index = -1
+            for offset in range(1, 7):
+                if _looks_like_dimension_start(content_lines, index + offset):
+                    dimension_index = index + offset
+                    break
+            if dimension_index == -1:
+                index += 1
+                continue
+
+            row_end = _next_segment_start(content_lines, dimension_index + 5, 6)
+            segment = content_lines[index:row_end]
+            row_index += 1
+            row = _parse_fiokelo_row_segment(segment, current_label, page_number, row_index)
+            if row is not None:
+                section_map.setdefault(current_label, []).append(row)
+            index = row_end
+
+    sections = [
+        ManufacturingSection(
+            key=_slugify(section_label),
+            label=section_label,
+            rows=tuple(rows),
+        )
+        for section_label, rows in section_map.items()
+        if rows
+    ]
+    sections = _pair_sections_in_display_order(
+        sorted(sections, key=lambda section: (_pair_info_for_section_label(section.label) or ("9", section.label.lower())))
+    )
+    return ManufacturingDocument(
+        key="fiokelo_furas",
+        label="Fiókelő fúrás",
+        file_name=path.name,
+        sections=tuple(sections),
+        row_count=sum(len(section.rows) for section in sections),
+    )
+
+
 def load_production_bundle(production_number: str) -> dict:
     folder = production_folder(production_number)
     if not folder.exists():
@@ -857,6 +1235,24 @@ def load_production_bundle(production_number: str) -> dict:
             front_doc = None
         if front_doc is not None:
             documents.append(asdict(front_doc))
+
+    cnc_path = _find_cnc_path(folder)
+    if cnc_path is not None:
+        try:
+            cnc_doc = parse_cnc(cnc_path)
+        except Exception:
+            cnc_doc = None
+        if cnc_doc is not None:
+            documents.append(asdict(cnc_doc))
+
+    fiokelo_furas_path = _find_fiokelo_furas_path(folder)
+    if fiokelo_furas_path is not None:
+        try:
+            fiokelo_doc = parse_fiokelo_furas(fiokelo_furas_path)
+        except Exception:
+            fiokelo_doc = None
+        if fiokelo_doc is not None:
+            documents.append(asdict(fiokelo_doc))
 
     return {
         "production_number": production_number,

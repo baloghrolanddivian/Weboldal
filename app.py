@@ -48,6 +48,7 @@ from nettfront_order_module import (
     rows_to_suggestion_workbook,
 )
 from manufacturing_module import (
+    _pdf_lines as manufacturing_pdf_lines,
     available_production_entries,
     available_production_numbers,
     latest_production_number,
@@ -1887,13 +1888,15 @@ MANUFACTURING_OPERATION_DEFINITIONS = (
 MANUFACTURING_OPERATION_HINTS = {
     "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
     "front_osszekeszites": "A front összekészítő PDF sorai és kategóriái.",
-    "cnc_furas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
+    "cnc_furas": "CNC, alsó, felső és fiókelő/front fúrás egy közös műveleti nézetben.",
     "pantolas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
 }
 MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
     "alkatresz_kesz": "Alkatrész kész",
     "front_osszekeszito": "Front összekészítő",
+    "cnc": "CNC",
+    "fiokelo_furas": "Fiókelő fúrás",
 }
 
 
@@ -1935,7 +1938,7 @@ def _manufacturing_local_slug(value: str) -> str:
     return cleaned or "szakasz"
 
 
-def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...]) -> tuple[list[dict], int]:
+def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
     sections: list[dict] = []
     row_count = 0
     for document in bundle.get("documents", []):
@@ -1959,10 +1962,11 @@ def _manufacturing_document_sections(bundle: dict, production_number: str, allow
             if not rows:
                 continue
             section_label = str(section.get("label", "")).strip() or source_label
+            display_label = f"{source_label} - {section_label}" if include_source_prefix else section_label
             sections.append(
                 {
                     "key": f"{document_key}::{str(section.get('key', '')).strip() or 'section'}",
-                    "label": f"{source_label} · {section_label}",
+                    "label": display_label,
                     "rows": rows,
                 }
             )
@@ -1971,7 +1975,7 @@ def _manufacturing_document_sections(bundle: dict, production_number: str, allow
 
 
 def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
-    return _manufacturing_document_sections(bundle, production_number, ("osszekeszito", "alkatresz_kesz"))
+    return _manufacturing_document_sections(bundle, production_number, ("osszekeszito", "alkatresz_kesz"), include_source_prefix=False)
 
 
 def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
@@ -2042,7 +2046,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     "label": f"{size} · {material}",
                     "rows": [],
                 }
-            grouped_sections[section_slug]["label"] = f"{group_size} Â· {material}"
+            grouped_sections[section_slug]["label"] = f"{group_size} · {material}"
             row["name"] = type_label
             grouped_sections[section_slug]["rows"].append(row)
 
@@ -2073,18 +2077,949 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
     return sorted_sections, row_count
 
 
-def _manufacturing_current_red_special_view(sections: list[dict], raw_state: dict[str, str]) -> dict:
-    return {
-        "key": "current-production-red",
-        "label": "Aktuális gyártás összes piros eleme",
-        "count": sum(
-            1
-            for section in sections
-            for row in section.get("rows", [])
-            if isinstance(row, dict) and raw_state.get(str(row.get("row_id", "")).strip()) == "red"
-        ),
-        "sections": sections,
+def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict]]:
+    raw_sections, _ = _manufacturing_document_sections(bundle, production_number, ("cnc", "fiokelo_furas"))
+
+    def folded(value: object) -> str:
+        text = str(value or "").strip().lower()
+        for source, target in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ö", "o"), ("ő", "o"), ("ú", "u"), ("ü", "u"), ("ű", "u"), ("õ", "o"), ("û", "u")):
+            text = text.replace(source, target)
+        return text
+
+    def clean_text(value: object) -> str:
+        return (
+            str(value or "")
+            .strip()
+            .replace("õ", "ő")
+            .replace("Õ", "Ő")
+            .replace("û", "ű")
+            .replace("Û", "Ű")
+        )
+
+    def size_parts(size_label: object) -> tuple[int, ...]:
+        parts = [int(part.strip()) for part in re.split(r"[xX]", str(size_label or "")) if part.strip().isdigit()]
+        return tuple(parts or [9999, 9999, 9999])
+
+    def canonical_side_type(value: object) -> str:
+        text = clean_text(value)
+        folded_text = re.sub(r"\s+", " ", folded(text)).strip()
+        if not folded_text:
+            return ""
+        if "aaf fiokos ajtos" in folded_text:
+            return "AAF fiókos ajtós"
+        if "af 1+2" in folded_text or "af 1 + 2" in folded_text:
+            return "AF 1+2 fiókos"
+        if "pultos" in folded_text:
+            return "Pultos nor. al."
+        if "as vt" in folded_text:
+            return "AS VT"
+        if "as magic" in folded_text:
+            return "AS MAGIC"
+        if re.search(r"\batf\b", folded_text):
+            return "ATF"
+        if "aszb" in folded_text and "szemetes" in folded_text:
+            return "ASZB kihúzható szemetes"
+        if "aszhs" in folded_text:
+            return "ASZHS"
+        if "aszb" in folded_text:
+            return "ASZB kihúzható szemetes"
+        if re.search(r"\bakl\b", folded_text):
+            return "AKL"
+        if "jolly" in folded_text:
+            return "Jolly"
+        if re.search(r"\bkira\b", folded_text):
+            return "Kira"
+        if re.search(r"\bar\b", folded_text):
+            return "AR"
+        if "nyitott" in folded_text:
+            return "Nyitott"
+        if "normal" in folded_text:
+            return "Normáls alsó"
+        return text
+
+    def normalize_side_type(value: object) -> str:
+        return re.sub(r"\s+", " ", folded(canonical_side_type(value))).strip()
+
+    def cnc_display_name(name: object) -> str:
+        text = clean_text(name)
+        folded_text = folded(text)
+        if "also oldal" in folded_text:
+            return "Alsó oldal"
+        if "felso oldal" in folded_text:
+            return "Felső oldal"
+        if "also fenek" in folded_text:
+            return "Alsó fenék"
+        if "fiokelo" in folded_text:
+            return "Fiókelő"
+        if "blende" in folded_text:
+            return "Blende"
+        return text or "Tétel"
+
+    def parse_lower_detail(detail: object) -> tuple[str, str, str, str]:
+        text = clean_text(detail)
+        if not text:
+            return "", "", "", ""
+        drawer_drill = ""
+        remainder = text
+        if text.startswith("Nincs "):
+            drawer_drill = "Nincs"
+            remainder = clean_text(text[6:].strip())
+        if text.startswith("Teleszkóp "):
+            drawer_drill = "Teleszkópos"
+            remainder = clean_text(text[len("Teleszkóp "):].strip())
+        if text.startswith("Teleszkópos "):
+            drawer_drill = "Teleszkópos"
+            remainder = clean_text(text[len("Teleszkópos "):].strip())
+        if text.startswith("AVZ "):
+            drawer_drill = "AVZ"
+            remainder = clean_text(text[4:].strip())
+        if text.startswith("Box Hettich "):
+            drawer_drill = "Box Hettich"
+            remainder = clean_text(text[len("Box Hettich "):].strip())
+        known_side_types = {
+            "Normál alsó",
+            "Normáls alsó",
+            "AS MAGIC",
+            "AKL",
+            "AR",
+            "Jolly",
+            "Kira",
+            "Nyitott",
+            "ATF",
+            "ASZHS/ASZB",
+            "ASZHS",
+            "ASZB kihúzható szemetes",
+            "AS VT",
+            "AAF fiókos ajtós",
+            "AF 1+2 fiókos",
+        }
+        if remainder in known_side_types:
+            return drawer_drill, canonical_side_type(remainder), "", ""
+        tokens = [clean_text(token) for token in remainder.split() if clean_text(token)]
+        hardware_type = ""
+        parsed_edge = ""
+        if drawer_drill == "AVZ" and len(tokens) == 1 and tokens[0] in {"N", "KESB", "GTEL", "B"}:
+            return drawer_drill, "", "", tokens[0]
+        if len(tokens) >= 2 and re.fullmatch(r"\d+H(?:\dR)?", tokens[-2]) and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"}:
+            parsed_edge = tokens[-2]
+            hardware_type = tokens[-1]
+            remainder = clean_text(" ".join(tokens[:-2]))
+        elif len(tokens) >= 1 and re.fullmatch(r"\d+H(?:\dR)?", tokens[-1]):
+            parsed_edge = tokens[-1]
+            remainder = clean_text(" ".join(tokens[:-1]))
+        elif len(tokens) >= 1 and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"} and drawer_drill:
+            hardware_type = tokens[-1]
+            remainder = clean_text(" ".join(tokens[:-1]))
+        return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
+
+    def parse_upper_detail(detail: object) -> tuple[str, str]:
+        text = clean_text(detail)
+        if not text:
+            return "", ""
+        parts = text.rsplit(" ", 1)
+        if len(parts) == 2 and parts[1] in {"N", "KESB", "GTEL", "TE", "RI", "JO"}:
+            return parts[0], parts[1]
+        return text, ""
+
+    def is_kamra_row(name: str, color: str, side_type: str) -> bool:
+        combined = " ".join([folded(name), folded(color), normalize_side_type(side_type)])
+        return "kamra" in combined or "k40" in combined or "k60" in combined or "kmth" in combined or "kmtb" in combined or "ktb60" in combined
+
+    def is_non_nutos_text(value: object) -> bool:
+        text = clean_text(value).strip().lower()
+        folded_text = folded(text)
+        return "nem nútos" in text or "nem nutos" in folded_text
+
+    def is_fiokos_family(row: dict) -> bool:
+        combined = " ".join(
+            [
+                folded(row.get("source_name")),
+                folded(row.get("name")),
+                normalize_side_type(row.get("side_type")),
+                folded(row.get("detail")),
+            ]
+        )
+        return "fiokos" in combined or "aaf" in combined or "af 1+2" in combined or "af 1 + 2" in combined
+
+    def build_lower_rows(source_sections: list[dict]) -> list[dict]:
+        merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
+        for section in source_sections:
+            for raw_row in section.get("rows", []):
+                if not isinstance(raw_row, dict):
+                    continue
+                source_name = clean_text(raw_row.get("name"))
+                name = cnc_display_name(raw_row.get("name"))
+                size = clean_text(raw_row.get("size"))
+                color = clean_text(raw_row.get("color"))
+                raw_edge = clean_text(raw_row.get("edge")) or "-"
+                drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(raw_row.get("detail"))
+                edge = parsed_edge or raw_edge
+                if is_kamra_row(name, color, side_type):
+                    folded_drill = folded(drawer_drill)
+                    if folded_drill.startswith("box hettich"):
+                        drawer_drill = "Box Hettich"
+                    elif folded_drill.startswith("teleszk"):
+                        drawer_drill = "Teleszkóp"
+                    elif folded_drill.startswith("nincs"):
+                        drawer_drill = "Nincs"
+                merge_key = (name, size, color, drawer_drill, side_type, edge, hardware_type)
+                quantity = int(raw_row.get("quantity", 0) or 0)
+                existing = merged.get(merge_key)
+                if existing is None:
+                    merged_id = hashlib.sha1(
+                        f"cnc-lower|{production_number}|{name}|{size}|{color}|{drawer_drill}|{side_type}|{edge}|{hardware_type}".encode("utf-8")
+                    ).hexdigest()[:16]
+                    merged[merge_key] = {
+                        "row_id": merged_id,
+                        "state_key": _manufacturing_state_key(production_number, merged_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": name,
+                        "source_name": source_name,
+                        "size": size,
+                        "color": color,
+                        "drawer_drill": drawer_drill,
+                        "side_type": side_type,
+                        "hardware_type": hardware_type,
+                        "edge": edge,
+                        "quantity": quantity,
+                        "detail": clean_text(raw_row.get("detail")),
+                        "columnLayout": "cnc-lower",
+                        "isMuted": is_non_nutos_text(name) or is_non_nutos_text(source_name),
+                    }
+                else:
+                    existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+                    if source_name:
+                        existing["source_name"] = f"{existing.get('source_name', '')} · {source_name}".strip(" ·")
+                    existing["isMuted"] = bool(existing.get("isMuted")) or is_non_nutos_text(name) or is_non_nutos_text(source_name)
+        return list(merged.values())
+
+    def build_upper_rows(source_sections: list[dict]) -> list[dict]:
+        merged: dict[tuple[str, str, str, str, str, str], dict] = {}
+        for section in source_sections:
+            for raw_row in section.get("rows", []):
+                if not isinstance(raw_row, dict):
+                    continue
+                name = cnc_display_name(raw_row.get("name"))
+                size = clean_text(raw_row.get("size"))
+                color = clean_text(raw_row.get("color"))
+                edge = clean_text(raw_row.get("edge")) or "-"
+                hardware_type, side_type = parse_upper_detail(raw_row.get("detail"))
+                merge_key = (name, size, color, hardware_type, side_type, edge)
+                quantity = int(raw_row.get("quantity", 0) or 0)
+                existing = merged.get(merge_key)
+                if existing is None:
+                    merged_id = hashlib.sha1(
+                        f"cnc-upper|{production_number}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
+                    ).hexdigest()[:16]
+                    merged[merge_key] = {
+                        "row_id": merged_id,
+                        "state_key": _manufacturing_state_key(production_number, merged_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": name,
+                        "size": size,
+                        "color": color,
+                        "hardware_type": hardware_type,
+                        "side_type": side_type,
+                        "edge": edge,
+                        "quantity": quantity,
+                        "detail": clean_text(raw_row.get("detail")),
+                        "columnLayout": "cnc-upper",
+                    }
+                else:
+                    existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+        return list(merged.values())
+
+    def build_front_rows(source_sections: list[dict]) -> list[dict]:
+        merged: dict[tuple[str, str, str, str, str], dict] = {}
+        for section in source_sections:
+            for raw_row in section.get("rows", []):
+                if not isinstance(raw_row, dict):
+                    continue
+                name = cnc_display_name(raw_row.get("name"))
+                size = clean_text(raw_row.get("size"))
+                color = clean_text(raw_row.get("color"))
+                edge = clean_text(raw_row.get("edge")) or "-"
+                detail = clean_text(raw_row.get("detail"))
+                merge_key = (name, size, color, edge, detail)
+                quantity = int(raw_row.get("quantity", 0) or 0)
+                existing = merged.get(merge_key)
+                if existing is None:
+                    merged_id = hashlib.sha1(
+                        f"cnc-front|{production_number}|{name}|{size}|{color}|{edge}|{detail}".encode("utf-8")
+                    ).hexdigest()[:16]
+                    merged[merge_key] = {
+                        "row_id": merged_id,
+                        "state_key": _manufacturing_state_key(production_number, merged_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": name,
+                        "size": size,
+                        "color": color,
+                        "edge": edge,
+                        "quantity": quantity,
+                        "detail": detail,
+                    }
+                else:
+                    existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+        return list(merged.values())
+
+    also_source_sections = [
+        dict(section)
+        for section in raw_sections
+        if str(section.get("key", "")).startswith("cnc::") and "als" in folded(section.get("label", ""))
+    ]
+    felso_source_sections = [
+        dict(section)
+        for section in raw_sections
+        if str(section.get("key", "")).startswith("cnc::") and "fels" in folded(section.get("label", ""))
+    ]
+    front_source_sections = [
+        dict(section)
+        for section in raw_sections
+        if str(section.get("key", "")).startswith("fiokelo_furas::")
+    ]
+
+    lower_rows = build_lower_rows(also_source_sections)
+    upper_rows = build_upper_rows(felso_source_sections)
+    front_rows = build_front_rows(front_source_sections)
+
+    lower_box_order = {
+        "pultos nor. al.": 0,
+        "as vt": 1,
+        "as magic": 2,
+        "atf": 3,
+        "aszb kihuzhato szemetes": 4,
+        "aszhs": 4,
+        "akl": 5,
+        "ar": 6,
+        "kira": 7,
+        "nyitott": 8,
     }
+    upper_side_order = {"N": 0, "KESB": 1, "GTEL": 2, "TE": 3, "RI": 4, "JO": 5}
+
+    lower_box_sections: list[dict] = []
+
+    def clone_row(row: dict, **updates: object) -> dict:
+        cloned = dict(row)
+        cloned.update(updates)
+        return cloned
+
+    def add_lower_section(label: str, rows: list[dict], key_suffix: str) -> None:
+        if not rows:
+            return
+        lower_box_sections.append(
+            {
+                "key": f"cnc-also::{key_suffix}",
+                "label": label,
+                "rows": rows,
+                "columnLayout": "cnc-lower",
+            }
+        )
+
+    def aggregate_lower_rows(rows: list[dict], group_fields: tuple[str, ...], *, hide_subtitle: bool = False) -> list[dict]:
+        grouped: dict[tuple[str, ...], dict] = {}
+        for row in rows:
+            group_key = tuple(clean_text(row.get(field)) for field in group_fields)
+            existing = grouped.get(group_key)
+            if existing is None:
+                merged_id = hashlib.sha1(
+                    f"cnc-lower-box|{production_number}|{'|'.join(group_key)}".encode("utf-8")
+                ).hexdigest()[:16]
+                grouped[group_key] = {
+                    "row_id": merged_id,
+                    "state_key": _manufacturing_state_key(production_number, merged_id),
+                    "production_number": _manufacturing_normalize_number(production_number),
+                    "name": clean_text(row.get("name")),
+                    "size": clean_text(row.get("size")),
+                    "color": clean_text(row.get("color")),
+                    "drawer_drill": clean_text(row.get("drawer_drill")),
+                    "side_type": clean_text(row.get("side_type")),
+                    "hardware_type": clean_text(row.get("hardware_type")),
+                    "edge": clean_text(row.get("edge")) or "-",
+                    "quantity": int(row.get("quantity", 0) or 0),
+                    "detail": "",
+                    "columnLayout": "cnc-lower",
+                    "hideSubtitle": hide_subtitle,
+                    "isMuted": bool(row.get("isMuted")),
+                    "_colors": {clean_text(row.get("color"))},
+                    "_drills": {clean_text(row.get("drawer_drill"))},
+                    "_edges": {clean_text(row.get("edge")) or "-"},
+                    "_hardware": {clean_text(row.get("hardware_type"))},
+                }
+                continue
+            existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+            existing["isMuted"] = bool(existing.get("isMuted")) or bool(row.get("isMuted"))
+            existing["_colors"].add(clean_text(row.get("color")))
+            existing["_drills"].add(clean_text(row.get("drawer_drill")))
+            existing["_edges"].add(clean_text(row.get("edge")) or "-")
+            existing["_hardware"].add(clean_text(row.get("hardware_type")))
+
+        aggregated_rows: list[dict] = []
+        for item in grouped.values():
+            item["color"] = next(iter(item["_colors"])) if len(item["_colors"]) == 1 else "Vegyes"
+            item["drawer_drill"] = next(iter(item["_drills"])) if len(item["_drills"]) == 1 else "Vegyes"
+            item["edge"] = next(iter(item["_edges"])) if len(item["_edges"]) == 1 else "Vegyes"
+            item["hardware_type"] = next(iter(item["_hardware"])) if len(item["_hardware"]) == 1 else "Vegyes"
+            item.pop("_colors", None)
+            item.pop("_drills", None)
+            item.pop("_edges", None)
+            item.pop("_hardware", None)
+            aggregated_rows.append(item)
+        return aggregated_rows
+
+    def is_boxos_side_type(row: dict) -> bool:
+        return normalize_side_type(row.get("side_type")) in {"aaf fiokos ajtos", "af 1+2 fiokos"}
+
+    def is_as_takarosav_row(row: dict) -> bool:
+        name_text = folded(row.get("name"))
+        return "as takarosav" in name_text or "takarolap as" in name_text
+
+    def is_normal_also_row(row: dict) -> bool:
+        return (
+            folded(row.get("name")) == "also oldal"
+            and normalize_side_type(row.get("side_type")) == "normals also"
+            and not is_as_takarosav_row(row)
+            and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+        )
+
+    def build_raw_normal_also_box_rows() -> list[dict]:
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return []
+        cnc_path = Path(folder_text) / "CNC.pdf"
+        if not cnc_path.is_file():
+            return []
+        try:
+            pages = manufacturing_pdf_lines(cnc_path)
+        except Exception:
+            return []
+
+        def is_boundary(token: str) -> bool:
+            clean_token = clean_text(token)
+            folded_token = folded(clean_token)
+            return (
+                clean_token == "Alsó oldal"
+                or clean_token.startswith("AS takarósáv")
+                or clean_token.startswith("Kamra")
+                or clean_token.startswith("Takarólap AS")
+                or clean_token.startswith("Oldal ")
+                or bool(re.fullmatch(r"[12]-es\s+als.*", folded_token))
+                or bool(re.fullmatch(r"[12]-es\s+fels.*", folded_token))
+            )
+
+        raw_rows: list[dict] = []
+        current_label = ""
+        for page_number, lines in enumerate(pages, start=1):
+            index = 0
+            while index < len(lines):
+                token = clean_text(lines[index])
+                folded_token = folded(token)
+                if re.fullmatch(r"[12]-es\s+als.*", folded_token) or re.fullmatch(r"[12]-es\s+fels.*", folded_token):
+                    current_label = token
+                    index += 1
+                    continue
+                if "als" not in folded(current_label) or token != "Alsó oldal":
+                    index += 1
+                    continue
+                if index + 5 >= len(lines):
+                    index += 1
+                    continue
+                size_tokens = [clean_text(lines[index + offset]) for offset in range(1, 6)]
+                if size_tokens != ["724", "x", "505", "x", "18"]:
+                    index += 1
+                    continue
+
+                cursor = index + 6
+                tail_tokens: list[str] = []
+                while cursor < len(lines):
+                    next_token = clean_text(lines[cursor])
+                    if cursor > index + 6 and is_boundary(next_token):
+                        break
+                    tail_tokens.append(next_token)
+                    cursor += 1
+                if len(tail_tokens) < 3 or not re.fullmatch(r"-?\d+", tail_tokens[-1]):
+                    index = cursor
+                    continue
+
+                quantity = int(tail_tokens[-1])
+                edge = clean_text(tail_tokens[-2]) or "-"
+                payload_tokens = [clean_text(token) for token in tail_tokens[:-2] if clean_text(token)]
+                if not payload_tokens:
+                    index = cursor
+                    continue
+
+                detail_start = len(payload_tokens)
+                for position in range(len(payload_tokens)):
+                    folded_single = folded(payload_tokens[position])
+                    folded_pair = folded(" ".join(payload_tokens[position:position + 2]))
+                    if folded_single in {"nincs", "teleszkop", "teleszkopos", "avz", "box hettich"} or folded_pair == "box hettich":
+                        detail_start = position
+                        break
+                color = clean_text(" ".join(payload_tokens[:detail_start]))
+                detail = clean_text(" ".join(payload_tokens[detail_start:]))
+                drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
+                if normalize_side_type(side_type) != "normals also":
+                    index = cursor
+                    continue
+
+                row_id = hashlib.sha1(
+                    f"cnc-raw-normal|{production_number}|{page_number}|{index}|{color}|{quantity}".encode("utf-8")
+                ).hexdigest()[:16]
+                raw_rows.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": _manufacturing_state_key(production_number, row_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": "Alsó oldal",
+                        "source_name": "Alsó oldal",
+                        "size": "724 x 505 x 18",
+                        "color": color,
+                        "drawer_drill": drawer_drill,
+                        "side_type": side_type,
+                        "hardware_type": hardware_type,
+                        "edge": parsed_edge or edge,
+                        "quantity": quantity,
+                        "detail": detail,
+                        "columnLayout": "cnc-lower",
+                        "hideSubtitle": True,
+                        "isMuted": False,
+                    }
+                )
+                index = cursor
+        return raw_rows
+
+    def build_raw_kinga_anna_box_rows() -> list[dict]:
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return []
+        cnc_path = Path(folder_text) / "CNC.pdf"
+        if not cnc_path.is_file():
+            return []
+        try:
+            pages = manufacturing_pdf_lines(cnc_path)
+        except Exception:
+            return []
+
+        def is_boundary(token: str) -> bool:
+            clean_token = clean_text(token)
+            folded_token = folded(clean_token)
+            return (
+                folded(clean_token) == "also oldal"
+                or folded(clean_token).startswith("as takarosav")
+                or clean_token.startswith("Kamra")
+                or folded(clean_token).startswith("takarolap as")
+                or clean_token.startswith("Oldal ")
+                or bool(re.fullmatch(r"[12]-es\s+als.*", folded_token))
+                or bool(re.fullmatch(r"[12]-es\s+fels.*", folded_token))
+            )
+
+        raw_rows: list[dict] = []
+        current_label = ""
+        for page_number, lines in enumerate(pages, start=1):
+            index = 0
+            while index < len(lines):
+                token = clean_text(lines[index])
+                folded_token = folded(token)
+                if re.fullmatch(r"[12]-es\s+als.*", folded_token) or re.fullmatch(r"[12]-es\s+fels.*", folded_token):
+                    current_label = token
+                    index += 1
+                    continue
+                if "als" not in folded(current_label) or folded(token) != "also oldal":
+                    index += 1
+                    continue
+                if index + 5 >= len(lines):
+                    index += 1
+                    continue
+                size_tokens = [clean_text(lines[index + offset]) for offset in range(1, 6)]
+                if size_tokens != ["824", "x", "505", "x", "18"]:
+                    index += 1
+                    continue
+
+                cursor = index + 6
+                tail_tokens: list[str] = []
+                while cursor < len(lines):
+                    next_token = clean_text(lines[cursor])
+                    if cursor > index + 6 and is_boundary(next_token):
+                        break
+                    tail_tokens.append(next_token)
+                    cursor += 1
+                if len(tail_tokens) < 3 or not re.fullmatch(r"-?\d+", tail_tokens[-1]):
+                    index = cursor
+                    continue
+
+                quantity = int(tail_tokens[-1])
+                edge = clean_text(tail_tokens[-2]) or "-"
+                payload_tokens = [clean_text(token) for token in tail_tokens[:-2] if clean_text(token)]
+                if not payload_tokens:
+                    index = cursor
+                    continue
+
+                detail_start = len(payload_tokens)
+                for position in range(len(payload_tokens)):
+                    folded_single = folded(payload_tokens[position])
+                    folded_pair = folded(" ".join(payload_tokens[position:position + 2]))
+                    if folded_single in {"nincs", "teleszkop", "teleszkopos", "avz", "box hettich"} or folded_pair == "box hettich":
+                        detail_start = position
+                        break
+                color = clean_text(" ".join(payload_tokens[:detail_start]))
+                detail = clean_text(" ".join(payload_tokens[detail_start:]))
+                drawer_drill, _side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
+                normalized_drill = drawer_drill
+                if folded(normalized_drill).startswith("teleszk"):
+                    normalized_drill = "Teleszkópos"
+                elif folded(normalized_drill).startswith("nincs"):
+                    normalized_drill = "Nincs"
+                else:
+                    index = cursor
+                    continue
+
+                row_id = hashlib.sha1(
+                    f"cnc-raw-824|{production_number}|{page_number}|{index}|{color}|{normalized_drill}|{quantity}".encode("utf-8")
+                ).hexdigest()[:16]
+                raw_rows.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": _manufacturing_state_key(production_number, row_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": "Alsó oldal",
+                        "source_name": "Alsó oldal",
+                        "size": "824 x 505 x 18",
+                        "color": color,
+                        "drawer_drill": normalized_drill,
+                        "side_type": "",
+                        "hardware_type": hardware_type,
+                        "edge": parsed_edge or edge,
+                        "quantity": quantity,
+                        "detail": detail,
+                        "columnLayout": "cnc-lower",
+                        "isMuted": False,
+                    }
+                )
+                index = cursor
+        return raw_rows
+
+    def build_raw_egyebek_box_rows() -> list[dict]:
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return []
+        cnc_path = Path(folder_text) / "CNC.pdf"
+        if not cnc_path.is_file():
+            return []
+        try:
+            pages = manufacturing_pdf_lines(cnc_path)
+        except Exception:
+            return []
+
+        def is_boundary(token: str) -> bool:
+            clean_token = clean_text(token)
+            folded_token = folded(clean_token)
+            return (
+                folded(clean_token) == "also oldal"
+                or folded(clean_token).startswith("as takarosav")
+                or clean_token.startswith("Kamra")
+                or folded(clean_token).startswith("takarolap as")
+                or clean_token.startswith("Oldal ")
+                or bool(re.fullmatch(r"[12]-es\s+als.*", folded_token))
+                or bool(re.fullmatch(r"[12]-es\s+fels.*", folded_token))
+            )
+
+        raw_rows: list[dict] = []
+        current_label = ""
+        for page_number, lines in enumerate(pages, start=1):
+            index = 0
+            while index < len(lines):
+                token = clean_text(lines[index])
+                folded_token = folded(token)
+                if re.fullmatch(r"[12]-es\s+als.*", folded_token) or re.fullmatch(r"[12]-es\s+fels.*", folded_token):
+                    current_label = token
+                    index += 1
+                    continue
+                if "als" not in folded(current_label) or folded(token) != "also oldal":
+                    index += 1
+                    continue
+                if index + 5 >= len(lines):
+                    index += 1
+                    continue
+                size_tokens = [clean_text(lines[index + offset]) for offset in range(1, 6)]
+                size_label = " ".join(size_tokens)
+                if size_label not in {"724 x 505 x 18", "724 x 520 x 18"}:
+                    index += 1
+                    continue
+
+                cursor = index + 6
+                tail_tokens: list[str] = []
+                while cursor < len(lines):
+                    next_token = clean_text(lines[cursor])
+                    if cursor > index + 6 and is_boundary(next_token):
+                        break
+                    tail_tokens.append(next_token)
+                    cursor += 1
+                if len(tail_tokens) < 3 or not re.fullmatch(r"-?\d+", tail_tokens[-1]):
+                    index = cursor
+                    continue
+
+                quantity = int(tail_tokens[-1])
+                edge = clean_text(tail_tokens[-2]) or "-"
+                payload_tokens = [clean_text(token) for token in tail_tokens[:-2] if clean_text(token)]
+                if not payload_tokens:
+                    index = cursor
+                    continue
+
+                detail_start = len(payload_tokens)
+                for position in range(len(payload_tokens)):
+                    folded_single = folded(payload_tokens[position])
+                    folded_pair = folded(" ".join(payload_tokens[position:position + 2]))
+                    if folded_single in {"nincs", "teleszkop", "teleszkopos", "avz", "box hettich"} or folded_pair == "box hettich":
+                        detail_start = position
+                        break
+                color = clean_text(" ".join(payload_tokens[:detail_start]))
+                detail = clean_text(" ".join(payload_tokens[detail_start:]))
+                drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
+                side_type_normalized = normalize_side_type(side_type)
+                if (
+                    size_label == "724 x 505 x 18"
+                    and side_type_normalized == "normals also"
+                ) or is_boxos_side_type({"side_type": side_type}) or is_as_takarosav_row({"name": "Alsó oldal"}) or is_kamra_row("Alsó oldal", color, side_type):
+                    index = cursor
+                    continue
+                if side_type_normalized not in {
+                    "pultos nor. al.",
+                    "as vt",
+                    "as magic",
+                    "atf",
+                    "aszb kihuzhato szemetes",
+                    "aszhs",
+                    "akl",
+                    "ar",
+                    "kira",
+                    "nyitott",
+                } and size_label not in {"724 x 505 x 18", "724 x 520 x 18"}:
+                    index = cursor
+                    continue
+
+                row_id = hashlib.sha1(
+                    f"cnc-raw-egyebek|{production_number}|{page_number}|{index}|{color}|{drawer_drill}|{side_type}|{quantity}".encode('utf-8')
+                ).hexdigest()[:16]
+                raw_rows.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": _manufacturing_state_key(production_number, row_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": "Alsó oldal",
+                        "source_name": "Alsó oldal",
+                        "size": size_label,
+                        "color": color,
+                        "drawer_drill": drawer_drill,
+                        "side_type": side_type,
+                        "hardware_type": hardware_type,
+                        "edge": parsed_edge or edge,
+                        "quantity": quantity,
+                        "detail": detail,
+                        "columnLayout": "cnc-lower",
+                        "isMuted": False,
+                    }
+                )
+                index = cursor
+        return raw_rows
+
+    box1_source_rows = [
+        row for row in lower_rows
+        if is_normal_also_row(row) and clean_text(row.get("size")) == "724 x 505 x 18"
+    ]
+    box1_display_rows = build_raw_normal_also_box_rows() or box1_source_rows
+    box1_rows = aggregate_lower_rows(
+        box1_display_rows,
+        ("name", "size", "color", "side_type"),
+        hide_subtitle=True,
+    )
+    box1_rows.sort(key=lambda row: (folded(row.get("color")), folded(row.get("name"))))
+    box1_ids = {str(row.get("row_id", "")) for row in box1_source_rows}
+    box2_rows = [
+        row for row in lower_rows
+        if row.get("size") == "724 x 505 x 18"
+        and is_boxos_side_type(row)
+        and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+    ]
+    box2_ids = {str(row.get("row_id", "")) for row in box2_rows}
+    box3_rows = [
+        row for row in lower_rows
+        if row.get("size") == "824 x 505 x 18"
+        and str(row.get("row_id", "")) not in box1_ids
+        and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+    ]
+    box3_ids = {str(row.get("row_id", "")) for row in box3_rows}
+    box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
+    box3_rows = aggregate_lower_rows(
+        box3_display_rows,
+        ("name", "size", "color", "drawer_drill"),
+    )
+    box4_rows = [
+        row for row in lower_rows
+        if str(row.get("row_id", "")) not in box1_ids and str(row.get("row_id", "")) not in box2_ids and str(row.get("row_id", "")) not in box3_ids
+        and not is_as_takarosav_row(row)
+        and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+    ]
+    box4_display_rows = build_raw_egyebek_box_rows() or box4_rows
+    box4_rows = aggregate_lower_rows(
+        box4_display_rows,
+        ("name", "size", "color", "drawer_drill", "side_type", "edge"),
+    )
+    box5_rows = [row for row in lower_rows if is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))]
+    box6_rows = [
+        row for row in lower_rows
+        if is_as_takarosav_row(row)
+        and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+    ]
+
+    box1_rows.sort(
+        key=lambda row: (
+            size_parts(row.get("size")),
+            clean_text(row.get("color")),
+            clean_text(row.get("name")),
+            clean_text(row.get("drawer_drill")),
+            clean_text(row.get("side_type")),
+        )
+    )
+    box2_rows.sort(
+        key=lambda row: (
+            {"aaf fiokos ajtos": 0, "af 1+2 fiokos": 1}.get(normalize_side_type(row.get("side_type")), 9),
+            clean_text(row.get("color")),
+            clean_text(row.get("name")),
+        )
+    )
+    box3_rows.sort(
+        key=lambda row: (
+            {"nincs": 0, "teleszkopos": 1, "teleszkop": 1}.get(folded(row.get("drawer_drill")), 9),
+            clean_text(row.get("color")),
+            normalize_side_type(row.get("side_type")),
+            clean_text(row.get("name")),
+            size_parts(row.get("size")),
+        )
+    )
+    box4_rows.sort(
+        key=lambda row: (
+            lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
+            normalize_side_type(row.get("side_type")),
+            clean_text(row.get("color")),
+            size_parts(row.get("size")),
+            clean_text(row.get("name")),
+        )
+    )
+    box5_rows.sort(
+        key=lambda row: (
+            0 if clean_text(row.get("size")) != "2017 x 550 x 18" else 1,
+            clean_text(row.get("color")),
+            0 if "nútos" in folded(row.get("name")) and "nem nútos" not in folded(row.get("name")) else 1,
+            {"nincs": 0, "teleszkop": 1, "box hettich": 2}.get(folded(row.get("drawer_drill")), 9),
+            clean_text(row.get("side_type")),
+            clean_text(row.get("hardware_type")),
+            clean_text(row.get("name")),
+            size_parts(row.get("size")),
+        )
+    )
+    box6_rows.sort(
+        key=lambda row: (
+            clean_text(row.get("color")),
+            size_parts(row.get("size")),
+            clean_text(row.get("name")),
+            clean_text(row.get("side_type")),
+        )
+    )
+
+    add_lower_section("Normáls alsó · 724 x 505 x 18", box1_rows, "box1")
+    add_lower_section("Boxosok", box2_rows, "box2")
+    add_lower_section("Kinga/Anna", box3_rows, "box3")
+    add_lower_section("Egyebek", box4_rows, "box4")
+    add_lower_section("Kamrák", box5_rows, "box5")
+    add_lower_section("AS takarósávok", box6_rows, "box6")
+
+    upper_rows.sort(
+        key=lambda row: (
+            upper_side_order.get(str(row.get("side_type", "")).strip(), 99),
+            size_parts(row.get("size")),
+            clean_text(row.get("name")),
+            clean_text(row.get("color")),
+            clean_text(row.get("hardware_type")),
+        )
+    )
+    upper_sections = []
+    if upper_rows:
+        upper_sections.append(
+            {
+                "key": "cnc-felso::all",
+                "label": "Felső",
+                "rows": upper_rows,
+                "columnLayout": "cnc-upper",
+            }
+        )
+
+    front_rows.sort(
+        key=lambda row: (
+            clean_text(row.get("name")),
+            size_parts(row.get("size")),
+            clean_text(row.get("color")),
+            clean_text(row.get("detail")),
+        )
+    )
+    front_sections = []
+    if front_rows:
+        front_sections.append(
+            {
+                "key": "cnc-front::all",
+                "label": "Front összekészítés",
+                "rows": front_rows,
+            }
+        )
+
+    main_sections = []
+    if lower_rows:
+        main_sections.append(
+            {
+                "key": "cnc-main::also",
+                "label": "Alsó",
+                "rows": lower_rows,
+                "columnLayout": "cnc-lower",
+            }
+        )
+    if upper_rows:
+        main_sections.append(
+            {
+                "key": "cnc-main::felso",
+                "label": "Felső",
+                "rows": upper_rows,
+                "columnLayout": "cnc-upper",
+            }
+        )
+    if front_rows:
+        main_sections.append(
+            {
+                "key": "cnc-main::front",
+                "label": "Front összekészítés",
+                "rows": front_rows,
+            }
+        )
+
+    row_count = sum(len(section.get("rows", [])) for section in main_sections)
+    special_views = [
+        {
+            "key": "cnc-also",
+            "label": "Alsó",
+            "count": sum(len(section.get("rows", [])) for section in lower_box_sections),
+            "sections": lower_box_sections,
+        },
+        {
+            "key": "cnc-felso",
+            "label": "Felső",
+            "count": sum(len(section.get("rows", [])) for section in upper_sections),
+            "sections": upper_sections,
+        },
+        {
+            "key": "cnc-front",
+            "label": "Front összekészítés",
+            "count": sum(len(section.get("rows", [])) for section in front_sections),
+            "sections": front_sections,
+        },
+    ]
+    return main_sections, row_count, special_views
 
 
 def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
@@ -2210,7 +3145,23 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
         }
     )
 
-    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS[2:]:
+    cnc_sections, cnc_row_count, cnc_special_views = _manufacturing_cnc_sections(raw_bundle, current_number)
+    documents.append(
+        {
+            "key": "cnc_furas",
+            "label": "CNC fúrás",
+            "file_name": "",
+            "sections": cnc_sections,
+            "row_count": cnc_row_count,
+            "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
+            "specialViews": cnc_special_views,
+            "hideBarcodeColumn": True,
+            "allowSplit": False,
+            "singleColumnOverview": True,
+        }
+    )
+
+    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS[3:]:
         documents.append(_manufacturing_placeholder_document(operation_key, operation_label))
 
     return (
