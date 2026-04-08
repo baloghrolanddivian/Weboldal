@@ -3316,60 +3316,60 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if mode == "normal":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
                     0 if "normal" in upper_combined_text(row) else 1,
                     0 if "fny" in upper_combined_text(row) else 1,
-                    clean_text(row.get("color")),
                     size_parts(row.get("size")),
                 )
             )
         elif mode == "felnyilo":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
                     0 if "felnyilo" in upper_combined_text(row) else 1,
                     0 if "f2a" in upper_combined_text(row) or "f_2a" in upper_combined_text(row) else 1,
                     0 if "ffm" in upper_combined_text(row) else 1,
                     0 if "ef60" in upper_combined_text(row) else 1,
-                    clean_text(row.get("color")),
                     size_parts(row.get("size")),
                 )
             )
         elif mode == "rack1-other":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
                     0 if is_upper_595_eft(row) else 1,
                     0 if is_upper_360(row) else 1,
                     0 if is_upper_680(row) else 1,
                     size_parts(row.get("size")),
-                    clean_text(row.get("color")),
                     clean_text(row.get("hardware_type")),
                 )
             )
         elif mode == "rack2-other":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
                     0 if is_upper_595_eft(row) else 1,
                     0 if is_upper_360(row) else 1,
                     0 if is_upper_680(row) and "eft" in upper_combined_text(row) else 1,
                     0 if is_upper_zille(row) else 1,
                     size_parts(row.get("size")),
-                    clean_text(row.get("color")),
                     clean_text(row.get("hardware_type")),
                 )
             )
         elif mode == "sarok":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
                     0 if clean_text(row.get("size")) == "360 x 290 x 18" else 1,
                     1 if clean_text(row.get("size")) == "360 x 550 x 18" else 0,
-                    clean_text(row.get("color")),
                     clean_text(row.get("hardware_type")),
                 )
             )
         else:
             rows.sort(
                 key=lambda row: (
-                    size_parts(row.get("size")),
                     clean_text(row.get("color")),
+                    size_parts(row.get("size")),
                     clean_text(row.get("hardware_type")),
                 )
             )

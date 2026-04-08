@@ -1867,7 +1867,7 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
-                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat t?pusa")}}
+                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat típusa")}}
                   ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
                   ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
