@@ -749,7 +749,7 @@ def render_manufacturing_page(
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard,
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard {{
-      grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.46fr 1.74fr;
+      grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4),
@@ -759,6 +759,12 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-cnc-lower > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-row.is-cnc-fiokelo > :nth-child(4) {{
+      display: grid;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard > * {{
+      display: inline-flex;
+    }}
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard > * {{
       display: grid;
     }}
     .mfg-content.is-split {{
@@ -848,7 +854,7 @@ def render_manufacturing_page(
       grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
     }}
     .mfg-table-head.is-front-standard {{
-      grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.46fr 1.74fr;
+      grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
     }}
     .mfg-section-title {{
       font-size: 0.82rem;
@@ -908,7 +914,18 @@ def render_manufacturing_page(
       grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
     }}
     .mfg-row.is-front-standard {{
-      grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.46fr 1.74fr;
+      grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
+    }}
+    .mfg-row.is-front-standard .mfg-row-main {{
+      min-width: 0;
+      padding-right: 8px;
+    }}
+    .mfg-row.is-front-standard .mfg-row-main .mfg-row-title {{
+      line-height: 1.2;
+    }}
+    .mfg-row.is-front-standard .mfg-row-meta.is-model {{
+      font-weight: 700;
+      color: #111827;
     }}
     .mfg-row.is-green {{
       background: var(--mfg-green-bg);
@@ -1159,7 +1176,7 @@ def render_manufacturing_page(
       }}
       .mfg-table-head.is-front-standard,
       .mfg-row.is-front-standard {{
-        grid-template-columns: 0.98fr 0.66fr 0.7fr 0.82fr 0.44fr 1.56fr;
+        grid-template-columns: 0.92fr 0.78fr 0.68fr 0.82fr 0.44fr 1.48fr;
       }}
     }}
     @media (orientation: portrait) {{
@@ -1288,7 +1305,12 @@ def render_manufacturing_page(
       const documentAllowsSplit = (document) => document?.allowSplit !== false;
       const documentUsesSingleColumnOverview = (document) => document?.singleColumnOverview === true;
       const documentHidesBarcode = (document) => document?.hideBarcodeColumn === true;
-      const groupColumnLayout = (group) => String(group?.columnLayout || "");
+      const groupColumnLayout = (group) => {{
+        const directLayout = String(group?.columnLayout || "").trim();
+        if (directLayout) return directLayout;
+        const firstRowLayout = String((Array.isArray(group?.rows) && group.rows.length ? group.rows[0]?.columnLayout : "") || "").trim();
+        return firstRowLayout;
+      }};
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
@@ -1938,7 +1960,7 @@ def render_manufacturing_page(
                                 <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                              <div class="mfg-row-meta is-model"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
                               <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
                               <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
                               <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
