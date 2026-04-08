@@ -1556,6 +1556,13 @@ def render_manufacturing_page(
               }}))
               .filter((section) => section.rows.length);
           }}
+          if (layoutMode === "double") {{
+            const pairKey = pairedSectionKey({{ sections }}, currentSubcategoryKey);
+            return [currentSubcategoryKey, pairKey]
+              .filter((key, index, items) => key && items.indexOf(key) === index)
+              .map((key) => sections.find((section) => section.key === key))
+              .filter((section) => section && Array.isArray(section.rows) && section.rows.length);
+          }}
           const selectedSection = sections.find((section) => section.key === currentSubcategoryKey);
           return selectedSection ? [selectedSection] : [];
         }}
@@ -1728,7 +1735,7 @@ def render_manufacturing_page(
               {{ key: "all", label: "Összes méret", count: subcategories.reduce((total, item) => total + Number(item.count || 0), 0) }},
               ...subcategories,
             ].map((item) => `
-              <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : ""}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+              <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : (layoutMode === "double" && item.key !== "all" && item.key === pairedSectionKey({ sections: currentKorpuszSections }, currentSubcategoryKey) ? " is-secondary" : "")}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
                 <strong>${{escapeHtml(item.label)}}</strong>
                 <small>${{item.count}}</small>
               </button>
@@ -1757,7 +1764,10 @@ def render_manufacturing_page(
         const document = currentDocument();
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red" || Boolean(currentSpecialView);
-        const isSplitMode = layoutMode === "double" && !isSpecialViewKey(currentViewKey) && groups.length > 1;
+        const isSplitMode = layoutMode === "double" && groups.length > 1 && (
+          !isSpecialViewKey(currentViewKey) ||
+          (String(document?.key || "") === "korpusz_osszekeszites" && Boolean(currentSpecialView) && !["all", "plain", "green", "red"].includes(currentSubcategoryKey))
+        );
         const useSingleColumnOverview = documentUsesSingleColumnOverview(document) && isOverviewMode;
         contentNode.classList.toggle("is-overview", isOverviewMode);
         contentNode.classList.toggle("is-single-column-overview", useSingleColumnOverview);
@@ -1792,34 +1802,84 @@ def render_manufacturing_page(
             : columnLayout === "cnc-upper"
               ? " is-cnc-upper"
               : columnLayout === "cnc-fiokelo"
-                  ? `
-                    <div class="mfg-table-head${{tableHeadClass}}">
-                      ${{sortButtonMarkup(group.key, "model", "Modell")}}
-                      ${{sortButtonMarkup(group.key, "color", "Sz?n")}}
-                      ${{sortButtonMarkup(group.key, "size", "M?ret")}}
-                      ${{sortButtonMarkup(group.key, "netfront_color", "NettFrontos sz?n")}}
-                      ${{sortButtonMarkup(group.key, "drill", "Furat")}}
-                      ${{sortButtonMarkup(group.key, "drawer_type", "Fi?kt?pus")}}
-                      ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
-                    </div>
-                  `
-                : columnLayout === "front-standard"
-                  ? `
-                    <div class="mfg-table-head${{tableHeadClass}}">
-                      ${{sortButtonMarkup(group.key, "name", "Megnevez?s")}}
-                      ${{sortButtonMarkup(group.key, "model", "Modell")}}
-                      ${{sortButtonMarkup(group.key, "size", "M?ret")}}
-                      ${{sortButtonMarkup(group.key, "color", "Sz?n")}}
-                      ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
-                      ${{sortButtonMarkup(group.key, "code", "Vonalk?d")}}
-                    </div>
-                  `
-                : `
+                ? " is-cnc-fiokelo"
+              : columnLayout === "front-standard"
+                ? " is-front-standard"
+              : hideBarcode
+                ? " is-no-barcode"
+                : "";
+          const rowClass = columnLayout === "cnc-lower"
+            ? " is-cnc-lower"
+            : columnLayout === "cnc-upper"
+              ? " is-cnc-upper"
+              : columnLayout === "cnc-fiokelo"
+                ? " is-cnc-fiokelo"
+              : columnLayout === "front-standard"
+                ? " is-front-standard"
+              : hideBarcode
+                ? " is-no-barcode"
+                : "";
+          const headMarkup = showSectionHeader
+            ? `
+              <div class="mfg-section-head">
+                <div class="mfg-section-title">${{escapeHtml(group.label)}}</div>
+                <div class="mfg-section-count">${{group.rows.length}} sor</div>
+              </div>
+            `
+            : "";
+          const tableHeadMarkup = columnLayout === "cnc-lower"
+            ? `
                 <div class="mfg-table-head${{tableHeadClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
-                  ${{sortButtonMarkup(group.key, "edge", "Él")}}
+                  ${{sortButtonMarkup(group.key, "drawer_drill", "Fióksín fúrás")}}
+                  ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
+                  ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                </div>
+              `
+            : columnLayout === "cnc-upper"
+              ? `
+                <div class="mfg-table-head${{tableHeadClass}}">
+                  ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat t?pusa")}}
+                  ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
+                  ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                </div>
+              `
+            : columnLayout === "cnc-fiokelo"
+              ? `
+                <div class="mfg-table-head${{tableHeadClass}}">
+                  ${{sortButtonMarkup(group.key, "model", "Modell")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "netfront_color", "NettFrontos szín")}}
+                  ${{sortButtonMarkup(group.key, "drill", "Furat")}}
+                  ${{sortButtonMarkup(group.key, "drawer_type", "Fióktípus")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                </div>
+              `
+            : columnLayout === "front-standard"
+              ? `
+                <div class="mfg-table-head${{tableHeadClass}}">
+                  ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
+                  ${{sortButtonMarkup(group.key, "model", "Modell")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{sortButtonMarkup(group.key, "code", "Vonalkód")}}
+                </div>
+              `
+            : `
+                <div class="mfg-table-head${{tableHeadClass}}">
+                  ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "edge", "?l")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{hideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
@@ -1842,21 +1902,21 @@ def render_manufacturing_page(
                           <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                           ${{subtitleMarkup}}
                         </div>
-                        <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
-                        <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
+                        <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
+                        <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.drawer_drill || "-")}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                         <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                       `
-                      : columnLayout === "cnc-upper"
-                        ? `
+                    : columnLayout === "cnc-upper"
+                      ? `
                           <div class="mfg-row-main">
                             <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
-                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
-                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
@@ -1864,59 +1924,61 @@ def render_manufacturing_page(
                         `
                       : columnLayout === "cnc-fiokelo"
                         ? `
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Sz?n n?lk?l")}}</span></div>
-                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "M?ret n?lk?l")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.netfrontColor || "-")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.drillLabel || "-")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.drawerType || "-")}}</span></div>
-                          <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
-                        `
-                      : columnLayout === "front-standard"
-                        ? `
-                          <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "N?vtelen sor")}}${{glassBadgeMarkup}}</div>
-                            ${{subtitleMarkup}}
-                          </div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "M?ret n?lk?l")}}</span></div>
-                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Sz?n n?lk?l")}}</span></div>
-                          <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
-                          <div class="mfg-row-barcode">
-                            <div class="mfg-row-barcode-box"><svg class="mfg-barcode-svg" data-barcode="${{escapeHtml(String(row.code || row.row_id || ''))}}"></svg></div>
-                            <div class="mfg-row-code">${{escapeHtml(row.code || "")}}</div>
-                          </div>
-                        `
-                      : `
-                          <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
-                            ${{subtitleMarkup}}
-                          </div>
-                          <div class="mfg-row-meta">
-                            <span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>
-                          </div>
-                          <div class="mfg-row-meta">
-                            <span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span>
-                          </div>
-                          <div class="mfg-row-meta">
-                            <span>${{escapeHtml(row.edge || "Él nélkül")}}</span>
-                          </div>
-                          <div class="mfg-row-side">
-                            <div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div>
-                          </div>
-                          ${{
-                            hideBarcode
-                              ? ""
-                              : `
-                                  <div class="mfg-row-barcode-wrap">
-                                    <div class="mfg-row-barcode">
-                                      <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.detail || row.row_id)}}"></svg>
-                                    </div>
-                                    <div class="mfg-row-code">${{escapeHtml(row.code || row.detail || "Kód nélkül")}}</div>
-                                  </div>
-                                `
-                          }}
-                        `
+                            <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                            <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
+                            <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
+                            <div class="mfg-row-meta"><span>${{escapeHtml(row.netfrontColor || "-")}}</span></div>
+                            <div class="mfg-row-meta"><span>${{escapeHtml(row.drillLabel || "-")}}</span></div>
+                            <div class="mfg-row-meta"><span>${{escapeHtml(row.drawerType || "-")}}</span></div>
+                            <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                          `
+                        : columnLayout === "front-standard"
+                          ? `
+                              <div class="mfg-row-main">
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
+                                ${{subtitleMarkup}}
+                              </div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
+                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
+                              <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                              <div class="mfg-row-barcode-wrap">
+                                <div class="mfg-row-barcode">
+                                  <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
+                                </div>
+                                <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
+                              </div>
+                            `
+                          : `
+                              <div class="mfg-row-main">
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                                ${{subtitleMarkup}}
+                              </div>
+                              <div class="mfg-row-meta">
+                                <span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span>
+                              </div>
+                              <div class="mfg-row-meta">
+                                <span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span>
+                              </div>
+                              <div class="mfg-row-meta">
+                                <span>${{escapeHtml(row.edge || "Él nélkül")}}</span>
+                              </div>
+                              <div class="mfg-row-side">
+                                <div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div>
+                              </div>
+                              ${{
+                                hideBarcode
+                                  ? ""
+                                  : `
+                                      <div class="mfg-row-barcode-wrap">
+                                        <div class="mfg-row-barcode">
+                                          <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.detail || row.row_id)}}"></svg>
+                                        </div>
+                                        <div class="mfg-row-code">${{escapeHtml(row.code || row.detail || "Kód nélkül")}}</div>
+                                      </div>
+                                    `
+                              }}
+                            `
                 }}
               </button>
             `;
