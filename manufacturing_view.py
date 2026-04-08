@@ -743,12 +743,22 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper {{
       grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-fiokelo,
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-fiokelo {{
+      grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard {{
+      grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.46fr 1.74fr;
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
-    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4) {{
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4),
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-fiokelo > :nth-child(4) {{
       display: inline-flex;
     }}
     .mfg-content.is-single-column-overview .mfg-row.is-cnc-lower > :nth-child(4),
-    .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper > :nth-child(4) {{
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper > :nth-child(4),
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-fiokelo > :nth-child(4) {{
       display: grid;
     }}
     .mfg-content.is-split {{
@@ -834,6 +844,12 @@ def render_manufacturing_page(
     .mfg-table-head.is-cnc-upper {{
       grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
     }}
+    .mfg-table-head.is-cnc-fiokelo {{
+      grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
+    }}
+    .mfg-table-head.is-front-standard {{
+      grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.46fr 1.74fr;
+    }}
     .mfg-section-title {{
       font-size: 0.82rem;
       font-weight: 800;
@@ -888,6 +904,12 @@ def render_manufacturing_page(
     .mfg-row.is-cnc-upper {{
       grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
     }}
+    .mfg-row.is-cnc-fiokelo {{
+      grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
+    }}
+    .mfg-row.is-front-standard {{
+      grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.46fr 1.74fr;
+    }}
     .mfg-row.is-green {{
       background: var(--mfg-green-bg);
       box-shadow: inset 3px 0 0 var(--mfg-green-line);
@@ -898,6 +920,24 @@ def render_manufacturing_page(
     }}
     .mfg-row.is-muted {{
       background: #f3f4f6;
+    }}
+    .mfg-row.is-model-blue {{
+      background: #eef4ff;
+    }}
+    .mfg-row.is-model-violet {{
+      background: #f4efff;
+    }}
+    .mfg-row.is-model-amber {{
+      background: #fff6e8;
+    }}
+    .mfg-row.is-model-cyan {{
+      background: #eefafc;
+    }}
+    .mfg-row.is-model-slate {{
+      background: #f3f6f8;
+    }}
+    .mfg-row.is-model-orange {{
+      background: #fff1ea;
     }}
     .mfg-row.is-glass {{
       background: #eef6ff;
@@ -941,6 +981,36 @@ def render_manufacturing_page(
       background: #dbeafe;
       color: #1d4ed8;
       border: 1px solid rgba(37, 99, 235, 0.16);
+    }}
+    .mfg-row-badge.is-model-blue {{
+      background: #dbe8ff;
+      color: #1d4ed8;
+      border: 1px solid rgba(37, 99, 235, 0.14);
+    }}
+    .mfg-row-badge.is-model-violet {{
+      background: #ebe2ff;
+      color: #6d28d9;
+      border: 1px solid rgba(109, 40, 217, 0.14);
+    }}
+    .mfg-row-badge.is-model-amber {{
+      background: #fdecc8;
+      color: #b45309;
+      border: 1px solid rgba(180, 83, 9, 0.14);
+    }}
+    .mfg-row-badge.is-model-cyan {{
+      background: #d9f4f8;
+      color: #0f766e;
+      border: 1px solid rgba(15, 118, 110, 0.14);
+    }}
+    .mfg-row-badge.is-model-slate {{
+      background: #e6edf2;
+      color: #475569;
+      border: 1px solid rgba(71, 85, 105, 0.14);
+    }}
+    .mfg-row-badge.is-model-orange {{
+      background: #fee2d5;
+      color: #c2410c;
+      border: 1px solid rgba(194, 65, 12, 0.14);
     }}
     .mfg-row-subtitle {{
       font-size: 0.7rem;
@@ -1086,6 +1156,10 @@ def render_manufacturing_page(
       .mfg-table-head.is-cnc-upper,
       .mfg-row.is-cnc-upper {{
         grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.76fr 0.48fr 0.46fr;
+      }}
+      .mfg-table-head.is-front-standard,
+      .mfg-row.is-front-standard {{
+        grid-template-columns: 0.98fr 0.66fr 0.7fr 0.82fr 0.44fr 1.56fr;
       }}
     }}
     @media (orientation: portrait) {{
@@ -1239,6 +1313,13 @@ def render_manufacturing_page(
             count,
           }}));
       }};
+      const korpuszMainViews = (document) => {{
+        if (String(document?.key || "") !== "korpusz_osszekeszites") return [];
+        return specialViewsForDocument(document).filter((view) => {{
+          const key = String(view?.key || "");
+          return key === "korpusz-osszekeszito" || key === "korpusz-alkatresz-kesz" || key === "all-productions-red";
+        }});
+      }};
       const specialViewUsesRedFilter = (view) => ["current-production-red", "all-productions-red"].includes(String(view?.key || ""));
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
@@ -1341,7 +1422,11 @@ def render_manufacturing_page(
       const rowSortValue = (row, sortKey) => {{
         if (sortKey === "name") return normalizeSortText(row.name);
         if (sortKey === "size") return parseSizeParts(row.size);
+        if (sortKey === "model") return normalizeSortText(row.modelLabel);
         if (sortKey === "color") return normalizeSortText(row.color);
+        if (sortKey === "netfront_color") return normalizeSortText(row.netfrontColor);
+        if (sortKey === "drill") return normalizeSortText(row.drillLabel);
+        if (sortKey === "drawer_type") return normalizeSortText(row.drawerType);
         if (sortKey === "drawer_drill") return normalizeSortText(row.drawer_drill);
         if (sortKey === "side_type") return normalizeSortText(row.side_type);
         if (sortKey === "hardware_type") return normalizeSortText(row.hardware_type);
@@ -1456,6 +1541,24 @@ def render_manufacturing_page(
       const buildGroupsForView = (document) => {{
         if (!document) return [];
         const currentSpecialView = specialViewForKey(document, currentViewKey);
+        if (String(document?.key || "") === "korpusz_osszekeszites" && currentSpecialView) {{
+          const sections = orderedSectionsForTabs(Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : []);
+          if (currentSubcategoryKey === "all") {{
+            return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
+          }}
+          if (currentSubcategoryKey === "green" || currentSubcategoryKey === "red" || currentSubcategoryKey === "plain") {{
+            return sections
+              .map((section) => ({{
+                ...section,
+                rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
+                  currentSubcategoryKey === "plain" ? !rowStateValue(row) : rowStateValue(row) === currentSubcategoryKey
+                ),
+              }}))
+              .filter((section) => section.rows.length);
+          }}
+          const selectedSection = sections.find((section) => section.key === currentSubcategoryKey);
+          return selectedSection ? [selectedSection] : [];
+        }}
         if (currentSpecialView) {{
           let specialSections = Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : [];
           if (currentSubcategoryKey !== "all") {{
@@ -1550,7 +1653,46 @@ def render_manufacturing_page(
           subsectionTabsNode.style.display = "none";
           return;
         }}
-        const sections = Array.isArray(document.sections) ? document.sections : [];
+        const mainKorpuszViews = korpuszMainViews(document);
+        if (mainKorpuszViews.length) {{
+          if (!mainKorpuszViews.some((item) => item.key === currentViewKey)) {{
+            currentViewKey = String(mainKorpuszViews[0]?.key || "all");
+          }}
+          const currentKorpuszView = specialViewForKey(document, currentViewKey) || mainKorpuszViews[0];
+          const currentKorpuszSections = orderedSectionsForTabs(Array.isArray(currentKorpuszView?.sections) ? currentKorpuszView.sections : []);
+          const korpuszSubTabs = [
+            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections) }},
+            {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)) }},
+            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "green") }},
+            {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red") }},
+            ...currentKorpuszSections.map((section) => ({{
+              key: section.key,
+              label: section.label,
+              count: Array.isArray(section.rows) ? section.rows.length : 0,
+            }})),
+          ];
+          if (!korpuszSubTabs.some((item) => item.key === currentSubcategoryKey)) {{
+            currentSubcategoryKey = "all";
+          }}
+          sectionTabsNode.innerHTML = mainKorpuszViews.map((item) => `
+            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+              <strong>${{escapeHtml(item.label)}}</strong>
+              <small>${{Number(item.count || 0)}}</small>
+            </button>
+          `).join("");
+          subsectionTabsNode.style.display = "";
+          subsectionTabsNode.innerHTML = korpuszSubTabs.map((item) => `
+            <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : ""}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+              <strong>${{escapeHtml(item.label)}}</strong>
+              <small>${{item.count}}</small>
+            </button>
+          `).join("");
+          return;
+        }}
+        const currentSpecialView = specialViewForKey(document, currentViewKey);
+        const sections = (currentSpecialView && !specialViewUsesRedFilter(currentSpecialView) && Array.isArray(currentSpecialView.sections))
+          ? currentSpecialView.sections
+          : (Array.isArray(document.sections) ? document.sections : []);
         const documentSpecialViews = specialViewsForDocument(document);
         const specialTabs = [
           {{ key: "all", label: "Összes", count: flattenRows(document).length }},
@@ -1649,49 +1791,30 @@ def render_manufacturing_page(
             ? " is-cnc-lower"
             : columnLayout === "cnc-upper"
               ? " is-cnc-upper"
-              : hideBarcode
-                ? " is-no-barcode"
-                : "";
-          const rowClass = columnLayout === "cnc-lower"
-            ? " is-cnc-lower"
-            : columnLayout === "cnc-upper"
-              ? " is-cnc-upper"
-              : hideBarcode
-                ? " is-no-barcode"
-                : "";
-          const headMarkup = showSectionHeader
-            ? `
-              <div class="mfg-section-head">
-                <div class="mfg-section-title">${{escapeHtml(group.label)}}</div>
-                <div class="mfg-section-count">${{group.rows.length}} sor</div>
-              </div>
-            `
-            : "";
-          const tableHeadMarkup = columnLayout === "cnc-lower"
-            ? `
-              <div class="mfg-table-head${{tableHeadClass}}">
-                ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
-                ${{sortButtonMarkup(group.key, "size", "Méret")}}
-                ${{sortButtonMarkup(group.key, "color", "Szín")}}
-                ${{sortButtonMarkup(group.key, "drawer_drill", "Fióksín fúrás")}}
-                ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
-                ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
-                ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
-              </div>
-            `
-            : columnLayout === "cnc-upper"
-              ? `
-                <div class="mfg-table-head${{tableHeadClass}}">
-                  ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
-                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
-                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
-                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat típusa")}}
-                  ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
-                  ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
-                  ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
-                </div>
-              `
-              : `
+              : columnLayout === "cnc-fiokelo"
+                  ? `
+                    <div class="mfg-table-head${{tableHeadClass}}">
+                      ${{sortButtonMarkup(group.key, "model", "Modell")}}
+                      ${{sortButtonMarkup(group.key, "color", "Sz?n")}}
+                      ${{sortButtonMarkup(group.key, "size", "M?ret")}}
+                      ${{sortButtonMarkup(group.key, "netfront_color", "NettFrontos sz?n")}}
+                      ${{sortButtonMarkup(group.key, "drill", "Furat")}}
+                      ${{sortButtonMarkup(group.key, "drawer_type", "Fi?kt?pus")}}
+                      ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                    </div>
+                  `
+                : columnLayout === "front-standard"
+                  ? `
+                    <div class="mfg-table-head${{tableHeadClass}}">
+                      ${{sortButtonMarkup(group.key, "name", "Megnevez?s")}}
+                      ${{sortButtonMarkup(group.key, "model", "Modell")}}
+                      ${{sortButtonMarkup(group.key, "size", "M?ret")}}
+                      ${{sortButtonMarkup(group.key, "color", "Sz?n")}}
+                      ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                      ${{sortButtonMarkup(group.key, "code", "Vonalk?d")}}
+                    </div>
+                  `
+                : `
                 <div class="mfg-table-head${{tableHeadClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
@@ -1706,13 +1829,17 @@ def render_manufacturing_page(
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
+            const modelToneClass = row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : "";
+            const modelBadgeMarkup = row.modelLabel
+              ? `<span class="mfg-row-badge${{modelToneClass}}">${{escapeHtml(String(row.modelLabel))}}</span>`
+              : "";
             return `
-              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
+              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
                         <div class="mfg-row-main">
-                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
+                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                           ${{subtitleMarkup}}
                         </div>
                         <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -1722,22 +1849,47 @@ def render_manufacturing_page(
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                         <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                       `
-                    : columnLayout === "cnc-upper"
-                      ? `
+                      : columnLayout === "cnc-upper"
+                        ? `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
                           <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                           <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                         `
+                      : columnLayout === "cnc-fiokelo"
+                        ? `
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Sz?n n?lk?l")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "M?ret n?lk?l")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.netfrontColor || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.drillLabel || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.drawerType || "-")}}</span></div>
+                          <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                        `
+                      : columnLayout === "front-standard"
+                        ? `
+                          <div class="mfg-row-main">
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "N?vtelen sor")}}${{glassBadgeMarkup}}</div>
+                            ${{subtitleMarkup}}
+                          </div>
+                          <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "M?ret n?lk?l")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Sz?n n?lk?l")}}</span></div>
+                          <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                          <div class="mfg-row-barcode">
+                            <div class="mfg-row-barcode-box"><svg class="mfg-barcode-svg" data-barcode="${{escapeHtml(String(row.code || row.row_id || ''))}}"></svg></div>
+                            <div class="mfg-row-code">${{escapeHtml(row.code || "")}}</div>
+                          </div>
+                        `
                       : `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta">

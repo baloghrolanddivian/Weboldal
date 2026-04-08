@@ -2091,6 +2091,14 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                 return clean_type[: -len(suffix)].strip()
         return clean_type
 
+    def front_model_label(row: dict) -> str:
+        detail_text = clean_text(row.get("detail"))
+        if "·" in detail_text:
+            return clean_text(detail_text.split("·", 1)[0])
+        if "-" in detail_text:
+            return clean_text(detail_text.split("-", 1)[0])
+        return ""
+
     def is_glass_row(row: dict, type_label: str) -> bool:
         combined = " ".join(
             [
@@ -2124,8 +2132,10 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             grouped_sections[section_slug]["label"] = f"{group_size} · {material} · {box_type_label}"
             row["name"] = clean_text(raw_row.get("name")) or display_row_name(row)
             row["detail"] = type_label
+            row["modelLabel"] = front_model_label(raw_row)
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
+            row["columnLayout"] = "front-standard"
             grouped_sections[section_slug]["rows"].append(row)
 
     material_order = {"Fóliás": 0, "Bútorlapos": 1}
@@ -2135,6 +2145,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         rows.sort(
             key=lambda row: (
                 str(row.get("color", "")).lower(),
+                str(row.get("modelLabel", "")).lower(),
                 str(row.get("name", "")).lower(),
                 size_sort_key(str(row.get("size", "")).strip()),
                 str(row.get("detail", "")).lower(),
@@ -2297,10 +2308,46 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         text = clean_text(detail)
         if not text:
             return "", ""
+        for marker in ("Felső oldal", "Felső végzáró", "Tető-fenék mart", "EFT fenék excenteres"):
+            marker_index = text.find(marker)
+            if marker_index > 0:
+                text = clean_text(text[:marker_index])
+                break
+        text = re.sub(r"\b\d+H(?:\dR)?\s+\d+\b", "", text).strip()
+        text = re.sub(r"\s{2,}", " ", text).strip()
+        if not text:
+            return "", ""
+        hardware_codes = {"N", "KESB", "GTEL", "TE", "RI", "JO"}
+        if text in hardware_codes:
+            return "", text
         parts = text.rsplit(" ", 1)
-        if len(parts) == 2 and parts[1] in {"N", "KESB", "GTEL", "TE", "RI", "JO"}:
-            return parts[0], parts[1]
+        if len(parts) == 2 and parts[1] in hardware_codes:
+            return clean_text(parts[0]), parts[1]
         return text, ""
+
+    def split_upper_color_and_side(color: object, side_type: object) -> tuple[str, str]:
+        color_text = clean_text(color)
+        side_text = clean_text(side_type)
+        patterns = [
+            (r"\s+Fels[őo]\s+felny[ií]l[oó]s$", "Felnyíló"),
+            (r"\s+F_?2A$", "F2A"),
+            (r"\s+EF60_?72$", "EF60"),
+            (r"\s+FNY$", "FNY"),
+            (r"\s+EFT$", "EFT"),
+            (r"\s+FVZ$", "FVZ"),
+            (r"\s+FMFS$", "FMFS"),
+            (r"\s+FMF$", "FMF"),
+            (r"\s+FKF$", "FKF"),
+            (r"\s+FZN$", "FZN"),
+            (r"\s+FÜF$", "FÜF"),
+            (r"\s+FUF$", "FÜF"),
+            (r"\s+Fels[őo]$", "Normál"),
+        ]
+        for pattern, detected_side in patterns:
+            if re.search(pattern, color_text, flags=re.IGNORECASE):
+                stripped_color = re.sub(pattern, "", color_text, flags=re.IGNORECASE).strip()
+                return stripped_color or color_text, side_text or detected_side
+        return color_text, side_text
 
     def is_kamra_row(name: str, color: str, side_type: str) -> bool:
         combined = " ".join([folded(name), folded(color), normalize_side_type(side_type)])
@@ -2374,29 +2421,43 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     existing["isMuted"] = bool(existing.get("isMuted")) or is_non_nutos_text(name) or is_non_nutos_text(source_name)
         return list(merged.values())
 
+    def upper_source_group(section_label: object) -> str:
+        text = clean_text(section_label)
+        folded_text = folded(text)
+        if "1-es" in folded_text:
+            return "1-es"
+        if "2-es" in folded_text:
+            return "2-es"
+        return text or "egyeb"
+
     def build_upper_rows(source_sections: list[dict]) -> list[dict]:
-        merged: dict[tuple[str, str, str, str, str, str], dict] = {}
+        merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
         for section in source_sections:
+            source_group = upper_source_group(section.get("label"))
             for raw_row in section.get("rows", []):
                 if not isinstance(raw_row, dict):
                     continue
+                source_name = clean_text(raw_row.get("name"))
                 name = cnc_display_name(raw_row.get("name"))
                 size = clean_text(raw_row.get("size"))
                 color = clean_text(raw_row.get("color"))
                 edge = clean_text(raw_row.get("edge")) or "-"
-                hardware_type, side_type = parse_upper_detail(raw_row.get("detail"))
-                merge_key = (name, size, color, hardware_type, side_type, edge)
+                side_type, hardware_type = parse_upper_detail(raw_row.get("detail"))
+                color, side_type = split_upper_color_and_side(color, side_type)
+                merge_key = (source_group, name, size, color, hardware_type, side_type, edge)
                 quantity = int(raw_row.get("quantity", 0) or 0)
                 existing = merged.get(merge_key)
                 if existing is None:
                     merged_id = hashlib.sha1(
-                        f"cnc-upper|{production_number}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
+                        f"cnc-upper|{production_number}|{source_group}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
                     ).hexdigest()[:16]
                     merged[merge_key] = {
                         "row_id": merged_id,
                         "state_key": _manufacturing_state_key(production_number, merged_id),
                         "production_number": _manufacturing_normalize_number(production_number),
+                        "sourceGroup": source_group,
                         "name": name,
+                        "source_name": source_name,
                         "size": size,
                         "color": color,
                         "hardware_type": hardware_type,
@@ -2411,8 +2472,88 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return list(merged.values())
 
     def build_front_rows(source_sections: list[dict]) -> list[dict]:
-        merged: dict[tuple[str, str, str, str, str], dict] = {}
+        palette = ("blue", "violet", "amber", "cyan", "slate", "orange")
+
+        def fiokelo_group_label(section_label: object) -> str:
+            text = clean_text(section_label)
+            folded_text = folded(text)
+            if re.search(r"\b1-es\b", folded_text):
+                return "1-es"
+            if re.search(r"\b2-es\b", folded_text):
+                return "2-es"
+            return text or "Egyéb"
+
+        def fiokelo_model_label(detail: object) -> str:
+            text = clean_text(detail)
+            if not text:
+                return "Ismeretlen modell"
+            prefix = clean_text(text.split(" - ", 1)[0])
+            prefix = re.sub(r"\bNincs\b", "", prefix, flags=re.IGNORECASE).strip(" -")
+            first_token = clean_text(prefix.split()[0] if prefix else "")
+            return first_token or prefix or "Ismeretlen modell"
+
+        def parse_fiokelo_detail(detail: object) -> tuple[str, str, str, str]:
+            text = clean_text(detail)
+            if not text:
+                return "-", "-", "-", "-"
+            prefix, separator, suffix = text.partition(" - ")
+            prefix = clean_text(prefix)
+            suffix = clean_text(suffix)
+
+            prefix_tokens = [token for token in prefix.split() if token]
+            model_label = clean_text(prefix_tokens[0]) if prefix_tokens else "Ismeretlen modell"
+            netfront_color = clean_text(" ".join(prefix_tokens[1:])).strip(" -")
+            if folded(netfront_color) == "nincs":
+                netfront_color = ""
+
+            suffix_tokens = [token for token in suffix.split() if token]
+            drawer_type = ""
+            if suffix_tokens and re.fullmatch(r"[A-Z]{1,4}", suffix_tokens[-1]):
+                drawer_type = suffix_tokens.pop()
+            drill_text = clean_text(" ".join(suffix_tokens))
+            folded_drill_text = folded(drill_text)
+            if "furva" in folded_drill_text:
+                drill_label = "Fúrva"
+            elif "nincs" in folded_drill_text:
+                drill_label = "Nincs"
+            else:
+                drill_label = "-"
+            return (
+                model_label or "Ismeretlen modell",
+                netfront_color or "-",
+                drill_label or "-",
+                drawer_type or "-",
+            )
+
+        def fiokelo_model_tone(model_label: object) -> str:
+            token = folded(model_label)
+            if not token:
+                return "slate"
+            return palette[sum(ord(char) for char in token) % len(palette)]
+
+        def normalized_color_key(value: object) -> str:
+            return re.sub(r"[^a-z0-9]+", " ", folded(clean_text(value))).strip()
+
+        color_fallback_map = {
+            "sm feher folias": "Pure White",
+            "sm kasmir folias": "Dune Beige",
+            "sm provance folias": "Cedar Green",
+            "sm beige folias": "Palo Santo Beige",
+            "mf feher": "Mf. Fehér",
+            "mf capuccino": "Mf. Latte",
+            "mf beige": "Mf. Krém",
+            "feher fenyes evogloss": "Magasfényű fehér",
+            "matt grafit folias": "Matt antracit",
+            "beige folias": "Uni beige",
+            "canyon tolgy": "Canyon tölgy",
+            "sonoma tolgy": "Sonoma tölgy",
+            "kasmir": "Kasmír",
+            "antracit kr": "Antracit kr.",
+        }
+
+        parsed_rows: list[dict] = []
         for section in source_sections:
+            group_label = fiokelo_group_label(section.get("label"))
             for raw_row in section.get("rows", []):
                 if not isinstance(raw_row, dict):
                     continue
@@ -2421,26 +2562,89 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 color = clean_text(raw_row.get("color"))
                 edge = clean_text(raw_row.get("edge")) or "-"
                 detail = clean_text(raw_row.get("detail"))
-                merge_key = (name, size, color, edge, detail)
-                quantity = int(raw_row.get("quantity", 0) or 0)
-                existing = merged.get(merge_key)
-                if existing is None:
-                    merged_id = hashlib.sha1(
-                        f"cnc-front|{production_number}|{name}|{size}|{color}|{edge}|{detail}".encode("utf-8")
-                    ).hexdigest()[:16]
-                    merged[merge_key] = {
-                        "row_id": merged_id,
-                        "state_key": _manufacturing_state_key(production_number, merged_id),
-                        "production_number": _manufacturing_normalize_number(production_number),
+                model_label, netfront_color, drill_label, drawer_type = parse_fiokelo_detail(detail)
+                model_tone = fiokelo_model_tone(model_label)
+                parsed_rows.append(
+                    {
+                        "groupLabel": group_label,
                         "name": name,
                         "size": size,
                         "color": color,
                         "edge": edge,
-                        "quantity": quantity,
                         "detail": detail,
+                        "modelLabel": model_label,
+                        "netfrontColor": netfront_color,
+                        "drillLabel": drill_label,
+                        "drawerType": drawer_type,
+                        "modelTone": model_tone,
+                        "quantity": int(raw_row.get("quantity", 0) or 0),
                     }
-                else:
-                    existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+                )
+
+        explicit_model_color_map: dict[tuple[str, str], str] = {}
+        explicit_color_map: dict[str, str] = {}
+        for row in parsed_rows:
+            netfront_color = clean_text(row.get("netfrontColor"))
+            if not netfront_color or netfront_color == "-":
+                continue
+            model_key = folded(row.get("modelLabel"))
+            color_key = normalized_color_key(row.get("color"))
+            if model_key and color_key:
+                explicit_model_color_map[(model_key, color_key)] = netfront_color
+            if color_key:
+                explicit_color_map[color_key] = netfront_color
+
+        merged: dict[tuple[str, str, str, str, str, str, str, str], dict] = {}
+        for row in parsed_rows:
+            model_label = clean_text(row.get("modelLabel"))
+            color = clean_text(row.get("color"))
+            color_key = normalized_color_key(color)
+            model_key = folded(model_label)
+            netfront_color = clean_text(row.get("netfrontColor"))
+            if not netfront_color or netfront_color == "-":
+                netfront_color = (
+                    explicit_model_color_map.get((model_key, color_key))
+                    or explicit_color_map.get(color_key)
+                    or color_fallback_map.get(color_key)
+                    or color
+                    or "-"
+                )
+
+            merge_key = (
+                row.get("groupLabel", ""),
+                row.get("name", ""),
+                model_label,
+                color,
+                row.get("size", ""),
+                netfront_color,
+                row.get("drillLabel", ""),
+                row.get("drawerType", ""),
+            )
+            existing = merged.get(merge_key)
+            if existing is None:
+                merged_id = hashlib.sha1(
+                    f"cnc-front|{production_number}|{row.get('groupLabel','')}|{row.get('name','')}|{model_label}|{color}|{row.get('size','')}|{netfront_color}|{row.get('drillLabel','')}|{row.get('drawerType','')}".encode("utf-8")
+                ).hexdigest()[:16]
+                merged[merge_key] = {
+                    "row_id": merged_id,
+                    "state_key": _manufacturing_state_key(production_number, merged_id),
+                    "production_number": _manufacturing_normalize_number(production_number),
+                    "name": row.get("name", ""),
+                    "size": row.get("size", ""),
+                    "color": color,
+                    "edge": row.get("edge", ""),
+                    "quantity": int(row.get("quantity", 0) or 0),
+                    "detail": row.get("detail", ""),
+                    "fiokeloGroup": row.get("groupLabel", ""),
+                    "modelLabel": model_label,
+                    "netfrontColor": netfront_color,
+                    "drillLabel": row.get("drillLabel", ""),
+                    "drawerType": row.get("drawerType", ""),
+                    "modelTone": row.get("modelTone", "slate"),
+                    "hideSubtitle": True,
+                }
+            else:
+                existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
         return list(merged.values())
 
     also_source_sections = [
@@ -2553,6 +2757,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     def is_as_takarosav_row(row: dict) -> bool:
         name_text = folded(row.get("name"))
         return "as takarosav" in name_text or "takarolap as" in name_text
+
+    def is_takarolap_as_row(row: dict) -> bool:
+        return "takarolap as" in folded(row.get("name"))
 
     def is_normal_also_row(row: dict) -> bool:
         return (
@@ -2950,6 +3157,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_as_takarosav_row(row)
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
     ]
+    box6_takarolap_rows = [row for row in box6_rows if is_takarolap_as_row(row)]
+    box6_rows = [row for row in box6_rows if not is_takarolap_as_row(row)]
 
     box1_rows.sort(
         key=lambda row: (
@@ -3005,51 +3214,226 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_text(row.get("side_type")),
         )
     )
+    box6_takarolap_rows.sort(
+        key=lambda row: (
+            clean_text(row.get("color")),
+            size_parts(row.get("size")),
+            clean_text(row.get("name")),
+            clean_text(row.get("side_type")),
+        )
+    )
 
     add_lower_section("Normáls alsó · 724 x 505 x 18", box1_rows, "box1")
     add_lower_section("Boxosok", box2_rows, "box2")
     add_lower_section("Kinga/Anna", box3_rows, "box3")
     add_lower_section("Egyebek", box4_rows, "box4")
     add_lower_section("Kamrák", box5_rows, "box5")
+    add_lower_section("AS takarósávok · Takarólap AS, 165 mellé", box6_takarolap_rows, "box6-takarolap")
     add_lower_section("AS takarósávok", box6_rows, "box6")
 
-    upper_rows.sort(
-        key=lambda row: (
-            upper_side_order.get(str(row.get("side_type", "")).strip(), 99),
-            size_parts(row.get("size")),
-            clean_text(row.get("name")),
-            clean_text(row.get("color")),
-            clean_text(row.get("hardware_type")),
+    def upper_combined_text(row: dict) -> str:
+        return " ".join(
+            [
+                folded(row.get("name")),
+                folded(row.get("color")),
+                folded(row.get("hardware_type")),
+                folded(row.get("side_type")),
+                folded(row.get("detail")),
+            ]
         )
-    )
+
+    def is_upper_normal_or_fny(row: dict) -> bool:
+        combined = upper_combined_text(row)
+        return "normal" in combined or "fny" in combined
+
+    def is_upper_felnyilo_group(row: dict) -> bool:
+        combined = upper_combined_text(row)
+        return (
+            "felnyilo" in combined
+            or "f_2a" in combined
+            or "f2a" in combined
+            or "ffm" in combined
+            or "ef60" in combined
+        )
+
+    def is_upper_zille(row: dict) -> bool:
+        combined = upper_combined_text(row)
+        return "zille" in combined or "fuf" in combined or "fzn" in combined
+
+    def is_upper_sarok(row: dict) -> bool:
+        combined = upper_combined_text(row)
+        size = clean_text(row.get("size"))
+        return (
+            "sarok" in combined
+            or (size == "360 x 330 x 18" and ("fmf" in combined or "fmfs" in combined or "fkf" in combined))
+            or (size == "360 x 550 x 18" and ("fmf" in combined or "fmfs" in combined or "fkf" in combined))
+        )
+
+    def is_upper_595_eft(row: dict) -> bool:
+        return clean_text(row.get("size")).startswith("595 x ") and "eft" in upper_combined_text(row)
+
+    def is_upper_680(row: dict) -> bool:
+        return clean_text(row.get("size")).startswith("680 x ")
+
+    def is_upper_360(row: dict) -> bool:
+        return clean_text(row.get("size")).startswith("360 x ")
+
+    def aggregate_upper_rows(rows: list[dict]) -> list[dict]:
+        grouped: dict[tuple[str, ...], dict] = {}
+        for row in rows:
+            group_key = (
+                clean_text(row.get("name")),
+                clean_text(row.get("size")),
+                clean_text(row.get("color")),
+                clean_text(row.get("hardware_type")),
+                clean_text(row.get("side_type")),
+                clean_text(row.get("edge")) or "-",
+            )
+            existing = grouped.get(group_key)
+            if existing is None:
+                merged_id = hashlib.sha1(
+                    f"cnc-upper-box|{production_number}|{'|'.join(group_key)}".encode("utf-8")
+                ).hexdigest()[:16]
+                grouped[group_key] = {
+                    "row_id": merged_id,
+                    "state_key": _manufacturing_state_key(production_number, merged_id),
+                    "production_number": _manufacturing_normalize_number(production_number),
+                    "name": clean_text(row.get("name")),
+                    "size": clean_text(row.get("size")),
+                    "color": clean_text(row.get("color")),
+                    "hardware_type": clean_text(row.get("hardware_type")),
+                    "side_type": clean_text(row.get("side_type")),
+                    "edge": clean_text(row.get("edge")) or "-",
+                    "quantity": int(row.get("quantity", 0) or 0),
+                    "detail": clean_text(row.get("detail")),
+                    "columnLayout": "cnc-upper",
+                }
+            else:
+                existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+        return list(grouped.values())
+
+    def sort_upper_rows(rows: list[dict], mode: str) -> list[dict]:
+        if mode == "normal":
+            rows.sort(
+                key=lambda row: (
+                    0 if "normal" in upper_combined_text(row) else 1,
+                    0 if "fny" in upper_combined_text(row) else 1,
+                    clean_text(row.get("color")),
+                    size_parts(row.get("size")),
+                )
+            )
+        elif mode == "felnyilo":
+            rows.sort(
+                key=lambda row: (
+                    0 if "felnyilo" in upper_combined_text(row) else 1,
+                    0 if "f2a" in upper_combined_text(row) or "f_2a" in upper_combined_text(row) else 1,
+                    0 if "ffm" in upper_combined_text(row) else 1,
+                    0 if "ef60" in upper_combined_text(row) else 1,
+                    clean_text(row.get("color")),
+                    size_parts(row.get("size")),
+                )
+            )
+        elif mode == "rack1-other":
+            rows.sort(
+                key=lambda row: (
+                    0 if is_upper_595_eft(row) else 1,
+                    0 if is_upper_360(row) else 1,
+                    0 if is_upper_680(row) else 1,
+                    size_parts(row.get("size")),
+                    clean_text(row.get("color")),
+                    clean_text(row.get("hardware_type")),
+                )
+            )
+        elif mode == "rack2-other":
+            rows.sort(
+                key=lambda row: (
+                    0 if is_upper_595_eft(row) else 1,
+                    0 if is_upper_360(row) else 1,
+                    0 if is_upper_680(row) and "eft" in upper_combined_text(row) else 1,
+                    0 if is_upper_zille(row) else 1,
+                    size_parts(row.get("size")),
+                    clean_text(row.get("color")),
+                    clean_text(row.get("hardware_type")),
+                )
+            )
+        elif mode == "sarok":
+            rows.sort(
+                key=lambda row: (
+                    0 if clean_text(row.get("size")) == "360 x 290 x 18" else 1,
+                    1 if clean_text(row.get("size")) == "360 x 550 x 18" else 0,
+                    clean_text(row.get("color")),
+                    clean_text(row.get("hardware_type")),
+                )
+            )
+        else:
+            rows.sort(
+                key=lambda row: (
+                    size_parts(row.get("size")),
+                    clean_text(row.get("color")),
+                    clean_text(row.get("hardware_type")),
+                )
+            )
+        return rows
+
     upper_sections = []
-    if upper_rows:
+
+    def add_upper_section(label: str, rows: list[dict], key_suffix: str, sort_mode: str) -> None:
+        if not rows:
+            return
         upper_sections.append(
             {
-                "key": "cnc-felso::all",
-                "label": "Felső",
-                "rows": upper_rows,
+                "key": f"cnc-felso::{key_suffix}",
+                "label": label,
+                "rows": sort_upper_rows(aggregate_upper_rows(rows), sort_mode),
                 "columnLayout": "cnc-upper",
             }
         )
 
-    front_rows.sort(
-        key=lambda row: (
-            clean_text(row.get("name")),
-            size_parts(row.get("size")),
-            clean_text(row.get("color")),
-            clean_text(row.get("detail")),
-        )
-    )
+    rack1_source_rows = [row for row in upper_rows if clean_text(row.get("sourceGroup")) == "2-es" and not is_upper_zille(row)]
+    rack2_source_rows = [row for row in upper_rows if clean_text(row.get("sourceGroup")) == "1-es" or is_upper_zille(row)]
+
+    rack1_box1_rows = [row for row in rack1_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row)]
+    rack1_box2_rows = [row for row in rack1_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
+    rack1_box3_rows = [row for row in rack1_source_rows if row not in rack1_box1_rows and row not in rack1_box2_rows and not is_upper_sarok(row)]
+
+    rack2_box1_rows = [row for row in rack2_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row)]
+    rack2_box2_rows = [row for row in rack2_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
+    rack2_box4_rows = [row for row in rack2_source_rows if is_upper_sarok(row)]
+    rack2_box3_rows = [row for row in rack2_source_rows if row not in rack2_box1_rows and row not in rack2_box2_rows and row not in rack2_box4_rows]
+
+    add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
+    add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
+    add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
+    add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
+    add_upper_section("2-es raklap · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
+
     front_sections = []
     if front_rows:
-        front_sections.append(
-            {
-                "key": "cnc-front::all",
-                "label": "Front összekészítés",
-                "rows": front_rows,
-            }
-        )
+        grouped_front_rows: dict[str, list[dict]] = {}
+        for row in front_rows:
+            grouped_front_rows.setdefault(str(row.get("fiokeloGroup", "Egyéb")), []).append(row)
+        preferred_order = {"1-es": 0, "2-es": 1}
+        for group_label, rows in sorted(grouped_front_rows.items(), key=lambda item: (preferred_order.get(item[0], 9), item[0])):
+            rows.sort(
+                key=lambda row: (
+                    size_parts(row.get("size")),
+                    clean_text(row.get("modelLabel")),
+                    clean_text(row.get("color")),
+                    clean_text(row.get("netfrontColor")),
+                    clean_text(row.get("drillLabel")),
+                    clean_text(row.get("drawerType")),
+                )
+            )
+            front_sections.append(
+                {
+                    "key": f"cnc-front::{_manufacturing_local_slug(group_label)}",
+                    "label": group_label,
+                    "rows": rows,
+                    "columnLayout": "cnc-fiokelo",
+                }
+            )
 
     main_sections = []
     if lower_rows:
@@ -3074,8 +3458,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         main_sections.append(
             {
                 "key": "cnc-main::front",
-                "label": "Front összekészítés",
+                "label": "Fiókelő fúrás",
                 "rows": front_rows,
+                "columnLayout": "cnc-fiokelo",
             }
         )
 
@@ -3095,7 +3480,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         },
         {
             "key": "cnc-front",
-            "label": "Front összekészítés",
+            "label": "Fiókelő fúrás",
             "count": sum(len(section.get("rows", [])) for section in front_sections),
             "sections": front_sections,
         },
@@ -3181,6 +3566,12 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
     selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
 
     korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
+    korpusz_osszekeszito_sections, korpusz_osszekeszito_count = _manufacturing_document_sections(
+        raw_bundle, current_number, ("osszekeszito",), include_source_prefix=False
+    )
+    korpusz_alkatresz_sections, korpusz_alkatresz_count = _manufacturing_document_sections(
+        raw_bundle, current_number, ("alkatresz_kesz",), include_source_prefix=False
+    )
     all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
     selection_state_payload.update(all_red_selection_state)
 
@@ -3192,7 +3583,21 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
             "sections": korpusz_sections,
             "row_count": korpusz_row_count,
             "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
-            "specialViews": [all_red_view],
+            "specialViews": [
+                {
+                    "key": "korpusz-osszekeszito",
+                    "label": "Összekészítő",
+                    "count": korpusz_osszekeszito_count,
+                    "sections": korpusz_osszekeszito_sections,
+                },
+                {
+                    "key": "korpusz-alkatresz-kesz",
+                    "label": "Alkatrész kész",
+                    "count": korpusz_alkatresz_count,
+                    "sections": korpusz_alkatresz_sections,
+                },
+                all_red_view,
+            ],
         }
     )
 
@@ -3677,6 +4082,9 @@ def _detect_invoice_profile(lines: list[str], text: str) -> str:
     if "KASTAMONU" in upper_text:
         return "kastamonu"
 
+    if "GAMET SP. Z O.O." in upper_text or "GAMET SP. Z O.O." in upper_text.replace("Ł", "L"):
+        return "gamet"
+
     krono_hits = 0
     for marker in ("KRONOSPAN", "DESPATCH ADDRESS", "SPLIT_PDF_MARK", "PAYMENT DUE", "DELIVERY NOTE NO."):
         if marker in upper_text:
@@ -3936,6 +4344,104 @@ def _parse_kastamonu_or_generic_invoice_data(lines: list[str]) -> InvoiceData:
     data.items = _parse_items(lines)
     if data.supplier_lines:
         data.supplier_name = data.supplier_lines[0]
+    return data
+
+
+def _parse_gamet_items(lines: list[str]) -> list[InvoiceItem]:
+    items: list[InvoiceItem] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        start_match = re.match(r"^(\d+)\s+([A-Z0-9-]+)\s*$", line)
+        if not start_match:
+            i += 1
+            continue
+
+        row_no = start_match.group(1)
+        article_code = start_match.group(2)
+        description = ""
+        total_qty = ""
+        unit = ""
+        unit_price = ""
+        net_value = ""
+
+        j = i + 1
+        while j < len(lines):
+            next_line = lines[j]
+            if re.match(r"^\d+\s+[A-Z0-9-]+\s*$", next_line):
+                break
+            if next_line.startswith("Total according to VAT rates") or next_line == "Total":
+                break
+            if next_line.startswith("GTIN No:"):
+                j += 1
+                continue
+            if next_line.startswith("Delivery Note(s):"):
+                j += 1
+                continue
+
+            qty_match = re.match(
+                r"^([0-9]+(?:\.[0-9]+)?)\s+(\S+)\s+([0-9]+(?:\.[0-9]+)?)\s+([A-Z]{3})\s+([0-9]+(?:\.[0-9]+)?)\s+([0-9]+%)\s+([0-9]+(?:\.[0-9]+)?)\s+([0-9]+(?:\.[0-9]+)?)$",
+                next_line,
+            )
+            if qty_match:
+                total_qty = qty_match.group(1)
+                unit = qty_match.group(2)
+                unit_price = qty_match.group(3)
+                net_value = qty_match.group(5)
+                j += 1
+                continue
+
+            if not description:
+                description = next_line
+            else:
+                description = f"{description} | {next_line}"
+            j += 1
+
+        items.append(
+            InvoiceItem(
+                row_no=row_no,
+                article_code=article_code,
+                description=description,
+                total_qty=total_qty,
+                unit=unit,
+                unit_price=unit_price,
+                net_value=net_value,
+            )
+        )
+        i = j
+
+    return items
+
+
+def _parse_gamet_invoice_data(lines: list[str], text: str) -> InvoiceData:
+    normalized_text = "\n".join(lines)
+    data = InvoiceData(invoice_profile="gamet", supplier_name="GAMET Sp. z o.o.")
+
+    data.invoice_number = _match_first(normalized_text, [r"Invoice No\s*\n\s*([A-Z0-9/\-]+)"])
+    data.invoice_date = _match_first(normalized_text, [r"Invoice date\s*\n\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})"])
+    data.due_date = _match_first(normalized_text, [r"Due date:\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})"])
+    data.payment_method = _match_first(normalized_text, [r"Payment:\s*\n\s*(.+)"])
+    data.payment_term = data.payment_method
+    data.delivery_term = _match_first(normalized_text, [r"Delivery Terms:\s*(.+)"])
+    data.transport_mode = _match_first(normalized_text, [r"Ship Via:\s*(.+)"])
+    data.currency = _match_first(normalized_text, [r"Total\s*\n\s*([A-Z]{3})\s+[0-9.]+\s+[0-9.]+\s+[0-9.]+"])
+    data.total_net = _match_first(normalized_text, [r"Total\s*\n\s*[A-Z]{3}\s+([0-9.]+)\s+[0-9.]+\s+[0-9.]+"])
+    data.total_gross = _match_first(normalized_text, [r"Total\s*\n\s*[A-Z]{3}\s+[0-9.]+\s+[0-9.]+\s+([0-9.]+)"])
+    data.vat_0 = _match_first(normalized_text, [r"0%\s+[A-Z]{3}\s+[0-9.]+\s+([0-9.]+)\s+[0-9.]+"])
+    data.total_gross_weight = _match_first(normalized_text, [r"Gross weight including transport packaging:\s*([0-9]+)\s*kgs"])
+    data.order_confirmation_no = _match_first(normalized_text, [r"Order Number:\s*([A-Z0-9/\-]+)"])
+
+    seller_block = _extract_block(lines, r"^Seller:", [r"^Buyer:"])
+    buyer_block = _extract_block(lines, r"^Buyer:", [r"^Terms of", r"^Payment:"])
+    data.supplier_lines = ["GAMET Sp. z o.o."] + [line for line in seller_block if not line.startswith("Address:")]
+    data.buyer_lines = ["DIVIAN MEGA Kft."] + [line for line in buyer_block if not line.startswith("Address:")]
+
+    if seller_block:
+        data.supplier_lines = [lines[_find_index(lines, r"^Seller:")]] + seller_block
+    if buyer_block:
+        data.buyer_lines = [lines[_find_index(lines, r"^Buyer:")]] + buyer_block
+
+    data.items = _parse_gamet_items(lines)
     return data
 
 
@@ -4350,6 +4856,8 @@ def parse_invoice_data(text: str) -> InvoiceData:
     profile = _detect_invoice_profile(lines, text)
     if profile == "kronospan":
         return _parse_kronospan_invoice_data(lines, text)
+    if profile == "gamet":
+        return _parse_gamet_invoice_data(lines, text)
     if profile == "divian":
         return _parse_divian_invoice_data(lines, text)
     return _parse_kastamonu_or_generic_invoice_data(lines)
@@ -4447,6 +4955,10 @@ def _detect_product_type(description: str, article_code: str = "", invoice_profi
 
     if _is_takarotabla_item(description):
         return "takarótábla"
+    if normalized_profile == "gamet" and (normalized_code == "TRANSPORT" or "KOSZT TRANSPORTU" in normalized_description):
+        return "szállítás"
+    if normalized_profile == "gamet":
+        return "fogantyú"
     if normalized_profile == "kronospan":
         if "WORKTOP" in text or "WORK TOP" in text or "KITCHEN TOP" in text:
             return "munkalap"
@@ -4488,6 +5000,18 @@ def _detect_product_type(description: str, article_code: str = "", invoice_profi
 def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> str:
     product_type = _detect_product_type(item.description, item.article_code, invoice_profile=invoice_profile)
     missing_placeholder = "-" if product_type == "takarótábla" else NO_DATA
+    if _fix_hungarian_mojibake(_clean_spaces(invoice_profile)).lower() == "gamet":
+        return (
+            "<tr>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.row_no, missing_placeholder))}</td>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.article_code, missing_placeholder))}</td>"
+            f"<td class='center'>{html.escape(product_type)}</td>"
+            f"<td class='right'>{html.escape(_item_value_or_default(item.total_qty, missing_placeholder))}</td>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.unit, missing_placeholder))}</td>"
+            f"<td class='right'>{html.escape(_item_value_or_default(item.unit_price, missing_placeholder))}</td>"
+            f"<td class='right'>{html.escape(_item_value_or_default(item.net_value, missing_placeholder))}</td>"
+            "</tr>"
+        )
     return (
         "<tr>"
         f"<td class='center'>{html.escape(_item_value_or_default(item.row_no, missing_placeholder))}</td>"
@@ -4500,6 +5024,20 @@ def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> st
         f"<td class='center'>{html.escape(_item_value_or_default(item.unit, missing_placeholder))}</td>"
         f"<td class='right'>{html.escape(_item_value_or_default(item.unit_price, missing_placeholder))}</td>"
         f"<td class='right'>{html.escape(_item_value_or_default(item.net_value, missing_placeholder))}</td>"
+        "</tr>"
+    )
+
+
+def _render_invoice_total_row(data: InvoiceData) -> str:
+    total_value = _item_value_or_default(data.total_gross or data.total_net)
+    if _fix_hungarian_mojibake(_clean_spaces(data.invoice_profile)).lower() == "gamet":
+        colspan = "6"
+    else:
+        colspan = "9"
+    return (
+        "<tr class='total-row'>"
+        f"<td colspan='{colspan}'><strong>Végösszeg</strong></td>"
+        f"<td class='right'><strong>{html.escape(total_value)}</strong></td>"
         "</tr>"
     )
 
@@ -4526,22 +5064,24 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     profile_label = {
         "kastamonu": "Kastamonu sablon",
         "kronospan": "Kronospan sablon",
+        "gamet": "Gamet sablon",
         "divian": "DIVI sablon",
         "generic": "Általános sablon",
         "": "Általános sablon",
     }.get(data.invoice_profile, "Általános sablon")
 
-    info_fields = _non_empty_rows(
-        [
-            ("Számlaszám", data.invoice_number),
-            ("Számla dátuma", invoice_date_display),
-            ("Fizetési határidő", due_date_display),
-            ("Fizetési mód", data.payment_method),
-            ("Szállítólevél száma", data.delivery_note_no),
-            ("Gépjármű azonosító", vehicle_plates),
-        ],
-        keep_labels={"Számlaszám", "Számla dátuma", "Gépjármű azonosító"},
-    )
+    info_field_rows = [
+        ("Számlaszám", data.invoice_number),
+        ("Számla dátuma", invoice_date_display),
+        ("Fizetési határidő", due_date_display),
+        ("Fizetési mód", data.payment_method),
+        ("Szállítólevél száma", data.delivery_note_no),
+    ]
+    keep_labels = {"Számlaszám", "Számla dátuma"}
+    if data.invoice_profile != "gamet":
+        info_field_rows.append(("Gépjármű azonosító", vehicle_plates))
+        keep_labels.add("Gépjármű azonosító")
+    info_fields = _non_empty_rows(info_field_rows, keep_labels=keep_labels)
     info_rows = _html_table_rows(info_fields)
 
     discount_label = "Engedmény"
@@ -4572,8 +5112,38 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
             _render_invoice_item_row(item, data.invoice_profile)
             for item in data.items
         )
+        item_rows += _render_invoice_total_row(data)
     else:
-        item_rows = "<tr><td colspan='10'>Nem sikerült tételsorokat felismerni.</td></tr>"
+        empty_colspan = "7" if data.invoice_profile == "gamet" else "10"
+        item_rows = f"<tr><td colspan='{empty_colspan}'>Nem sikerült tételsorokat felismerni.</td></tr>"
+
+    if data.invoice_profile == "gamet":
+        items_header = """
+        <tr>
+          <th class="center">Ssz.</th>
+          <th class="center">Cikkszám</th>
+          <th class="center">Termék típus</th>
+          <th class="right">Mennyiség</th>
+          <th class="center">ME</th>
+          <th class="right">Egységár</th>
+          <th class="right">Nettó érték</th>
+        </tr>
+        """
+    else:
+        items_header = """
+        <tr>
+          <th class="center">Ssz.</th>
+          <th class="center">Cikkszám</th>
+          <th class="center">Termék típus</th>
+          <th>Megnevezés</th>
+          <th class="center">Rakat</th>
+          <th class="center">Össz. db</th>
+          <th class="right">Mennyiség</th>
+          <th class="center">ME</th>
+          <th class="right">Egységár</th>
+          <th class="right">Nettó érték</th>
+        </tr>
+        """
 
     page = f"""<!doctype html>
 <html lang="hu">
@@ -4990,18 +5560,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     <h3>Tételek</h3>
     <table class="items">
       <thead>
-        <tr>
-          <th class="center">Ssz.</th>
-          <th class="center">Cikkszám</th>
-          <th class="center">Termék típus</th>
-          <th>Megnevezés</th>
-          <th class="center">Rakat</th>
-          <th class="center">Össz. db</th>
-          <th class="right">Mennyiség</th>
-          <th class="center">ME</th>
-          <th class="right">Egységár</th>
-          <th class="right">Nettó érték</th>
-        </tr>
+        {items_header}
       </thead>
       <tbody>{item_rows}</tbody>
     </table>
@@ -8848,6 +9407,10 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                   <span class="order-dropzone-chip">Excel</span>
                   <strong>Raktárfájl kiválasztása</strong>
                   <p>Kattints ide, vagy húzd be a fájlt.</p>
+                  <div class="order-columns-note">
+                    <span class="order-columns-title">Szükséges oszlopok</span>
+                    <span><code>Alkatr.szám</code>, <code>Alkatr.leírás</code>, <code>Rend.áll.rakt.készl. ME</code>, <code>Rend.áll</code>, <code>Biztonsági készlet</code>, <code>Tárolh.menny.</code></span>
+                  </div>
                 </div>
                 <span class="order-file-state" id="nettfront-order-stock-state">Támogatott formátum: XLSX, XLSM, CSV</span>
               </label>
@@ -8872,6 +9435,10 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                     <span class="order-dropzone-chip">Opcionális</span>
                     <strong>Friss lista kiválasztása</strong>
                     <p>Kattints ide, vagy húzd be a fájlt.</p>
+                    <div class="order-columns-note">
+                      <span class="order-columns-title">Elvárt tartalom</span>
+                      <span>Egyszerű, egyoszlopos cikkszámlista. Az első oszlopban csak az alkatrészszámok szerepeljenek.</span>
+                    </div>
                   </div>
                   <span class="order-file-state" id="nettfront-order-parts-state">Támogatott formátum: XLSX, XLSM, CSV</span>
                 </label>
@@ -9079,6 +9646,25 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
     display: grid;
     gap: 8px;
     justify-items: start;
+  }
+  .order-columns-note {
+    display: grid;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+  .order-columns-title {
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
   .order-dropzone-chip {
     display: inline-flex;
