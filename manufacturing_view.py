@@ -1689,7 +1689,7 @@ def render_manufacturing_page(
           `).join("");
           subsectionTabsNode.style.display = "";
           subsectionTabsNode.innerHTML = korpuszSubTabs.map((item) => `
-            <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : (layoutMode === "double" && item.key !== "all" && item.key === pairedSectionKey({ sections: currentKorpuszSections }, currentSubcategoryKey) ? " is-secondary" : "")}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+            <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : (layoutMode === "double" && item.key !== "all" && item.key === pairedSectionKey({{ sections: currentKorpuszSections }}, currentSubcategoryKey) ? " is-secondary" : "")}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
               <small>${{item.count}}</small>
             </button>
