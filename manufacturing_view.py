@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import html
 import json
@@ -109,7 +109,7 @@ def render_manufacturing_page(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Divian-HUB | Gyártási papírok</title>
+  <title>Divian-HUB | GyĂˇrtĂˇsi papĂ­rok</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -1104,6 +1104,11 @@ def render_manufacturing_page(
       color: #1d4ed8;
       border: 1px solid rgba(37, 99, 235, 0.16);
     }}
+    .mfg-row-badge.is-curved {{
+      background: #f3e8ff;
+      color: #7c3aed;
+      border: 1px solid rgba(124, 58, 237, 0.18);
+    }}
     .mfg-row-badge.is-model-blue {{
       background: #dbe8ff;
       color: #1d4ed8;
@@ -1404,7 +1409,7 @@ def render_manufacturing_page(
       }};
 
       const escapeHtml = (value) =>
-        String(value ?? "").replace(/[&<>"']/g, (character) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[character] || character);
+        String(value ? "").replace(/[&<>"']/g, (character) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[character] || character);
       const flattenRows = (document) => (document?.sections || []).flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
       const currentDocument = () => documents.find((document) => document.key === currentDocKey) || documents[0] || null;
       const documentAllowsSplit = (document) => document?.allowSplit !== false;
@@ -1433,7 +1438,7 @@ def render_manufacturing_page(
         const grouped = new Map();
         for (const section of sections) {{
           const label = String(section?.label || "");
-          const sizeLabel = label.includes("·") ? label.split("·", 1)[0].trim() : label.trim();
+          const sizeLabel = label.includes("Â·") ? label.split("Â·", 1)[0].trim() : label.trim();
           if (!sizeLabel) continue;
           const count = Array.isArray(section?.rows) ? section.rows.length : 0;
           grouped.set(sizeLabel, (grouped.get(sizeLabel) || 0) + count);
@@ -1556,6 +1561,7 @@ def render_manufacturing_page(
         if (sortKey === "name") return normalizeSortText(row.name);
         if (sortKey === "size") return parseSizeParts(row.size);
         if (sortKey === "model") return normalizeSortText(row.modelLabel);
+        if (sortKey === "trait") return normalizeSortText(row.frontTrait);
         if (sortKey === "color") return normalizeSortText(row.color);
         if (sortKey === "netfront_color") return normalizeSortText(row.netfrontColor);
         if (sortKey === "drill") return normalizeSortText(row.drillLabel);
@@ -1707,7 +1713,7 @@ def render_manufacturing_page(
           if (currentSubcategoryKey !== "all") {{
             specialSections = specialSections.filter((section) => {{
               const label = String(section?.label || "");
-              const sizeLabel = label.includes("·") ? label.split("·", 1)[0].trim() : label.trim();
+              const sizeLabel = label.includes("Â·") ? label.split("Â·", 1)[0].trim() : label.trim();
               return sizeLabel === currentSubcategoryKey;
             }});
           }}
@@ -1746,10 +1752,10 @@ def render_manufacturing_page(
           }});
           if (!combinedRows.length) return [];
           const combinedLabel =
-            currentViewKey === "plain" ? "Sima front tételek" :
-            currentViewKey === "green" ? "Zöld front tételek" :
-            currentViewKey === "red" ? "Piros front tételek" :
-            String(document.label || "Front összekészítés");
+            currentViewKey === "plain" ? "Sima front tĂ©telek" :
+            currentViewKey === "green" ? "ZĂ¶ld front tĂ©telek" :
+            currentViewKey === "red" ? "Piros front tĂ©telek" :
+            String(document.label || "Front Ă¶sszekĂ©szĂ­tĂ©s");
           return [{{
             key: `overview-${{currentViewKey}}`,
             label: combinedLabel,
@@ -2023,7 +2029,7 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
-                  ${{sortButtonMarkup(group.key, "edge", "?l")}}
+                  ${{sortButtonMarkup(group.key, "edge", "Él")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{hideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
@@ -2033,6 +2039,8 @@ def render_manufacturing_page(
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
+            const traitBadgeMarkup = row.frontTrait === "Blende" ? `<span class="mfg-row-badge is-curved">Blende</span>` : "";
+            const curvedBadgeMarkup = row.isCurved ? `<span class="mfg-row-badge is-curved">Íves</span>` : "";
             const modelToneClass = row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : "";
             const modelBadgeMarkup = row.modelLabel
               ? `<span class="mfg-row-badge${{modelToneClass}}">${{escapeHtml(String(row.modelLabel))}}</span>`
@@ -2043,11 +2051,11 @@ def render_manufacturing_page(
                   columnLayout === "cnc-lower"
                     ? `
                         <div class="mfg-row-main">
-                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                          <div class="mfg-row-title">${{escapeHtml(row.name || "NĂ©vtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                           ${{subtitleMarkup}}
                         </div>
-                        <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
-                        <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
+                        <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "MĂ©ret n?lk?l")}}</span></div>
+                        <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "SzĂ­n n?lk?l")}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.drawer_drill || "-")}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(hideSideTypeColumn ? "-" : (row.side_type || "-"))}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
@@ -2056,11 +2064,11 @@ def render_manufacturing_page(
                     : columnLayout === "cnc-upper"
                       ? `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "NĂ©vtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
-                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
-                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "MĂ©ret n?lk?l")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "SzĂ­n n?lk?l")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
@@ -2069,8 +2077,8 @@ def render_manufacturing_page(
                       : columnLayout === "cnc-fiokelo"
                         ? `
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                            <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
-                            <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
+                            <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "SzĂ­n n?lk?l")}}</span></div>
+                            <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "MĂ©ret n?lk?l")}}</span></div>
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.netfrontColor || "-")}}</span></div>
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.drillLabel || "-")}}</span></div>
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.drawerType || "-")}}</span></div>
@@ -2079,12 +2087,12 @@ def render_manufacturing_page(
                         : columnLayout === "front-standard"
                           ? `
                               <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}</div>
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
                               <div class="mfg-row-meta is-model"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
-                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
+                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
+                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
                               <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                               <div class="mfg-row-barcode-wrap">
                                 <div class="mfg-row-barcode">
@@ -2095,17 +2103,17 @@ def render_manufacturing_page(
                             `
                           : `
                               <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "NĂ©vtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
                               <div class="mfg-row-meta">
-                                <span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span>
+                                <span class="is-size">${{escapeHtml(row.size || "MĂ©ret n?lk?l")}}</span>
                               </div>
                               <div class="mfg-row-meta">
-                                <span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span>
+                                <span class="is-color">${{escapeHtml(row.color || "SzĂ­n n?lk?l")}}</span>
                               </div>
                               <div class="mfg-row-meta">
-                                <span>${{escapeHtml(row.edge || "Él nélkül")}}</span>
+                                <span>${{escapeHtml(row.edge || "Ă‰l nĂ©lkĂĽl")}}</span>
                               </div>
                               <div class="mfg-row-side">
                                 <div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div>
@@ -2118,7 +2126,7 @@ def render_manufacturing_page(
                                         <div class="mfg-row-barcode">
                                           <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.detail || row.row_id)}}"></svg>
                                         </div>
-                                        <div class="mfg-row-code">${{escapeHtml(row.code || row.detail || "Kód nélkül")}}</div>
+                                        <div class="mfg-row-code">${{escapeHtml(row.code || row.detail || "KĂłd nĂ©lkĂĽl")}}</div>
                                       </div>
                                     `
                               }}
@@ -2192,7 +2200,7 @@ def render_manufacturing_page(
           }});
           const result = await response.json().catch(() => ({{}}));
           if (!response.ok || !result.ok) {{
-            throw new Error(result.error || "A mentés nem sikerült.");
+            throw new Error(result.error || "A mentĂ©s nem sikerĂĽlt.");
           }}
           setStatus("Mentve.", "is-success");
         }} catch (error) {{
@@ -2201,7 +2209,7 @@ def render_manufacturing_page(
             else delete selectionState[previousKey];
           }}
           renderAll();
-          setStatus(error instanceof Error ? error.message : "A mentés nem sikerült.", "is-error");
+          setStatus(error instanceof Error ? error.message : "A mentĂ©s nem sikerĂĽlt.", "is-error");
         }}
       }};
 
@@ -2220,7 +2228,7 @@ def render_manufacturing_page(
           else selectionState[key] = targetState;
         }}
         renderAll(scrollState);
-        setStatus("Mentés...");
+        setStatus("MentĂ©s...");
         void persistRowState(rowId, targetProductionNumber, stateKey, targetState, previousStateMap, sourceRowIds);
       }};
 
@@ -2346,3 +2354,4 @@ def render_manufacturing_page(
 </body>
 </html>"""
     return page.encode("utf-8")
+

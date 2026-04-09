@@ -889,6 +889,17 @@ def _looks_like_fiokelo_header(line: str) -> bool:
     return _fold_hu(line) == "front tipus:"
 
 
+def _looks_like_fiokelo_row_start(tokens: list[str], index: int) -> bool:
+    token = _fold_hu(_clean_text(tokens[index] if index < len(tokens) else ""))
+    if not token:
+        return False
+    if token in {"fiokelo", "fiokelo:", "fiokelo. "}:
+        return True
+    if token in {"kihuzhat", "kihuzhato", "kihuzhato front"}:
+        return True
+    return False
+
+
 def _looks_like_potential_row_start(tokens: list[str], index: int, max_name_tokens: int) -> bool:
     token = _clean_text(tokens[index] if index < len(tokens) else "")
     if not token or token in {":", "-"} or token.lower() == "x":
@@ -1172,7 +1183,7 @@ def parse_fiokelo_furas(path: Path) -> ManufacturingDocument:
             if not current_label:
                 index += 1
                 continue
-            if not _looks_like_potential_row_start(content_lines, index, 6):
+            if not _looks_like_fiokelo_row_start(content_lines, index):
                 index += 1
                 continue
 
@@ -1185,7 +1196,15 @@ def parse_fiokelo_furas(path: Path) -> ManufacturingDocument:
                 index += 1
                 continue
 
-            row_end = _next_segment_start(content_lines, dimension_index + 5, 6)
+            row_end = len(content_lines)
+            for next_index in range(dimension_index + 5, len(content_lines)):
+                token = _clean_text(content_lines[next_index])
+                if token.startswith("Oldal ") or _looks_like_fiokelo_header(token):
+                    row_end = next_index
+                    break
+                if _looks_like_fiokelo_row_start(content_lines, next_index):
+                    row_end = next_index
+                    break
             segment = content_lines[index:row_end]
             row_index += 1
             row = _parse_fiokelo_row_segment(segment, current_label, page_number, row_index)

@@ -2110,6 +2110,35 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         )
         return "uveges" in folded(combined) or "uveg" in folded(combined)
 
+    def front_trait_label(row: dict, type_label: str) -> str:
+        combined = " ".join(
+            [
+                clean_text(row.get("name")),
+                clean_text(row.get("detail")),
+                clean_text(row.get("section_label")),
+                clean_text(type_label),
+            ]
+        )
+        if "blende" in folded(combined):
+            return "Blende"
+
+        size_text = clean_text(row.get("size"))
+        code_text = clean_text(row.get("code"))
+        compact_size = re.sub(r"[^0-9X]", "", size_text.upper().replace("x", "X"))
+        compact_code = re.sub(r"\s+", "", code_text).upper()
+        if compact_size and re.search(re.escape(compact_size) + r"[JB]", compact_code):
+            return "Íves"
+        return "-"
+
+    def is_curved_front_row(row: dict) -> bool:
+        size_text = clean_text(row.get("size"))
+        code_text = clean_text(row.get("code"))
+        compact_size = re.sub(r"[^0-9X]", "", size_text.upper().replace("x", "X"))
+        compact_code = re.sub(r"\s+", "", code_text).upper()
+        if compact_size in {"655X397X18", "718X297X18"}:
+            return True
+        return bool(compact_size and re.search(re.escape(compact_size) + r"[JB]", compact_code))
+
     grouped_sections: dict[str, dict] = {}
     for section in raw_sections:
         for raw_row in section.get("rows", []):
@@ -2133,6 +2162,8 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             row["name"] = clean_text(raw_row.get("name")) or display_row_name(row)
             row["detail"] = type_label
             row["modelLabel"] = front_model_label(raw_row)
+            row["frontTrait"] = front_trait_label(raw_row, type_label)
+            row["isCurved"] = is_curved_front_row(raw_row)
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
             row["columnLayout"] = "front-standard"
@@ -2145,6 +2176,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         rows.sort(
             key=lambda row: (
                 str(row.get("color", "")).lower(),
+                str(row.get("frontTrait", "")).lower(),
                 str(row.get("modelLabel", "")).lower(),
                 str(row.get("name", "")).lower(),
                 size_sort_key(str(row.get("size", "")).strip()),
@@ -11342,7 +11374,7 @@ def render_vacation_calendar(
   const getModal = () => getRoot()?.querySelector("[data-vacation-modal]") || null;
   const shouldHandleUrl = (url) => url.origin === window.location.origin && url.pathname.startsWith(ROUTE_PREFIX);
   const escapeHtml = (value) =>
-    String(value ?? "").replace(/[&<>"']/g, (char) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[char] || char);
+    String(value ? "").replace(/[&<>"']/g, (char) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[char] || char);
   const parseVacationDate = (value) => new Date(`${{value}}T12:00:00`);
   const formatLongDate = (value) => {{
     if (!value) return "";
@@ -11450,7 +11482,7 @@ def render_vacation_calendar(
     }}
 
     modal.dataset.dayValue = dayValue;
-    renderVacationDayEntries(modal, dayValue, selectedLeave?.id ?? "");
+    renderVacationDayEntries(modal, dayValue, selectedLeave?.id ? "");
 
     const employeeField = saveForm.querySelector('select[name="employee_id"]');
     const startField = saveForm.querySelector('input[name="start_date"]');
