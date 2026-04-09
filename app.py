@@ -2369,6 +2369,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
         return "fiokos" in combined or "aaf" in combined or "af 1+2" in combined or "af 1 + 2" in combined
 
+
     def build_lower_rows(source_sections: list[dict]) -> list[dict]:
         merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
         for section in source_sections:
@@ -2397,6 +2398,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     merged_id = hashlib.sha1(
                         f"cnc-lower|{production_number}|{name}|{size}|{color}|{drawer_drill}|{side_type}|{edge}|{hardware_type}".encode("utf-8")
                     ).hexdigest()[:16]
+                    source_row_id = str(raw_row.get("row_id", "")).strip()
                     merged[merge_key] = {
                         "row_id": merged_id,
                         "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -2413,12 +2415,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "detail": clean_text(raw_row.get("detail")),
                         "columnLayout": "cnc-lower",
                         "isMuted": is_non_nutos_text(name) or is_non_nutos_text(source_name),
+                        "sourceRowIds": [source_row_id] if source_row_id else [],
                     }
                 else:
                     existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
                     if source_name:
                         existing["source_name"] = f"{existing.get('source_name', '')} · {source_name}".strip(" ·")
                     existing["isMuted"] = bool(existing.get("isMuted")) or is_non_nutos_text(name) or is_non_nutos_text(source_name)
+                    source_row_id = str(raw_row.get("row_id", "")).strip()
+                    if source_row_id:
+                        source_row_ids = list(existing.get("sourceRowIds", []))
+                        if source_row_id not in source_row_ids:
+                            source_row_ids.append(source_row_id)
+                        existing["sourceRowIds"] = source_row_ids
         return list(merged.values())
 
     def upper_source_group(section_label: object) -> str:
@@ -2451,6 +2460,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     merged_id = hashlib.sha1(
                         f"cnc-upper|{production_number}|{source_group}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
                     ).hexdigest()[:16]
+                    source_row_id = str(raw_row.get("row_id", "")).strip()
                     merged[merge_key] = {
                         "row_id": merged_id,
                         "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -2466,9 +2476,16 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "quantity": quantity,
                         "detail": clean_text(raw_row.get("detail")),
                         "columnLayout": "cnc-upper",
+                        "sourceRowIds": [source_row_id] if source_row_id else [],
                     }
                 else:
                     existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+                    source_row_id = str(raw_row.get("row_id", "")).strip()
+                    if source_row_id:
+                        source_row_ids = list(existing.get("sourceRowIds", []))
+                        if source_row_id not in source_row_ids:
+                            source_row_ids.append(source_row_id)
+                        existing["sourceRowIds"] = source_row_ids
         return list(merged.values())
 
     def build_front_rows(source_sections: list[dict]) -> list[dict]:
@@ -2558,6 +2575,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 if not isinstance(raw_row, dict):
                     continue
                 name = cnc_display_name(raw_row.get("name"))
+                if folded(name) == "blende":
+                    continue
                 size = clean_text(raw_row.get("size"))
                 color = clean_text(raw_row.get("color"))
                 edge = clean_text(raw_row.get("edge")) or "-"
@@ -2594,8 +2613,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if color_key:
                 explicit_color_map[color_key] = netfront_color
 
-        merged: dict[tuple[str, str, str, str, str, str, str, str], dict] = {}
-        for row in parsed_rows:
+        rendered_rows: list[dict] = []
+        for index, row in enumerate(parsed_rows):
             model_label = clean_text(row.get("modelLabel"))
             color = clean_text(row.get("color"))
             color_key = normalized_color_key(color)
@@ -2610,24 +2629,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     or "-"
                 )
 
-            merge_key = (
-                row.get("groupLabel", ""),
-                row.get("name", ""),
-                model_label,
-                color,
-                row.get("size", ""),
-                netfront_color,
-                row.get("drillLabel", ""),
-                row.get("drawerType", ""),
-            )
-            existing = merged.get(merge_key)
-            if existing is None:
-                merged_id = hashlib.sha1(
-                    f"cnc-front|{production_number}|{row.get('groupLabel','')}|{row.get('name','')}|{model_label}|{color}|{row.get('size','')}|{netfront_color}|{row.get('drillLabel','')}|{row.get('drawerType','')}".encode("utf-8")
-                ).hexdigest()[:16]
-                merged[merge_key] = {
-                    "row_id": merged_id,
-                    "state_key": _manufacturing_state_key(production_number, merged_id),
+            row_id = hashlib.sha1(
+                f"cnc-front|{production_number}|{index}|{row.get('groupLabel','')}|{row.get('name','')}|{model_label}|{color}|{row.get('size','')}|{netfront_color}|{row.get('drillLabel','')}|{row.get('drawerType','')}|{row.get('quantity',0)}".encode("utf-8")
+            ).hexdigest()[:16]
+            rendered_rows.append(
+                {
+                    "row_id": row_id,
+                    "state_key": _manufacturing_state_key(production_number, row_id),
                     "production_number": _manufacturing_normalize_number(production_number),
                     "name": row.get("name", ""),
                     "size": row.get("size", ""),
@@ -2643,9 +2651,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "modelTone": row.get("modelTone", "slate"),
                     "hideSubtitle": True,
                 }
-            else:
-                existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
-        return list(merged.values())
+            )
+        return rendered_rows
 
     also_source_sections = [
         dict(section)
@@ -2688,7 +2695,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         cloned.update(updates)
         return cloned
 
-    def add_lower_section(label: str, rows: list[dict], key_suffix: str) -> None:
+    def add_lower_section(label: str, rows: list[dict], key_suffix: str, *, hide_side_type: bool = False) -> None:
         if not rows:
             return
         lower_box_sections.append(
@@ -2697,6 +2704,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "label": label,
                 "rows": rows,
                 "columnLayout": "cnc-lower",
+                "hideSideTypeColumn": hide_side_type,
             }
         )
 
@@ -2709,6 +2717,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 merged_id = hashlib.sha1(
                     f"cnc-lower-box|{production_number}|{'|'.join(group_key)}".encode("utf-8")
                 ).hexdigest()[:16]
+                source_row_ids = [
+                    source_row_id
+                    for source_row_id in (
+                        str(source_id).strip()
+                        for source_id in (row.get("sourceRowIds") or [row.get("row_id", "")])
+                    )
+                    if source_row_id
+                ]
                 grouped[group_key] = {
                     "row_id": merged_id,
                     "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -2725,6 +2741,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "columnLayout": "cnc-lower",
                     "hideSubtitle": hide_subtitle,
                     "isMuted": bool(row.get("isMuted")),
+                    "sourceRowIds": source_row_ids,
                     "_colors": {clean_text(row.get("color"))},
                     "_drills": {clean_text(row.get("drawer_drill"))},
                     "_edges": {clean_text(row.get("edge")) or "-"},
@@ -2737,6 +2754,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             existing["_drills"].add(clean_text(row.get("drawer_drill")))
             existing["_edges"].add(clean_text(row.get("edge")) or "-")
             existing["_hardware"].add(clean_text(row.get("hardware_type")))
+            source_row_ids = list(existing.get("sourceRowIds", []))
+            for source_row_id in (
+                str(source_id).strip()
+                for source_id in (row.get("sourceRowIds") or [row.get("row_id", "")])
+            ):
+                if source_row_id and source_row_id not in source_row_ids:
+                    source_row_ids.append(source_row_id)
+            existing["sourceRowIds"] = source_row_ids
 
         aggregated_rows: list[dict] = []
         for item in grouped.values():
@@ -2768,6 +2793,23 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             and not is_as_takarosav_row(row)
             and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
         )
+
+    def is_boxos_target_row(row: dict) -> bool:
+        size_label = clean_text(row.get("size"))
+        source_name_folded = folded(row.get("source_name"))
+        return (
+            size_label in {"724 x 505 x 18", "725 x 505 x 18"}
+            and "fiokos" in source_name_folded
+            and folded(row.get("name")) == "also oldal"
+            and not is_as_takarosav_row(row)
+            and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+        )
+
+    def is_boxos_box_hettich_row(row: dict) -> bool:
+        return is_boxos_target_row(row) and folded(row.get("drawer_drill")) == "box hettich"
+
+    def is_boxos_teleszkop_row(row: dict) -> bool:
+        return is_boxos_target_row(row) and folded(row.get("drawer_drill")).startswith("teleszk")
 
     def build_raw_normal_also_box_rows() -> list[dict]:
         folder_text = str(bundle.get("folder", "") or "").strip()
@@ -2950,7 +2992,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         break
                 color = clean_text(" ".join(payload_tokens[:detail_start]))
                 detail = clean_text(" ".join(payload_tokens[detail_start:]))
-                drawer_drill, _side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
+                drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
+                side_type_normalized = normalize_side_type(side_type)
+                if side_type_normalized not in {"normals also", "aaf fiokos ajtos", "af 1+2 fiokos"}:
+                    index = cursor
+                    continue
                 normalized_drill = drawer_drill
                 if folded(normalized_drill).startswith("teleszk"):
                     normalized_drill = "Teleszkópos"
@@ -2973,7 +3019,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "size": "824 x 505 x 18",
                         "color": color,
                         "drawer_drill": normalized_drill,
-                        "side_type": "",
+                        "side_type": side_type,
                         "hardware_type": hardware_type,
                         "edge": parsed_edge or edge,
                         "quantity": quantity,
@@ -2983,6 +3029,118 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     }
                 )
                 index = cursor
+        return raw_rows
+
+    def build_raw_boxos_box_rows() -> list[dict]:
+        alkatresz_sections, _ = _manufacturing_document_sections(
+            bundle,
+            production_number,
+            ("alkatresz_kesz",),
+            include_source_prefix=False,
+        )
+        raw_rows: list[dict] = []
+        for section in alkatresz_sections:
+            for raw_row in section.get("rows", []):
+                if not isinstance(raw_row, dict):
+                    continue
+                size_label = clean_text(raw_row.get("size"))
+                if size_label not in {"724 x 505 x 18", "725 x 505 x 18"}:
+                    continue
+                if folded(raw_row.get("name")) != "also oldal":
+                    continue
+                detail = clean_text(raw_row.get("detail"))
+                if not detail:
+                    continue
+                detail_parts = [clean_text(part) for part in detail.split("_") if clean_text(part)]
+                detail_folded = [folded(part) for part in detail_parts]
+                if "aaf" in detail_folded:
+                    side_type = "AAF fiókos ajtós"
+                elif "af" in detail_folded:
+                    side_type = "AF 1+2 fiókos"
+                else:
+                    continue
+                drawer_drill = ""
+                if "bh" in detail_folded:
+                    drawer_drill = "Box Hettich"
+                elif "t" in detail_folded:
+                    drawer_drill = "Teleszkópos"
+                elif "n" in detail_folded:
+                    drawer_drill = "Nincs"
+                if drawer_drill != "Box Hettich":
+                    continue
+                row_id = hashlib.sha1(
+                    f"cnc-raw-boxos|{production_number}|{detail}|{raw_row.get('color')}|{raw_row.get('quantity')}".encode("utf-8")
+                ).hexdigest()[:16]
+                raw_rows.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": _manufacturing_state_key(production_number, row_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": "Alsó oldal",
+                        "source_name": "Alsó oldal",
+                        "size": size_label,
+                        "color": clean_text(raw_row.get("color")),
+                        "drawer_drill": drawer_drill,
+                        "side_type": side_type,
+                        "hardware_type": "",
+                        "edge": clean_text(raw_row.get("edge")) or "-",
+                        "quantity": int(raw_row.get("quantity", 0) or 0),
+                        "detail": detail,
+                        "columnLayout": "cnc-lower",
+                        "isMuted": False,
+                    }
+                )
+        return raw_rows
+
+    def build_raw_boxos_teleszkop_rows() -> list[dict]:
+        alkatresz_sections, _ = _manufacturing_document_sections(
+            bundle,
+            production_number,
+            ("alkatresz_kesz",),
+            include_source_prefix=False,
+        )
+        raw_rows: list[dict] = []
+        for section in alkatresz_sections:
+            for raw_row in section.get("rows", []):
+                if not isinstance(raw_row, dict):
+                    continue
+                size_label = clean_text(raw_row.get("size"))
+                if size_label not in {"724 x 505 x 18", "725 x 505 x 18"}:
+                    continue
+                if folded(raw_row.get("name")) != "also oldal":
+                    continue
+                detail = clean_text(raw_row.get("detail"))
+                if not detail:
+                    continue
+                detail_parts = [clean_text(part) for part in detail.split("_") if clean_text(part)]
+                detail_folded = [folded(part) for part in detail_parts]
+                if "aaf" not in detail_folded and "af" not in detail_folded:
+                    continue
+                if "t" not in detail_folded:
+                    continue
+                row_id = hashlib.sha1(
+                    f"cnc-raw-boxos-teleszkop|{production_number}|{detail}|{raw_row.get('color')}|{raw_row.get('quantity')}".encode("utf-8")
+                ).hexdigest()[:16]
+                raw_rows.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": _manufacturing_state_key(production_number, row_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": "Alsó oldal",
+                        "source_name": "Alsó oldal",
+                        "size": size_label,
+                        "color": clean_text(raw_row.get("color")),
+                        "drawer_drill": "Teleszkópos",
+                        "side_type": "Normáls alsó",
+                        "hardware_type": "",
+                        "edge": clean_text(raw_row.get("edge")) or "-",
+                        "quantity": int(raw_row.get("quantity", 0) or 0),
+                        "detail": detail,
+                        "columnLayout": "cnc-lower",
+                        "hideSubtitle": True,
+                        "isMuted": False,
+                    }
+                )
         return raw_rows
 
     def build_raw_egyebek_box_rows() -> list[dict]:
@@ -3029,7 +3187,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     continue
                 size_tokens = [clean_text(lines[index + offset]) for offset in range(1, 6)]
                 size_label = " ".join(size_tokens)
-                if size_label not in {"724 x 505 x 18", "724 x 520 x 18"}:
+                if size_label not in {"724 x 505 x 18", "724 x 520 x 18", "824 x 505 x 18"}:
                     index += 1
                     continue
 
@@ -3064,7 +3222,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
                 side_type_normalized = normalize_side_type(side_type)
                 if (
-                    size_label == "724 x 505 x 18"
+                    size_label in {"724 x 505 x 18", "824 x 505 x 18"}
                     and side_type_normalized == "normals also"
                 ) or is_boxos_side_type({"side_type": side_type}) or is_as_takarosav_row({"name": "Alsó oldal"}) or is_kamra_row("Alsó oldal", color, side_type):
                     index = cursor
@@ -3080,7 +3238,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "ar",
                     "kira",
                     "nyitott",
-                } and size_label not in {"724 x 505 x 18", "724 x 520 x 18"}:
+                } and size_label not in {"724 x 505 x 18", "724 x 520 x 18", "824 x 505 x 18"}:
                     index = cursor
                     continue
 
@@ -3113,7 +3271,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         row for row in lower_rows
         if is_normal_also_row(row) and clean_text(row.get("size")) == "724 x 505 x 18"
     ]
-    box1_display_rows = build_raw_normal_also_box_rows() or box1_source_rows
+    box1_extra_rows = build_raw_boxos_teleszkop_rows()
+    box1_display_rows = (build_raw_normal_also_box_rows() or box1_source_rows) + box1_extra_rows
     box1_rows = aggregate_lower_rows(
         box1_display_rows,
         ("name", "size", "color", "side_type"),
@@ -3121,24 +3280,26 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     )
     box1_rows.sort(key=lambda row: (folded(row.get("color")), folded(row.get("name"))))
     box1_ids = {str(row.get("row_id", "")) for row in box1_source_rows}
-    box2_rows = [
-        row for row in lower_rows
-        if row.get("size") == "724 x 505 x 18"
-        and is_boxos_side_type(row)
-        and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
-    ]
-    box2_ids = {str(row.get("row_id", "")) for row in box2_rows}
+    box2_source_rows = [row for row in lower_rows if is_boxos_box_hettich_row(row)]
+    box2_display_rows = build_raw_boxos_box_rows() or box2_source_rows
+    box2_rows = aggregate_lower_rows(
+        box2_display_rows,
+        ("name", "size", "color", "drawer_drill", "side_type", "edge"),
+    )
+    box2_ids = {str(row.get("row_id", "")) for row in box2_source_rows}
     box3_rows = [
         row for row in lower_rows
         if row.get("size") == "824 x 505 x 18"
+        and normalize_side_type(row.get("side_type")) in {"normals also", "aaf fiokos ajtos", "af 1+2 fiokos"}
         and str(row.get("row_id", "")) not in box1_ids
+        and str(row.get("row_id", "")) not in box2_ids
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
     ]
     box3_ids = {str(row.get("row_id", "")) for row in box3_rows}
     box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
     box3_rows = aggregate_lower_rows(
         box3_display_rows,
-        ("name", "size", "color", "drawer_drill"),
+        ("name", "size", "color"),
     )
     box4_rows = [
         row for row in lower_rows
@@ -3160,18 +3321,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     box6_takarolap_rows = [row for row in box6_rows if is_takarolap_as_row(row)]
     box6_rows = [row for row in box6_rows if not is_takarolap_as_row(row)]
 
-    box1_rows.sort(
-        key=lambda row: (
-            size_parts(row.get("size")),
-            clean_text(row.get("color")),
-            clean_text(row.get("name")),
-            clean_text(row.get("drawer_drill")),
-            clean_text(row.get("side_type")),
-        )
-    )
     box2_rows.sort(
         key=lambda row: (
-            {"aaf fiokos ajtos": 0, "af 1+2 fiokos": 1}.get(normalize_side_type(row.get("side_type")), 9),
             clean_text(row.get("color")),
             clean_text(row.get("name")),
         )
@@ -3198,7 +3349,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         key=lambda row: (
             0 if clean_text(row.get("size")) != "2017 x 550 x 18" else 1,
             clean_text(row.get("color")),
-            0 if "nútos" in folded(row.get("name")) and "nem nútos" not in folded(row.get("name")) else 1,
+            0 if "n?tos" in folded(row.get("name")) and "nem n?tos" not in folded(row.get("name")) else 1,
             {"nincs": 0, "teleszkop": 1, "box hettich": 2}.get(folded(row.get("drawer_drill")), 9),
             clean_text(row.get("side_type")),
             clean_text(row.get("hardware_type")),
@@ -3225,7 +3376,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     add_lower_section("Normáls alsó · 724 x 505 x 18", box1_rows, "box1")
     add_lower_section("Boxosok", box2_rows, "box2")
-    add_lower_section("Kinga/Anna", box3_rows, "box3")
+    add_lower_section("Kinga/Anna", box3_rows, "box3", hide_side_type=True)
     add_lower_section("Egyebek", box4_rows, "box4")
     add_lower_section("Kamrák", box5_rows, "box5")
     add_lower_section("AS takarósávok · Takarólap AS, 165 mellé", box6_takarolap_rows, "box6-takarolap")
@@ -3272,6 +3423,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     def is_upper_595_eft(row: dict) -> bool:
         return clean_text(row.get("size")).startswith("595 x ") and "eft" in upper_combined_text(row)
 
+    def is_upper_any_eft(row: dict) -> bool:
+        return "eft" in upper_combined_text(row) or folded(row.get("name")) == "eft fenek excenteres"
+
     def is_upper_680(row: dict) -> bool:
         return clean_text(row.get("size")).startswith("680 x ")
 
@@ -3294,6 +3448,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 merged_id = hashlib.sha1(
                     f"cnc-upper-box|{production_number}|{'|'.join(group_key)}".encode("utf-8")
                 ).hexdigest()[:16]
+                source_row_ids = [
+                    source_row_id
+                    for source_row_id in (
+                        str(source_id).strip()
+                        for source_id in (row.get("sourceRowIds") or [row.get("row_id", "")])
+                    )
+                    if source_row_id
+                ]
                 grouped[group_key] = {
                     "row_id": merged_id,
                     "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -3307,9 +3469,18 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "quantity": int(row.get("quantity", 0) or 0),
                     "detail": clean_text(row.get("detail")),
                     "columnLayout": "cnc-upper",
+                    "sourceRowIds": source_row_ids,
                 }
             else:
                 existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+                source_row_ids = list(existing.get("sourceRowIds", []))
+                for source_row_id in (
+                    str(source_id).strip()
+                    for source_id in (row.get("sourceRowIds") or [row.get("row_id", "")])
+                ):
+                    if source_row_id and source_row_id not in source_row_ids:
+                        source_row_ids.append(source_row_id)
+                existing["sourceRowIds"] = source_row_ids
         return list(grouped.values())
 
     def sort_upper_rows(rows: list[dict], mode: str) -> list[dict]:
@@ -3400,6 +3571,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     rack2_box2_rows = [row for row in rack2_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
     rack2_box4_rows = [row for row in rack2_source_rows if is_upper_sarok(row)]
     rack2_box3_rows = [row for row in rack2_source_rows if row not in rack2_box1_rows and row not in rack2_box2_rows and row not in rack2_box4_rows]
+
+    moved_eft_rows = [row for row in rack2_box3_rows if is_upper_any_eft(row)]
+    if moved_eft_rows:
+        rack1_box3_rows.extend(moved_eft_rows)
+        rack2_box3_rows = [row for row in rack2_box3_rows if row not in moved_eft_rows]
 
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
     add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
@@ -20850,6 +21026,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
             row_id = str(payload.get("row_id", "")).strip()
+            extra_row_ids = (
+                [str(item).strip() for item in payload.get("row_ids", []) if str(item).strip()]
+                if isinstance(payload.get("row_ids"), list)
+                else []
+            )
             state = str(payload.get("state", "")).strip().lower()
 
             if not production_number:
@@ -20863,7 +21044,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, row_id, state)
+                target_row_ids: list[str] = []
+                for candidate_row_id in [row_id, *extra_row_ids]:
+                    if candidate_row_id and candidate_row_id not in target_row_ids:
+                        target_row_ids.append(candidate_row_id)
+                current_state: dict[str, str] = {}
+                for target_row_id in target_row_ids:
+                    current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_row_id, state)
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
                 return
@@ -20875,6 +21062,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "production_number": production_number,
                     "row_id": row_id,
                     "state": current_state.get(row_id, ""),
+                    "row_ids": target_row_ids,
                 },
             )
             return

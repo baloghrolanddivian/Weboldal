@@ -664,6 +664,42 @@ def render_manufacturing_page(
     .mfg-subsection-tab.is-active small {{
       color: rgba(255, 255, 255, 0.76);
     }}
+    .mfg-subsection-tab.is-complete {{
+      border-color: var(--mfg-green-line);
+      background: var(--mfg-green-bg);
+      color: var(--mfg-green-text);
+    }}
+    .mfg-subsection-tab.is-complete small {{
+      color: var(--mfg-green-text);
+      opacity: 0.82;
+    }}
+    .mfg-subsection-tab.is-complete.is-active {{
+      border-color: var(--mfg-green-line);
+      background: #cdeed9;
+      color: var(--mfg-green-text);
+    }}
+    .mfg-subsection-tab.is-complete.is-active small {{
+      color: var(--mfg-green-text);
+      opacity: 0.9;
+    }}
+    .mfg-subsection-tab.is-alert {{
+      border-color: var(--mfg-red-line);
+      background: var(--mfg-red-bg);
+      color: var(--mfg-red-text);
+    }}
+    .mfg-subsection-tab.is-alert small {{
+      color: var(--mfg-red-text);
+      opacity: 0.82;
+    }}
+    .mfg-subsection-tab.is-alert.is-active {{
+      border-color: var(--mfg-red-line);
+      background: #ffdcdc;
+      color: var(--mfg-red-text);
+    }}
+    .mfg-subsection-tab.is-alert.is-active small {{
+      color: var(--mfg-red-text);
+      opacity: 0.9;
+    }}
     .mfg-tab.is-active {{
       border-color: #111827;
       background: #111827;
@@ -913,6 +949,25 @@ def render_manufacturing_page(
     .mfg-row.is-cnc-fiokelo {{
       grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
     }}
+    .mfg-row.is-cnc-fiokelo .mfg-row-meta {{
+      padding-top: 2px;
+      padding-bottom: 2px;
+    }}
+    .mfg-row.is-cnc-fiokelo .mfg-row-meta:first-child span {{
+      font-weight: 900;
+      font-size: 0.92rem;
+      letter-spacing: 0.01em;
+      color: #0f172a;
+    }}
+    .mfg-row.is-cnc-fiokelo .mfg-row-meta:nth-child(2) span {{
+      font-weight: 900;
+      font-size: 0.92rem;
+      color: #111827;
+    }}
+    .mfg-row.is-cnc-fiokelo .mfg-row-meta:nth-child(3) span {{
+      font-size: 0.88rem;
+      font-weight: 900;
+    }}
     .mfg-row.is-front-standard {{
       grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
     }}
@@ -956,9 +1011,43 @@ def render_manufacturing_page(
     .mfg-row.is-model-orange {{
       background: #fff1ea;
     }}
+    .mfg-row.is-cnc-fiokelo.is-model-blue {{
+      background: #dbe8ff;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-violet {{
+      background: #ede4ff;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-amber {{
+      background: #fef0cb;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-cyan {{
+      background: #dcf6fb;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-slate {{
+      background: #e9eef3;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-orange {{
+      background: #ffe4d6;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-green {{
+      background: #c9f0d8;
+      box-shadow: inset 5px 0 0 var(--mfg-green-line);
+    }}
+    .mfg-row.is-cnc-fiokelo.is-red {{
+      background: #ffd4d4;
+      box-shadow: inset 5px 0 0 var(--mfg-red-line);
+    }}
     .mfg-row.is-glass {{
       background: #eef6ff;
       box-shadow: inset 3px 0 0 #2563eb;
+    }}
+    .mfg-row.is-green {{
+      background: #c9f0d8;
+      box-shadow: inset 5px 0 0 var(--mfg-green-line);
+    }}
+    .mfg-row.is-red {{
+      background: #ffd4d4;
+      box-shadow: inset 5px 0 0 var(--mfg-red-line);
     }}
     .mfg-row.is-green .mfg-row-meta span,
     .mfg-row.is-green .mfg-row-code {{
@@ -967,6 +1056,22 @@ def render_manufacturing_page(
     .mfg-row.is-red .mfg-row-meta span,
     .mfg-row.is-red .mfg-row-code {{
       color: var(--mfg-red-text);
+    }}
+    .mfg-row.is-cnc-fiokelo.is-green,
+    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-main,
+    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-meta,
+    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-side,
+    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-qty,
+    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-code,
+    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-meta span,
+    .mfg-row.is-cnc-fiokelo.is-red,
+    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-main,
+    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-meta,
+    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-side,
+    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-qty,
+    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-code,
+    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-meta span {{
+      color: var(--mfg-text);
     }}
     .mfg-row-main {{
       display: grid;
@@ -1314,6 +1419,12 @@ def render_manufacturing_page(
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
+      const overviewSectionsForDocument = (document) => {{
+        if (String(document?.key || "") === "cnc_furas") {{
+          return specialViewsForDocument(document).flatMap((view) => Array.isArray(view?.sections) ? view.sections : []);
+        }}
+        return Array.isArray(document?.sections) ? document.sections : [];
+      }};
       const frontSubcategoriesForView = (document, viewKey) => {{
         if (String(document?.key || "") !== "front_osszekeszites") return [];
         if (!["front-folias", "front-butorlapos"].includes(String(viewKey || ""))) return [];
@@ -1505,13 +1616,16 @@ def render_manufacturing_page(
         `;
       }};
 
-      const sectionTabStateClass = (section) => {{
-        const rows = Array.isArray(section?.rows) ? section.rows : [];
+      const tabStateClassForRows = (rows) => {{
         if (!rows.length) return "";
         if (rows.some((row) => !rowStateValue(row))) return "";
         if (rows.every((row) => rowStateValue(row) === "green")) return " is-complete";
         if (rows.some((row) => rowStateValue(row) === "red")) return " is-alert";
         return "";
+      }};
+      const sectionTabStateClass = (section) => {{
+        const rows = Array.isArray(section?.rows) ? section.rows : [];
+        return tabStateClassForRows(rows);
       }};
       const pairInfoForLabel = (label) => {{
         const text = String(label || "").trim();
@@ -1607,7 +1721,7 @@ def render_manufacturing_page(
             }}))
             .filter((section) => section.rows.length);
         }}
-        const sections = orderedSectionsForTabs(Array.isArray(document.sections) ? document.sections : []);
+        const sections = orderedSectionsForTabs(overviewSectionsForDocument(document));
         if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           if (currentViewKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
@@ -1689,29 +1803,31 @@ def render_manufacturing_page(
           }}
           const currentKorpuszView = specialViewForKey(document, currentViewKey) || mainKorpuszViews[0];
           const currentKorpuszSections = orderedSectionsForTabs(Array.isArray(currentKorpuszView?.sections) ? currentKorpuszView.sections : []);
+          const korpuszAllRows = currentKorpuszSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
           const korpuszSubTabs = [
-            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections) }},
-            {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)) }},
-            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "green") }},
-            {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red") }},
+            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows) }},
+            {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)), stateClass: "" }},
+            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "green"), stateClass: "" }},
+            {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
             ...currentKorpuszSections.map((section) => ({{
               key: section.key,
               label: section.label,
               count: Array.isArray(section.rows) ? section.rows.length : 0,
+              stateClass: sectionTabStateClass(section),
             }})),
           ];
           if (!korpuszSubTabs.some((item) => item.key === currentSubcategoryKey)) {{
             currentSubcategoryKey = "all";
           }}
           sectionTabsNode.innerHTML = mainKorpuszViews.map((item) => `
-            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{tabStateClassForRows(Array.isArray(item?.sections) ? item.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : [])}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
               <small>${{Number(item.count || 0)}}</small>
             </button>
           `).join("");
           subsectionTabsNode.style.display = "";
           subsectionTabsNode.innerHTML = korpuszSubTabs.map((item) => `
-            <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : (layoutMode === "double" && item.key !== "all" && item.key === pairedSectionKey({{ sections: currentKorpuszSections }}, currentSubcategoryKey) ? " is-secondary" : "")}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+            <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : (layoutMode === "double" && item.key !== "all" && item.key === pairedSectionKey({{ sections: currentKorpuszSections }}, currentSubcategoryKey) ? " is-secondary" : "")}}${{item.stateClass || ""}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
               <small>${{item.count}}</small>
             </button>
@@ -1719,26 +1835,30 @@ def render_manufacturing_page(
           return;
         }}
         const currentSpecialView = specialViewForKey(document, currentViewKey);
+        const overviewSections = overviewSectionsForDocument(document);
         const sections = (currentSpecialView && !specialViewUsesRedFilter(currentSpecialView) && Array.isArray(currentSpecialView.sections))
           ? currentSpecialView.sections
-          : (Array.isArray(document.sections) ? document.sections : []);
+          : overviewSections;
         const documentSpecialViews = specialViewsForDocument(document);
         const specialTabs = [
-          {{ key: "all", label: "Összes", count: flattenRows(document).length }},
-          {{ key: "plain", label: "Simák", count: countPlainInDocument(document) }},
-          {{ key: "green", label: "Zöldek", count: countStateInDocument(document, "green") }},
-          {{ key: "red", label: "Pirosak", count: countStateInDocument(document, "red") }},
+          {{ key: "all", label: "Összes", count: countRowsInSections(overviewSections), stateClass: tabStateClassForRows(overviewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])) }},
+          {{ key: "plain", label: "Simák", count: countRowsInSections(overviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
+          {{ key: "green", label: "Zöldek", count: countRowsInSections(overviewSections, (row) => rowStateValue(row) === "green"), stateClass: "" }},
+          {{ key: "red", label: "Pirosak", count: countRowsInSections(overviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
           ...documentSpecialViews.map((view) => ({{
             key: String(view?.key || ""),
             label: String(view?.label || ""),
             count: specialViewUsesRedFilter(view)
               ? countRowsInSections(view?.sections, (row) => rowStateValue(row) === "red")
               : Number(view?.count || 0),
+            stateClass: specialViewUsesRedFilter(view)
+              ? ""
+              : tabStateClassForRows(Array.isArray(view?.sections) ? view.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : []),
           }})),
         ];
         if (documentUsesSingleColumnOverview(document)) {{
           sectionTabsNode.innerHTML = specialTabs.map((item) => `
-            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{item.stateClass || ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
               <small>${{item.count}}</small>
             </button>
@@ -1818,6 +1938,7 @@ def render_manufacturing_page(
         contentNode.innerHTML = groups.map((group) => {{
           const showSectionHeader = isOverviewMode || isSplitMode;
           const hideBarcode = documentHidesBarcode(document);
+          const hideSideTypeColumn = Boolean(group?.hideSideTypeColumn);
           const columnLayout = groupColumnLayout(group);
           const tableHeadClass = columnLayout === "cnc-lower"
             ? " is-cnc-lower"
@@ -1841,11 +1962,12 @@ def render_manufacturing_page(
               : hideBarcode
                 ? " is-no-barcode"
                 : "";
+          const totalQuantity = (Array.isArray(group.rows) ? group.rows : []).reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
           const headMarkup = showSectionHeader
             ? `
               <div class="mfg-section-head">
                 <div class="mfg-section-title">${{escapeHtml(group.label)}}</div>
-                <div class="mfg-section-count">${{group.rows.length}} sor</div>
+                <div class="mfg-section-count">${{totalQuantity}} db</div>
               </div>
             `
             : "";
@@ -1916,7 +2038,7 @@ def render_manufacturing_page(
               ? `<span class="mfg-row-badge${{modelToneClass}}">${{escapeHtml(String(row.modelLabel))}}</span>`
               : "";
             return `
-              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}">
+              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
@@ -1927,7 +2049,7 @@ def render_manufacturing_page(
                         <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret n?lk?l")}}</span></div>
                         <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín n?lk?l")}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.drawer_drill || "-")}}</span></div>
-                        <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
+                        <div class="mfg-row-meta"><span>${{escapeHtml(hideSideTypeColumn ? "-" : (row.side_type || "-"))}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                         <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                       `
@@ -2055,14 +2177,16 @@ def render_manufacturing_page(
         requestAnimationFrame(() => restoreScrollState(scrollState));
       }};
 
-      const persistRowState = async (rowId, targetProductionNumber, stateKey, nextState, previousState) => {{
+      const persistRowState = async (rowId, targetProductionNumber, stateKey, nextState, previousStateMap, sourceRowIds = []) => {{
         try {{
+          const uniqueRowIds = Array.from(new Set([rowId, ...sourceRowIds].map((value) => String(value || "").trim()).filter(Boolean)));
           const response = await fetch(stateRoute, {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({{
               production_number: targetProductionNumber,
               row_id: rowId,
+              row_ids: uniqueRowIds,
               state: nextState || "clear",
             }}),
           }});
@@ -2072,21 +2196,32 @@ def render_manufacturing_page(
           }}
           setStatus("Mentve.", "is-success");
         }} catch (error) {{
-          if (previousState) selectionState[stateKey] = previousState;
-          else delete selectionState[stateKey];
+          for (const [previousKey, previousValue] of previousStateMap.entries()) {{
+            if (previousValue) selectionState[previousKey] = previousValue;
+            else delete selectionState[previousKey];
+          }}
           renderAll();
           setStatus(error instanceof Error ? error.message : "A mentés nem sikerült.", "is-error");
         }}
       }};
 
-      const applyRowState = (stateKey, rowId, targetProductionNumber, targetState) => {{
+      const applyRowState = (stateKey, rowId, targetProductionNumber, targetState, sourceRowIds = []) => {{
         const scrollState = captureScrollState();
-        const previousState = selectionState[stateKey] || "";
-        if (targetState === "clear") delete selectionState[stateKey];
-        else selectionState[stateKey] = targetState;
+        const allStateKeys = Array.from(new Set([
+          stateKey,
+          ...sourceRowIds
+            .map((sourceRowId) => String(sourceRowId || "").trim())
+            .filter(Boolean)
+            .map((sourceRowId) => `${{targetProductionNumber}}::${{sourceRowId}}`),
+        ]));
+        const previousStateMap = new Map(allStateKeys.map((key) => [key, selectionState[key] || ""]));
+        for (const key of allStateKeys) {{
+          if (targetState === "clear") delete selectionState[key];
+          else selectionState[key] = targetState;
+        }}
         renderAll(scrollState);
         setStatus("Mentés...");
-        void persistRowState(rowId, targetProductionNumber, stateKey, targetState, previousState);
+        void persistRowState(rowId, targetProductionNumber, stateKey, targetState, previousStateMap, sourceRowIds);
       }};
 
       docTabsNode.addEventListener("click", (event) => {{
@@ -2195,9 +2330,13 @@ def render_manufacturing_page(
         const rowId = row.getAttribute("data-row-id") || "";
         const targetProductionNumber = row.getAttribute("data-row-production") || productionNumber;
         const stateKey = row.getAttribute("data-state-key") || rowId;
+        const sourceRowIds = (row.getAttribute("data-source-row-ids") || "")
+          .split(",")
+          .map((value) => String(value || "").trim())
+          .filter(Boolean);
         if (!rowId) return;
         const currentState = selectionState[stateKey] || "";
-        applyRowState(stateKey, rowId, targetProductionNumber, nextRowState(currentState));
+        applyRowState(stateKey, rowId, targetProductionNumber, nextRowState(currentState), sourceRowIds);
       }});
 
       renderAll();
