@@ -13,12 +13,14 @@ def render_manufacturing_page(
     *,
     route: str,
     state_route: str,
+    partial_qty_route: str,
     selected_number: str,
     operations: list[dict[str, str]],
     selected_operation: str,
     recent_productions: list[dict[str, str]],
     bundle: dict,
     selection_state: dict[str, str],
+    partial_quantity_state: dict[str, str],
     message: str = "",
     success: bool = False,
 ) -> bytes:
@@ -101,6 +103,8 @@ def render_manufacturing_page(
             "currentDocumentKey": selected_operation_key,
             "selectionState": selection_state,
             "stateRoute": state_route,
+            "partialQuantityState": partial_quantity_state,
+            "partialQtyRoute": partial_qty_route,
         }
     )
 
@@ -787,6 +791,10 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard {{
       grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-with-partial {{
+      grid-template-columns: 0.9fr 0.74fr 0.68fr 0.82fr 0.34fr 0.32fr 1.5fr;
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-fiokelo > :nth-child(4) {{
@@ -892,6 +900,9 @@ def render_manufacturing_page(
     .mfg-table-head.is-front-standard {{
       grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
     }}
+    .mfg-table-head.is-front-standard.is-with-partial {{
+      grid-template-columns: 0.9fr 0.74fr 0.68fr 0.82fr 0.34fr 0.32fr 1.5fr;
+    }}
     .mfg-section-title {{
       font-size: 0.82rem;
       font-weight: 800;
@@ -927,7 +938,7 @@ def render_manufacturing_page(
       color: var(--mfg-text);
       text-align: left;
       display: grid;
-      grid-template-columns: 1.02fr 0.7fr 0.7fr 0.4fr 0.5fr 1.98fr;
+      grid-template-columns: 1.04fr 0.7fr 0.7fr 0.4fr 0.46fr 0.42fr 1.7fr;
       gap: 5px;
       align-items: center;
       cursor: pointer;
@@ -938,16 +949,16 @@ def render_manufacturing_page(
       -webkit-touch-callout: none;
     }}
     .mfg-row.is-no-barcode {{
-      grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
+      grid-template-columns: 1.12fr 0.78fr 0.8fr 0.44fr 0.54fr 0.4fr;
     }}
     .mfg-row.is-cnc-lower {{
-      grid-template-columns: 1.1fr 0.72fr 0.78fr 0.78fr 0.92fr 0.5fr 0.48fr;
+      grid-template-columns: 1.08fr 0.72fr 0.78fr 0.78fr 0.9fr 0.48fr 0.4fr 0.46fr;
     }}
     .mfg-row.is-cnc-upper {{
-      grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
+      grid-template-columns: 1.06fr 0.72fr 0.76fr 0.92fr 0.78fr 0.48fr 0.4fr 0.46fr;
     }}
     .mfg-row.is-cnc-fiokelo {{
-      grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
+      grid-template-columns: 0.8fr 0.96fr 0.9fr 1.08fr 0.58fr 0.62fr 0.38fr 0.44fr;
     }}
     .mfg-row.is-cnc-fiokelo .mfg-row-meta {{
       padding-top: 2px;
@@ -969,7 +980,10 @@ def render_manufacturing_page(
       font-weight: 900;
     }}
     .mfg-row.is-front-standard {{
-      grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
+      grid-template-columns: 0.94fr 0.8fr 0.72fr 0.9fr 0.38fr 1.5fr;
+    }}
+    .mfg-row.is-front-standard.is-with-partial {{
+      grid-template-columns: 0.9fr 0.74fr 0.68fr 0.82fr 0.34fr 0.32fr 1.5fr;
     }}
     .mfg-row.is-front-standard .mfg-row-main {{
       min-width: 0;
@@ -1215,6 +1229,89 @@ def render_manufacturing_page(
     .mfg-row.is-red .mfg-row-qty {{
       background: var(--mfg-red-text);
     }}
+    .mfg-row-partial {{
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }}
+    .mfg-row-partial-input {{
+      width: 100%;
+      min-width: 42px;
+      max-width: 56px;
+      height: 32px;
+      border-radius: 9px;
+      border: 1px solid rgba(17, 24, 39, 0.16);
+      background: rgba(255, 255, 255, 0.92);
+      color: #111827;
+      font: inherit;
+      font-weight: 700;
+      padding: 0 8px;
+      outline: none;
+    }}
+    .mfg-row-partial-input:focus {{
+      border-color: #111827;
+      box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+    }}
+    .mfg-row-partial-empty {{
+      display: block;
+      width: 100%;
+      min-height: 34px;
+    }}
+    .mfg-choice-modal[hidden] {{
+      display: none !important;
+    }}
+    .mfg-choice-modal {{
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.32);
+    }}
+    .mfg-choice-card {{
+      width: min(360px, 100%);
+      border-radius: 20px;
+      background: #fff;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18);
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }}
+    .mfg-choice-title {{
+      font-size: 1rem;
+      font-weight: 800;
+      color: #111827;
+    }}
+    .mfg-choice-copy {{
+      font-size: 0.92rem;
+      color: #475569;
+      line-height: 1.45;
+    }}
+    .mfg-choice-actions {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .mfg-choice-button {{
+      min-height: 42px;
+      border-radius: 12px;
+      border: 1px solid rgba(17, 24, 39, 0.14);
+      background: #fff;
+      color: #111827;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }}
+    .mfg-choice-button.is-green {{
+      background: #dff8e6;
+      border-color: rgba(18, 106, 52, 0.22);
+    }}
+    .mfg-choice-button.is-plain {{
+      background: #f8fafc;
+    }}
     .mfg-row-barcode-wrap {{
       display: grid;
       gap: 2px;
@@ -1288,6 +1385,10 @@ def render_manufacturing_page(
       .mfg-row.is-front-standard {{
         grid-template-columns: 0.92fr 0.78fr 0.68fr 0.82fr 0.44fr 1.48fr;
       }}
+      .mfg-table-head.is-front-standard.is-with-partial,
+      .mfg-row.is-front-standard.is-with-partial {{
+        grid-template-columns: 0.86fr 0.72fr 0.64fr 0.78fr 0.34fr 0.3fr 1.4fr;
+      }}
     }}
     @media (orientation: portrait) {{
       .mfg-content.is-split .mfg-table-head {{
@@ -1360,6 +1461,16 @@ def render_manufacturing_page(
       </div>
       <div class="mfg-content" id="mfg-content"></div>
     </section>
+    <div class="mfg-choice-modal" id="mfg-choice-modal" hidden>
+      <div class="mfg-choice-card" role="dialog" aria-modal="true" aria-labelledby="mfg-choice-title">
+        <div class="mfg-choice-title" id="mfg-choice-title">Piros tétel áthelyezése</div>
+        <div class="mfg-choice-copy">Hova kerüljön a kijelölt piros tétel?</div>
+        <div class="mfg-choice-actions">
+          <button class="mfg-choice-button is-plain" type="button" data-choice-action="plain">Sima</button>
+          <button class="mfg-choice-button is-green" type="button" data-choice-action="green">Zöld</button>
+        </div>
+      </div>
+    </div>
 
     <script type="application/json" id="manufacturing-data">{payload_json}</script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
@@ -1374,7 +1485,8 @@ def render_manufacturing_page(
       const contentNode = document.getElementById("mfg-content");
       const statusNode = document.getElementById("mfg-status");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !layoutToggleNode) return;
+      const choiceModalNode = document.getElementById("mfg-choice-modal");
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !layoutToggleNode || !choiceModalNode) return;
 
       let payload = {{}};
       try {{
@@ -1386,7 +1498,9 @@ def render_manufacturing_page(
       const documents = Array.isArray(payload.documents) ? payload.documents : [];
       if (!documents.length) return;
       const selectionState = Object.assign({{}}, payload.selectionState || {{}});
+      const partialQuantityState = Object.assign({{}}, payload.partialQuantityState || {{}});
       const stateRoute = String(payload.stateRoute || "");
+      const partialQtyRoute = String(payload.partialQtyRoute || "");
       const productionNumber = String(payload.productionNumber || "");
       let currentDocKey = String(payload.currentDocumentKey || documents[0]?.key || "");
       if (!documents.some((document) => document.key === currentDocKey)) {{
@@ -1397,6 +1511,8 @@ def render_manufacturing_page(
       let secondaryViewKey = "";
       let layoutMode = "single";
       const sectionSortState = Object.create(null);
+      const partialSaveTimers = new Map();
+      let pendingRedChoice = null;
 
       const syncUrlForDocument = () => {{
         try {{
@@ -1977,9 +2093,11 @@ def render_manufacturing_page(
               </div>
             `
             : "";
+          const showPartialColumn = currentViewKey === "red";
+          const tableHeadExtraClass = showPartialColumn ? " is-with-partial" : "";
           const tableHeadMarkup = columnLayout === "cnc-lower"
             ? `
-                <div class="mfg-table-head${{tableHeadClass}}">
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
@@ -1987,11 +2105,12 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
                   ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                 </div>
               `
             : columnLayout === "cnc-upper"
               ? `
-                <div class="mfg-table-head${{tableHeadClass}}">
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
@@ -1999,11 +2118,12 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
                   ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                 </div>
               `
             : columnLayout === "cnc-fiokelo"
               ? `
-                <div class="mfg-table-head${{tableHeadClass}}">
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "model", "Modell")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
@@ -2011,31 +2131,41 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "drill", "Furat")}}
                   ${{sortButtonMarkup(group.key, "drawer_type", "Fióktípus")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                 </div>
               `
             : columnLayout === "front-standard"
               ? `
-                <div class="mfg-table-head${{tableHeadClass}}">
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "model", "Modell")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                   ${{sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `
             : `
-                <div class="mfg-table-head${{tableHeadClass}}">
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
                   ${{sortButtonMarkup(group.key, "edge", "Él")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
+                  ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                   ${{hideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `;
           const rowMarkup = sortedRowsForView(group.rows, group.key).map((row) => {{
             const rowState = rowStateValue(row);
+            const partialKey = rowStateKey(row);
+            const partialValue = showPartialColumn && rowState === "red" ? String(partialQuantityState[partialKey] || "") : "";
+            const partialMarkup = showPartialColumn
+              ? (rowState === "red"
+                  ? `<div class="mfg-row-partial"><input class="mfg-row-partial-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" value="${{escapeHtml(partialValue)}}" placeholder="db" data-partial-input data-partial-key="${{escapeHtml(partialKey)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" /></div>`
+                  : `<div class="mfg-row-partial-empty"></div>`)
+              : "";
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
@@ -2046,7 +2176,7 @@ def render_manufacturing_page(
               ? `<span class="mfg-row-badge${{modelToneClass}}">${{escapeHtml(String(row.modelLabel))}}</span>`
               : "";
             return `
-              <button class="mfg-row${{rowClass}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
+              <button class="mfg-row${{rowClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
@@ -2060,6 +2190,7 @@ def render_manufacturing_page(
                         <div class="mfg-row-meta"><span>${{escapeHtml(hideSideTypeColumn ? "-" : (row.side_type || "-"))}}</span></div>
                         <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                         <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                        ${{partialMarkup}}
                       `
                     : columnLayout === "cnc-upper"
                       ? `
@@ -2073,6 +2204,7 @@ def render_manufacturing_page(
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                           <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                          ${{partialMarkup}}
                         `
                       : columnLayout === "cnc-fiokelo"
                         ? `
@@ -2083,6 +2215,7 @@ def render_manufacturing_page(
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.drillLabel || "-")}}</span></div>
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.drawerType || "-")}}</span></div>
                             <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                            ${{partialMarkup}}
                           `
                         : columnLayout === "front-standard"
                           ? `
@@ -2094,6 +2227,7 @@ def render_manufacturing_page(
                               <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
                               <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
                               <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                              ${{partialMarkup}}
                               <div class="mfg-row-barcode-wrap">
                                 <div class="mfg-row-barcode">
                                   <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
@@ -2118,6 +2252,7 @@ def render_manufacturing_page(
                               <div class="mfg-row-side">
                                 <div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div>
                               </div>
+                              ${{partialMarkup}}
                               ${{
                                 hideBarcode
                                   ? ""
@@ -2232,6 +2367,56 @@ def render_manufacturing_page(
         void persistRowState(rowId, targetProductionNumber, stateKey, targetState, previousStateMap, sourceRowIds);
       }};
 
+      const closeRedChoiceModal = () => {{
+        pendingRedChoice = null;
+        choiceModalNode.hidden = true;
+      }};
+
+      const openRedChoiceModal = (payload) => {{
+        pendingRedChoice = payload;
+        choiceModalNode.hidden = false;
+      }};
+
+      const persistPartialQuantity = async (targetProductionNumber, stateKey, value, previousValue) => {{
+        try {{
+          const response = await fetch(partialQtyRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              production_number: targetProductionNumber,
+              state_key: stateKey,
+              value,
+            }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "A mentés nem sikerült.");
+          }}
+          if (result.value) partialQuantityState[stateKey] = String(result.value);
+          else delete partialQuantityState[stateKey];
+          setStatus("Mentve.", "is-success");
+        }} catch (error) {{
+          if (previousValue) partialQuantityState[stateKey] = previousValue;
+          else delete partialQuantityState[stateKey];
+          renderAll();
+          setStatus(error instanceof Error ? error.message : "A mentés nem sikerült.", "is-error");
+        }}
+      }};
+
+      const queuePartialQuantitySave = (targetProductionNumber, stateKey, value) => {{
+        const previousValue = String(partialQuantityState[stateKey] || "");
+        const normalizedValue = String(value || "").replace(/[^0-9]/g, "").slice(0, 4);
+        if (normalizedValue) partialQuantityState[stateKey] = normalizedValue;
+        else delete partialQuantityState[stateKey];
+        const existingTimer = partialSaveTimers.get(stateKey);
+        if (existingTimer) clearTimeout(existingTimer);
+        const nextTimer = setTimeout(() => {{
+          partialSaveTimers.delete(stateKey);
+          void persistPartialQuantity(targetProductionNumber, stateKey, normalizedValue, previousValue);
+        }}, 280);
+        partialSaveTimers.set(stateKey, nextTimer);
+      }};
+
       docTabsNode.addEventListener("click", (event) => {{
         const button = event.target.closest("[data-doc-key]");
         if (!(button instanceof HTMLElement)) return;
@@ -2315,6 +2500,11 @@ def render_manufacturing_page(
       }});
 
       contentNode.addEventListener("click", (event) => {{
+        const partialInput = event.target.closest("[data-partial-input]");
+        if (partialInput instanceof HTMLElement) {{
+          event.stopPropagation();
+          return;
+        }}
         const sortButton = event.target.closest("[data-sort-key]");
         if (sortButton instanceof HTMLElement) {{
           event.preventDefault();
@@ -2344,7 +2534,44 @@ def render_manufacturing_page(
           .filter(Boolean);
         if (!rowId) return;
         const currentState = selectionState[stateKey] || "";
+        if (currentState === "red") {{
+          openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds }});
+          return;
+        }}
         applyRowState(stateKey, rowId, targetProductionNumber, nextRowState(currentState), sourceRowIds);
+      }});
+
+      contentNode.addEventListener("input", (event) => {{
+        const input = event.target.closest("[data-partial-input]");
+        if (!(input instanceof HTMLInputElement)) return;
+        event.stopPropagation();
+        const stateKey = String(input.getAttribute("data-partial-key") || "").trim();
+        const targetProductionNumber = String(input.getAttribute("data-row-production") || productionNumber || "").trim();
+        if (!stateKey || !targetProductionNumber) return;
+        const normalizedValue = String(input.value || "").replace(/[^0-9]/g, "").slice(0, 4);
+        if (input.value !== normalizedValue) input.value = normalizedValue;
+        queuePartialQuantitySave(targetProductionNumber, stateKey, normalizedValue);
+      }});
+
+      choiceModalNode.addEventListener("click", (event) => {{
+        const actionButton = event.target.closest("[data-choice-action]");
+        if (actionButton instanceof HTMLElement) {{
+          const action = actionButton.getAttribute("data-choice-action") || "";
+          const currentChoice = pendingRedChoice;
+          closeRedChoiceModal();
+          if (!currentChoice) return;
+          applyRowState(
+            currentChoice.stateKey,
+            currentChoice.rowId,
+            currentChoice.targetProductionNumber,
+            action === "green" ? "green" : "clear",
+            currentChoice.sourceRowIds || [],
+          );
+          return;
+        }}
+        if (event.target === choiceModalNode) {{
+          closeRedChoiceModal();
+        }}
       }});
 
       renderAll();

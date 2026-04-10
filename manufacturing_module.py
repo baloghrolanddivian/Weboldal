@@ -1309,3 +1309,42 @@ def save_selection_state(runtime_root: Path, production_number: str, row_id: str
     path = selection_state_path(runtime_root, production_number)
     path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
     return current
+
+
+def partial_quantity_state_path(runtime_root: Path, production_number: str) -> Path:
+    target_dir = runtime_root / production_number
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir / "partial-qty.json"
+
+
+def load_partial_quantity_state(runtime_root: Path, production_number: str) -> dict[str, str]:
+    path = partial_quantity_state_path(runtime_root, production_number)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    result: dict[str, str] = {}
+    for key, value in payload.items():
+        text = str(value or "").strip()
+        if key and text:
+            result[str(key)] = text
+    return result
+
+
+def save_partial_quantity_state(runtime_root: Path, production_number: str, key: str, value: str) -> dict[str, str]:
+    current = load_partial_quantity_state(runtime_root, production_number)
+    normalized_key = str(key or "").strip()
+    normalized_value = str(value or "").strip()
+    if not normalized_key:
+        return current
+    if normalized_value:
+        current[normalized_key] = normalized_value
+    else:
+        current.pop(normalized_key, None)
+    path = partial_quantity_state_path(runtime_root, production_number)
+    path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    return current

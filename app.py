@@ -52,9 +52,11 @@ from manufacturing_module import (
     available_production_entries,
     available_production_numbers,
     latest_production_number,
+    load_partial_quantity_state,
     load_production_bundle,
     load_selection_state,
     production_folder as manufacturing_production_folder,
+    save_partial_quantity_state,
     save_selection_state,
 )
 from manufacturing_view import render_manufacturing_page
@@ -149,6 +151,7 @@ VACATION_CALENDAR_LEAVE_SAVE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/men
 VACATION_CALENDAR_LEAVE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/torles"
 MANUFACTURING_ROUTE = "/apps/gyartasi-papirok"
 MANUFACTURING_STATE_ROUTE = f"{MANUFACTURING_ROUTE}/state"
+MANUFACTURING_PARTIAL_QTY_ROUTE = f"{MANUFACTURING_ROUTE}/partial-qty"
 MATT_INVENTORY_ROUTE = "/apps/matt-raktarertek"
 MATT_INVENTORY_PROCESS_ROUTE = f"{MATT_INVENTORY_ROUTE}/process"
 MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
@@ -2086,6 +2089,8 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
     def front_box_type_label(type_label: str) -> str:
         clean_type = clean_text(type_label)
+        if "alsó kihúzható" in folded(clean_type):
+            return "Fiókelő"
         for suffix in (" - Oldalra", " - Nincs"):
             if clean_type.endswith(suffix):
                 return clean_type[: -len(suffix)].strip()
@@ -2135,8 +2140,18 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         code_text = clean_text(row.get("code"))
         compact_size = re.sub(r"[^0-9X]", "", size_text.upper().replace("x", "X"))
         compact_code = re.sub(r"\s+", "", code_text).upper()
-        if compact_size in {"655X397X18", "718X297X18"}:
+        if compact_size == "655X397X18":
             return True
+        if compact_size == "718X297X18":
+            combined = " ".join(
+                [
+                    clean_text(row.get("name")),
+                    clean_text(row.get("detail")),
+                    clean_text(row.get("section_label")),
+                    clean_text(row.get("code")),
+                ]
+            ).upper()
+            return "FZN" in combined
         return bool(compact_size and re.search(re.escape(compact_size) + r"[JB]", compact_code))
 
     grouped_sections: dict[str, dict] = {}
@@ -11866,6 +11881,7 @@ def render_manufacturing_module(
 
     bundle: dict | None = None
     selection_state: dict[str, str] = {}
+    partial_quantity_state: dict[str, str] = {}
     combined_message = message
     combined_success = success
 
@@ -11876,6 +11892,7 @@ def render_manufacturing_module(
         try:
             raw_bundle = _load_manufacturing_bundle_cached(selected_number)
             current_selection_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, selected_number)
+            partial_quantity_state = load_partial_quantity_state(MANUFACTURING_RUNTIME_DIR, selected_number)
             bundle, selection_state = _manufacturing_view_bundle(raw_bundle, selected_number, current_selection_state)
         except Exception as exc:
             combined_message = f"A gyártási papírok betöltése nem sikerült: {exc}"
@@ -11891,12 +11908,14 @@ def render_manufacturing_module(
     return render_manufacturing_page(
         route=MANUFACTURING_ROUTE,
         state_route=MANUFACTURING_STATE_ROUTE,
+        partial_qty_route=MANUFACTURING_PARTIAL_QTY_ROUTE,
         selected_number=selected_number,
         operations=operations,
         selected_operation=selected_operation,
         recent_productions=recent_productions,
         bundle=bundle,
         selection_state=selection_state,
+        partial_quantity_state=partial_quantity_state,
         message=combined_message,
         success=combined_success,
     )
@@ -21165,6 +21184,51 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "row_id": row_id,
                     "state": current_state.get(row_id, ""),
                     "row_ids": target_row_ids,
+                },
+            )
+            return
+
+        if path == MANUFACTURING_PARTIAL_QTY_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+
+            production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
+            state_key = str(payload.get("state_key", "")).strip()
+            value = str(payload.get("value", "")).strip()
+
+            if not production_number:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártási szám."})
+                return
+            if not state_key:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a sorazonosító."})
+                return
+            if value and not re.fullmatch(r"\d{1,4}", value):
+                self.respond_json(400, {"ok": False, "error": "Csak egész darabszám adható meg."})
+                return
+
+            try:
+                current_state = save_partial_quantity_state(
+                    MANUFACTURING_RUNTIME_DIR,
+                    production_number,
+                    state_key,
+                    value,
+                )
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
+                return
+
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "production_number": production_number,
+                    "state_key": state_key,
+                    "value": current_state.get(state_key, ""),
                 },
             )
             return
