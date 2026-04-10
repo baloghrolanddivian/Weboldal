@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$ManufacturingRoot = "",
     [int]$Port = 5000
 )
+
+$ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $runtimeDir = Join-Path $repoRoot "runtime\server"
