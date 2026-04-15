@@ -952,6 +952,10 @@ DIVIAN_AI_PRIME_LOCK = threading.Lock()
 DIVIAN_AI_PRIME_STARTED = False
 MANUFACTURING_BUNDLE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
+MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 120.0
+MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 10.0
+MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
+MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
 
 
 def _dev_reload_token() -> str:
@@ -1845,10 +1849,52 @@ def _manufacturing_normalize_number(value: object) -> str:
     return re.sub(r"[^0-9]", "", str(value or ""))
 
 
+def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) -> str:
+    payload = json.dumps(list(signature), ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _manufacturing_disk_cache_path(production_number: str) -> Path:
+    return MANUFACTURING_BUNDLE_DISK_CACHE_DIR / f"{production_number}.json"
+
+
+def _read_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...]) -> dict | None:
+    cache_path = _manufacturing_disk_cache_path(production_number)
+    if not cache_path.exists():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if str(payload.get("signature_key", "")) != _manufacturing_signature_key(signature):
+        return None
+    bundle = payload.get("bundle")
+    return bundle if isinstance(bundle, dict) else None
+
+
+def _write_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...], bundle: dict) -> None:
+    try:
+        MANUFACTURING_BUNDLE_DISK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path = _manufacturing_disk_cache_path(production_number)
+        payload = {
+            "signature_key": _manufacturing_signature_key(signature),
+            "bundle": bundle,
+        }
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        return
+
+
 def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[tuple[str, int, int], ...]]:
     normalized = _manufacturing_normalize_number(production_number)
     if not normalized:
         return "", tuple()
+
+    now = time.time()
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        cached_signature = MANUFACTURING_SIGNATURE_CACHE.get(normalized)
+        if cached_signature and (now - float(cached_signature.get("created_at", 0.0) or 0.0)) < MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS:
+            return normalized, tuple(cached_signature.get("signature", tuple()))
 
     folder = manufacturing_production_folder(normalized)
     if not folder.exists():
@@ -1860,25 +1906,51 @@ def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[
             continue
         stat = entry.stat()
         signature_items.append((entry.name, stat.st_mtime_ns, stat.st_size))
-    return normalized, tuple(signature_items)
+    signature = tuple(signature_items)
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        MANUFACTURING_SIGNATURE_CACHE[normalized] = {
+            "created_at": now,
+            "signature": signature,
+        }
+    return normalized, signature
 
 
 def _load_manufacturing_bundle_cached(production_number: str) -> dict:
-    normalized, signature = _manufacturing_bundle_signature(production_number)
+    normalized = _manufacturing_normalize_number(production_number)
     if not normalized:
         raise FileNotFoundError("Adj meg egy érvényes gyártási számot.")
 
+    now = time.time()
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        cached = MANUFACTURING_BUNDLE_CACHE.get(normalized)
+        if cached and (now - float(cached.get("created_at", 0.0) or 0.0)) < MANUFACTURING_BUNDLE_FAST_TTL_SECONDS:
+            return dict(cached.get("bundle", {}))
+
+    normalized, signature = _manufacturing_bundle_signature(normalized)
     with MANUFACTURING_BUNDLE_CACHE_LOCK:
         cached = MANUFACTURING_BUNDLE_CACHE.get(normalized)
         if cached and cached.get("signature") == signature:
+            cached["created_at"] = now
             return dict(cached.get("bundle", {}))
+
+    disk_cached_bundle = _read_manufacturing_disk_cache(normalized, signature)
+    if disk_cached_bundle:
+        with MANUFACTURING_BUNDLE_CACHE_LOCK:
+            MANUFACTURING_BUNDLE_CACHE[normalized] = {
+                "created_at": now,
+                "signature": signature,
+                "bundle": disk_cached_bundle,
+            }
+        return dict(disk_cached_bundle)
 
     bundle = load_production_bundle(normalized)
     with MANUFACTURING_BUNDLE_CACHE_LOCK:
         MANUFACTURING_BUNDLE_CACHE[normalized] = {
+            "created_at": now,
             "signature": signature,
             "bundle": bundle,
         }
+    _write_manufacturing_disk_cache(normalized, signature, bundle)
     return dict(bundle)
 
 
@@ -2244,6 +2316,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         folded_text = re.sub(r"\s+", " ", folded(text)).strip()
         if not folded_text:
             return ""
+        if "ar golyos" in folded_text:
+            return "AR golyós tel."
         if "aaf fiokos ajtos" in folded_text:
             return "AAF fiókos ajtós"
         if "af 1+2" in folded_text or "af 1 + 2" in folded_text:
@@ -2337,19 +2411,51 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         tokens = [clean_text(token) for token in remainder.split() if clean_text(token)]
         hardware_type = ""
         parsed_edge = ""
+        edge_pattern = re.compile(r"^\d+H(?:\dR)?$")
+        # Some rows (especially Box Hettich) contain "SIDE EDGE EXTRA..." format,
+        # e.g. "KF60F 1H 176FI N". Keep side type isolated in its own column.
+        edge_index = next((idx for idx, token in enumerate(tokens) if edge_pattern.fullmatch(token)), -1)
+        if edge_index > 0:
+            parsed_edge = tokens[edge_index]
+            remainder = clean_text(" ".join(tokens[:edge_index]))
+            trailing_tokens = tokens[edge_index + 1 :]
+            if trailing_tokens:
+                hardware_type = clean_text(" ".join(trailing_tokens))
+            return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
         if drawer_drill == "AVZ" and len(tokens) == 1 and tokens[0] in {"N", "KESB", "GTEL", "B"}:
             return drawer_drill, "", "", tokens[0]
-        if len(tokens) >= 2 and re.fullmatch(r"\d+H(?:\dR)?", tokens[-2]) and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"}:
+        if len(tokens) >= 2 and edge_pattern.fullmatch(tokens[-2]) and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"}:
             parsed_edge = tokens[-2]
             hardware_type = tokens[-1]
             remainder = clean_text(" ".join(tokens[:-2]))
-        elif len(tokens) >= 1 and re.fullmatch(r"\d+H(?:\dR)?", tokens[-1]):
+        elif len(tokens) >= 1 and edge_pattern.fullmatch(tokens[-1]):
             parsed_edge = tokens[-1]
             remainder = clean_text(" ".join(tokens[:-1]))
         elif len(tokens) >= 1 and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"} and drawer_drill:
             hardware_type = tokens[-1]
             remainder = clean_text(" ".join(tokens[:-1]))
         return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
+
+    def split_lower_color_and_side_v2(color: object, side_type: object) -> tuple[str, str]:
+        color_text = clean_text(color)
+        side_text = clean_text(side_type)
+        if not color_text:
+            return color_text, side_text
+
+        # Keep already parsed side types intact.
+        if side_text and side_text not in {"-", ""}:
+            return color_text, canonical_side_type(side_text)
+
+        # Some PDF rows append side-type code to color, e.g. "Antracit kr. K60R".
+        # Move trailing code-like token into the side-type column.
+        match = re.match(r"^(.*\S)\s+(K\d{1,2}[A-Z0-9]{0,6})$", color_text, flags=re.IGNORECASE)
+        if match:
+            parsed_color = clean_text(match.group(1))
+            parsed_side = clean_text(match.group(2)).upper()
+            if parsed_color:
+                return parsed_color, parsed_side
+
+        return color_text, side_text
 
     def parse_upper_detail(detail: object) -> tuple[str, str]:
         text = clean_text(detail)
@@ -2405,6 +2511,124 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     break
         return stripped_color or color_text, detected_side
 
+    def parse_upper_detail_v2(detail: object) -> tuple[str, str]:
+        text = clean_text(detail)
+        if not text:
+            return "", ""
+        folded_text = folded(text)
+        marker_positions = []
+        for marker in ("felso oldal", "felso vegzaro", "teto-fenek mart", "eft fenek excenteres"):
+            marker_index = folded_text.find(marker)
+            if marker_index > 0:
+                marker_positions.append(marker_index)
+        if marker_positions:
+            text = clean_text(text[:min(marker_positions)])
+        text = re.sub(r"\b\d+H(?:\dR)?\s+\d+\b", "", text).strip()
+        text = re.sub(r"\s{2,}", " ", text).strip()
+        if not text:
+            return "", ""
+        hardware_codes = {"N", "KESB", "GTEL", "TE", "RI", "JO"}
+        if text in hardware_codes:
+            return "", text
+        parts = text.rsplit(" ", 1)
+        if len(parts) == 2 and parts[1] in hardware_codes:
+            return clean_text(parts[0]), parts[1]
+        return text, ""
+
+    def split_upper_color_and_side_v2(color: object, side_type: object) -> tuple[str, str]:
+        color_text = clean_text(color)
+        side_text = clean_text(side_type)
+        patterns = [
+            (r"\s+Sarok\s+fels[őo]\b.*$", "Sarok felső"),
+            (r"\s+Fels[őo]\s+felny[ií]l[oó]s\b.*$", "Felnyíló"),
+            (r"\s+F_?2A\b.*$", "F2A"),
+            (r"\s+EF60(?:_?72)?\b.*$", "EF60"),
+            (r"\s+FNY\b.*$", "FNY"),
+            (r"\s+EFT\b.*$", "EFT"),
+            (r"\s+FVZ\b.*$", "FVZ"),
+            (r"\s+FMFS\b.*$", "FMFS"),
+            (r"\s+FMF\b.*$", "FMF"),
+            (r"\s+FKF\b.*$", "FKF"),
+            (r"\s+FZN\b.*$", "FZN"),
+            (r"\s+FÜF\b.*$", "FÜF"),
+            (r"\s+FUF\b.*$", "FÜF"),
+            (r"\s+Fels[őo]\b.*$", "Normál"),
+        ]
+        detected_side = side_text
+        stripped_color = color_text
+        changed = True
+        while changed and stripped_color:
+            changed = False
+            for pattern, candidate_side in patterns:
+                if re.search(pattern, stripped_color, flags=re.IGNORECASE):
+                    stripped_color = re.sub(pattern, "", stripped_color, flags=re.IGNORECASE).strip(" -")
+                    if not detected_side or detected_side in {"-", ""}:
+                        detected_side = candidate_side
+                    changed = True
+                    break
+        return stripped_color or color_text, detected_side
+
+    def extract_embedded_upper_rows(raw_row: dict, source_group: str) -> list[dict]:
+        detail_text = clean_text(raw_row.get("detail"))
+        if not detail_text:
+            return []
+        embedded_rows: list[dict] = []
+        segments = re.findall(
+            r"(Fels[őo] oldal\s+1H(?:2R)?\s+360 x (?:330|550) x 18.*?)(?=(?:Fels[őo] oldal\s+1H(?:2R)?\s+360 x (?:330|550) x 18)|$)",
+            detail_text,
+            flags=re.IGNORECASE,
+        )
+        for segment in segments:
+            match = re.match(
+                r"(Fels[őo] oldal)\s+(1H(?:2R)?)\s+(360 x (?:330|550) x 18)\s+([A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű\. ]+?)\s+([A-Z0-9ÁÉÍÓÖŐÚÜŰa-záéíóöőúüű]+)(?:\s+(1H(?:2R)?))?(?:\s+(\d+))?\s+(N|KESB|GTEL)\s*$",
+                clean_text(segment),
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                continue
+            name, edge, size, color, side_type, maybe_edge, maybe_qty, hardware_type = match.groups()
+            normalized_color, normalized_side_type = split_upper_color_and_side_v2(color, side_type)
+            embedded_rows.append(
+                {
+                    "sourceGroup": source_group,
+                    "name": cnc_display_name(name),
+                    "source_name": clean_text(name),
+                    "size": clean_text(size),
+                    "color": normalized_color,
+                    "hardware_type": clean_text(hardware_type),
+                    "side_type": clean_text(normalized_side_type or side_type),
+                    "edge": clean_text(maybe_edge or edge or "-") or "-",
+                    "quantity": int(maybe_qty or 2),
+                    "detail": "",
+                    "columnLayout": "cnc-upper",
+                }
+            )
+        return embedded_rows
+
+    def clean_upper_detail_for_display(detail: object, side_type: object, hardware_type: object) -> str:
+        text = clean_text(detail)
+        if not text:
+            return ""
+        text = re.sub(
+            r"Fels[őo] oldal\s+1H(?:2R)?\s+360 x (?:330|550) x 18.*?(?=(?:Fels[őo] oldal\s+1H(?:2R)?\s+360 x (?:330|550) x 18)|$)",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = clean_text(text)
+        side_text = clean_text(side_type)
+        hardware_text = clean_text(hardware_type)
+        candidates = {
+            "",
+            side_text,
+            hardware_text,
+            clean_text(f"{side_text} {hardware_text}"),
+            clean_text(f"{hardware_text} {side_text}"),
+        }
+        if text in candidates:
+            return ""
+        return text
+
     def is_kamra_row(name: str, color: str, side_type: str) -> bool:
         combined = " ".join([folded(name), folded(color), normalize_side_type(side_type)])
         return "kamra" in combined or "k40" in combined or "k60" in combined or "kmth" in combined or "kmtb" in combined or "ktb60" in combined
@@ -2438,6 +2662,18 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 color = clean_text(raw_row.get("color"))
                 raw_edge = clean_text(raw_row.get("edge")) or "-"
                 drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(raw_row.get("detail"))
+                color, side_type = split_lower_color_and_side_v2(color, side_type)
+
+                folded_name = folded(name)
+                if "takarolap as" in folded_name:
+                    # OCR sometimes emits "alsó 1H 1 Takarólap AS" as name and
+                    # "Normál alsó" in detail. This is not a Normál oldalelem.
+                    # Normalize it so it stays in AS takarósáv sections.
+                    name = "Takarólap AS"
+                    drawer_drill = ""
+                    side_type = ""
+                    hardware_type = ""
+
                 edge = parsed_edge or raw_edge
                 if is_kamra_row(name, color, side_type):
                     folded_drill = folded(drawer_drill)
@@ -2497,6 +2733,52 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_upper_rows(source_sections: list[dict]) -> list[dict]:
         merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
+        def add_upper_row(parsed_row: dict, raw_row: dict | None = None) -> None:
+            source_group = clean_text(parsed_row.get("sourceGroup"))
+            name = clean_text(parsed_row.get("name"))
+            source_name = clean_text(parsed_row.get("source_name"))
+            size = clean_text(parsed_row.get("size"))
+            color = clean_text(parsed_row.get("color"))
+            hardware_type = clean_text(parsed_row.get("hardware_type"))
+            side_type = clean_text(parsed_row.get("side_type"))
+            edge = clean_text(parsed_row.get("edge")) or "-"
+            quantity = int(parsed_row.get("quantity", 0) or 0)
+            merge_key = (source_group, name, size, color, hardware_type, side_type, edge)
+            existing = merged.get(merge_key)
+            source_row_id = ""
+            if raw_row is not None:
+                source_row_id = str(raw_row.get("row_id", "")).strip()
+            if existing is None:
+                merged_id = hashlib.sha1(
+                    f"cnc-upper|{production_number}|{source_group}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
+                ).hexdigest()[:16]
+                merged[merge_key] = {
+                    "row_id": merged_id,
+                    "state_key": _manufacturing_state_key(production_number, merged_id),
+                    "production_number": _manufacturing_normalize_number(production_number),
+                    "sourceGroup": source_group,
+                    "name": name,
+                    "source_name": source_name,
+                    "size": size,
+                    "color": color,
+                    "hardware_type": hardware_type,
+                    "side_type": side_type,
+                    "edge": edge,
+                    "quantity": quantity,
+                    "detail": clean_text(parsed_row.get("detail")),
+                    "columnLayout": "cnc-upper",
+                    "sourceRowIds": [source_row_id] if source_row_id else [],
+                }
+            else:
+                existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+                if source_name:
+                    existing["source_name"] = f"{existing.get('source_name', '')} · {source_name}".strip(" ·")
+                if source_row_id:
+                    source_row_ids = list(existing.get("sourceRowIds", []))
+                    if source_row_id not in source_row_ids:
+                        source_row_ids.append(source_row_id)
+                    existing["sourceRowIds"] = source_row_ids
+
         for section in source_sections:
             source_group = upper_source_group(section.get("label"))
             for raw_row in section.get("rows", []):
@@ -2507,20 +2789,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 size = clean_text(raw_row.get("size"))
                 color = clean_text(raw_row.get("color"))
                 edge = clean_text(raw_row.get("edge")) or "-"
-                side_type, hardware_type = parse_upper_detail(raw_row.get("detail"))
-                color, side_type = split_upper_color_and_side(color, side_type)
-                merge_key = (source_group, name, size, color, hardware_type, side_type, edge)
-                quantity = int(raw_row.get("quantity", 0) or 0)
-                existing = merged.get(merge_key)
-                if existing is None:
-                    merged_id = hashlib.sha1(
-                        f"cnc-upper|{production_number}|{source_group}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
-                    ).hexdigest()[:16]
-                    source_row_id = str(raw_row.get("row_id", "")).strip()
-                    merged[merge_key] = {
-                        "row_id": merged_id,
-                        "state_key": _manufacturing_state_key(production_number, merged_id),
-                        "production_number": _manufacturing_normalize_number(production_number),
+                side_type, hardware_type = parse_upper_detail_v2(raw_row.get("detail"))
+                color, side_type = split_upper_color_and_side_v2(color, side_type)
+                add_upper_row(
+                    {
                         "sourceGroup": source_group,
                         "name": name,
                         "source_name": source_name,
@@ -2529,23 +2801,30 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "hardware_type": hardware_type,
                         "side_type": side_type,
                         "edge": edge,
-                        "quantity": quantity,
-                        "detail": clean_text(raw_row.get("detail")),
-                        "columnLayout": "cnc-upper",
-                        "sourceRowIds": [source_row_id] if source_row_id else [],
-                    }
-                else:
-                    existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
-                    source_row_id = str(raw_row.get("row_id", "")).strip()
-                    if source_row_id:
-                        source_row_ids = list(existing.get("sourceRowIds", []))
-                        if source_row_id not in source_row_ids:
-                            source_row_ids.append(source_row_id)
-                        existing["sourceRowIds"] = source_row_ids
+                        "quantity": int(raw_row.get("quantity", 0) or 0),
+                        "detail": clean_upper_detail_for_display(raw_row.get("detail"), side_type, hardware_type),
+                    },
+                    raw_row,
+                )
+                for embedded_row in extract_embedded_upper_rows(raw_row, source_group):
+                    add_upper_row(embedded_row)
         return list(merged.values())
 
     def build_front_rows(source_sections: list[dict]) -> list[dict]:
-        palette = ("blue", "violet", "amber", "cyan", "slate", "orange")
+        palette = ("blue", "violet", "amber", "cyan", "slate", "orange", "rose", "lime", "teal")
+        explicit_model_tones = {
+            "anna": "blue",
+            "kinga": "amber",
+            "antonia": "violet",
+            "laura": "cyan",
+            "zille": "slate",
+            "kata": "orange",
+            "doroti": "rose",
+            "kira": "lime",
+            "klio": "teal",
+        }
+        known_models = {"anna", "kinga", "antonia", "laura", "zille", "kata", "doroti", "kira", "klio"}
+        invalid_model_tokens = {"", "-", "nincs", "front", "frontos", "furva", "fura", "fio", "fiok"}
 
         def fiokelo_group_label(section_label: object) -> str:
             text = clean_text(section_label)
@@ -2569,13 +2848,47 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             text = clean_text(detail)
             if not text:
                 return "-", "-", "-", "-"
-            prefix, separator, suffix = text.partition(" - ")
-            prefix = clean_text(prefix)
-            suffix = clean_text(suffix)
+            parts = [clean_text(part) for part in text.split(" - ") if clean_text(part)]
+            prefix = clean_text(parts[0]) if parts else ""
+            suffix = clean_text(" - ".join(parts[1:])) if len(parts) > 1 else ""
+
+            # Some PDF extracts split across lines and produce a leading technical token
+            # ("Nincs", "Fúrva", "front"), while the real model+color starts in the next chunk.
+            leading_token = re.sub(r"[^a-z0-9]+", "", folded(prefix))
+            if len(parts) >= 2 and leading_token in {"nincs", "furva", "front", "frontos", "fio", "fiok"}:
+                prefix = clean_text(parts[1])
+                tail_parts = []
+                if parts[0]:
+                    tail_parts.append(parts[0])
+                if len(parts) > 2:
+                    tail_parts.extend(parts[2:])
+                suffix = clean_text(" - ".join(tail_parts))
 
             prefix_tokens = [token for token in prefix.split() if token]
-            model_label = clean_text(prefix_tokens[0]) if prefix_tokens else "Ismeretlen modell"
-            netfront_color = clean_text(" ".join(prefix_tokens[1:])).strip(" -")
+            # Some PDF extracts keep a broken leading token from "Fiókelő"
+            # (for example only "ó"), which would shift model/color columns.
+            while prefix_tokens:
+                lead_normalized = re.sub(r"[^a-z0-9]+", "", folded(prefix_tokens[0]))
+                if lead_normalized in {"fiokelo", "fiokelofuras", "fiok", "fio", "io", "front", "frontos", "frontfuras"}:
+                    prefix_tokens.pop(0)
+                    continue
+                if len(prefix_tokens) > 1 and lead_normalized in {"o", "a"}:
+                    prefix_tokens.pop(0)
+                    continue
+                break
+            model_index = -1
+            for idx, token in enumerate(prefix_tokens):
+                normalized = re.sub(r"[^a-z0-9]+", "", folded(token))
+                if normalized in known_models:
+                    model_index = idx
+                    break
+
+            if model_index != -1:
+                model_label = clean_text(prefix_tokens[model_index]) or "Ismeretlen modell"
+                netfront_color = clean_text(" ".join(prefix_tokens[model_index + 1 :])).strip(" -")
+            else:
+                model_label = clean_text(prefix_tokens[0]) if prefix_tokens else "Ismeretlen modell"
+                netfront_color = clean_text(" ".join(prefix_tokens[1:])).strip(" -")
             if folded(netfront_color) == "nincs":
                 netfront_color = ""
 
@@ -2602,6 +2915,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             token = folded(model_label)
             if not token:
                 return "slate"
+            normalized_token = re.sub(r"[^a-z0-9]+", "", token)
+            if normalized_token in explicit_model_tones:
+                return explicit_model_tones[normalized_token]
             return palette[sum(ord(char) for char in token) % len(palette)]
 
         def normalized_color_key(value: object) -> str:
@@ -2625,6 +2941,25 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         }
 
         parsed_rows: list[dict] = []
+
+        def split_model_color_token(value: object) -> tuple[str, str]:
+            text = clean_text(value)
+            if not text:
+                return "", ""
+            tokens = [token for token in text.split() if token]
+            if not tokens:
+                return "", ""
+            first_norm = re.sub(r"[^a-z0-9]+", "", folded(tokens[0]))
+            if first_norm in known_models:
+                model = clean_text(tokens[0])
+                color = clean_text(" ".join(tokens[1:]))
+                return model, color
+            return "", ""
+
+        def is_invalid_model(value: object) -> bool:
+            normalized = re.sub(r"[^a-z0-9]+", "", folded(clean_text(value)))
+            return normalized in invalid_model_tokens
+
         for section in source_sections:
             group_label = fiokelo_group_label(section.get("label"))
             for raw_row in section.get("rows", []):
@@ -2638,6 +2973,30 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 edge = clean_text(raw_row.get("edge")) or "-"
                 detail = clean_text(raw_row.get("detail"))
                 model_label, netfront_color, drill_label, drawer_type = parse_fiokelo_detail(detail)
+
+                # PDF extraction sometimes shifts model into color/netfront fields (e.g. "Kira Fehér").
+                # Recover model + color before rendering so model column never shows technical placeholders.
+                model_from_color, color_without_model = split_model_color_token(color)
+                model_from_netfront, netfront_without_model = split_model_color_token(netfront_color)
+
+                if is_invalid_model(model_label):
+                    if model_from_color:
+                        model_label = model_from_color
+                    elif model_from_netfront:
+                        model_label = model_from_netfront
+
+                if model_from_color:
+                    model_norm = re.sub(r"[^a-z0-9]+", "", folded(model_label))
+                    color_model_norm = re.sub(r"[^a-z0-9]+", "", folded(model_from_color))
+                    if is_invalid_model(model_label) or model_norm == color_model_norm:
+                        color = color_without_model or color
+
+                if model_from_netfront:
+                    model_norm = re.sub(r"[^a-z0-9]+", "", folded(model_label))
+                    netfront_model_norm = re.sub(r"[^a-z0-9]+", "", folded(model_from_netfront))
+                    if is_invalid_model(model_label) or model_norm == netfront_model_norm:
+                        netfront_color = netfront_without_model or netfront_color
+
                 model_tone = fiokelo_model_tone(model_label)
                 parsed_rows.append(
                     {
@@ -2676,7 +3035,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             color_key = normalized_color_key(color)
             model_key = folded(model_label)
             netfront_color = clean_text(row.get("netfrontColor"))
-            if not netfront_color or netfront_color == "-":
+            folded_color = folded(color)
+            is_nettfront_front = ("folias" in folded_color) or bool(re.search(r"\bmf\b", folded_color))
+
+            if is_nettfront_front and (not netfront_color or netfront_color == "-"):
                 netfront_color = (
                     explicit_model_color_map.get((model_key, color_key))
                     or explicit_color_map.get(color_key)
@@ -2684,6 +3046,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     or color
                     or "-"
                 )
+            elif not is_nettfront_front:
+                netfront_color = "-"
 
             row_id = hashlib.sha1(
                 f"cnc-front|{production_number}|{index}|{row.get('groupLabel','')}|{row.get('name','')}|{model_label}|{color}|{row.get('size','')}|{netfront_color}|{row.get('drillLabel','')}|{row.get('drawerType','')}|{row.get('quantity',0)}".encode("utf-8")
@@ -2739,6 +3103,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         "aszhs": 4,
         "akl": 5,
         "ar": 6,
+        "ar golyos tel.": 6,
         "kira": 7,
         "nyitott": 8,
     }
@@ -3323,6 +3688,129 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 index = cursor
         return raw_rows
 
+    def build_raw_takarolap_rows() -> list[dict]:
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return []
+        cnc_path = Path(folder_text) / "CNC.pdf"
+        if not cnc_path.is_file():
+            return []
+        try:
+            pages = manufacturing_pdf_lines(cnc_path)
+        except Exception:
+            return []
+
+        def is_boundary(token: str) -> bool:
+            clean_token = clean_text(token)
+            folded_token = folded(clean_token)
+            return (
+                folded_token.startswith("takarolap as")
+                or folded_token.startswith("as takarosav")
+                or folded_token == "also oldal"
+                or folded_token.startswith("vegzaro")
+                or folded_token.startswith("kamra")
+                or folded_token == "felso oldal"
+                or clean_token.startswith("Oldal ")
+                or bool(re.fullmatch(r"[12]-es\s+als.*", folded_token))
+                or bool(re.fullmatch(r"[12]-es\s+fels.*", folded_token))
+            )
+
+        raw_rows: list[dict] = []
+        for page_number, lines in enumerate(pages, start=1):
+            index = 0
+            while index < len(lines):
+                token = clean_text(lines[index])
+                folded_token = folded(token)
+                if not folded_token.startswith("takarolap as"):
+                    index += 1
+                    continue
+
+                source_name = token
+                cursor = index + 1
+                if cursor < len(lines):
+                    maybe_suffix = clean_text(lines[cursor])
+                    if folded(maybe_suffix) == "165 melle":
+                        source_name = clean_text(f"{token} {maybe_suffix}")
+                        cursor += 1
+
+                if cursor + 4 >= len(lines):
+                    index += 1
+                    continue
+
+                size_tokens = [clean_text(lines[cursor + offset]) for offset in range(0, 5)]
+                if not (
+                    size_tokens[0].isdigit()
+                    and size_tokens[1].lower() == "x"
+                    and size_tokens[2].isdigit()
+                    and size_tokens[3].lower() == "x"
+                    and size_tokens[4].isdigit()
+                ):
+                    index += 1
+                    continue
+                size_label = " ".join(size_tokens)
+                cursor += 5
+
+                tail_tokens: list[str] = []
+                while cursor < len(lines):
+                    next_token = clean_text(lines[cursor])
+                    if tail_tokens and is_boundary(next_token):
+                        break
+                    tail_tokens.append(next_token)
+                    cursor += 1
+
+                if len(tail_tokens) < 2:
+                    index = max(index + 1, cursor)
+                    continue
+
+                qty_index = -1
+                for pos in range(len(tail_tokens) - 1, -1, -1):
+                    if re.fullmatch(r"-?\d+", clean_text(tail_tokens[pos])):
+                        qty_index = pos
+                        break
+                if qty_index <= 0:
+                    index = cursor
+                    continue
+
+                quantity = int(clean_text(tail_tokens[qty_index]))
+                edge = clean_text(tail_tokens[qty_index - 1]) or "-"
+                payload_tokens = [clean_text(item) for item in tail_tokens[: qty_index - 1] if clean_text(item)]
+                if not payload_tokens:
+                    index = cursor
+                    continue
+
+                detail_start = len(payload_tokens)
+                for pos, item in enumerate(payload_tokens):
+                    if folded(item).startswith("normal"):
+                        detail_start = pos
+                        break
+                color = clean_text(" ".join(payload_tokens[:detail_start])) if detail_start > 0 else clean_text(" ".join(payload_tokens))
+                detail = clean_text(" ".join(payload_tokens[detail_start:])) if detail_start < len(payload_tokens) else ""
+
+                row_id = hashlib.sha1(
+                    f"cnc-raw-takarolap|{production_number}|{page_number}|{index}|{size_label}|{color}|{quantity}".encode("utf-8")
+                ).hexdigest()[:16]
+                raw_rows.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": _manufacturing_state_key(production_number, row_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "name": "Takarólap AS",
+                        "source_name": source_name,
+                        "size": size_label,
+                        "color": color,
+                        "drawer_drill": "",
+                        "side_type": "",
+                        "hardware_type": "",
+                        "edge": edge,
+                        "quantity": quantity,
+                        "detail": detail,
+                        "columnLayout": "cnc-lower",
+                        "isMuted": False,
+                    }
+                )
+                index = cursor
+        return raw_rows
+
     def is_fvz_row(row: dict) -> bool:
         combined = " ".join(
             [
@@ -3369,7 +3857,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
     box3_rows = aggregate_lower_rows(
         box3_display_rows,
-        ("name", "size", "color"),
+        ("name", "size", "color", "drawer_drill"),
     )
     box_fvz_rows = [
         row for row in lower_rows
@@ -3395,6 +3883,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         box4_display_rows,
         ("name", "size", "color", "drawer_drill", "side_type", "edge"),
     )
+    for row in box4_rows:
+        side_norm = normalize_side_type(row.get("side_type"))
+        detail_folded = folded(row.get("detail"))
+        source_folded = folded(row.get("source_name"))
+        if side_norm == "ar golyos tel." or "ar golyos" in detail_folded or "ar golyos" in source_folded:
+            row["side_type"] = "AR golyós tel."
+        elif side_norm == "ar":
+            row["side_type"] = "AR"
     box5_rows = [row for row in lower_rows if is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))]
     box6_rows = [
         row for row in lower_rows
@@ -3402,6 +3898,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
     ]
     box6_takarolap_rows = [row for row in box6_rows if is_takarolap_as_row(row)]
+    raw_takarolap_rows = build_raw_takarolap_rows()
+    if raw_takarolap_rows:
+        box6_takarolap_rows = aggregate_lower_rows(
+            raw_takarolap_rows,
+            ("name", "size", "color", "drawer_drill", "side_type", "edge"),
+        )
     box6_rows = [row for row in box6_rows if not is_takarolap_as_row(row)]
 
     box2_rows.sort(
@@ -3422,6 +3924,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     box4_rows.sort(
         key=lambda row: (
             lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
+            1 if "ar goly" in folded(row.get("side_type")) else 0,
             normalize_side_type(row.get("side_type")),
             clean_text(row.get("color")),
             size_parts(row.get("size")),
@@ -3611,9 +4114,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             rows.sort(
                 key=lambda row: (
                     clean_text(row.get("color")),
-                    0 if is_upper_595_eft(row) else 1,
-                    0 if is_upper_360(row) else 1,
-                    0 if is_upper_680(row) and "eft" in upper_combined_text(row) else 1,
+                    0 if clean_text(row.get("size")).startswith("595 x ") else 1,
+                    0 if is_upper_360_special(row) else 1,
+                    0 if is_upper_680(row) else 1,
                     0 if is_upper_zille(row) else 1,
                     size_parts(row.get("size")),
                     clean_text(row.get("hardware_type")),
@@ -3622,9 +4125,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "sarok":
             rows.sort(
                 key=lambda row: (
-                    clean_text(row.get("color")),
+                    0 if is_upper_sarok(row) else 1,
                     0 if clean_text(row.get("size")) == "360 x 290 x 18" else 1,
                     1 if clean_text(row.get("size")) == "360 x 550 x 18" else 0,
+                    clean_text(row.get("color")),
                     clean_text(row.get("hardware_type")),
                 )
             )
@@ -3652,26 +4156,109 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             }
         )
 
-    rack1_source_rows = [row for row in upper_rows if clean_text(row.get("sourceGroup")) == "2-es" and not is_upper_zille(row)]
-    rack2_source_rows = [row for row in upper_rows if clean_text(row.get("sourceGroup")) == "1-es" or is_upper_zille(row)]
+    def upper_source_group(row: dict) -> str:
+        return clean_text(row.get("sourceGroup"))
 
-    rack1_box1_rows = [row for row in rack1_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row) and not is_fvz_row(row)]
-    rack1_box2_rows = [row for row in rack1_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row) and not is_fvz_row(row)]
-    rack1_box_fvz_rows = [row for row in rack1_source_rows if is_fvz_row(row) and not is_upper_sarok(row)]
-    rack1_box3_rows = [row for row in rack1_source_rows if row not in rack1_box1_rows and row not in rack1_box2_rows and row not in rack1_box_fvz_rows and not is_upper_sarok(row)]
+    def is_upper_zille_target(row: dict) -> bool:
+        combined = upper_combined_text(row)
+        return "zille" in combined and ("fuf" in combined or "fzn" in combined or "f\u00fcf" in combined)
 
-    rack2_box1_rows = [row for row in rack2_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row) and not is_fvz_row(row)]
-    rack2_box2_rows = [row for row in rack2_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row) and not is_fvz_row(row)]
-    rack2_box4_rows = [row for row in rack2_source_rows if is_upper_sarok(row)]
-    rack2_box_fvz_rows = [row for row in rack2_source_rows if is_fvz_row(row) and row not in rack2_box4_rows]
-    rack2_box3_rows = [row for row in rack2_source_rows if row not in rack2_box1_rows and row not in rack2_box2_rows and row not in rack2_box4_rows and row not in rack2_box_fvz_rows]
+    def is_upper_360_special(row: dict) -> bool:
+        if not is_upper_360(row):
+            return False
+        combined = upper_combined_text(row)
+        return "fmf" in combined or "fmfs" in combined or "fkf" in combined
 
-    moved_eft_rows = [row for row in rack2_box3_rows if is_upper_any_eft(row) and not is_upper_360(row)]
-    if moved_eft_rows:
-        rack1_box3_rows.extend(moved_eft_rows)
-        rack2_box3_rows = [row for row in rack2_box3_rows if row not in moved_eft_rows]
+    def is_upper_360_fkf(row: dict) -> bool:
+        return is_upper_360(row) and "fkf" in upper_combined_text(row)
 
-    vegzaro_raklap_rows = rack1_box_fvz_rows + rack2_box_fvz_rows
+    def is_upper_sarok_bucket_size(row: dict) -> bool:
+        size_text = clean_text(row.get("size"))
+        return size_text.startswith("360 x 550") or size_text.startswith("360 x 290")
+
+    def is_upper_360x330(row: dict) -> bool:
+        return clean_text(row.get("size")).startswith("360 x 330")
+
+    def upper_row_id(row: dict) -> str:
+        return str(row.get("row_id", "")).strip()
+
+    non_fvz_upper_rows = [row for row in upper_rows if not is_fvz_row(row)]
+    vegzaro_raklap_rows = [row for row in upper_rows if is_fvz_row(row)]
+    rack1_source_rows = [row for row in non_fvz_upper_rows if upper_source_group(row) == "2-es"]
+    rack2_source_rows = [row for row in non_fvz_upper_rows if upper_source_group(row) == "1-es"]
+    zille_rows = [row for row in non_fvz_upper_rows if is_upper_zille_target(row)]
+
+    rack1_box1_rows = [row for row in rack1_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row)]
+    rack1_box1_ids = {upper_row_id(row) for row in rack1_box1_rows}
+    rack1_box2_rows = [row for row in rack1_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
+    rack1_box2_ids = {upper_row_id(row) for row in rack1_box2_rows}
+    rack1_box3_rows = [
+        row for row in rack1_source_rows
+        if upper_row_id(row) not in rack1_box1_ids
+        and upper_row_id(row) not in rack1_box2_ids
+        and not is_upper_360x330(row)
+        and not is_upper_sarok(row)
+    ]
+    rack1_box3_ids = {upper_row_id(row) for row in rack1_box3_rows}
+
+    rack2_box1_rows = [row for row in rack2_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row)]
+    rack2_box1_ids = {upper_row_id(row) for row in rack2_box1_rows}
+    rack2_box2_rows = [row for row in rack2_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
+    rack2_box2_ids = {upper_row_id(row) for row in rack2_box2_rows}
+    rack2_primary_assigned_ids = {row_id for row_id in (rack2_box1_ids | rack2_box2_ids) if row_id}
+    rack2_box3_rows = [
+        row for row in non_fvz_upper_rows
+        if upper_row_id(row) not in rack2_primary_assigned_ids
+        and not is_upper_sarok_bucket_size(row)
+        and (
+            clean_text(row.get("size")).startswith("595 x ")
+            or is_upper_360x330(row)
+            or is_upper_360_special(row)
+            or is_upper_680(row)
+        )
+    ]
+    fkf_360_rows = [
+        row for row in non_fvz_upper_rows
+        if is_upper_360_fkf(row) and not is_upper_sarok_bucket_size(row)
+    ]
+    for row in fkf_360_rows:
+        if row not in rack2_box3_rows:
+            rack2_box3_rows.append(row)
+    for row in zille_rows:
+        if row not in rack2_box3_rows:
+            rack2_box3_rows.append(row)
+    rack2_box3_ids = {upper_row_id(row) for row in rack2_box3_rows}
+    rack2_box4_rows = [
+        row for row in non_fvz_upper_rows
+        if (
+            is_upper_sarok(row)
+            or is_upper_sarok_bucket_size(row)
+            or (
+                upper_row_id(row) not in rack1_box1_ids
+                and upper_row_id(row) not in rack1_box2_ids
+                and upper_row_id(row) not in rack1_box3_ids
+                and upper_row_id(row) not in rack2_primary_assigned_ids
+                and upper_row_id(row) not in rack2_box3_ids
+                and row not in zille_rows
+            )
+        )
+    ]
+    recovered_rack1_360_rows = [
+        row for row in rack2_box4_rows
+        if upper_source_group(row) == "2-es" and is_upper_360(row) and not is_upper_sarok(row) and not is_upper_360x330(row)
+    ]
+    for row in recovered_rack1_360_rows:
+        if upper_row_id(row) not in rack1_box3_ids:
+            rack1_box3_rows.append(row)
+            rack1_box3_ids.add(upper_row_id(row))
+    rack2_box4_rows = [
+        row for row in rack2_box4_rows
+        if upper_row_id(row) not in rack1_box3_ids and upper_row_id(row) not in rack2_box3_ids
+    ]
+    rack1_box3_rows = [row for row in rack1_box3_rows if upper_row_id(row) not in rack2_box3_ids]
+    rack1_box3_ids = {upper_row_id(row) for row in rack1_box3_rows}
+    rack1_box360_rows: list[dict] = []
+    rack2_box360_rows: list[dict] = []
     upper_assigned_ids = {
         str(row.get("row_id", ""))
         for bucket in (
@@ -3694,11 +4281,24 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
     add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
     add_upper_section("1-es raklap · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
     add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("2-es raklap · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("2-es raklap · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
+    add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
+    add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
+
+    upper_sections = []
+    add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
+    add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
+    add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
+    add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
+    add_upper_section("2-es raklap · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
@@ -16528,7 +17128,7 @@ def _divian_ai_clean_elemjegyzek_description(raw_description: str, code: str) ->
     markers = (
         "BLOKK KONYHÁKHOZ RENDELHETŐ ELEMEK",
         "RENDELHETŐ ELEMEK",
-        "ALSÓ ELEMEK",
+        "ALS? ELEMEK",
         "FELSŐ ELEMEK",
         "KONYHASZIGET ELEMEK",
         "KIEGÉSZÍTŐK",
@@ -22349,10 +22949,22 @@ def _prime_divian_ai_cache_worker() -> None:
 
 def _prime_manufacturing_cache_worker() -> None:
     try:
-        available_production_entries(limit=12, ready_only=True)
-        latest_number = latest_production_number()
-        if latest_number:
-            _load_manufacturing_bundle_cached(latest_number)
+        entries = available_production_entries(limit=12, ready_only=True)
+        numbers = [
+            _manufacturing_normalize_number(item.get("number", ""))
+            for item in entries
+            if _manufacturing_normalize_number(item.get("number", ""))
+        ]
+        if not numbers:
+            latest_number = latest_production_number()
+            if latest_number:
+                numbers = [latest_number]
+        # Warm a few most recent bundles in the background so first user click is fast.
+        for number in numbers[:4]:
+            try:
+                _load_manufacturing_bundle_cached(number)
+            except Exception:
+                continue
     except Exception:
         pass
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html
 import json
@@ -787,13 +787,33 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-cnc-fiokelo {{
       grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-lower.is-with-partial {{
+      grid-template-columns: 1.02fr 0.72fr 0.78fr 0.72fr 0.86fr 0.44fr 0.44fr 0.34fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-upper.is-with-partial {{
+      grid-template-columns: 1fr 0.72fr 0.76fr 0.86fr 0.76fr 0.44fr 0.44fr 0.34fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-fiokelo.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-cnc-fiokelo.is-with-partial {{
+      grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard,
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard {{
-      grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
+      grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-no-barcode,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode {{
+      grid-template-columns: 1fr 0.8fr 0.74fr 0.88fr 0.44fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-with-partial,
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-with-partial {{
-      grid-template-columns: 0.9fr 0.74fr 0.68fr 0.82fr 0.34fr 0.32fr 1.5fr;
+      grid-template-columns: 0.92fr 0.72fr 0.68fr 0.8fr 0.3fr 0.16fr 2.02fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-no-barcode.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode.is-with-partial {{
+      grid-template-columns: 0.98fr 0.78fr 0.72fr 0.86fr 0.34fr 0.18fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4),
@@ -826,7 +846,7 @@ def render_manufacturing_page(
     }}
     .mfg-table-head {{
       display: grid;
-      grid-template-columns: 1.02fr 0.7fr 0.7fr 0.4fr 0.5fr 1.98fr;
+      grid-template-columns: 1fr 0.74fr 0.82fr 0.24fr 0.46fr 1.74fr;
       gap: 5px;
       min-height: 34px;
       max-height: 34px;
@@ -888,20 +908,38 @@ def render_manufacturing_page(
     .mfg-table-head.is-no-barcode {{
       grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
     }}
+    .mfg-table-head.is-no-barcode.is-with-partial {{
+      grid-template-columns: 1.1fr 0.82fr 0.92fr 0.46fr 0.58fr 0.36fr;
+    }}
     .mfg-table-head.is-cnc-lower {{
       grid-template-columns: 1.1fr 0.72fr 0.78fr 0.78fr 0.92fr 0.5fr 0.48fr;
+    }}
+    .mfg-table-head.is-cnc-lower.is-with-partial {{
+      grid-template-columns: 1.02fr 0.72fr 0.78fr 0.72fr 0.86fr 0.44fr 0.44fr 0.34fr;
     }}
     .mfg-table-head.is-cnc-upper {{
       grid-template-columns: 1.08fr 0.72fr 0.76fr 0.92fr 0.78fr 0.5fr 0.48fr;
     }}
+    .mfg-table-head.is-cnc-upper.is-with-partial {{
+      grid-template-columns: 1fr 0.72fr 0.76fr 0.86fr 0.76fr 0.44fr 0.44fr 0.34fr;
+    }}
     .mfg-table-head.is-cnc-fiokelo {{
       grid-template-columns: 0.8fr 0.98fr 0.9fr 1.12fr 0.62fr 0.64fr 0.46fr;
     }}
+    .mfg-table-head.is-cnc-fiokelo.is-with-partial {{
+      grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
+    }}
     .mfg-table-head.is-front-standard {{
-      grid-template-columns: 0.96fr 0.82fr 0.72fr 0.9fr 0.46fr 1.64fr;
+      grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
+    }}
+    .mfg-table-head.is-front-standard.is-no-barcode {{
+      grid-template-columns: 1fr 0.8fr 0.74fr 0.88fr 0.44fr;
     }}
     .mfg-table-head.is-front-standard.is-with-partial {{
-      grid-template-columns: 0.9fr 0.74fr 0.68fr 0.82fr 0.34fr 0.32fr 1.5fr;
+      grid-template-columns: 0.92fr 0.72fr 0.68fr 0.8fr 0.3fr 0.16fr 2.02fr;
+    }}
+    .mfg-table-head.is-front-standard.is-no-barcode.is-with-partial {{
+      grid-template-columns: 1fr 0.82fr 0.76fr 0.88fr 0.36fr 0.34fr;
     }}
     .mfg-section-title {{
       font-size: 0.82rem;
@@ -938,7 +976,7 @@ def render_manufacturing_page(
       color: var(--mfg-text);
       text-align: left;
       display: grid;
-      grid-template-columns: 1.04fr 0.7fr 0.7fr 0.4fr 0.46fr 0.42fr 1.7fr;
+      grid-template-columns: 1fr 0.74fr 0.82fr 0.24fr 0.46fr 1.74fr;
       gap: 5px;
       align-items: center;
       cursor: pointer;
@@ -951,14 +989,26 @@ def render_manufacturing_page(
     .mfg-row.is-no-barcode {{
       grid-template-columns: 1.12fr 0.78fr 0.8fr 0.44fr 0.54fr 0.4fr;
     }}
+    .mfg-row.is-no-barcode.is-with-partial {{
+      grid-template-columns: 1.1fr 0.82fr 0.92fr 0.46fr 0.58fr 0.36fr;
+    }}
     .mfg-row.is-cnc-lower {{
       grid-template-columns: 1.08fr 0.72fr 0.78fr 0.78fr 0.9fr 0.48fr 0.4fr 0.46fr;
+    }}
+    .mfg-row.is-cnc-lower.is-with-partial {{
+      grid-template-columns: 1.02fr 0.72fr 0.78fr 0.72fr 0.86fr 0.44fr 0.44fr 0.34fr;
     }}
     .mfg-row.is-cnc-upper {{
       grid-template-columns: 1.06fr 0.72fr 0.76fr 0.92fr 0.78fr 0.48fr 0.4fr 0.46fr;
     }}
+    .mfg-row.is-cnc-upper.is-with-partial {{
+      grid-template-columns: 1fr 0.72fr 0.76fr 0.86fr 0.76fr 0.44fr 0.44fr 0.34fr;
+    }}
     .mfg-row.is-cnc-fiokelo {{
       grid-template-columns: 0.8fr 0.96fr 0.9fr 1.08fr 0.58fr 0.62fr 0.38fr 0.44fr;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-with-partial {{
+      grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
     }}
     .mfg-row.is-cnc-fiokelo .mfg-row-meta {{
       padding-top: 2px;
@@ -980,10 +1030,23 @@ def render_manufacturing_page(
       font-weight: 900;
     }}
     .mfg-row.is-front-standard {{
-      grid-template-columns: 0.94fr 0.8fr 0.72fr 0.9fr 0.38fr 1.5fr;
+      grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
+    }}
+    .mfg-row.is-front-standard.is-no-barcode {{
+      grid-template-columns: 1fr 0.8fr 0.74fr 0.88fr 0.44fr;
     }}
     .mfg-row.is-front-standard.is-with-partial {{
-      grid-template-columns: 0.9fr 0.74fr 0.68fr 0.82fr 0.34fr 0.32fr 1.5fr;
+      grid-template-columns: 0.92fr 0.72fr 0.68fr 0.8fr 0.3fr 0.16fr 2.02fr;
+    }}
+    .mfg-row.is-front-standard.is-no-barcode.is-with-partial {{
+      grid-template-columns: 1fr 0.82fr 0.76fr 0.88fr 0.36fr 0.34fr;
+    }}
+    .mfg-table-head.is-front-standard > *,
+    .mfg-row.is-front-standard > * {{
+      min-width: 0;
+    }}
+    .mfg-row > * {{
+      min-width: 0;
     }}
     .mfg-row.is-front-standard .mfg-row-main {{
       min-width: 0;
@@ -1025,6 +1088,15 @@ def render_manufacturing_page(
     .mfg-row.is-model-orange {{
       background: #fff1ea;
     }}
+    .mfg-row.is-model-rose {{
+      background: #ffe6ee;
+    }}
+    .mfg-row.is-model-lime {{
+      background: #eef8d8;
+    }}
+    .mfg-row.is-model-teal {{
+      background: #ddf6ee;
+    }}
     .mfg-row.is-cnc-fiokelo.is-model-blue {{
       background: #dbe8ff;
     }}
@@ -1042,6 +1114,15 @@ def render_manufacturing_page(
     }}
     .mfg-row.is-cnc-fiokelo.is-model-orange {{
       background: #ffe4d6;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-rose {{
+      background: #ffdbe7;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-lime {{
+      background: #e4f4bf;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-teal {{
+      background: #cff1e6;
     }}
     .mfg-row.is-cnc-fiokelo.is-green {{
       background: #c9f0d8;
@@ -1153,6 +1234,33 @@ def render_manufacturing_page(
       color: #c2410c;
       border: 1px solid rgba(194, 65, 12, 0.14);
     }}
+    .mfg-row-badge.is-model-rose {{
+      background: #ffdce7;
+      color: #be185d;
+      border: 1px solid rgba(190, 24, 93, 0.14);
+    }}
+    .mfg-row-badge.is-model-lime {{
+      background: #e8f3c9;
+      color: #4d7c0f;
+      border: 1px solid rgba(77, 124, 15, 0.14);
+    }}
+    .mfg-row-badge.is-model-teal {{
+      background: #d4f1e8;
+      color: #0f766e;
+      border: 1px solid rgba(15, 118, 110, 0.14);
+    }}
+    .mfg-row-meta span.is-pill-black {{
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #0f172a;
+      color: #fff;
+      font-weight: 900;
+      justify-content: center;
+      white-space: nowrap;
+      display: inline-flex;
+      width: fit-content;
+    }}
     .mfg-row-subtitle {{
       font-size: 0.7rem;
       line-height: 1.12;
@@ -1185,8 +1293,8 @@ def render_manufacturing_page(
     }}
     .mfg-row-meta span.is-size {{
       white-space: nowrap;
-      overflow: visible;
-      text-overflow: clip;
+      overflow: hidden;
+      text-overflow: ellipsis;
       word-break: normal;
       overflow-wrap: normal;
       line-height: 1;
@@ -1195,14 +1303,20 @@ def render_manufacturing_page(
       transform: translateY(2px);
     }}
     .mfg-row-meta span.is-color {{
-      white-space: normal;
-      line-height: 1.14;
-      padding-left: 14px;
+      white-space: nowrap;
+      line-height: 1.05;
+      padding-left: 8px;
+      font-size: 0.8rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }}
     .mfg-row-code {{
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }}
+    .mfg-row:not(.is-front-standard):not(.is-cnc-fiokelo) .mfg-row-meta {{
+      overflow: hidden;
     }}
     .mfg-row-side {{
       display: grid;
@@ -1222,6 +1336,7 @@ def render_manufacturing_page(
       font-weight: 800;
       font-size: 0.84rem;
       justify-self: start;
+      white-space: nowrap;
     }}
     .mfg-row.is-green .mfg-row-qty {{
       background: var(--mfg-green-text);
@@ -1236,8 +1351,8 @@ def render_manufacturing_page(
     }}
     .mfg-row-partial-input {{
       width: 100%;
-      min-width: 42px;
-      max-width: 56px;
+      min-width: 36px;
+      max-width: 42px;
       height: 32px;
       border-radius: 9px;
       border: 1px solid rgba(17, 24, 39, 0.16);
@@ -1245,7 +1360,7 @@ def render_manufacturing_page(
       color: #111827;
       font: inherit;
       font-weight: 700;
-      padding: 0 8px;
+      padding: 0 6px;
       outline: none;
     }}
     .mfg-row-partial-input:focus {{
@@ -1319,12 +1434,18 @@ def render_manufacturing_page(
       min-width: 0;
       overflow: hidden;
       justify-self: stretch;
+      align-self: center;
       width: 100%;
       max-width: 100%;
     }}
+    .mfg-row:not(.is-front-standard):not(.is-cnc-lower):not(.is-cnc-upper):not(.is-cnc-fiokelo) .mfg-row-barcode-wrap {{
+      justify-self: end;
+      width: min(100%, 216px);
+      max-width: 216px;
+    }}
     .mfg-row-barcode {{
-      min-height: 38px;
-      padding: 4px 10px;
+      min-height: 34px;
+      padding: 3px 10px;
       border-radius: 8px;
       background: #fff;
       border: 1px solid rgba(17, 24, 39, 0.08);
@@ -1333,13 +1454,16 @@ def render_manufacturing_page(
       overflow: hidden;
       width: 100%;
       max-width: 100%;
+      box-sizing: border-box;
     }}
     .mfg-row-barcode svg {{
       width: 100%;
-      height: 30px;
+      height: 28px;
       display: block;
     }}
     .mfg-row-code {{
+      width: 100%;
+      display: block;
       justify-content: center;
       text-align: center;
       font-size: 0.64rem;
@@ -1367,27 +1491,51 @@ def render_manufacturing_page(
       }}
       .mfg-table-head,
       .mfg-row {{
-        grid-template-columns: 0.96fr 0.66fr 0.66fr 0.38fr 0.46fr 1.88fr;
+        grid-template-columns: 0.96fr 0.7fr 0.78fr 0.22fr 0.42fr 1.6fr;
       }}
       .mfg-table-head.is-no-barcode,
       .mfg-row.is-no-barcode {{
         grid-template-columns: 1.02fr 0.7fr 0.72fr 0.42fr 0.54fr;
       }}
+      .mfg-table-head.is-no-barcode.is-with-partial,
+      .mfg-row.is-no-barcode.is-with-partial {{
+        grid-template-columns: 1fr 0.7fr 0.74fr 0.38fr 0.48fr 0.32fr;
+      }}
       .mfg-table-head.is-cnc-lower,
       .mfg-row.is-cnc-lower {{
         grid-template-columns: 1.04fr 0.7fr 0.72fr 0.74fr 0.86fr 0.48fr 0.46fr;
+      }}
+      .mfg-table-head.is-cnc-lower.is-with-partial,
+      .mfg-row.is-cnc-lower.is-with-partial {{
+        grid-template-columns: 0.98fr 0.66fr 0.7fr 0.68fr 0.8fr 0.42fr 0.4fr 0.3fr;
       }}
       .mfg-table-head.is-cnc-upper,
       .mfg-row.is-cnc-upper {{
         grid-template-columns: 1.02fr 0.7fr 0.72fr 0.86fr 0.76fr 0.48fr 0.46fr;
       }}
+      .mfg-table-head.is-cnc-upper.is-with-partial,
+      .mfg-row.is-cnc-upper.is-with-partial {{
+        grid-template-columns: 0.96fr 0.66fr 0.68fr 0.8fr 0.72fr 0.42fr 0.4fr 0.3fr;
+      }}
+      .mfg-table-head,
+      .mfg-row {{
+        grid-template-columns: 0.94fr 0.66fr 0.74fr 0.22fr 0.4fr 1.52fr;
+      }}
       .mfg-table-head.is-front-standard,
       .mfg-row.is-front-standard {{
         grid-template-columns: 0.92fr 0.78fr 0.68fr 0.82fr 0.44fr 1.48fr;
       }}
+      .mfg-table-head.is-front-standard.is-no-barcode,
+      .mfg-row.is-front-standard.is-no-barcode {{
+        grid-template-columns: 0.96fr 0.78fr 0.7fr 0.84fr 0.42fr;
+      }}
       .mfg-table-head.is-front-standard.is-with-partial,
       .mfg-row.is-front-standard.is-with-partial {{
         grid-template-columns: 0.86fr 0.72fr 0.64fr 0.78fr 0.34fr 0.3fr 1.4fr;
+      }}
+      .mfg-table-head.is-front-standard.is-no-barcode.is-with-partial,
+      .mfg-row.is-front-standard.is-no-barcode.is-with-partial {{
+        grid-template-columns: 0.94fr 0.72fr 0.68fr 0.82fr 0.34fr 0.3fr;
       }}
     }}
     @media (orientation: portrait) {{
@@ -1527,6 +1675,13 @@ def render_manufacturing_page(
       const escapeHtml = (value) =>
         String(value ?? "").replace(/[&<>"']/g, (character) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[character] || character);
       const flattenRows = (document) => (document?.sections || []).flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
+      const totalQuantityForRows = (rows) => Array.isArray(rows)
+        ? rows.reduce((sum, row) => sum + Number(row?.quantity || 0), 0)
+        : 0;
+      const totalQuantityForSections = (sections) => (Array.isArray(sections) ? sections : []).reduce(
+        (sum, section) => sum + totalQuantityForRows(section?.rows),
+        0,
+      );
       const currentDocument = () => documents.find((document) => document.key === currentDocKey) || documents[0] || null;
       const documentAllowsSplit = (document) => document?.allowSplit !== false;
       const documentUsesSingleColumnOverview = (document) => document?.singleColumnOverview === true;
@@ -1556,7 +1711,7 @@ def render_manufacturing_page(
           const label = String(section?.label || "");
           const sizeLabel = label.includes("·") ? label.split("·", 1)[0].trim() : label.trim();
           if (!sizeLabel) continue;
-          const count = Array.isArray(section?.rows) ? section.rows.length : 0;
+          const count = totalQuantityForRows(section?.rows);
           grouped.set(sizeLabel, (grouped.get(sizeLabel) || 0) + count);
         }}
         return Array.from(grouped.entries())
@@ -1578,12 +1733,18 @@ def render_manufacturing_page(
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
       const rowStateValue = (row) => selectionState[rowStateKey(row)] || "";
-      const countStateInDocument = (document, wanted) => flattenRows(document).filter((row) => rowStateValue(row) === wanted).length;
-      const countPlainInDocument = (document) => flattenRows(document).filter((row) => !rowStateValue(row)).length;
+      const countStateInDocument = (document, wanted) => flattenRows(document)
+        .filter((row) => rowStateValue(row) === wanted)
+        .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
+      const countPlainInDocument = (document) => flattenRows(document)
+        .filter((row) => !rowStateValue(row))
+        .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
       const countRowsInSections = (sections, predicate = null) =>
         (Array.isArray(sections) ? sections : []).reduce((total, section) => {{
           const rows = Array.isArray(section?.rows) ? section.rows : [];
-          return total + rows.filter((row) => !predicate || predicate(row)).length;
+          return total + rows
+            .filter((row) => !predicate || predicate(row))
+            .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
         }}, 0);
       const specialViewKeys = new Set(["all", "plain", "green", "red"]);
       const isSpecialViewKey = (key, document = currentDocument()) =>
@@ -1624,9 +1785,9 @@ def render_manufacturing_page(
               window.JsBarcode(node, value, {{
                 format: "CODE128",
                 lineColor: "#111827",
-                width: 0.98,
-                height: 34,
-                margin: 2,
+                width: 0.72,
+                height: 30,
+                margin: 1,
                 displayValue: false,
                 background: "transparent",
               }});
@@ -1634,7 +1795,7 @@ def render_manufacturing_page(
               node.removeAttribute("height");
               node.setAttribute("preserveAspectRatio", "none");
               node.style.width = "100%";
-              node.style.height = "30px";
+              node.style.height = "28px";
               node.style.display = "block";
               continue;
             }} catch (_error) {{
@@ -1934,7 +2095,7 @@ def render_manufacturing_page(
             ...currentKorpuszSections.map((section) => ({{
               key: section.key,
               label: section.label,
-              count: Array.isArray(section.rows) ? section.rows.length : 0,
+              count: totalQuantityForRows(section?.rows),
               stateClass: sectionTabStateClass(section),
             }})),
           ];
@@ -1944,7 +2105,7 @@ def render_manufacturing_page(
           sectionTabsNode.innerHTML = mainKorpuszViews.map((item) => `
             <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{tabStateClassForRows(Array.isArray(item?.sections) ? item.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : [])}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
-              <small>${{Number(item.count || 0)}}</small>
+              <small>${{totalQuantityForSections(item?.sections)}}</small>
             </button>
           `).join("");
           subsectionTabsNode.style.display = "";
@@ -1972,7 +2133,7 @@ def render_manufacturing_page(
             label: String(view?.label || ""),
             count: specialViewUsesRedFilter(view)
               ? countRowsInSections(view?.sections, (row) => rowStateValue(row) === "red")
-              : Number(view?.count || 0),
+              : totalQuantityForSections(view?.sections),
             stateClass: specialViewUsesRedFilter(view)
               ? ""
               : tabStateClassForRows(Array.isArray(view?.sections) ? view.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : []),
@@ -2012,7 +2173,7 @@ def render_manufacturing_page(
         const sectionTabs = sections.map((section) => ({{
           key: section.key,
           label: section.label,
-          count: Array.isArray(section.rows) ? section.rows.length : 0,
+          count: totalQuantityForRows(section?.rows),
           stateClass: sectionTabStateClass(section),
           selectedClass: section.key === currentViewKey ? " is-active" : (layoutMode === "double" && section.key === secondaryViewKey ? " is-secondary" : ""),
         }}));
@@ -2062,6 +2223,11 @@ def render_manufacturing_page(
           const hideBarcode = documentHidesBarcode(document);
           const hideSideTypeColumn = Boolean(group?.hideSideTypeColumn);
           const columnLayout = groupColumnLayout(group);
+          const showPartialColumn =
+            currentViewKey === "red" ||
+            currentSubcategoryKey === "red" ||
+            specialViewUsesRedFilter(currentSpecialView);
+          const effectiveHideBarcode = hideBarcode || showPartialColumn;
           const tableHeadClass = columnLayout === "cnc-lower"
             ? " is-cnc-lower"
             : columnLayout === "cnc-upper"
@@ -2069,8 +2235,8 @@ def render_manufacturing_page(
               : columnLayout === "cnc-fiokelo"
                 ? " is-cnc-fiokelo"
               : columnLayout === "front-standard"
-                ? " is-front-standard"
-              : hideBarcode
+                ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
+              : effectiveHideBarcode
                 ? " is-no-barcode"
                 : "";
           const rowClass = columnLayout === "cnc-lower"
@@ -2080,8 +2246,8 @@ def render_manufacturing_page(
               : columnLayout === "cnc-fiokelo"
                 ? " is-cnc-fiokelo"
               : columnLayout === "front-standard"
-                ? " is-front-standard"
-              : hideBarcode
+                ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
+              : effectiveHideBarcode
                 ? " is-no-barcode"
                 : "";
           const totalQuantity = (Array.isArray(group.rows) ? group.rows : []).reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
@@ -2093,7 +2259,6 @@ def render_manufacturing_page(
               </div>
             `
             : "";
-          const showPartialColumn = currentViewKey === "red";
           const tableHeadExtraClass = showPartialColumn ? " is-with-partial" : "";
           const tableHeadMarkup = columnLayout === "cnc-lower"
             ? `
@@ -2143,7 +2308,7 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
-                  ${{sortButtonMarkup(group.key, "code", "Vonalkód")}}
+                  ${{effectiveHideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `
             : `
@@ -2154,7 +2319,7 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "edge", "Él")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
-                  ${{hideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
+                  ${{effectiveHideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `;
           const rowMarkup = sortedRowsForView(group.rows, group.key).map((row) => {{
@@ -2175,6 +2340,14 @@ def render_manufacturing_page(
             const modelBadgeMarkup = row.modelLabel
               ? `<span class="mfg-row-badge${{modelToneClass}}">${{escapeHtml(String(row.modelLabel))}}</span>`
               : "";
+            const fiokeloDrillValue = String(row.drillLabel || "-");
+            const fiokeloDrawerTypeValue = String(row.drawerType || "-");
+            const fiokeloDrillMarkup = fiokeloDrillValue === "Nincs"
+              ? `<span class="is-pill-black">${{escapeHtml(fiokeloDrillValue)}}</span>`
+              : `<span>${{escapeHtml(fiokeloDrillValue)}}</span>`;
+            const fiokeloDrawerTypeMarkup = fiokeloDrawerTypeValue === "HE"
+              ? `<span class="is-pill-black">${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`
+              : `<span>${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`;
             return `
               <button class="mfg-row${{rowClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
                 ${{
@@ -2212,8 +2385,8 @@ def render_manufacturing_page(
                             <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
                             <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
                             <div class="mfg-row-meta"><span>${{escapeHtml(row.netfrontColor || "-")}}</span></div>
-                            <div class="mfg-row-meta"><span>${{escapeHtml(row.drillLabel || "-")}}</span></div>
-                            <div class="mfg-row-meta"><span>${{escapeHtml(row.drawerType || "-")}}</span></div>
+                            <div class="mfg-row-meta">${{fiokeloDrillMarkup}}</div>
+                            <div class="mfg-row-meta">${{fiokeloDrawerTypeMarkup}}</div>
                             <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                             ${{partialMarkup}}
                           `
@@ -2228,12 +2401,18 @@ def render_manufacturing_page(
                               <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
                               <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                               ${{partialMarkup}}
-                              <div class="mfg-row-barcode-wrap">
-                                <div class="mfg-row-barcode">
-                                  <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
-                                </div>
-                                <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
-                              </div>
+                              ${{
+                                effectiveHideBarcode
+                                  ? ""
+                                  : `
+                                      <div class="mfg-row-barcode-wrap">
+                                        <div class="mfg-row-barcode">
+                                          <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
+                                        </div>
+                                        <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
+                                      </div>
+                                    `
+                              }}
                             `
                           : `
                               <div class="mfg-row-main">
@@ -2254,7 +2433,7 @@ def render_manufacturing_page(
                               </div>
                               ${{partialMarkup}}
                               ${{
-                                hideBarcode
+                                effectiveHideBarcode
                                   ? ""
                                   : `
                                       <div class="mfg-row-barcode-wrap">
