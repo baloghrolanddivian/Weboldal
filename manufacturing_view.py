@@ -14,6 +14,7 @@ def render_manufacturing_page(
     route: str,
     state_route: str,
     partial_qty_route: str,
+    report_ready_route: str,
     selected_number: str,
     operations: list[dict[str, str]],
     selected_operation: str,
@@ -105,6 +106,7 @@ def render_manufacturing_page(
             "stateRoute": state_route,
             "partialQuantityState": partial_quantity_state,
             "partialQtyRoute": partial_qty_route,
+            "reportReadyRoute": report_ready_route,
         }
     )
 
@@ -529,6 +531,65 @@ def render_manufacturing_page(
       border: 1px solid rgba(17, 24, 39, 0.08);
       background: #f7f9fb;
     }}
+    .mfg-status-actions {{
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .mfg-report-button {{
+      min-height: 32px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid #0b6c44;
+      background: linear-gradient(180deg, #12a566, #0c8d57);
+      color: #ffffff;
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 10px rgba(8, 109, 67, 0.24);
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    }}
+    .mfg-report-button.is-loading {{
+      position: relative;
+      padding-right: 30px;
+    }}
+    .mfg-report-button.is-loading::after {{
+      content: "";
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      margin-top: -6px;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #ffffff;
+      animation: mfg-report-spin 0.72s linear infinite;
+    }}
+    @keyframes mfg-report-spin {{
+      from {{ transform: rotate(0deg); }}
+      to {{ transform: rotate(360deg); }}
+    }}
+    .mfg-report-button:hover {{
+      filter: brightness(1.04);
+      box-shadow: 0 5px 14px rgba(8, 109, 67, 0.3);
+      transform: translateY(-1px);
+    }}
+    .mfg-report-button:active {{
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(8, 109, 67, 0.22);
+    }}
+    .mfg-report-button:disabled {{
+      opacity: 0.55;
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }}
     .mfg-layout-button {{
       width: 30px;
       min-width: 30px;
@@ -831,6 +892,20 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard > * {{
       display: grid;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo,
+    .mfg-content.is-single-column-overview .mfg-row.is-pantolo {{
+      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-partial {{
+      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo > * {{
+      display: inline-flex;
+    }}
+    .mfg-content.is-single-column-overview .mfg-row.is-pantolo > * {{
+      display: grid;
+    }}
     .mfg-content.is-split {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
@@ -905,6 +980,19 @@ def render_manufacturing_page(
       background: #f5f7fa;
       border-bottom: 1px solid rgba(17, 24, 39, 0.06);
     }}
+    .mfg-section-card.is-pantolo .mfg-section-head {{
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+    }}
+    .mfg-section-card.is-pantolo .mfg-section-title {{
+      grid-column: 2;
+      text-align: center;
+    }}
+    .mfg-section-card.is-pantolo .mfg-section-count {{
+      grid-column: 3;
+      justify-self: end;
+    }}
     .mfg-table-head.is-no-barcode {{
       grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
     }}
@@ -928,6 +1016,12 @@ def render_manufacturing_page(
     }}
     .mfg-table-head.is-cnc-fiokelo.is-with-partial {{
       grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
+    }}
+    .mfg-table-head.is-pantolo {{
+      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
+    }}
+    .mfg-table-head.is-pantolo.is-with-partial {{
+      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
     }}
     .mfg-table-head.is-front-standard {{
       grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
@@ -987,7 +1081,7 @@ def render_manufacturing_page(
       -webkit-touch-callout: none;
     }}
     .mfg-row.is-no-barcode {{
-      grid-template-columns: 1.12fr 0.78fr 0.8fr 0.44fr 0.54fr 0.4fr;
+      grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
     }}
     .mfg-row.is-no-barcode.is-with-partial {{
       grid-template-columns: 1.1fr 0.82fr 0.92fr 0.46fr 0.58fr 0.36fr;
@@ -1009,6 +1103,12 @@ def render_manufacturing_page(
     }}
     .mfg-row.is-cnc-fiokelo.is-with-partial {{
       grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
+    }}
+    .mfg-row.is-pantolo {{
+      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
+    }}
+    .mfg-row.is-pantolo.is-with-partial {{
+      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
     }}
     .mfg-row.is-cnc-fiokelo .mfg-row-meta {{
       padding-top: 2px;
@@ -1066,6 +1166,11 @@ def render_manufacturing_page(
     .mfg-row.is-red {{
       background: var(--mfg-red-bg);
       box-shadow: inset 3px 0 0 var(--mfg-red-line);
+    }}
+    .mfg-row.is-done {{
+      background: #1f7a46;
+      box-shadow: inset 5px 0 0 #0f4f2f;
+      color: #f4fff8;
     }}
     .mfg-row.is-muted {{
       background: #f3f4f6;
@@ -1151,6 +1256,15 @@ def render_manufacturing_page(
     .mfg-row.is-red .mfg-row-meta span,
     .mfg-row.is-red .mfg-row-code {{
       color: var(--mfg-red-text);
+    }}
+    .mfg-row.is-done .mfg-row-title,
+    .mfg-row.is-done .mfg-row-meta span,
+    .mfg-row.is-done .mfg-row-code {{
+      color: #f4fff8;
+    }}
+    .mfg-row.is-done .mfg-row-qty {{
+      background: #0f4f2f;
+      color: #ffffff;
     }}
     .mfg-row.is-cnc-fiokelo.is-green,
     .mfg-row.is-cnc-fiokelo.is-green .mfg-row-main,
@@ -1427,6 +1541,65 @@ def render_manufacturing_page(
     .mfg-choice-button.is-plain {{
       background: #f8fafc;
     }}
+    .mfg-confirm-modal[hidden] {{
+      display: none !important;
+    }}
+    .mfg-confirm-modal {{
+      position: fixed;
+      inset: 0;
+      z-index: 92;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.38);
+      backdrop-filter: blur(2px);
+    }}
+    .mfg-confirm-card {{
+      width: min(430px, 100%);
+      border-radius: 18px;
+      background: #ffffff;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      box-shadow: 0 28px 88px rgba(15, 23, 42, 0.2);
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }}
+    .mfg-confirm-title {{
+      margin: 0;
+      font-size: 1.02rem;
+      font-weight: 800;
+      color: #0f172a;
+    }}
+    .mfg-confirm-copy {{
+      margin: 0;
+      font-size: 0.9rem;
+      color: #475569;
+      line-height: 1.45;
+    }}
+    .mfg-confirm-actions {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .mfg-confirm-button {{
+      min-height: 42px;
+      border-radius: 12px;
+      border: 1px solid rgba(17, 24, 39, 0.14);
+      background: #fff;
+      color: #111827;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }}
+    .mfg-confirm-button.is-confirm {{
+      border-color: rgba(11, 108, 68, 0.48);
+      background: linear-gradient(180deg, #12a566, #0c8d57);
+      color: #fff;
+    }}
+    .mfg-confirm-button.is-cancel {{
+      background: #f8fafc;
+    }}
     .mfg-row-barcode-wrap {{
       display: grid;
       gap: 2px;
@@ -1517,6 +1690,14 @@ def render_manufacturing_page(
       .mfg-row.is-cnc-upper.is-with-partial {{
         grid-template-columns: 0.96fr 0.66fr 0.68fr 0.8fr 0.72fr 0.42fr 0.4fr 0.3fr;
       }}
+      .mfg-table-head.is-pantolo,
+      .mfg-row.is-pantolo {{
+        grid-template-columns: 0.9fr 0.64fr 0.72fr 0.66fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.34fr;
+      }}
+      .mfg-table-head.is-pantolo.is-with-partial,
+      .mfg-row.is-pantolo.is-with-partial {{
+        grid-template-columns: 0.88fr 0.62fr 0.7fr 0.62fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.32fr 0.28fr;
+      }}
       .mfg-table-head,
       .mfg-row {{
         grid-template-columns: 0.94fr 0.66fr 0.74fr 0.22fr 0.4fr 1.52fr;
@@ -1539,6 +1720,9 @@ def render_manufacturing_page(
       }}
     }}
     @media (orientation: portrait) {{
+      .mfg-content.is-overview.is-split {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
       .mfg-content.is-split .mfg-table-head {{
         font-size: 0.58rem;
         gap: 4px;
@@ -1602,9 +1786,12 @@ def render_manufacturing_page(
       <div class="mfg-subsection-tab-row" id="mfg-subsection-tabs" style="display:none"></div>
       <div class="mfg-status-row">
         <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
-        <div class="mfg-layout-toggle" id="mfg-layout-toggle" aria-label="Nézet mód">
-          <button class="mfg-layout-button is-active" type="button" data-layout-mode="single" title="Egy kategória">▣</button>
-          <button class="mfg-layout-button" type="button" data-layout-mode="double" title="Két kategória">▥</button>
+        <div class="mfg-status-actions">
+          <button class="mfg-report-button" id="mfg-report-ready" type="button">Készre jelentek</button>
+          <div class="mfg-layout-toggle" id="mfg-layout-toggle" aria-label="Nézet mód">
+            <button class="mfg-layout-button is-active" type="button" data-layout-mode="single" title="Egy kategória">▣</button>
+            <button class="mfg-layout-button" type="button" data-layout-mode="double" title="Két kategória">▥</button>
+          </div>
         </div>
       </div>
       <div class="mfg-content" id="mfg-content"></div>
@@ -1616,6 +1803,16 @@ def render_manufacturing_page(
         <div class="mfg-choice-actions">
           <button class="mfg-choice-button is-plain" type="button" data-choice-action="plain">Sima</button>
           <button class="mfg-choice-button is-green" type="button" data-choice-action="green">Zöld</button>
+        </div>
+      </div>
+    </div>
+    <div class="mfg-confirm-modal" id="mfg-confirm-modal" hidden>
+      <div class="mfg-confirm-card" role="dialog" aria-modal="true" aria-labelledby="mfg-confirm-title">
+        <h3 class="mfg-confirm-title" id="mfg-confirm-title">Biztosan készre jelented a zöld tételeket?</h3>
+        <p class="mfg-confirm-copy">A sikeresen készre jelentett sorok sötétzöldre váltanak és többé nem módosíthatók.</p>
+        <div class="mfg-confirm-actions">
+          <button class="mfg-confirm-button is-cancel" type="button" data-confirm-action="cancel">Mégse</button>
+          <button class="mfg-confirm-button is-confirm" type="button" data-confirm-action="confirm">Igen, készre</button>
         </div>
       </div>
     </div>
@@ -1632,9 +1829,11 @@ def render_manufacturing_page(
       const subsectionTabsNode = document.getElementById("mfg-subsection-tabs");
       const contentNode = document.getElementById("mfg-content");
       const statusNode = document.getElementById("mfg-status");
+      const reportReadyButtonNode = document.getElementById("mfg-report-ready");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
       const choiceModalNode = document.getElementById("mfg-choice-modal");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !layoutToggleNode || !choiceModalNode) return;
+      const confirmModalNode = document.getElementById("mfg-confirm-modal");
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
 
       let payload = {{}};
       try {{
@@ -1649,6 +1848,7 @@ def render_manufacturing_page(
       const partialQuantityState = Object.assign({{}}, payload.partialQuantityState || {{}});
       const stateRoute = String(payload.stateRoute || "");
       const partialQtyRoute = String(payload.partialQtyRoute || "");
+      const reportReadyRoute = String(payload.reportReadyRoute || "");
       const productionNumber = String(payload.productionNumber || "");
       let currentDocKey = String(payload.currentDocumentKey || documents[0]?.key || "");
       if (!documents.some((document) => document.key === currentDocKey)) {{
@@ -1661,6 +1861,7 @@ def render_manufacturing_page(
       const sectionSortState = Object.create(null);
       const partialSaveTimers = new Map();
       let pendingRedChoice = null;
+      let pendingConfirmResolve = null;
 
       const syncUrlForDocument = () => {{
         try {{
@@ -1733,6 +1934,7 @@ def render_manufacturing_page(
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
       const rowStateValue = (row) => selectionState[rowStateKey(row)] || "";
+      const isGreenLikeState = (value) => value === "green" || value === "done";
       const countStateInDocument = (document, wanted) => flattenRows(document)
         .filter((row) => rowStateValue(row) === wanted)
         .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
@@ -1838,6 +2040,12 @@ def render_manufacturing_page(
         if (sortKey === "name") return normalizeSortText(row.name);
         if (sortKey === "size") return parseSizeParts(row.size);
         if (sortKey === "model") return normalizeSortText(row.modelLabel);
+        if (sortKey === "color23") return normalizeSortText(row.color23);
+        if (sortKey === "pant_type") return normalizeSortText(row.pantType);
+        if (sortKey === "handle_drill") return normalizeSortText(row.handleDrill);
+        if (sortKey === "handle_type") return normalizeSortText(row.handleType);
+        if (sortKey === "opening_dir") return normalizeSortText(row.openingDir);
+        if (sortKey === "door_type") return normalizeSortText(row.doorType);
         if (sortKey === "trait") return normalizeSortText(row.frontTrait);
         if (sortKey === "color") return normalizeSortText(row.color);
         if (sortKey === "netfront_color") return normalizeSortText(row.netfrontColor);
@@ -1885,12 +2093,17 @@ def render_manufacturing_page(
       const sortArrowFor = (sectionKey, sortKey) => {{
         const sortState = getSectionSortState(sectionKey);
         if (sortState.key != sortKey) return "";
-        return sortState.direction === "desc" ? "v" : "^";
+        return sortState.direction === "desc" ? "↓" : "↑";
       }};
       const sortButtonMarkup = (sectionKey, sortKey, label) => {{
         const sortState = getSectionSortState(sectionKey);
         const activeClass = sortState.key === sortKey ? " is-active" : "";
-        const arrow = sortArrowFor(sectionKey, sortKey);
+        const sortArrowForEscaped = (key, innerSortKey) => {{
+          const innerSortState = getSectionSortState(key);
+          if (innerSortState.key != innerSortKey) return "";
+          return innerSortState.direction === "desc" ? "\\u2193" : "\\u2191";
+        }};
+        const arrow = sortArrowForEscaped(sectionKey, sortKey);
         return `
           <button class="mfg-sort-head${{activeClass}}" type="button" data-sort-key="${{escapeHtml(sortKey)}}" data-section-key="${{escapeHtml(sectionKey)}}" title="${{escapeHtml(label)}}">
             <span class="mfg-sort-head-label">${{escapeHtml(label)}}</span>
@@ -1902,7 +2115,7 @@ def render_manufacturing_page(
       const tabStateClassForRows = (rows) => {{
         if (!rows.length) return "";
         if (rows.some((row) => !rowStateValue(row))) return "";
-        if (rows.every((row) => rowStateValue(row) === "green")) return " is-complete";
+        if (rows.every((row) => isGreenLikeState(rowStateValue(row)))) return " is-complete";
         if (rows.some((row) => rowStateValue(row) === "red")) return " is-alert";
         return "";
       }};
@@ -1970,7 +2183,7 @@ def render_manufacturing_page(
               .map((section) => ({{
                 ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                  currentSubcategoryKey === "plain" ? !rowStateValue(row) : rowStateValue(row) === currentSubcategoryKey
+                  currentSubcategoryKey === "plain" ? !rowStateValue(row) : (currentSubcategoryKey === "green" ? isGreenLikeState(rowStateValue(row)) : rowStateValue(row) === currentSubcategoryKey)
                 ),
               }}))
               .filter((section) => section.rows.length);
@@ -2014,7 +2227,7 @@ def render_manufacturing_page(
               .map((section) => ({{
                 ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                  currentViewKey === "plain" ? !rowStateValue(row) : rowStateValue(row) === currentViewKey
+                  currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isGreenLikeState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
                 ),
               }}))
               .filter((section) => section.rows.length);
@@ -2024,7 +2237,8 @@ def render_manufacturing_page(
         if (false && documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           const combinedRows = sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []).filter((row) => {{
             if (currentViewKey === "plain") return !rowStateValue(row);
-            if (currentViewKey === "green" || currentViewKey === "red") return rowStateValue(row) === currentViewKey;
+            if (currentViewKey === "green") return isGreenLikeState(rowStateValue(row));
+            if (currentViewKey === "red") return rowStateValue(row) === "red";
             return true;
           }});
           if (!combinedRows.length) return [];
@@ -2054,7 +2268,7 @@ def render_manufacturing_page(
               key: section.key,
               label: section.label,
               rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                currentViewKey === "plain" ? !rowStateValue(row) : rowStateValue(row) === currentViewKey
+                currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isGreenLikeState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
               ),
             }}))
             .filter((section) => section.rows.length);
@@ -2090,7 +2304,7 @@ def render_manufacturing_page(
           const korpuszSubTabs = [
             {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows) }},
             {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)), stateClass: "" }},
-            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "green"), stateClass: "" }},
+            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => isGreenLikeState(rowStateValue(row))), stateClass: "" }},
             {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
             ...currentKorpuszSections.map((section) => ({{
               key: section.key,
@@ -2126,7 +2340,7 @@ def render_manufacturing_page(
         const specialTabs = [
           {{ key: "all", label: "Összes", count: countRowsInSections(overviewSections), stateClass: tabStateClassForRows(overviewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])) }},
           {{ key: "plain", label: "Simák", count: countRowsInSections(overviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
-          {{ key: "green", label: "Zöldek", count: countRowsInSections(overviewSections, (row) => rowStateValue(row) === "green"), stateClass: "" }},
+          {{ key: "green", label: "Zöldek", count: countRowsInSections(overviewSections, (row) => isGreenLikeState(rowStateValue(row))), stateClass: "" }},
           {{ key: "red", label: "Pirosak", count: countRowsInSections(overviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
           ...documentSpecialViews.map((view) => ({{
             key: String(view?.key || ""),
@@ -2189,6 +2403,7 @@ def render_manufacturing_page(
         const document = currentDocument();
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red" || Boolean(currentSpecialView);
+        const isPantoloDocument = String(document?.key || "") === "pantolas";
         const isSplitMode = layoutMode === "double" && groups.length > 1 && (
           !isSpecialViewKey(currentViewKey) ||
           (String(document?.key || "") === "korpusz_osszekeszites" && Boolean(currentSpecialView) && !["all", "plain", "green", "red"].includes(currentSubcategoryKey))
@@ -2234,6 +2449,8 @@ def render_manufacturing_page(
               ? " is-cnc-upper"
               : columnLayout === "cnc-fiokelo"
                 ? " is-cnc-fiokelo"
+              : columnLayout === "pantolo"
+                ? " is-pantolo"
               : columnLayout === "front-standard"
                 ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
               : effectiveHideBarcode
@@ -2245,6 +2462,8 @@ def render_manufacturing_page(
               ? " is-cnc-upper"
               : columnLayout === "cnc-fiokelo"
                 ? " is-cnc-fiokelo"
+              : columnLayout === "pantolo"
+                ? " is-pantolo"
               : columnLayout === "front-standard"
                 ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
               : effectiveHideBarcode
@@ -2297,6 +2516,22 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "drawer_type", "Fióktípus")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
+                </div>
+              `
+            : columnLayout === "pantolo"
+              ? `
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
+                  ${{sortButtonMarkup(group.key, "color", "SzĂ­n")}}
+                  ${{sortButtonMarkup(group.key, "color23", "SzĂ­n 2/3")}}
+                  ${{sortButtonMarkup(group.key, "pant_type", "PĂˇnt tĂ­pus")}}
+                  ${{sortButtonMarkup(group.key, "model", "Modell")}}
+                  ${{sortButtonMarkup(group.key, "size", "MĂ©ret")}}
+                  ${{sortButtonMarkup(group.key, "handle_drill", "FogantyĂş furat")}}
+                  ${{sortButtonMarkup(group.key, "handle_type", "FogantyĂş tĂ­pus")}}
+                  ${{sortButtonMarkup(group.key, "opening_dir", "NyitĂˇs irĂˇny")}}
+                  ${{sortButtonMarkup(group.key, "door_type", "AjtĂł tĂ­pus")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "ME")}}
+                  ${{showPartialColumn ? "<span>HiĂˇnyzik</span>" : ""}}
                 </div>
               `
             : columnLayout === "front-standard"
@@ -2390,6 +2625,20 @@ def render_manufacturing_page(
                             <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                             ${{partialMarkup}}
                           `
+                        : columnLayout === "pantolo"
+                          ? `
+                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.color23 || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.pantType || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.handleDrill || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.handleType || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.openingDir || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(row.doorType || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span>${{escapeHtml(String(row.meValue || row.quantity || 0))}}</span></div>
+                              ${{partialMarkup}}
+                            `
                         : columnLayout === "front-standard"
                           ? `
                               <div class="mfg-row-main">
@@ -2449,8 +2698,30 @@ def render_manufacturing_page(
               </button>
             `;
           }}).join("");
-          return `<section class="mfg-section-card" data-section-key="${{escapeHtml(group.key || "")}}">${{headMarkup}}${{tableHeadMarkup}}<div class="mfg-row-list" data-section-key="${{escapeHtml(group.key || "")}}">${{rowMarkup}}</div></section>`;
+          const sectionClass = columnLayout === "pantolo" ? " is-pantolo" : "";
+          return `<section class="mfg-section-card${{sectionClass}}" data-section-key="${{escapeHtml(group.key || "")}}">${{headMarkup}}${{tableHeadMarkup}}<div class="mfg-row-list" data-section-key="${{escapeHtml(group.key || "")}}">${{rowMarkup}}</div></section>`;
         }}).join("");
+      }};
+
+      const normalizePantoloHeaders = () => {{
+        const labelMap = {{
+          color: "Szin",
+          color23: "Szin 2/3",
+          pant_type: "Pant tipus",
+          model: "Modell",
+          size: "Meret",
+          handle_drill: "Fogantyu furat",
+          handle_type: "Fogantyu tipus",
+          opening_dir: "Nyitas irany",
+          door_type: "Ajto tipus",
+          quantity: "ME",
+        }};
+        Array.from(contentNode.querySelectorAll(".mfg-table-head.is-pantolo .mfg-sort-head[data-sort-key]")).forEach((button) => {{
+          const sortKey = String(button.getAttribute("data-sort-key") || "").trim();
+          const labelNode = button.querySelector(".mfg-sort-head-label");
+          if (!labelNode || !Object.prototype.hasOwnProperty.call(labelMap, sortKey)) return;
+          labelNode.textContent = labelMap[sortKey];
+        }});
       }};
 
       const captureScrollState = () => {{
@@ -2486,6 +2757,19 @@ def render_manufacturing_page(
         }}
         renderDocTabs();
         renderSectionTabs(document);
+        const canReportReady =
+          String(document?.key || "") === "korpusz_osszekeszites" &&
+          currentSubcategoryKey === "green" &&
+          Boolean(reportReadyRoute);
+        reportReadyButtonNode.style.display = canReportReady ? "inline-flex" : "none";
+        if (canReportReady) {{
+          const greenRows = buildGroupsForView(document)
+            .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
+            .filter((row) => isGreenLikeState(rowStateValue(row)));
+          reportReadyButtonNode.disabled = greenRows.length === 0;
+        }} else {{
+          reportReadyButtonNode.disabled = true;
+        }}
         layoutToggleNode.style.display = documentAllowsSplit(document) ? "" : "none";
         if (!documentAllowsSplit(document)) {{
           layoutMode = "single";
@@ -2495,6 +2779,7 @@ def render_manufacturing_page(
           button.classList.toggle("is-active", mode === layoutMode);
         }});
         renderRows(buildGroupsForView(document));
+        normalizePantoloHeaders();
         renderBarcodes();
         requestAnimationFrame(() => restoreScrollState(scrollState));
       }};
@@ -2555,6 +2840,21 @@ def render_manufacturing_page(
         pendingRedChoice = payload;
         choiceModalNode.hidden = false;
       }};
+
+      const closeConfirmModal = (result = false) => {{
+        confirmModalNode.hidden = true;
+        if (typeof pendingConfirmResolve === "function") {{
+          const resolve = pendingConfirmResolve;
+          pendingConfirmResolve = null;
+          resolve(Boolean(result));
+        }}
+      }};
+
+      const requestConfirmModal = () =>
+        new Promise((resolve) => {{
+          pendingConfirmResolve = resolve;
+          confirmModalNode.hidden = false;
+        }});
 
       const persistPartialQuantity = async (targetProductionNumber, stateKey, value, previousValue) => {{
         try {{
@@ -2713,6 +3013,9 @@ def render_manufacturing_page(
           .filter(Boolean);
         if (!rowId) return;
         const currentState = selectionState[stateKey] || "";
+        if (currentState === "done") {{
+          return;
+        }}
         if (currentState === "red") {{
           openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds }});
           return;
@@ -2753,6 +3056,92 @@ def render_manufacturing_page(
         }}
       }});
 
+      confirmModalNode.addEventListener("click", (event) => {{
+        const actionButton = event.target.closest("[data-confirm-action]");
+        if (actionButton instanceof HTMLElement) {{
+          const action = actionButton.getAttribute("data-confirm-action") || "";
+          closeConfirmModal(action === "confirm");
+          return;
+        }}
+        if (event.target === confirmModalNode) {{
+          closeConfirmModal(false);
+        }}
+      }});
+
+      reportReadyButtonNode.addEventListener("click", async () => {{
+        const document = currentDocument();
+        const canReportReady =
+          String(document?.key || "") === "korpusz_osszekeszites" &&
+          currentSubcategoryKey === "green" &&
+          Boolean(reportReadyRoute);
+        if (!canReportReady || reportReadyButtonNode.disabled) return;
+        const isConfirmed = await requestConfirmModal();
+        if (!isConfirmed) return;
+
+        const visibleRows = buildGroupsForView(document)
+          .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
+          .filter((row) => isGreenLikeState(rowStateValue(row)));
+        if (!visibleRows.length) {{
+          setStatus("Nincs készre jelentendő zöld sor.", "is-error");
+          return;
+        }}
+
+        const extractConCode = (row) => {{
+          const joined = [row?.code, row?.detail, row?.row_id].map((value) => String(value || "")).join(" ");
+          const match = joined.toUpperCase().match(/\\bCON\\d{{7}}\\b/);
+          return match ? match[0] : "";
+        }};
+        const entries = visibleRows
+          .map((row) => {{
+            const rowId = String(row?.row_id || "").trim();
+            const stateKey = String(rowStateKey(row) || "").trim();
+            const code = extractConCode(row);
+            const sourceRowIds = Array.isArray(row?.sourceRowIds)
+              ? row.sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)
+              : [];
+            if (!rowId || !stateKey || !code) return null;
+            return {{ row_id: rowId, state_key: stateKey, code, source_row_ids: sourceRowIds }};
+          }})
+          .filter(Boolean);
+        if (!entries.length) {{
+          setStatus("A zöld sorokhoz nem találtam érvényes CON kódot.", "is-error");
+          return;
+        }}
+
+        reportReadyButtonNode.classList.add("is-loading");
+        reportReadyButtonNode.disabled = true;
+        setStatus("Készre jelentés folyamatban...");
+        try {{
+          const response = await fetch(reportReadyRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              production_number: productionNumber,
+              entries,
+            }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "A készre jelentés nem sikerült.");
+          }}
+          const doneRowIds = new Set(
+            Array.isArray(result.done_row_ids)
+              ? result.done_row_ids.map((value) => String(value || "").trim()).filter(Boolean)
+              : []
+          );
+          for (const rowId of doneRowIds) {{
+            selectionState[`${{productionNumber}}::${{rowId}}`] = "done";
+          }}
+          renderAll();
+          setStatus("Készre jelentés sikeres. A tételek zárolva lettek.", "is-success");
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "A készre jelentés nem sikerült.", "is-error");
+        }} finally {{
+          reportReadyButtonNode.classList.remove("is-loading");
+          reportReadyButtonNode.disabled = false;
+        }}
+      }});
+
       renderAll();
     }})();
   </script>
@@ -2760,4 +3149,3 @@ def render_manufacturing_page(
 </body>
 </html>"""
     return page.encode("utf-8")
-

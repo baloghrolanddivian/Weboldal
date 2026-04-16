@@ -194,6 +194,20 @@ def _find_fiokelo_furas_path(folder: Path) -> Path | None:
     return None
 
 
+def _find_pantolo_path(folder: Path) -> Path | None:
+    if not folder.exists():
+        return None
+    candidate = folder / "Pantolo.pdf"
+    if candidate.exists():
+        return candidate
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file():
+            continue
+        if "pantolo" in _fold_hu(path.name) and path.suffix.lower() == ".pdf":
+            return path
+    return None
+
+
 def has_required_manufacturing_pdfs(folder: Path) -> bool:
     return _find_osszekeszito_path(folder) is not None and _find_alkatresz_kesz_path(folder) is not None
 
@@ -1233,6 +1247,182 @@ def parse_fiokelo_furas(path: Path) -> ManufacturingDocument:
     )
 
 
+def parse_pantolo(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    rows: list[ManufacturingRow] = []
+    row_index = 0
+    current_front_type: str | None = None
+    known_models = {"anna", "antonia", "laura", "kinga", "zille", "doroti", "kira", "kata", "klio", "petra", "ibiza", "etna"}
+    pant_markers = ("raut", "csill", "pant", "nincs", "klipp", "pill", "45", "165")
+    header_tokens = {
+        "szin",
+        "szin 2/3",
+        "pant",
+        "tipus",
+        "modell",
+        "meret",
+        "fogantyu",
+        "furat",
+        "fogantyu tipus",
+        "nyitas irany",
+        "ajto tipus",
+        "ajto",
+        "nyitas",
+        "irany",
+        "front",
+        "me",
+        ":",
+        "|",
+    }
+
+    def is_header_line(value: str) -> bool:
+        return _fold_hu(_clean_text(value)) in header_tokens
+
+    def looks_like_pantolo_size(tokens: list[str], start_index: int) -> bool:
+        if start_index + 2 >= len(tokens):
+            return False
+        return (
+            re.fullmatch(r"\d{1,4}", tokens[start_index] or "") is not None
+            and _clean_text(tokens[start_index + 1]).lower() == "x"
+            and re.fullmatch(r"\d{1,4}", tokens[start_index + 2] or "") is not None
+        )
+
+    # Keep the original PDF order; only parse rows under a recognized "Front típus".
+    stream: list[tuple[str, int, str]] = []
+    for page_number, page_lines in enumerate(pages, start=1):
+        footer_index = _footer_index(page_lines)
+        lines = [_clean_text(line) for line in page_lines[:footer_index] if _clean_text(line)]
+        index = 0
+        while index < len(lines):
+            token = _clean_text(lines[index])
+            folded_token = _fold_hu(token)
+            if folded_token == "front tipus:" and index + 1 < len(lines):
+                next_token = _clean_text(lines[index + 1])
+                if next_token and next_token != "|":
+                    current_front_type = next_token
+                index += 2
+                continue
+            if current_front_type and not is_header_line(token):
+                stream.append((token, page_number, current_front_type))
+            index += 1
+
+    index = 0
+    while index < len(stream):
+        dimension_index = -1
+        for probe in range(index, min(len(stream), index + 18)):
+            if looks_like_pantolo_size([item[0] for item in stream], probe):
+                dimension_index = probe
+                break
+        if dimension_index == -1:
+            index += 1
+            continue
+
+        pre_tokens = [_clean_text(item[0]) for item in stream[index:dimension_index] if _clean_text(item[0]) and not is_header_line(item[0])]
+        size = f"{stream[dimension_index][0]} x {stream[dimension_index + 2][0]}"
+        tail_start = dimension_index + 3
+
+        flat_tokens = [_clean_text(item[0]) for item in stream]
+        candidate_indices: list[int] = []
+        for probe in range(tail_start, min(len(stream), tail_start + 28)):
+            token = _clean_text(stream[probe][0])
+            if re.fullmatch(r"-?\d+", token):
+                candidate_indices.append(probe)
+        quantity_index = -1
+        if candidate_indices:
+            def marks_row_boundary(probe: int) -> bool:
+                look_start = probe + 1
+                look_end = min(len(stream), probe + 14)
+                for look in range(look_start, look_end):
+                    if look + 2 < len(flat_tokens) and looks_like_pantolo_size(flat_tokens, look):
+                        return True
+                    next_token = _fold_hu(_clean_text(stream[look][0]))
+                    if next_token == "front tipus:":
+                        return True
+                return False
+
+            for probe in candidate_indices:
+                if marks_row_boundary(probe):
+                    quantity_index = probe
+                    break
+            if quantity_index == -1:
+                small_candidates = [probe for probe in candidate_indices if abs(int(_clean_text(stream[probe][0]) or "0")) <= 50]
+                quantity_index = small_candidates[0] if small_candidates else candidate_indices[0]
+        if quantity_index == -1:
+            index += 1
+            continue
+
+        quantity = int(_clean_text(stream[quantity_index][0]))
+        post_tokens = [_clean_text(item[0]) for item in stream[tail_start:quantity_index] if _clean_text(item[0]) and not is_header_line(item[0])]
+        page_number = int(stream[dimension_index][1])
+        front_type = _clean_text(stream[dimension_index][2]) or "Pántolás"
+
+        model_index = -1
+        for probe, part in enumerate(pre_tokens):
+            if _fold_hu(part) in known_models:
+                model_index = probe
+                break
+
+        color_tokens: list[str] = []
+        pant_tokens: list[str] = []
+        model_label = ""
+        if model_index != -1:
+            model_label = _clean_text(pre_tokens[model_index])
+            pre_head = pre_tokens[:model_index]
+        else:
+            pre_head = pre_tokens
+
+        pant_start = -1
+        for probe, part in enumerate(pre_head):
+            folded_part = _fold_hu(part)
+            if any(marker in folded_part for marker in pant_markers):
+                pant_start = probe
+                break
+
+        if pant_start == -1:
+            color_tokens = pre_head
+        else:
+            color_tokens = pre_head[:pant_start]
+            pant_tokens = pre_head[pant_start:]
+
+        color_label = _clean_text(" ".join(color_tokens)) or "-"
+        name = model_label or _clean_text(" ".join(pre_tokens)) or "Pántolás tétel"
+        detail_parts = [f"Front típus: {front_type}"]
+        if pant_tokens:
+            detail_parts.append(_clean_text(" ".join(pant_tokens)))
+        if post_tokens:
+            detail_parts.append(_clean_text(" ".join(post_tokens)))
+        detail = " · ".join(part for part in detail_parts if part)
+
+        row_index += 1
+        code = f"PANT-{_row_hash(front_type, name, size, color_label, detail, str(row_index))[:10].upper()}"
+        rows.append(
+            ManufacturingRow(
+                row_id=_row_hash("pantolo", front_type, name, size, code, str(row_index)),
+                name=name,
+                detail=detail,
+                size=size,
+                color=color_label,
+                edge="-",
+                quantity=quantity,
+                code=code,
+                doc_key="pantolo",
+                section_key="pantolo",
+                section_label="Pántoló",
+                page_number=page_number,
+            )
+        )
+        index = quantity_index + 1
+
+    sections = (ManufacturingSection(key="pantolo", label="Pántoló", rows=tuple(rows)),) if rows else tuple()
+    return ManufacturingDocument(
+        key="pantolo",
+        label="Pántolás",
+        file_name=path.name,
+        sections=sections,
+        row_count=len(rows),
+    )
+
+
 def load_production_bundle(production_number: str) -> dict:
     folder = production_folder(production_number)
     if not folder.exists():
@@ -1273,6 +1463,15 @@ def load_production_bundle(production_number: str) -> dict:
         if fiokelo_doc is not None:
             documents.append(asdict(fiokelo_doc))
 
+    pantolo_path = _find_pantolo_path(folder)
+    if pantolo_path is not None:
+        try:
+            pantolo_doc = parse_pantolo(pantolo_path)
+        except Exception:
+            pantolo_doc = None
+        if pantolo_doc is not None:
+            documents.append(asdict(pantolo_doc))
+
     return {
         "production_number": production_number,
         "folder": str(folder),
@@ -1296,7 +1495,7 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
         return {}
     if not isinstance(payload, dict):
         return {}
-    return {str(key): str(value) for key, value in payload.items() if str(value) in {"green", "red"}}
+    return {str(key): str(value) for key, value in payload.items() if str(value) in {"green", "red", "done"}}
 
 
 def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
@@ -1304,7 +1503,7 @@ def save_selection_state(runtime_root: Path, production_number: str, row_id: str
     normalized_state = str(state or "").strip().lower()
     if normalized_state in {"", "none", "clear"}:
         current.pop(row_id, None)
-    elif normalized_state in {"green", "red"}:
+    elif normalized_state in {"green", "red", "done"}:
         current[row_id] = normalized_state
     path = selection_state_path(runtime_root, production_number)
     path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")

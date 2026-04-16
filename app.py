@@ -4,6 +4,8 @@ import html
 import hashlib
 import io
 import json
+import ssl
+import base64
 import mimetypes
 import os
 import sqlite3
@@ -152,6 +154,35 @@ VACATION_CALENDAR_LEAVE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/t
 MANUFACTURING_ROUTE = "/apps/gyartasi-papirok"
 MANUFACTURING_STATE_ROUTE = f"{MANUFACTURING_ROUTE}/state"
 MANUFACTURING_PARTIAL_QTY_ROUTE = f"{MANUFACTURING_ROUTE}/partial-qty"
+MANUFACTURING_REPORT_READY_ROUTE = f"{MANUFACTURING_ROUTE}/report-ready"
+SHOPFLOOR_BASE_URL = os.getenv("SHOPFLOOR_BASE_URL", "https://app01.internal.divian.hu:9000").rstrip("/")
+SHOPFLOOR_USERNAME = os.getenv("SHOPFLOOR_USERNAME", "alkatresz")
+SHOPFLOOR_PASSWORD = os.getenv("SHOPFLOOR_PASSWORD", "PPddaa1234")
+SHOPFLOOR_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_CHECKPOINT_ID", "103"))
+SHOPFLOOR_TAB_ID = int(os.getenv("SHOPFLOOR_TAB_ID", "178"))
+SHOPFLOOR_PROCESS_PAYLOAD = {
+    "allowAnonymousInventory": False,
+    "cdsmId": 4,
+    "coPromptForScanQty": False,
+    "coSequence": 2,
+    "conId": 0,
+    "contId": 2,
+    "contextId": 1,
+    "cptSubAltOperations": True,
+    "doLoadConfirm": False,
+    "doPromptForScanQty": False,
+    "enableWorkOrderOperations": True,
+    "isAnonymousInventory": None,
+    "isDuplicateScan": False,
+    "lcId": None,
+    "manualIssueXml": None,
+    "needsConfirmation": True,
+    "oprId": 153,
+    "oprIdAlt": 0,
+    "oprIdSub": 0,
+    "sttId": 3003,
+    "validateData": None,
+}
 MATT_INVENTORY_ROUTE = "/apps/matt-raktarertek"
 MATT_INVENTORY_PROCESS_ROUTE = f"{MATT_INVENTORY_ROUTE}/process"
 MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
@@ -956,6 +987,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 120.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 10.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-16-pantolo-v15"
 
 
 def _dev_reload_token() -> str:
@@ -1850,7 +1882,11 @@ def _manufacturing_normalize_number(value: object) -> str:
 
 
 def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) -> str:
-    payload = json.dumps(list(signature), ensure_ascii=False, separators=(",", ":"))
+    payload = json.dumps(
+        {"schema": MANUFACTURING_BUNDLE_SCHEMA_VERSION, "signature": list(signature)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()
 
 
@@ -1923,13 +1959,21 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
     now = time.time()
     with MANUFACTURING_BUNDLE_CACHE_LOCK:
         cached = MANUFACTURING_BUNDLE_CACHE.get(normalized)
-        if cached and (now - float(cached.get("created_at", 0.0) or 0.0)) < MANUFACTURING_BUNDLE_FAST_TTL_SECONDS:
+        if (
+            cached
+            and cached.get("parser_version") == MANUFACTURING_BUNDLE_SCHEMA_VERSION
+            and (now - float(cached.get("created_at", 0.0) or 0.0)) < MANUFACTURING_BUNDLE_FAST_TTL_SECONDS
+        ):
             return dict(cached.get("bundle", {}))
 
     normalized, signature = _manufacturing_bundle_signature(normalized)
     with MANUFACTURING_BUNDLE_CACHE_LOCK:
         cached = MANUFACTURING_BUNDLE_CACHE.get(normalized)
-        if cached and cached.get("signature") == signature:
+        if (
+            cached
+            and cached.get("parser_version") == MANUFACTURING_BUNDLE_SCHEMA_VERSION
+            and cached.get("signature") == signature
+        ):
             cached["created_at"] = now
             return dict(cached.get("bundle", {}))
 
@@ -1938,6 +1982,7 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
         with MANUFACTURING_BUNDLE_CACHE_LOCK:
             MANUFACTURING_BUNDLE_CACHE[normalized] = {
                 "created_at": now,
+                "parser_version": MANUFACTURING_BUNDLE_SCHEMA_VERSION,
                 "signature": signature,
                 "bundle": disk_cached_bundle,
             }
@@ -1947,6 +1992,7 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
     with MANUFACTURING_BUNDLE_CACHE_LOCK:
         MANUFACTURING_BUNDLE_CACHE[normalized] = {
             "created_at": now,
+            "parser_version": MANUFACTURING_BUNDLE_SCHEMA_VERSION,
             "signature": signature,
             "bundle": bundle,
         }
@@ -1964,7 +2010,7 @@ MANUFACTURING_OPERATION_HINTS = {
     "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
     "front_osszekeszites": "A front összekészítő PDF sorai és kategóriái.",
     "cnc_furas": "CNC, alsó, felső és fiókelő/front fúrás egy közös műveleti nézetben.",
-    "pantolas": "Placeholder, a PDF logika a holnapi papír után kerül be.",
+    "pantolas": "A Pántoló papír sorai eredeti sorrendben, zöld/piros jelöléssel.",
 }
 MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
@@ -1972,6 +2018,7 @@ MANUFACTURING_SOURCE_LABELS = {
     "front_osszekeszito": "Front összekészítő",
     "cnc": "CNC",
     "fiokelo_furas": "Fiókelő fúrás",
+    "pantolo": "Pántoló",
 }
 
 
@@ -1991,7 +2038,7 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
     result: dict[str, str] = {}
     for row_id, state in raw_state.items():
         clean_state = str(state or "").strip().lower()
-        if clean_state not in {"green", "red"}:
+        if clean_state not in {"green", "red", "done"}:
             continue
         result[_manufacturing_state_key(normalized_number, row_id)] = clean_state
     return result
@@ -2011,6 +2058,68 @@ def _manufacturing_local_slug(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower())
     cleaned = cleaned.strip("-")
     return cleaned or "szakasz"
+
+
+def _shopfloor_auth_header() -> str:
+    auth_raw = f"{SHOPFLOOR_USERNAME}:{SHOPFLOOR_PASSWORD}"
+    auth_b64 = base64.b64encode(auth_raw.encode("utf-8", errors="ignore")).decode("ascii", errors="ignore")
+    return f"Basic {auth_b64}"
+
+
+def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
+    encoded_auth = urllib.parse.quote(auth_header, safe="")
+    negotiate_url = f"{SHOPFLOOR_BASE_URL}/api/hubs/mainhub/negotiate?authorize={encoded_auth}&negotiateVersion=1"
+    req = urllib.request.Request(
+        negotiate_url,
+        method="POST",
+    )
+    context = ssl._create_unverified_context()
+    with urllib.request.urlopen(req, context=context, timeout=15) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
+    connection_id = str(payload.get("connectionId", "")).strip()
+    if not connection_id:
+        raise RuntimeError("A shopfloor negotiate válaszban nincs connectionId.")
+    return connection_id
+
+
+def _shopfloor_report_con_ready(con_code: str) -> tuple[int, str]:
+    con_text = str(con_code or "").strip().upper()
+    match = re.fullmatch(r"CON(\d{1,12})", con_text)
+    if not match:
+        raise ValueError(f"Érvénytelen CON azonosító: {con_code}")
+    con_id = int(match.group(1))
+
+    auth_header = _shopfloor_auth_header()
+    connection_id = _shopfloor_negotiate_connection_id(auth_header)
+    payload = dict(SHOPFLOOR_PROCESS_PAYLOAD)
+    payload["conId"] = con_id
+    process_url = (
+        f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{SHOPFLOOR_CHECKPOINT_ID}"
+        f"/tabs/{SHOPFLOOR_TAB_ID}/processscan/{con_text}?connectionId={urllib.parse.quote(connection_id, safe='')}"
+    )
+    req = urllib.request.Request(
+        process_url,
+        method="POST",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": auth_header,
+            "Content-Type": "application/json",
+        },
+    )
+    context = ssl._create_unverified_context()
+    try:
+        with urllib.request.urlopen(req, context=context, timeout=20) as response:
+            body = response.read().decode("utf-8", errors="ignore")
+            return int(response.getcode() or 0), body
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        return int(exc.code or 0), body
+
+
+def _extract_con_code(value: object) -> str:
+    text = str(value or "").strip().upper()
+    match = re.search(r"\bCON\d{7}\b", text)
+    return match.group(0) if match else ""
 
 
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
@@ -2286,6 +2395,221 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         )
     )
     return sorted_sections, row_count
+
+
+def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    raw_sections, _ = _manufacturing_document_sections(
+        bundle,
+        production_number,
+        ("pantolo",),
+        include_source_prefix=False,
+    )
+
+    def clean_text(value: object) -> str:
+        return str(value or "").strip()
+
+    def folded(value: object) -> str:
+        text = clean_text(value).lower()
+        for source, target in (
+            ("á", "a"),
+            ("é", "e"),
+            ("í", "i"),
+            ("ó", "o"),
+            ("ö", "o"),
+            ("ő", "o"),
+            ("ú", "u"),
+            ("ü", "u"),
+            ("ű", "u"),
+            ("õ", "o"),
+            ("û", "u"),
+        ):
+            text = text.replace(source, target)
+        return text
+
+    opening_tokens = {
+        "bal": "Bal",
+        "balos": "Balos",
+        "jobb": "Jobb",
+        "jobbos": "Jobbos",
+        "felnyilo": "Felnyíló",
+        "felnyíló": "Felnyíló",
+    }
+
+    def parse_front_type(detail_text: object) -> tuple[str, list[str]]:
+        detail = clean_text(detail_text)
+        parts = [clean_text(part) for part in detail.split("·") if clean_text(part)]
+        front_type = ""
+        if parts and folded(parts[0]).startswith("front tipus:"):
+            front_type = clean_text(parts[0].split(":", 1)[1] if ":" in parts[0] else parts[0].replace("Front tipus", ""))
+            parts = parts[1:]
+        return front_type or "-", parts
+
+    drill_tokens = {"furva", "fúrva", "nincs"}
+
+    def parse_tail_fields(parts: list[str]) -> tuple[str, str, str, str]:
+        if not parts:
+            return "-", "-", "-", "-"
+        tail_tokens: list[str] = []
+        for piece in parts:
+            tail_tokens.extend([token for token in clean_text(piece).split() if token])
+        tokens = tail_tokens
+        if not tokens:
+            return "-", "-", "-", "-"
+        drill = tokens[0]
+        remaining = tokens[1:]
+        if not remaining:
+            return drill, "-", "-", "-"
+        opening_index = -1
+        opening_label = "-"
+        for index, token in enumerate(remaining):
+            normalized = folded(token)
+            if normalized in opening_tokens:
+                opening_index = index
+                opening_label = opening_tokens[normalized]
+                break
+        if opening_index == -1:
+            lowered_remaining = [folded(token) for token in remaining]
+            separator_index = -1
+            for probe, token in enumerate(lowered_remaining):
+                if token == "nincs":
+                    separator_index = probe
+                    break
+            if separator_index != -1 and separator_index < len(remaining) - 1:
+                handle_type = clean_text(" ".join(remaining[:separator_index])) or "Nincs"
+                opening_value = "Nincs"
+                door_tail = clean_text(" ".join(remaining[separator_index + 1 :])) or "Nincs"
+                if folded(door_tail).startswith("nincs "):
+                    door_tail = clean_text(door_tail.split(" ", 1)[1]) or "Nincs"
+                return drill, handle_type, opening_value, door_tail
+            if len(remaining) >= 3 and lowered_remaining[0] == "nincs" and lowered_remaining[1] == "nincs":
+                handle_type = "Nincs"
+                opening_value = "Nincs"
+                door_tail = clean_text(" ".join(remaining[2:])) or "Nincs"
+                if lowered_remaining[2] == "nincs" and len(remaining) > 3:
+                    door_tail = clean_text(" ".join(remaining[3:])) or "Nincs"
+                if folded(door_tail).startswith("nincs "):
+                    door_tail = clean_text(door_tail.split(" ", 1)[1]) or "Nincs"
+                return drill, handle_type, opening_value, door_tail
+            handle_type = clean_text(" ".join(remaining)) or "-"
+            return drill, handle_type, "-", "-"
+        handle_type = clean_text(" ".join(remaining[:opening_index])) or "-"
+        door_type = clean_text(" ".join(remaining[opening_index + 1 :])) or "-"
+        return drill, handle_type, opening_label, door_type
+
+    grouped_sections: dict[str, dict] = {}
+    grouped_order: list[str] = []
+    row_count = 0
+
+    for section in raw_sections:
+        for raw_row in section.get("rows", []):
+            if not isinstance(raw_row, dict):
+                continue
+            row = dict(raw_row)
+            color = clean_text(row.get("color")) or "-"
+            model_label = clean_text(row.get("name")) or "-"
+            size_label = clean_text(row.get("size")) or "-"
+            quantity_value = int(row.get("quantity") or 0)
+            front_type, tail_parts = parse_front_type(row.get("detail"))
+            first_tail = clean_text(tail_parts[0]) if tail_parts else ""
+            first_tail_token = clean_text(first_tail.split(" ", 1)[0]) if first_tail else ""
+            if folded(first_tail_token) in drill_tokens:
+                pant_type = "Nincs"
+                tail_payload = tail_parts
+            else:
+                pant_type = first_tail or "Nincs"
+                tail_payload = tail_parts[1:] if len(tail_parts) > 1 else []
+            drill_label, handle_type, opening_dir, door_type = parse_tail_fields(tail_payload)
+            group_label = f"Front típus: {front_type} | {color} | {model_label}"
+            group_key = _manufacturing_local_slug(f"pantolo::{front_type}::{color}::{model_label}")
+            if group_key not in grouped_sections:
+                grouped_sections[group_key] = {
+                    "key": f"pantolo::{group_key}",
+                    "label": group_label,
+                    "rows": [],
+                    "columnLayout": "pantolo",
+                }
+                grouped_order.append(group_key)
+            row["name"] = color
+            row["detail"] = ""
+            row["modelLabel"] = model_label
+            row["color23"] = "-"
+            row["pantType"] = pant_type or "Nincs"
+            row["handleDrill"] = drill_label or "-"
+            row["handleType"] = handle_type or "-"
+            row["openingDir"] = opening_dir or "-"
+            row["doorType"] = door_type or "-"
+            row["meValue"] = quantity_value
+            row["columnLayout"] = "pantolo"
+            row["hideSubtitle"] = True
+            grouped_sections[group_key]["rows"].append(row)
+            row_count += quantity_value
+
+    sections = [grouped_sections[key] for key in grouped_order]
+    for section in sections:
+        rows = [row for row in section.get("rows", []) if isinstance(row, dict)]
+        pant_counts: dict[str, int] = {}
+        pant_rows_non_nincs: list[dict] = []
+        for row in rows:
+            pant_value = clean_text(row.get("pantType"))
+            if not pant_value or pant_value == "-":
+                continue
+            pant_counts[pant_value] = pant_counts.get(pant_value, 0) + 1
+            if folded(pant_value) != "nincs":
+                pant_rows_non_nincs.append(row)
+        if not pant_counts:
+            for row in rows:
+                row["pantType"] = "Nincs"
+            continue
+
+        def infer_pant_type(target_row: dict) -> str | None:
+            if not pant_rows_non_nincs:
+                return None
+            scored: list[tuple[int, str]] = []
+            for candidate_row in pant_rows_non_nincs:
+                candidate_pant = clean_text(candidate_row.get("pantType"))
+                if not candidate_pant:
+                    continue
+                score = 0
+                if clean_text(candidate_row.get("openingDir")) == clean_text(target_row.get("openingDir")):
+                    score += 3
+                if clean_text(candidate_row.get("doorType")) == clean_text(target_row.get("doorType")):
+                    score += 3
+                if clean_text(candidate_row.get("handleType")) == clean_text(target_row.get("handleType")):
+                    score += 2
+                if clean_text(candidate_row.get("handleDrill")) == clean_text(target_row.get("handleDrill")):
+                    score += 1
+                if clean_text(candidate_row.get("size")) == clean_text(target_row.get("size")):
+                    score += 1
+                scored.append((score, candidate_pant))
+            if not scored:
+                return None
+            scored.sort(reverse=True)
+            best_score = scored[0][0]
+            if best_score <= 0:
+                unique_pants = sorted({pant for _score, pant in scored})
+                return unique_pants[0] if len(unique_pants) == 1 else None
+            best_pants = sorted({pant for score, pant in scored if score == best_score})
+            if len(best_pants) != 1:
+                return None
+            inferred = best_pants[0]
+            target_opening = folded(clean_text(target_row.get("openingDir")))
+            # Ne keverjük: Felnyíló soroknál a hiányzó pánttípus tipikusan "Ráüt.",
+            # nem "Ráüt.tip.".
+            if target_opening == "felnyilo" and folded(inferred).startswith("raut.tip"):
+                return "Ráüt."
+            return inferred
+
+        # Csak egyértelmű esetben pótolunk, hogy a "Ráüt." és "Ráüt.tip." ne keveredjen.
+        for row in rows:
+            pant_value = clean_text(row.get("pantType"))
+            if not pant_value or pant_value == "-" or folded(pant_value) == "nincs":
+                inferred_pant = infer_pant_type(row)
+                if inferred_pant:
+                    row["pantType"] = inferred_pant
+                elif not pant_value or pant_value == "-":
+                    row["pantType"] = "Nincs"
+
+    return sections, row_count
 
 
 def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict]]:
@@ -4491,6 +4815,7 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
                 },
                 all_red_view,
             ],
+            "hideBarcodeColumn": True,
         }
     )
 
@@ -4540,7 +4865,26 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
         }
     )
 
-    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS[3:]:
+    pantolo_sections, pantolo_row_count = _manufacturing_pantolo_sections(raw_bundle, current_number)
+    documents.append(
+        {
+            "key": "pantolas",
+            "label": "Pántolás",
+            "file_name": "",
+            "sections": pantolo_sections,
+            "row_count": pantolo_row_count,
+            "placeholderMessage": "A kiválasztott gyártásban nem találtam használható Pántoló sort.",
+            "specialViews": [],
+            "hideBarcodeColumn": True,
+            "allowSplit": False,
+            "singleColumnOverview": True,
+        }
+    )
+
+    existing_keys = {str(document.get("key", "")).strip() for document in documents}
+    for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS:
+        if operation_key in existing_keys:
+            continue
         documents.append(_manufacturing_placeholder_document(operation_key, operation_label))
 
     return (
@@ -12509,6 +12853,7 @@ def render_manufacturing_module(
         route=MANUFACTURING_ROUTE,
         state_route=MANUFACTURING_STATE_ROUTE,
         partial_qty_route=MANUFACTURING_PARTIAL_QTY_ROUTE,
+        report_ready_route=MANUFACTURING_REPORT_READY_ROUTE,
         selected_number=selected_number,
         operations=operations,
         selected_operation=selected_operation,
@@ -21769,6 +22114,22 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 for candidate_row_id in [row_id, *extra_row_ids]:
                     if candidate_row_id and candidate_row_id not in target_row_ids:
                         target_row_ids.append(candidate_row_id)
+                current_saved_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, production_number)
+                locked_done_row_ids = [
+                    target_row_id
+                    for target_row_id in target_row_ids
+                    if str(current_saved_state.get(target_row_id, "")).strip().lower() == "done"
+                ]
+                if locked_done_row_ids:
+                    self.respond_json(
+                        409,
+                        {
+                            "ok": False,
+                            "error": "A készre jelentett sor már nem módosítható.",
+                            "row_ids": locked_done_row_ids,
+                        },
+                    )
+                    return
                 current_state: dict[str, str] = {}
                 for target_row_id in target_row_ids:
                     current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_row_id, state)
@@ -21829,6 +22190,109 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "production_number": production_number,
                     "state_key": state_key,
                     "value": current_state.get(state_key, ""),
+                },
+            )
+            return
+
+        if path == MANUFACTURING_REPORT_READY_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+
+            production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
+            raw_entries = payload.get("entries")
+            if not production_number:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártási szám."})
+                return
+            if not isinstance(raw_entries, list) or not raw_entries:
+                self.respond_json(400, {"ok": False, "error": "Nincs készre jelentendő zöld tétel."})
+                return
+
+            entries: list[dict] = []
+            for item in raw_entries:
+                if not isinstance(item, dict):
+                    continue
+                row_id = str(item.get("row_id", "")).strip()
+                state_key = str(item.get("state_key", "")).strip()
+                code = _extract_con_code(item.get("code", ""))
+                source_row_ids = (
+                    [str(value).strip() for value in item.get("source_row_ids", []) if str(value).strip()]
+                    if isinstance(item.get("source_row_ids"), list)
+                    else []
+                )
+                if not row_id or not state_key or not code:
+                    continue
+                entries.append(
+                    {
+                        "row_id": row_id,
+                        "state_key": state_key,
+                        "code": code,
+                        "source_row_ids": source_row_ids,
+                    }
+                )
+            if not entries:
+                self.respond_json(400, {"ok": False, "error": "Nem találtam érvényes CON kódot a zöld sorokban."})
+                return
+
+            codes = sorted({str(entry.get("code", "")).strip().upper() for entry in entries if entry.get("code")})
+            failures: list[dict[str, str | int]] = []
+            success_codes: set[str] = set()
+            for code in codes:
+                try:
+                    status_code, response_body = _shopfloor_report_con_ready(code)
+                except Exception as exc:
+                    failures.append({"code": code, "status": 0, "error": str(exc)})
+                    continue
+                if int(status_code) == 200:
+                    success_codes.add(code)
+                else:
+                    failures.append(
+                        {
+                            "code": code,
+                            "status": int(status_code),
+                            "error": str(response_body or "").strip()[:300],
+                        }
+                    )
+
+            done_row_ids: list[str] = []
+            skipped_row_ids: list[str] = []
+            try:
+                for entry in entries:
+                    entry_code = str(entry.get("code", "")).strip().upper()
+                    target_ids = [
+                        str(entry.get("row_id", "")).strip(),
+                        *[str(value).strip() for value in entry.get("source_row_ids", []) if str(value).strip()],
+                    ]
+                    unique_target_ids: list[str] = []
+                    for target_id in target_ids:
+                        if target_id and target_id not in unique_target_ids:
+                            unique_target_ids.append(target_id)
+                    if entry_code not in success_codes:
+                        skipped_row_ids.extend(unique_target_ids)
+                        continue
+                    for target_id in unique_target_ids:
+                        save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_id, "done")
+                        done_row_ids.append(target_id)
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A kész állapot mentése nem sikerült: {exc}"})
+                return
+
+            unique_done_ids = sorted(set(done_row_ids))
+            unique_skipped_ids = sorted(set(skipped_row_ids))
+            ok = not failures
+            self.respond_json(
+                200 if ok else 207,
+                {
+                    "ok": ok,
+                    "production_number": production_number,
+                    "reported_codes": sorted(success_codes),
+                    "failed": failures,
+                    "done_row_ids": unique_done_ids,
+                    "skipped_row_ids": unique_skipped_ids,
                 },
             )
             return
