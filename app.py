@@ -987,7 +987,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 120.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 10.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-16-pantolo-v15"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-16-alkatresz-unicode-v16"
 
 
 def _dev_reload_token() -> str:
@@ -2118,8 +2118,8 @@ def _shopfloor_report_con_ready(con_code: str) -> tuple[int, str]:
 
 def _extract_con_code(value: object) -> str:
     text = str(value or "").strip().upper()
-    match = re.search(r"\bCON\d{7}\b", text)
-    return match.group(0) if match else ""
+    match = re.search(r"\bCON\D*?(\d{6,})\b", text)
+    return f"CON{match.group(1)}" if match else ""
 
 
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:

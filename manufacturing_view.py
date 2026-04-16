@@ -3088,8 +3088,8 @@ def render_manufacturing_page(
 
         const extractConCode = (row) => {{
           const joined = [row?.code, row?.detail, row?.row_id].map((value) => String(value || "")).join(" ");
-          const match = joined.toUpperCase().match(/\\bCON\\d{{7}}\\b/);
-          return match ? match[0] : "";
+          const match = joined.toUpperCase().match(/\\bCON\\D*?(\\d{{6,}})\\b/);
+          return match ? `CON${{match[1]}}` : "";
         }};
         const entries = visibleRows
           .map((row) => {{

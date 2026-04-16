@@ -366,11 +366,21 @@ def _looks_like_edge(token: str) -> bool:
 
 
 def _is_final_code(token: str) -> bool:
-    return re.fullmatch(r"CON\d{6,}", token) is not None
+    clean = _clean_text(token).upper()
+    return re.fullmatch(r"(?:CON)?\d{6,}", clean) is not None
+
+
+def _normalize_final_code(token: str) -> str:
+    clean = _clean_text(token).upper()
+    match = re.fullmatch(r"(?:CON)?(\d{6,})", clean)
+    if not match:
+        return clean
+    return f"CON{match.group(1)}"
 
 
 def _looks_like_code_fragment(token: str) -> bool:
-    if not re.fullmatch(r"[A-Za-z0-9_/-]+", token):
+    # Accept Unicode letters too (e.g. FÜF), not only ASCII.
+    if not re.fullmatch(r"[\w/-]+", token, flags=re.UNICODE):
         return False
     return "_" in token or any(character.isalpha() for character in token)
 
@@ -428,7 +438,7 @@ def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number:
             token = tokens[index]
             index += 1
             if _is_final_code(token):
-                code = token
+                code = _normalize_final_code(token)
                 break
 
         row_index += 1
@@ -523,7 +533,7 @@ def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[Manufactu
     for segment in segments:
         if len(segment) < 8:
             continue
-        intake_code = segment[-1]
+        intake_code = _normalize_final_code(segment[-1])
         quantity_index = -1
         edge_index = -1
         for index in range(len(segment) - 2, -1, -1):
@@ -708,7 +718,7 @@ def _parse_front_rows(
         ]
         if len(cleaned_segment) < 8:
             continue
-        code = next((token for token in reversed(cleaned_segment) if _is_final_code(token)), "")
+        code = next((_normalize_final_code(token) for token in reversed(cleaned_segment) if _is_final_code(token)), "")
         if not code:
             continue
         code_index = cleaned_segment.index(code)
