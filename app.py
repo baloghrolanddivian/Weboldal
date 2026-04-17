@@ -983,11 +983,13 @@ DIVIAN_AI_PRIME_LOCK = threading.Lock()
 DIVIAN_AI_PRIME_STARTED = False
 MANUFACTURING_BUNDLE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
-MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 120.0
-MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 10.0
+MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
+MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-16-alkatresz-unicode-v16"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-17-pantolo-parse-v28"
+MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
+MANUFACTURING_PRIME_SYNC_ON_START = False
 
 
 def _dev_reload_token() -> str:
@@ -2000,6 +2002,77 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
     return dict(bundle)
 
 
+def _manufacturing_collect_document_state_keys(document: dict) -> tuple[str, ...]:
+    sections_for_completion: list[dict] = []
+    if bool(document.get("singleColumnOverview")):
+        for special_view in document.get("specialViews", []):
+            if not isinstance(special_view, dict):
+                continue
+            for section in special_view.get("sections", []):
+                if isinstance(section, dict):
+                    sections_for_completion.append(section)
+    if not sections_for_completion:
+        sections_for_completion = [section for section in document.get("sections", []) if isinstance(section, dict)]
+
+    row_state_keys: list[str] = []
+    for section in sections_for_completion:
+        if not isinstance(section, dict):
+            continue
+        for row in section.get("rows", []):
+            if not isinstance(row, dict):
+                continue
+            row_state_key = str(row.get("state_key", "")).strip() or str(row.get("row_id", "")).strip()
+            if row_state_key:
+                row_state_keys.append(row_state_key)
+    return tuple(sorted(set(row_state_keys)))
+
+
+def _manufacturing_operation_state_keys(production_number: str, operation_key: str) -> tuple[str, ...]:
+    normalized_number = _manufacturing_normalize_number(production_number)
+    normalized_operation = _manufacturing_normalize_operation(operation_key)
+    if not normalized_number or not normalized_operation:
+        return tuple()
+
+    _normalized_for_signature, signature = _manufacturing_bundle_signature(normalized_number)
+    signature_key = _manufacturing_signature_key(signature)
+    cache_key = (normalized_number, normalized_operation)
+    now = time.time()
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        cached = MANUFACTURING_OPERATION_STATE_KEYS_CACHE.get(cache_key)
+        if (
+            cached
+            and cached.get("parser_version") == MANUFACTURING_BUNDLE_SCHEMA_VERSION
+            and str(cached.get("signature_key", "")) == signature_key
+            and (now - float(cached.get("created_at", 0.0) or 0.0)) < MANUFACTURING_BUNDLE_FAST_TTL_SECONDS
+        ):
+            return tuple(cached.get("state_keys", tuple()))
+
+    raw_bundle = _load_manufacturing_bundle_cached(normalized_number)
+    view_bundle, _view_state = _manufacturing_view_bundle(
+        raw_bundle,
+        normalized_number,
+        {},
+        include_all_red_view=False,
+    )
+    target_document: dict | None = next(
+        (
+            document
+            for document in view_bundle.get("documents", [])
+            if isinstance(document, dict) and str(document.get("key", "")).strip() == normalized_operation
+        ),
+        None,
+    )
+    state_keys = _manufacturing_collect_document_state_keys(target_document) if isinstance(target_document, dict) else tuple()
+    with MANUFACTURING_BUNDLE_CACHE_LOCK:
+        MANUFACTURING_OPERATION_STATE_KEYS_CACHE[cache_key] = {
+            "created_at": now,
+            "parser_version": MANUFACTURING_BUNDLE_SCHEMA_VERSION,
+            "signature_key": signature_key,
+            "state_keys": state_keys,
+        }
+    return state_keys
+
+
 MANUFACTURING_OPERATION_DEFINITIONS = (
     ("korpusz_osszekeszites", "Korpusz összekészítés"),
     ("front_osszekeszites", "Front összekészítés"),
@@ -2431,9 +2504,88 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         "balos": "Balos",
         "jobb": "Jobb",
         "jobbos": "Jobbos",
+        "nincs": "Nincs",
         "felnyilo": "Felnyíló",
         "felnyíló": "Felnyíló",
     }
+
+    def normalize_token(token: object) -> str:
+        return folded(str(token or "").strip().strip(".,;:|/_-()[]{}"))
+
+    def is_nincs_token(token: object) -> bool:
+        return normalize_token(token) == "nincs"
+
+    def normalize_nincs_text(value: object) -> str:
+        text = clean_text(value)
+        if not text:
+            return ""
+        tokens = [clean_text(part) for part in text.split() if clean_text(part)]
+        if not tokens:
+            return ""
+        if all(is_nincs_token(part) for part in tokens):
+            return "Nincs"
+        if len(tokens) >= 2 and is_nincs_token(tokens[0]) and is_nincs_token(tokens[1]):
+            tail = " ".join(tokens[2:]).strip()
+            return f"Nincs {tail}".strip()
+        return text
+
+    def strip_leading_nincs(value: object) -> str:
+        text = normalize_nincs_text(value)
+        while text and normalize_token(text.split(" ", 1)[0]) == "nincs" and " " in text:
+            text = clean_text(text.split(" ", 1)[1])
+        return text or "Nincs"
+
+    def normalize_pant_label(value: object) -> str:
+        label = clean_text(value)
+        if not label:
+            return "Nincs"
+        folded_label = folded(label)
+        folded_compact = re.sub(r"\s+", " ", folded_label).strip()
+        if folded_compact in {"raut", "raut.", "ráüt", "ráüt."}:
+            return "Ráüt."
+        if folded_compact.startswith("raut.tip") or folded_compact.startswith("ráüt.tip"):
+            return "Ráüt.tip."
+        if folded_compact.startswith("csill. raut. 165") or folded_compact.startswith("csill. ráüt. 165"):
+            return "Csill. ráüt. 165°-os klipp"
+        if folded_compact.startswith("csill.raut.165") or folded_compact.startswith("csill.ráüt.165"):
+            return "Csill. ráüt. 165°-os klipp"
+        if folded_compact.startswith("csill.raut") or folded_compact.startswith("csill.ráüt"):
+            return "Csill.ráüt."
+        if folded_compact.startswith("raut.csill. 3d-s") or folded_compact.startswith("ráüt.csill. 3d-s"):
+            return "Ráüt.csill. 3D-s"
+        return label
+
+    def canonical_pantolo_color(value: object) -> tuple[str, bool]:
+        raw = re.sub(r"\s+", " ", clean_text(value)).strip()
+        if not raw:
+            return "-", False
+        tokens = [clean_text(part) for part in raw.split() if clean_text(part)]
+        if not tokens:
+            return "-", False
+        had_hutos = False
+        filtered: list[str] = []
+        for token in tokens:
+            if normalize_token(token) == "hutos":
+                had_hutos = True
+                continue
+            filtered.append(token)
+        final_text = re.sub(r"\s+", " ", " ".join(filtered)).strip() or raw
+        return final_text, had_hutos
+
+    def normalize_handle_type(drill_value: object, handle_value: object) -> str:
+        handle = normalize_nincs_text(handle_value)
+        if not handle:
+            return "-"
+        drill_norm = normalize_token(drill_value)
+        parts = [clean_text(part) for part in handle.split() if clean_text(part)]
+        if not parts:
+            return "-"
+        # OCR/parse csúszás esetén: "Fúrva Szabina fekete" ne maradjon a fogantyú típus elején,
+        # ha a furat oszlop már "Nincs".
+        if drill_norm == "nincs":
+            while parts and normalize_token(parts[0]) in {"furva", "nincs"}:
+                parts = parts[1:]
+        return " ".join(parts).strip() or "Nincs"
 
     def parse_front_type(detail_text: object) -> tuple[str, list[str]]:
         detail = clean_text(detail_text)
@@ -2455,45 +2607,54 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         tokens = tail_tokens
         if not tokens:
             return "-", "-", "-", "-"
-        drill = tokens[0]
-        remaining = tokens[1:]
+        lowered = [normalize_token(token) for token in tokens]
+
+        drill_index = -1
+        for probe in range(min(len(tokens), 4)):
+            if lowered[probe] in drill_tokens:
+                drill_index = probe
+                break
+        if drill_index == -1:
+            for probe, token in enumerate(lowered):
+                if token in drill_tokens:
+                    drill_index = probe
+                    break
+
+        drill = "-"
+        remaining: list[str]
+        if drill_index == -1:
+            remaining = tokens
+        else:
+            drill_norm = lowered[drill_index]
+            drill = "Fúrva" if drill_norm == "furva" else "Nincs"
+            remaining = tokens[drill_index + 1 :]
+
         if not remaining:
             return drill, "-", "-", "-"
+
         opening_index = -1
         opening_label = "-"
         for index, token in enumerate(remaining):
-            normalized = folded(token)
+            normalized = normalize_token(token)
             if normalized in opening_tokens:
                 opening_index = index
                 opening_label = opening_tokens[normalized]
                 break
+
         if opening_index == -1:
-            lowered_remaining = [folded(token) for token in remaining]
-            separator_index = -1
-            for probe, token in enumerate(lowered_remaining):
-                if token == "nincs":
-                    separator_index = probe
-                    break
-            if separator_index != -1 and separator_index < len(remaining) - 1:
-                handle_type = clean_text(" ".join(remaining[:separator_index])) or "Nincs"
-                opening_value = "Nincs"
-                door_tail = clean_text(" ".join(remaining[separator_index + 1 :])) or "Nincs"
-                if folded(door_tail).startswith("nincs "):
-                    door_tail = clean_text(door_tail.split(" ", 1)[1]) or "Nincs"
-                return drill, handle_type, opening_value, door_tail
-            if len(remaining) >= 3 and lowered_remaining[0] == "nincs" and lowered_remaining[1] == "nincs":
-                handle_type = "Nincs"
-                opening_value = "Nincs"
-                door_tail = clean_text(" ".join(remaining[2:])) or "Nincs"
-                if lowered_remaining[2] == "nincs" and len(remaining) > 3:
-                    door_tail = clean_text(" ".join(remaining[3:])) or "Nincs"
-                if folded(door_tail).startswith("nincs "):
-                    door_tail = clean_text(door_tail.split(" ", 1)[1]) or "Nincs"
-                return drill, handle_type, opening_value, door_tail
-            handle_type = clean_text(" ".join(remaining)) or "-"
+            handle_type = normalize_handle_type(drill, " ".join(remaining)) or "-"
+            if normalize_token(handle_type) == "nincs":
+                return drill, "Nincs", "Nincs", "Nincs"
             return drill, handle_type, "-", "-"
-        handle_type = clean_text(" ".join(remaining[:opening_index])) or "-"
-        door_type = clean_text(" ".join(remaining[opening_index + 1 :])) or "-"
+
+        handle_type = normalize_handle_type(drill, " ".join(remaining[:opening_index])) or "-"
+        door_type = normalize_nincs_text(" ".join(remaining[opening_index + 1 :])) or "-"
+        if door_type and normalize_token(door_type.split(" ", 1)[0]) == "nincs" and " " in door_type:
+            door_type = clean_text(door_type.split(" ", 1)[1]) or "Nincs"
+        if normalize_token(door_type) == "nincs":
+            door_type = "Nincs"
+        if handle_type == "Nincs Nincs":
+            handle_type = "Nincs"
         return drill, handle_type, opening_label, door_type
 
     grouped_sections: dict[str, dict] = {}
@@ -2505,18 +2666,43 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             if not isinstance(raw_row, dict):
                 continue
             row = dict(raw_row)
-            color = clean_text(row.get("color")) or "-"
+            color, _had_hutos_in_color = canonical_pantolo_color(row.get("color"))
             model_label = clean_text(row.get("name")) or "-"
             size_label = clean_text(row.get("size")) or "-"
             quantity_value = int(row.get("quantity") or 0)
             front_type, tail_parts = parse_front_type(row.get("detail"))
             first_tail = clean_text(tail_parts[0]) if tail_parts else ""
             first_tail_token = clean_text(first_tail.split(" ", 1)[0]) if first_tail else ""
-            if folded(first_tail_token) in drill_tokens:
-                pant_type = "Nincs"
-                tail_payload = tail_parts
+            first_tail_norm = normalize_token(first_tail_token)
+            if first_tail_norm in drill_tokens:
+                if first_tail_norm == "nincs":
+                    # "Nincs · Fúrva ..." mintánál az első "Nincs" a pánt oszlophoz tartozik,
+                    # a furatot a következő rész adja.
+                    next_token_norm = ""
+                    if len(tail_parts) > 1:
+                        next_token = clean_text(tail_parts[1]).split(" ", 1)[0]
+                        next_token_norm = normalize_token(next_token)
+                    if next_token_norm in drill_tokens:
+                        pant_type = "Nincs"
+                        row["_pantolo_explicit_nincs"] = True
+                        row["_pantolo_missing_pant"] = False
+                        tail_payload = tail_parts[1:]
+                    else:
+                        pant_type = "Nincs"
+                        row["_pantolo_explicit_nincs"] = True
+                        row["_pantolo_missing_pant"] = False
+                        tail_payload = tail_parts
+                else:
+                    # Ha "Fúrva"-val indul a sor, tipikusan hiányzik a pánttoken (parser törés),
+                    # ezt inferenciával pótoljuk később.
+                    pant_type = "-"
+                    row["_pantolo_explicit_nincs"] = False
+                    row["_pantolo_missing_pant"] = True
+                    tail_payload = tail_parts
             else:
                 pant_type = first_tail or "Nincs"
+                row["_pantolo_explicit_nincs"] = False
+                row["_pantolo_missing_pant"] = False
                 tail_payload = tail_parts[1:] if len(tail_parts) > 1 else []
             drill_label, handle_type, opening_dir, door_type = parse_tail_fields(tail_payload)
             group_label = f"Front típus: {front_type} | {color} | {model_label}"
@@ -2533,7 +2719,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             row["detail"] = ""
             row["modelLabel"] = model_label
             row["color23"] = "-"
-            row["pantType"] = pant_type or "Nincs"
+            row["pantType"] = normalize_pant_label(pant_type or "Nincs")
             row["handleDrill"] = drill_label or "-"
             row["handleType"] = handle_type or "-"
             row["openingDir"] = opening_dir or "-"
@@ -2545,6 +2731,52 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             row_count += quantity_value
 
     sections = [grouped_sections[key] for key in grouped_order]
+    all_pantolo_rows = [row for section in sections for row in section.get("rows", []) if isinstance(row, dict)]
+
+    def canonical_pantolo_door(value: object) -> str:
+        text = folded(clean_text(value))
+        compact = re.sub(r"[^a-z0-9]+", "", text)
+        if "sar" in text and "fel" in text:
+            return "sarok_felso"
+        if "sar" in text and "als" in text:
+            return "sarok_also"
+        if "felso" in compact and "uv" in compact:
+            return "felso_uv"
+        return compact or "-"
+
+    def infer_pant_from_global_context(target_row: dict) -> str | None:
+        if bool(target_row.get("_pantolo_explicit_nincs")):
+            return None
+        current_pant = folded(clean_text(target_row.get("pantType")))
+        if current_pant not in {"", "-"}:
+            return None
+        if folded(clean_text(target_row.get("handleDrill"))) != "furva":
+            return None
+
+        target_size = clean_text(target_row.get("size"))
+        target_opening = folded(clean_text(target_row.get("openingDir")))
+        target_door = canonical_pantolo_door(target_row.get("doorType"))
+        if not target_size or not target_opening or target_opening in {"-", "nincs"}:
+            return None
+
+        candidate_pants: set[str] = set()
+        for row in all_pantolo_rows:
+            if row is target_row:
+                continue
+            pant = clean_text(row.get("pantType"))
+            if not pant or folded(pant) in {"-", "nincs"}:
+                continue
+            if clean_text(row.get("size")) != target_size:
+                continue
+            if folded(clean_text(row.get("openingDir"))) != target_opening:
+                continue
+            if canonical_pantolo_door(row.get("doorType")) != target_door:
+                continue
+            candidate_pants.add(pant)
+        if len(candidate_pants) == 1:
+            return next(iter(candidate_pants))
+        return None
+
     for section in sections:
         rows = [row for row in section.get("rows", []) if isinstance(row, dict)]
         pant_counts: dict[str, int] = {}
@@ -2564,31 +2796,29 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         def infer_pant_type(target_row: dict) -> str | None:
             if not pant_rows_non_nincs:
                 return None
-            scored: list[tuple[int, str]] = []
+            scored: list[tuple[tuple[int, int, int, int, int], str]] = []
             for candidate_row in pant_rows_non_nincs:
                 candidate_pant = clean_text(candidate_row.get("pantType"))
                 if not candidate_pant:
                     continue
-                score = 0
-                if clean_text(candidate_row.get("openingDir")) == clean_text(target_row.get("openingDir")):
-                    score += 3
-                if clean_text(candidate_row.get("doorType")) == clean_text(target_row.get("doorType")):
-                    score += 3
-                if clean_text(candidate_row.get("handleType")) == clean_text(target_row.get("handleType")):
-                    score += 2
-                if clean_text(candidate_row.get("handleDrill")) == clean_text(target_row.get("handleDrill")):
-                    score += 1
-                if clean_text(candidate_row.get("size")) == clean_text(target_row.get("size")):
-                    score += 1
-                scored.append((score, candidate_pant))
+                # Prioritás: fogantyú típus + fogantyú furat > nyitás irány > ajtó típus > méret.
+                # Ez stabilabb azokra az első sorokra, ahol a pánt mező hiányos a PDF-ből.
+                feature_score = (
+                    int(clean_text(candidate_row.get("handleType")) == clean_text(target_row.get("handleType"))),
+                    int(clean_text(candidate_row.get("handleDrill")) == clean_text(target_row.get("handleDrill"))),
+                    int(clean_text(candidate_row.get("openingDir")) == clean_text(target_row.get("openingDir"))),
+                    int(clean_text(candidate_row.get("doorType")) == clean_text(target_row.get("doorType"))),
+                    int(clean_text(candidate_row.get("size")) == clean_text(target_row.get("size"))),
+                )
+                scored.append((feature_score, candidate_pant))
             if not scored:
                 return None
             scored.sort(reverse=True)
             best_score = scored[0][0]
-            if best_score <= 0:
-                unique_pants = sorted({pant for _score, pant in scored})
+            if best_score <= (0, 0, 0, 0, 0):
+                unique_pants = sorted({pant for _feature_score, pant in scored})
                 return unique_pants[0] if len(unique_pants) == 1 else None
-            best_pants = sorted({pant for score, pant in scored if score == best_score})
+            best_pants = sorted({pant for feature_score, pant in scored if feature_score == best_score})
             if len(best_pants) != 1:
                 return None
             inferred = best_pants[0]
@@ -2599,15 +2829,192 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 return "Ráüt."
             return inferred
 
+        def dominant_section_pant() -> str | None:
+            counts: dict[str, int] = {}
+            for row in pant_rows_non_nincs:
+                pant = clean_text(row.get("pantType"))
+                if not pant:
+                    continue
+                counts[pant] = counts.get(pant, 0) + 1
+            if not counts:
+                return None
+            ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+            if len(ordered) == 1:
+                return ordered[0][0]
+            # Csak markáns többségnél használjuk fallbackként.
+            if ordered[0][1] >= ordered[1][1] + 2:
+                return ordered[0][0]
+            return None
+
+        dominant_pant = dominant_section_pant()
+
+        def can_use_dominant_for_missing(target_row: dict) -> bool:
+            opening = folded(clean_text(target_row.get("openingDir")))
+            door_key = canonical_pantolo_door(target_row.get("doorType"))
+            if opening in {"felnyilo", "nincs", "-"}:
+                return False
+            # Ezeknél gyakori az eltérő pánt (vagy explicit Nincs), ezért itt nem domináns-tippelünk.
+            if door_key in {"sarok_felso", "sarok_also", "fsl", "felso_uv", "-"}:
+                return False
+            return True
+
+        def infer_pant_type_strict_first_row(target_row: dict, row_index: int) -> str | None:
+            # Csak az első sorra: 3-lépcsős kontroll, hogy ne maradjon hibás "Nincs".
+            if row_index != 0:
+                return None
+            if not pant_rows_non_nincs:
+                return None
+            current_pant = clean_text(target_row.get("pantType"))
+            current_drill = clean_text(target_row.get("handleDrill"))
+            if folded(current_pant) not in {"nincs", "-"}:
+                return None
+            if folded(current_drill) != "furva":
+                return None
+
+            def row_pant(candidate: dict) -> str:
+                return clean_text(candidate.get("pantType"))
+
+            def non_nincs(candidate: dict) -> bool:
+                pant = row_pant(candidate)
+                return bool(pant and folded(pant) not in {"nincs", "-"})
+
+            candidates = [candidate for candidate in rows if isinstance(candidate, dict) and candidate is not target_row and non_nincs(candidate)]
+            if not candidates:
+                return None
+
+            # 1) Erős egyezés: fogantyú típus + furat + nyitás + ajtó típus
+            strict = [
+                candidate
+                for candidate in candidates
+                if clean_text(candidate.get("handleType")) == clean_text(target_row.get("handleType"))
+                and clean_text(candidate.get("handleDrill")) == clean_text(target_row.get("handleDrill"))
+                and clean_text(candidate.get("openingDir")) == clean_text(target_row.get("openingDir"))
+                and clean_text(candidate.get("doorType")) == clean_text(target_row.get("doorType"))
+            ]
+            strict_pants = sorted({row_pant(candidate) for candidate in strict if row_pant(candidate)})
+            if len(strict_pants) == 1:
+                return strict_pants[0]
+
+            # 2) Közepes egyezés: fogantyú típus + furat
+            medium = [
+                candidate
+                for candidate in candidates
+                if clean_text(candidate.get("handleType")) == clean_text(target_row.get("handleType"))
+                and clean_text(candidate.get("handleDrill")) == clean_text(target_row.get("handleDrill"))
+            ]
+            medium_pants = sorted({row_pant(candidate) for candidate in medium if row_pant(candidate)})
+            if len(medium_pants) == 1:
+                return medium_pants[0]
+
+            # 3) Közeli sorok többségi pántja (2-3 következő sorból)
+            nearby = []
+            for index, candidate in enumerate(rows):
+                if not isinstance(candidate, dict) or candidate is target_row or not non_nincs(candidate):
+                    continue
+                if index in {1, 2, 3}:
+                    nearby.append(candidate)
+            if nearby:
+                counts: dict[str, int] = {}
+                for candidate in nearby:
+                    pant = row_pant(candidate)
+                    if not pant:
+                        continue
+                    counts[pant] = counts.get(pant, 0) + 1
+                if counts:
+                    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+                    top_pant, top_count = ordered[0]
+                    if top_count >= 2 or len(ordered) == 1:
+                        return top_pant
+
+            return None
+
         # Csak egyértelmű esetben pótolunk, hogy a "Ráüt." és "Ráüt.tip." ne keveredjen.
-        for row in rows:
+        for row_index, row in enumerate(rows):
             pant_value = clean_text(row.get("pantType"))
-            if not pant_value or pant_value == "-" or folded(pant_value) == "nincs":
+            if not pant_value or pant_value == "-":
+                # Hiányzó pánt a forrásban (sor Fúrva-val indult): ne tippeljünk domináns pánttal.
+                # Csak egyértelmű globális minta alapján töltsük, különben maradjon Nincs.
+                if bool(row.get("_pantolo_missing_pant")):
+                    global_inferred = infer_pant_from_global_context(row)
+                    row["pantType"] = global_inferred if global_inferred else "Nincs"
+                    if row["pantType"] == "Nincs" and dominant_pant and can_use_dominant_for_missing(row):
+                        row["pantType"] = normalize_pant_label(dominant_pant)
+                    continue
+
+                global_inferred = infer_pant_from_global_context(row)
+                if global_inferred:
+                    row["pantType"] = global_inferred
+                    continue
+                strict_inferred = infer_pant_type_strict_first_row(row, row_index)
+                if strict_inferred:
+                    row["pantType"] = strict_inferred
+                    continue
                 inferred_pant = infer_pant_type(row)
                 if inferred_pant:
-                    row["pantType"] = inferred_pant
-                elif not pant_value or pant_value == "-":
+                    row["pantType"] = normalize_pant_label(inferred_pant)
+                elif dominant_pant and folded(clean_text(row.get("handleDrill"))) == "furva":
+                    row["pantType"] = normalize_pant_label(dominant_pant)
+                elif not bool(row.get("_pantolo_explicit_nincs")):
+                    # Hiányos parser-sor esetén ne állítsunk be hamis "Nincs"-et.
+                    row["pantType"] = "-"
+                else:
                     row["pantType"] = "Nincs"
+
+        # 2. passz: ahol a forrásban hiányzott a pánt (Fúrva-val indult a sor),
+        # globális mintából korrigáljuk, ha egyértelműen azonosítható.
+        for row in rows:
+            if not bool(row.get("_pantolo_missing_pant")):
+                continue
+            if folded(clean_text(row.get("handleDrill"))) != "furva":
+                continue
+            target_size = clean_text(row.get("size"))
+            target_opening = folded(clean_text(row.get("openingDir")))
+            target_door = canonical_pantolo_door(row.get("doorType"))
+            if not target_size or not target_opening or target_opening in {"-", "nincs"}:
+                continue
+
+            candidates: set[str] = set()
+            for candidate in all_pantolo_rows:
+                if candidate is row:
+                    continue
+                if bool(candidate.get("_pantolo_missing_pant")):
+                    continue
+                candidate_pant = clean_text(candidate.get("pantType"))
+                if not candidate_pant or folded(candidate_pant) in {"-", "nincs"}:
+                    continue
+                if clean_text(candidate.get("size")) != target_size:
+                    continue
+                if folded(clean_text(candidate.get("openingDir"))) != target_opening:
+                    continue
+                if canonical_pantolo_door(candidate.get("doorType")) != target_door:
+                    continue
+                candidates.add(candidate_pant)
+
+            if len(candidates) == 1:
+                row["pantType"] = normalize_pant_label(next(iter(candidates)))
+
+        # 3. passz (first-row korrekció): ha a box első sora hiányzó pántos
+        # és továbbra is Nincs/-, akkor vegye át a box első explicit pántját.
+        if rows:
+            first_row = rows[0]
+            first_pant = clean_text(first_row.get("pantType"))
+            first_missing = bool(first_row.get("_pantolo_missing_pant"))
+            first_drill = folded(clean_text(first_row.get("handleDrill")))
+            if first_missing and first_drill == "furva" and folded(first_pant) in {"nincs", "-", ""}:
+                replacement = None
+                for candidate in rows[1:]:
+                    candidate_pant = clean_text(candidate.get("pantType"))
+                    if candidate_pant and folded(candidate_pant) not in {"nincs", "-", ""}:
+                        replacement = candidate_pant
+                        break
+                if replacement:
+                    first_row["pantType"] = normalize_pant_label(replacement)
+
+        for row in rows:
+            if "_pantolo_explicit_nincs" in row:
+                row.pop("_pantolo_explicit_nincs", None)
+            if "_pantolo_missing_pant" in row:
+                row.pop("_pantolo_missing_pant", None)
 
     return sections, row_count
 
@@ -2933,6 +3340,16 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         text = clean_text(detail)
         if not text:
             return ""
+        side_text = clean_text(side_type)
+        hardware_text = clean_text(hardware_type)
+        if side_text and hardware_text and side_text != "-" and hardware_text != "-":
+            # Remove helper fragments like: "Sarok felső 1H2R 13 N"
+            text = re.sub(
+                rf"{re.escape(side_text)}\s+\S+\s+\d{{1,3}}\s+{re.escape(hardware_text)}\b",
+                "",
+                text,
+                flags=re.IGNORECASE,
+            )
         text = re.sub(
             r"Fels[őo] oldal\s+1H(?:2R)?\s+360 x (?:330|550) x 18.*?(?=(?:Fels[őo] oldal\s+1H(?:2R)?\s+360 x (?:330|550) x 18)|$)",
             "",
@@ -2940,8 +3357,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             flags=re.IGNORECASE,
         )
         text = clean_text(text)
-        side_text = clean_text(side_type)
-        hardware_text = clean_text(hardware_type)
         candidates = {
             "",
             side_text,
@@ -2952,6 +3367,49 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if text in candidates:
             return ""
         return text
+
+    def upper_quantity_hint_from_detail(detail: object, edge: object, side_type: object) -> int:
+        text = clean_text(detail)
+        edge_text = clean_text(edge)
+        side_text = clean_text(side_type)
+        if not text or not edge_text or not side_text or side_text == "-":
+            return 0
+        candidates: list[int] = []
+        patterns = [
+            # "1H2R 13 N"
+            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(side_text)}\b",
+            # "1H2R N 13"
+            rf"{re.escape(edge_text)}\s*{re.escape(side_text)}\s*(\d{{1,3}})\b",
+            # merged OCR token: "1H2R13N"
+            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(side_text)}",
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+                try:
+                    value = int(match.group(1))
+                except Exception:
+                    continue
+                if 1 <= value <= 999:
+                    candidates.append(value)
+        return max(candidates) if candidates else 0
+
+    def upper_sarok_quantity_hint(detail: object, edge: object) -> int:
+        text = clean_text(detail)
+        edge_text = clean_text(edge)
+        if not text or not edge_text:
+            return 0
+        lowered = folded(text)
+        if "sarok fels" not in lowered:
+            return 0
+        pattern = rf"sarok\s+fels[őo]\s+{re.escape(edge_text)}\s+(\d{{1,3}})\s+(?:N|KESB|GTEL|TE|RI|JO)\b"
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            return 0
+        try:
+            value = int(match.group(1))
+        except Exception:
+            return 0
+        return value if 1 <= value <= 999 else 0
 
     def is_kamra_row(name: str, color: str, side_type: str) -> bool:
         combined = " ".join([folded(name), folded(color), normalize_side_type(side_type)])
@@ -3055,6 +3513,77 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return "2-es"
         return text or "egyeb"
 
+    def build_expected_upper_excenter_counts() -> dict[tuple[str, str, str, str, str, str, str], int]:
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return {}
+        cnc_path = Path(folder_text) / "CNC.pdf"
+        if not cnc_path.is_file():
+            return {}
+        try:
+            pages = manufacturing_pdf_lines(cnc_path)
+        except Exception:
+            return {}
+
+        expected: dict[tuple[str, str, str, str, str, str, str], int] = {}
+        current_label = ""
+        for lines in pages:
+            index = 0
+            while index < len(lines):
+                token = clean_text(lines[index])
+                token_folded = folded(token)
+                if re.fullmatch(r"[12]-es\s+als.*", token_folded) or re.fullmatch(r"[12]-es\s+fels.*", token_folded):
+                    current_label = token
+                    index += 1
+                    continue
+                if "fels" not in folded(current_label):
+                    index += 1
+                    continue
+                if token_folded not in {"eft fenek", "eft fenek excenteres"}:
+                    index += 1
+                    continue
+
+                cursor = index + 1
+                if cursor < len(lines) and folded(clean_text(lines[cursor])) == "excenteres":
+                    cursor += 1
+                if cursor + 7 >= len(lines):
+                    index += 1
+                    continue
+
+                size_tokens = [clean_text(lines[cursor + offset]) for offset in range(5)]
+                if not (
+                    size_tokens[0].isdigit()
+                    and size_tokens[1].lower() == "x"
+                    and size_tokens[2].isdigit()
+                    and size_tokens[3].lower() == "x"
+                    and size_tokens[4].isdigit()
+                ):
+                    index += 1
+                    continue
+
+                size_label = f"{size_tokens[0]} x {size_tokens[2]} x {size_tokens[4]}"
+                color = clean_text(lines[cursor + 5])
+                edge = clean_text(lines[cursor + 6]) or "-"
+                quantity_token = clean_text(lines[cursor + 7])
+                if not re.fullmatch(r"-?\d+", quantity_token):
+                    index += 1
+                    continue
+
+                quantity = int(quantity_token)
+                source_group = upper_source_group(current_label)
+                key = (
+                    source_group,
+                    "EFT fenék excenteres",
+                    size_label,
+                    color,
+                    "",
+                    "",
+                    edge,
+                )
+                expected[key] = int(expected.get(key, 0) or 0) + quantity
+                index = cursor + 8
+        return expected
+
     def build_upper_rows(source_sections: list[dict]) -> list[dict]:
         merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
         def add_upper_row(parsed_row: dict, raw_row: dict | None = None) -> None:
@@ -3075,7 +3604,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if existing is None:
                 merged_id = hashlib.sha1(
                     f"cnc-upper|{production_number}|{source_group}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
-                ).hexdigest()[:16]
+                ).hexdigest()
                 merged[merge_key] = {
                     "row_id": merged_id,
                     "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -3115,6 +3644,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 edge = clean_text(raw_row.get("edge")) or "-"
                 side_type, hardware_type = parse_upper_detail_v2(raw_row.get("detail"))
                 color, side_type = split_upper_color_and_side_v2(color, side_type)
+                raw_quantity = int(raw_row.get("quantity", 0) or 0)
+                quantity_hint = upper_quantity_hint_from_detail(raw_row.get("detail"), edge, side_type)
+                sarok_quantity_hint = upper_sarok_quantity_hint(raw_row.get("detail"), edge)
+                if quantity_hint > raw_quantity:
+                    raw_quantity = quantity_hint
+                if sarok_quantity_hint > raw_quantity:
+                    raw_quantity = sarok_quantity_hint
                 add_upper_row(
                     {
                         "sourceGroup": source_group,
@@ -3125,13 +3661,51 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "hardware_type": hardware_type,
                         "side_type": side_type,
                         "edge": edge,
-                        "quantity": int(raw_row.get("quantity", 0) or 0),
+                        "quantity": raw_quantity,
                         "detail": clean_upper_detail_for_display(raw_row.get("detail"), side_type, hardware_type),
                     },
                     raw_row,
                 )
                 for embedded_row in extract_embedded_upper_rows(raw_row, source_group):
                     add_upper_row(embedded_row)
+
+        expected_excenter_counts = build_expected_upper_excenter_counts()
+        if expected_excenter_counts:
+            actual_excenter_counts: dict[tuple[str, str, str, str, str, str, str], int] = {}
+            for row in merged.values():
+                row_name_folded = folded(row.get("name"))
+                if row_name_folded != "eft fenek excenteres":
+                    continue
+                key = (
+                    clean_text(row.get("sourceGroup")),
+                    clean_text(row.get("name")),
+                    clean_text(row.get("size")),
+                    clean_text(row.get("color")),
+                    clean_text(row.get("hardware_type")),
+                    clean_text(row.get("side_type")),
+                    clean_text(row.get("edge")) or "-",
+                )
+                actual_excenter_counts[key] = int(actual_excenter_counts.get(key, 0) or 0) + int(row.get("quantity", 0) or 0)
+
+            for key, expected_qty in expected_excenter_counts.items():
+                actual_qty = int(actual_excenter_counts.get(key, 0) or 0)
+                if expected_qty <= actual_qty:
+                    continue
+                source_group, name, size, color, hardware_type, side_type, edge = key
+                add_upper_row(
+                    {
+                        "sourceGroup": source_group,
+                        "name": name,
+                        "source_name": name,
+                        "size": size,
+                        "color": color,
+                        "hardware_type": hardware_type,
+                        "side_type": side_type,
+                        "edge": edge,
+                        "quantity": expected_qty - actual_qty,
+                        "detail": "",
+                    }
+                )
         return list(merged.values())
 
     def build_front_rows(source_sections: list[dict]) -> list[dict]:
@@ -4179,10 +4753,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
     box3_ids = {str(row.get("row_id", "")) for row in box3_rows}
     box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
-    box3_rows = aggregate_lower_rows(
-        box3_display_rows,
-        ("name", "size", "color", "drawer_drill"),
-    )
+    box3_rows = [dict(row) for row in box3_display_rows if isinstance(row, dict)]
     box_fvz_rows = [
         row for row in lower_rows
         if is_fvz_row(row)
@@ -4236,15 +4807,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_text(row.get("name")),
         )
     )
-    box3_rows.sort(
-        key=lambda row: (
-            {"nincs": 0, "teleszkopos": 1, "teleszkop": 1}.get(folded(row.get("drawer_drill")), 9),
-            clean_text(row.get("color")),
-            normalize_side_type(row.get("side_type")),
-            clean_text(row.get("name")),
-            size_parts(row.get("size")),
-        )
-    )
+    # Kinga/Anna: keep original PDF row order, no merge and no additional sorting.
     box4_rows.sort(
         key=lambda row: (
             lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
@@ -4355,6 +4918,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
             group_key = (
+                clean_text(row.get("sourceGroup")),
                 clean_text(row.get("name")),
                 clean_text(row.get("size")),
                 clean_text(row.get("color")),
@@ -4366,7 +4930,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if existing is None:
                 merged_id = hashlib.sha1(
                     f"cnc-upper-box|{production_number}|{'|'.join(group_key)}".encode("utf-8")
-                ).hexdigest()[:16]
+                ).hexdigest()
                 source_row_ids = [
                     source_row_id
                     for source_row_id in (
@@ -4471,11 +5035,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     def add_upper_section(label: str, rows: list[dict], key_suffix: str, sort_mode: str) -> None:
         if not rows:
             return
+        section_rows = sort_upper_rows(aggregate_upper_rows(rows), sort_mode)
+        for section_row in section_rows:
+            base_row_id = str(section_row.get("row_id", "")).strip()
+            if not base_row_id:
+                continue
+            scoped_row_id = hashlib.sha1(
+                f"cnc-upper-section|{production_number}|{key_suffix}|{base_row_id}".encode("utf-8")
+            ).hexdigest()
+            section_row["row_id"] = scoped_row_id
+            section_row["state_key"] = _manufacturing_state_key(production_number, scoped_row_id)
         upper_sections.append(
             {
                 "key": f"cnc-felso::{key_suffix}",
                 "label": label,
-                "rows": sort_upper_rows(aggregate_upper_rows(rows), sort_mode),
+                "rows": section_rows,
                 "columnLayout": "cnc-upper",
             }
         )
@@ -4487,11 +5061,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         combined = upper_combined_text(row)
         return "zille" in combined and ("fuf" in combined or "fzn" in combined or "f\u00fcf" in combined)
 
+    def is_upper_fuf_or_fzn(row: dict) -> bool:
+        combined = upper_combined_text(row)
+        return "fzn" in combined or "fuf" in combined or "f\u00fcf" in combined
+
     def is_upper_360_special(row: dict) -> bool:
         if not is_upper_360(row):
             return False
         combined = upper_combined_text(row)
         return "fmf" in combined or "fmfs" in combined or "fkf" in combined
+
+    def is_upper_360_fmf(row: dict) -> bool:
+        if not is_upper_360(row):
+            return False
+        combined = upper_combined_text(row)
+        return "fmf" in combined or "fmfs" in combined
 
     def is_upper_360_fkf(row: dict) -> bool:
         return is_upper_360(row) and "fkf" in upper_combined_text(row)
@@ -4512,9 +5096,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     rack2_source_rows = [row for row in non_fvz_upper_rows if upper_source_group(row) == "1-es"]
     zille_rows = [row for row in non_fvz_upper_rows if is_upper_zille_target(row)]
 
-    rack1_box1_rows = [row for row in rack1_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row)]
+    rack1_box1_rows = [
+        row
+        for row in rack1_source_rows
+        if is_upper_normal_or_fny(row)
+        and not is_upper_sarok(row)
+        and not is_upper_fuf_or_fzn(row)
+    ]
     rack1_box1_ids = {upper_row_id(row) for row in rack1_box1_rows}
-    rack1_box2_rows = [row for row in rack1_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
+    rack1_box2_rows = [
+        row
+        for row in rack1_source_rows
+        if is_upper_felnyilo_group(row)
+        and not is_upper_sarok(row)
+        and not is_upper_fuf_or_fzn(row)
+    ]
     rack1_box2_ids = {upper_row_id(row) for row in rack1_box2_rows}
     rack1_box3_rows = [
         row for row in rack1_source_rows
@@ -4525,24 +5121,41 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
     rack1_box3_ids = {upper_row_id(row) for row in rack1_box3_rows}
 
-    rack2_box1_rows = [row for row in rack2_source_rows if is_upper_normal_or_fny(row) and not is_upper_sarok(row)]
+    rack2_box1_rows = [
+        row
+        for row in rack2_source_rows
+        if is_upper_normal_or_fny(row)
+        and not is_upper_sarok(row)
+        and not is_upper_fuf_or_fzn(row)
+    ]
     rack2_box1_ids = {upper_row_id(row) for row in rack2_box1_rows}
-    rack2_box2_rows = [row for row in rack2_source_rows if is_upper_felnyilo_group(row) and not is_upper_sarok(row)]
+    rack2_box2_rows = [
+        row
+        for row in rack2_source_rows
+        if is_upper_felnyilo_group(row)
+        and not is_upper_sarok(row)
+        and not is_upper_fuf_or_fzn(row)
+    ]
     rack2_box2_ids = {upper_row_id(row) for row in rack2_box2_rows}
     rack2_primary_assigned_ids = {row_id for row_id in (rack2_box1_ids | rack2_box2_ids) if row_id}
     rack2_box3_rows = [
-        row for row in non_fvz_upper_rows
+        row for row in rack2_source_rows
         if upper_row_id(row) not in rack2_primary_assigned_ids
-        and not is_upper_sarok_bucket_size(row)
+        and (not is_upper_sarok_bucket_size(row) or is_upper_360_fmf(row))
         and (
             clean_text(row.get("size")).startswith("595 x ")
             or is_upper_360x330(row)
             or is_upper_360_special(row)
             or is_upper_680(row)
+            or is_upper_fuf_or_fzn(row)
         )
     ]
+    all_360_fmf_rows = [row for row in non_fvz_upper_rows if is_upper_360_fmf(row)]
+    for row in all_360_fmf_rows:
+        if row not in rack2_box3_rows:
+            rack2_box3_rows.append(row)
     fkf_360_rows = [
-        row for row in non_fvz_upper_rows
+        row for row in rack2_source_rows
         if is_upper_360_fkf(row) and not is_upper_sarok_bucket_size(row)
     ]
     for row in fkf_360_rows:
@@ -4555,8 +5168,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     rack2_box4_rows = [
         row for row in non_fvz_upper_rows
         if (
-            is_upper_sarok(row)
-            or is_upper_sarok_bucket_size(row)
+            (is_upper_sarok(row) and not is_upper_360_fmf(row))
+            or (is_upper_sarok_bucket_size(row) and not is_upper_360_fmf(row))
             or (
                 upper_row_id(row) not in rack1_box1_ids
                 and upper_row_id(row) not in rack1_box2_ids
@@ -4777,7 +5390,13 @@ def _manufacturing_placeholder_document(key: str, label: str) -> dict:
     }
 
 
-def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current_selection_state: dict[str, str]) -> tuple[dict, dict[str, str]]:
+def _manufacturing_view_bundle(
+    raw_bundle: dict,
+    production_number: str,
+    current_selection_state: dict[str, str],
+    *,
+    include_all_red_view: bool = True,
+) -> tuple[dict, dict[str, str]]:
     current_number = _manufacturing_normalize_number(production_number)
     documents: list[dict] = []
     selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
@@ -4789,8 +5408,16 @@ def _manufacturing_view_bundle(raw_bundle: dict, production_number: str, current
     korpusz_alkatresz_sections, korpusz_alkatresz_count = _manufacturing_document_sections(
         raw_bundle, current_number, ("alkatresz_kesz",), include_source_prefix=False
     )
-    all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
-    selection_state_payload.update(all_red_selection_state)
+    if include_all_red_view:
+        all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
+        selection_state_payload.update(all_red_selection_state)
+    else:
+        all_red_view = {
+            "key": "all-productions-red",
+            "label": "Összes gyártás összes piros eleme",
+            "count": 0,
+            "sections": [],
+        }
 
     documents.append(
         {
@@ -12807,9 +13434,17 @@ def render_manufacturing_module(
 ) -> bytes:
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
-    recent_productions = available_production_entries(limit=12, ready_only=True)
+    lightweight_operation_picker = not bool(selected_operation)
+    recent_productions = available_production_entries(
+        limit=(1 if lightweight_operation_picker else 12),
+        ready_only=True,
+    )
     recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
-    selected_number = requested_number if requested_number in recent_numbers else (recent_numbers[0] if recent_numbers else "")
+    selected_number = (
+        requested_number
+        if (requested_number and (requested_number in recent_numbers or lightweight_operation_picker))
+        else (recent_numbers[0] if recent_numbers else "")
+    )
     operations = [
         {
             "key": operation_key,
@@ -12818,10 +13453,43 @@ def render_manufacturing_module(
         }
         for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS
     ]
-    if requested_number and requested_number not in recent_numbers:
+    if requested_number and requested_number not in recent_numbers and not lightweight_operation_picker:
         combined_prefix = f"A {requested_number} gyártásban nem található meg mindkét szükséges PDF, ezért a legfrissebb használható gyártást nyitottam meg."
         message = f"{combined_prefix} {message}".strip() if message else combined_prefix
         success = False
+
+    def is_complete_production(entry_number: str, operation_key: str) -> bool:
+        operation_filter = _manufacturing_normalize_operation(operation_key)
+        if not operation_filter:
+            return False
+        normalized_number = _manufacturing_normalize_number(entry_number)
+        if not normalized_number:
+            return False
+        try:
+            required_state_keys = _manufacturing_operation_state_keys(normalized_number, operation_filter)
+            saved_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, normalized_number)
+            view_state = _manufacturing_selection_state_payload(normalized_number, saved_state)
+        except Exception:
+            return False
+        if not required_state_keys:
+            return False
+        for row_state_key in required_state_keys:
+            state_value = str(view_state.get(row_state_key, "")).strip().lower()
+            if state_value not in {"green", "done"}:
+                return False
+        return True
+
+    recent_productions = (
+        [
+            {
+                **dict(entry),
+                "is_complete": is_complete_production(str(entry.get("number", "")), selected_operation),
+            }
+            for entry in recent_productions
+        ]
+        if not lightweight_operation_picker
+        else []
+    )
 
     bundle: dict | None = None
     selection_state: dict[str, str] = {}
@@ -12832,12 +13500,17 @@ def render_manufacturing_module(
     if not selected_number:
         combined_message = "Nem találok használható gyártási mappát a beállított gyártási útvonalon."
         combined_success = False
-    else:
+    elif not lightweight_operation_picker:
         try:
             raw_bundle = _load_manufacturing_bundle_cached(selected_number)
             current_selection_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, selected_number)
             partial_quantity_state = load_partial_quantity_state(MANUFACTURING_RUNTIME_DIR, selected_number)
-            bundle, selection_state = _manufacturing_view_bundle(raw_bundle, selected_number, current_selection_state)
+            bundle, selection_state = _manufacturing_view_bundle(
+                raw_bundle,
+                selected_number,
+                current_selection_state,
+                include_all_red_view=True,
+            )
         except Exception as exc:
             combined_message = f"A gyártási papírok betöltése nem sikerült: {exc}"
             combined_success = False
@@ -23411,7 +24084,7 @@ def _prime_divian_ai_cache_worker() -> None:
         pass
 
 
-def _prime_manufacturing_cache_worker() -> None:
+def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, limit: int = 10) -> None:
     try:
         entries = available_production_entries(limit=12, ready_only=True)
         numbers = [
@@ -23423,10 +24096,19 @@ def _prime_manufacturing_cache_worker() -> None:
             latest_number = latest_production_number()
             if latest_number:
                 numbers = [latest_number]
-        # Warm a few most recent bundles in the background so first user click is fast.
-        for number in numbers[:4]:
+        # Warm recent productions so switching between them is noticeably faster.
+        for number in numbers[: max(1, int(limit))]:
             try:
-                _load_manufacturing_bundle_cached(number)
+                raw_bundle = _load_manufacturing_bundle_cached(number)
+                current_selection_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, number)
+                _manufacturing_view_bundle(
+                    raw_bundle,
+                    number,
+                    current_selection_state,
+                    include_all_red_view=include_all_red_view,
+                )
+                for operation_key, _operation_label in MANUFACTURING_OPERATION_DEFINITIONS:
+                    _manufacturing_operation_state_keys(number, operation_key)
             except Exception:
                 continue
     except Exception:
@@ -23443,7 +24125,12 @@ def _prime_divian_ai_cache_async() -> None:
 
 
 def _prime_manufacturing_cache_async() -> None:
-    threading.Thread(target=_prime_manufacturing_cache_worker, name="manufacturing-prime", daemon=True).start()
+    threading.Thread(
+        target=_prime_manufacturing_cache_worker,
+        kwargs={"include_all_red_view": True, "limit": 10},
+        name="manufacturing-prime",
+        daemon=True,
+    ).start()
 
 
 if __name__ == "__main__":
@@ -23451,6 +24138,8 @@ if __name__ == "__main__":
         _run_dev_supervisor()
     else:
         _prime_divian_ai_cache_async()
+        if MANUFACTURING_PRIME_SYNC_ON_START:
+            _prime_manufacturing_cache_worker(include_all_red_view=False, limit=10)
         _prime_manufacturing_cache_async()
         server = ReusableThreadingHTTPServer((HOST, PORT), InvoiceHandler)
         print(f"Server running on http://localhost:{PORT} (bind: {HOST}:{PORT})")
