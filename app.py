@@ -987,7 +987,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-17-front-etikett-v29"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-21-unicode-code-fragments-v30"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -13508,16 +13508,22 @@ def render_manufacturing_module(
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
     lightweight_operation_picker = not bool(selected_operation)
-    recent_productions = available_production_entries(
-        limit=(1 if lightweight_operation_picker else 12),
-        ready_only=True,
-    )
-    recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
-    selected_number = (
-        requested_number
-        if (requested_number and (requested_number in recent_numbers or lightweight_operation_picker))
-        else (recent_numbers[0] if recent_numbers else "")
-    )
+    if lightweight_operation_picker:
+        # Műveletválasztó nézet: ne töltsünk gyártáslistát/bundle-t.
+        recent_productions = []
+        recent_numbers: list[str] = []
+        selected_number = requested_number if requested_number else ""
+    else:
+        recent_productions = available_production_entries(
+            limit=12,
+            ready_only=True,
+        )
+        recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
+        selected_number = (
+            requested_number
+            if (requested_number and requested_number in recent_numbers)
+            else (recent_numbers[0] if recent_numbers else "")
+        )
     operations = [
         {
             "key": operation_key,
@@ -13552,17 +13558,13 @@ def render_manufacturing_module(
                 return False
         return True
 
-    recent_productions = (
-        [
-            {
-                **dict(entry),
-                "is_complete": is_complete_production(str(entry.get("number", "")), selected_operation),
-            }
-            for entry in recent_productions
-        ]
-        if not lightweight_operation_picker
-        else []
-    )
+    recent_productions = [
+        {
+            **dict(entry),
+            "is_complete": is_complete_production(str(entry.get("number", "")), selected_operation),
+        }
+        for entry in recent_productions
+    ]
 
     bundle: dict | None = None
     selection_state: dict[str, str] = {}

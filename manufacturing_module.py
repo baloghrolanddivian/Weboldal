@@ -6,6 +6,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -394,10 +395,16 @@ def _normalize_final_code(token: str) -> str:
 
 
 def _looks_like_code_fragment(token: str) -> bool:
-    # Accept Unicode letters too (e.g. FÜF), not only ASCII.
-    if not re.fullmatch(r"[\w/-]+", token, flags=re.UNICODE):
+    raw_token = _clean_text(token)
+    if not raw_token:
         return False
-    return "_" in token or any(character.isalpha() for character in token)
+    # Normalize decomposed accents too (U + combining diaeresis), so
+    # FÜF-like fragments are never dropped due Unicode form variance.
+    normalized = unicodedata.normalize("NFKD", raw_token)
+    normalized = "".join(character for character in normalized if not unicodedata.combining(character))
+    if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
+        return False
+    return "_" in normalized or any(character.isalpha() for character in normalized)
 
 
 def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number: int) -> list[ManufacturingRow]:
