@@ -2633,6 +2633,18 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             drill = "Fúrva" if drill_norm == "furva" else "Nincs"
             remaining = tokens[drill_index + 1 :]
 
+        # OCR/parse zaj: "Nincs Nincs Balos FSL" jellegű soroknál az első
+        # "Nincs" nem nyitásirány, csak töltelék token a furat után.
+        # Ilyenkor a nyitásirány valójában a következő token (Balos/Jobb/Bal...).
+        if drill == "Nincs":
+            while (
+                len(remaining) >= 2
+                and normalize_token(remaining[0]) == "nincs"
+                and normalize_token(remaining[1]) in opening_tokens
+                and normalize_token(remaining[1]) != "nincs"
+            ):
+                remaining = remaining[1:]
+
         if not remaining:
             return drill, "-", "-", "-"
 
@@ -2781,6 +2793,55 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             return next(iter(candidate_pants))
         return None
 
+    def infer_pant_from_door_dominance(target_row: dict) -> str | None:
+        """Fallback hiányzó pántnál: ajtó-típus alapú domináns pánt."""
+        if bool(target_row.get("_pantolo_explicit_nincs")):
+            return None
+        if folded(clean_text(target_row.get("handleDrill"))) != "furva":
+            return None
+
+        target_door = canonical_pantolo_door(target_row.get("doorType"))
+        target_opening = folded(clean_text(target_row.get("openingDir")))
+        if target_door in {"", "-"}:
+            return None
+
+        def collect_counts(match_opening: bool) -> dict[str, int]:
+            counts: dict[str, int] = {}
+            for candidate in all_pantolo_rows:
+                if candidate is target_row:
+                    continue
+                if bool(candidate.get("_pantolo_missing_pant")):
+                    continue
+                candidate_pant = clean_text(candidate.get("pantType"))
+                if not candidate_pant or folded(candidate_pant) in {"", "-", "nincs"}:
+                    continue
+                if folded(clean_text(candidate.get("handleDrill"))) != "furva":
+                    continue
+                if canonical_pantolo_door(candidate.get("doorType")) != target_door:
+                    continue
+                if match_opening and folded(clean_text(candidate.get("openingDir"))) != target_opening:
+                    continue
+                counts[candidate_pant] = counts.get(candidate_pant, 0) + 1
+            return counts
+
+        def pick_if_dominant(counts: dict[str, int], min_advantage: int) -> str | None:
+            if not counts:
+                return None
+            ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+            if len(ordered) == 1:
+                return ordered[0][0]
+            if ordered[0][1] >= ordered[1][1] + min_advantage:
+                return ordered[0][0]
+            return None
+
+        by_door_opening = collect_counts(match_opening=True)
+        inferred = pick_if_dominant(by_door_opening, min_advantage=2)
+        if inferred:
+            return inferred
+
+        by_door = collect_counts(match_opening=False)
+        return pick_if_dominant(by_door, min_advantage=3)
+
     for section in sections:
         rows = [row for row in section.get("rows", []) if isinstance(row, dict)]
         pant_counts: dict[str, int] = {}
@@ -2794,7 +2855,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 pant_rows_non_nincs.append(row)
         if not pant_counts:
             for row in rows:
-                row["pantType"] = "Nincs"
+                row["pantType"] = "Nincs" if bool(row.get("_pantolo_explicit_nincs")) else "-"
             continue
 
         def infer_pant_type(target_row: dict) -> str | None:
@@ -2932,87 +2993,57 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
 
             return None
 
+        def infer_missing_pant_from_section_pairs(target_row: dict) -> str | None:
+            """Hiányzó pántot csak ugyanazon box biztos párjából örököljünk."""
+            target_size = clean_text(target_row.get("size"))
+            target_door = canonical_pantolo_door(target_row.get("doorType"))
+            target_handle = clean_text(target_row.get("handleType"))
+            target_drill = folded(clean_text(target_row.get("handleDrill")))
+            target_opening = folded(clean_text(target_row.get("openingDir")))
+            if not target_size or target_door in {"", "-"} or target_drill != "furva":
+                return None
+
+            candidate_pants: set[str] = set()
+            for candidate in rows:
+                if candidate is target_row or not isinstance(candidate, dict):
+                    continue
+                candidate_pant = clean_text(candidate.get("pantType"))
+                if not candidate_pant or folded(candidate_pant) in {"", "-", "nincs"}:
+                    continue
+                if clean_text(candidate.get("size")) != target_size:
+                    continue
+                if canonical_pantolo_door(candidate.get("doorType")) != target_door:
+                    continue
+                if clean_text(candidate.get("handleType")) != target_handle:
+                    continue
+                if folded(clean_text(candidate.get("handleDrill"))) != target_drill:
+                    continue
+                candidate_opening = folded(clean_text(candidate.get("openingDir")))
+                # előny: ellentétes nyitású pár sor
+                if target_opening in {"bal", "jobb"} and candidate_opening in {"bal", "jobb"}:
+                    if candidate_opening == target_opening:
+                        continue
+                candidate_pants.add(candidate_pant)
+            if len(candidate_pants) == 1:
+                return next(iter(candidate_pants))
+            return None
+
+        def infer_missing_pant_business_rule(target_row: dict) -> str | None:
+            """Gyártási szabály: Sarok alsó + Fém rúd esetén pánt = Pillér."""
+            door_key = canonical_pantolo_door(target_row.get("doorType"))
+            handle_type = folded(clean_text(target_row.get("handleType")))
+            drill = folded(clean_text(target_row.get("handleDrill")))
+            if door_key == "sarok_also" and "fem rud" in handle_type and drill == "furva":
+                return "Pillér"
+            return None
+
         # Csak egyértelmű esetben pótolunk, hogy a "Ráüt." és "Ráüt.tip." ne keveredjen.
         for row_index, row in enumerate(rows):
             pant_value = clean_text(row.get("pantType"))
             if not pant_value or pant_value == "-":
-                # Hiányzó pánt a forrásban (sor Fúrva-val indult): ne tippeljünk domináns pánttal.
-                # Csak egyértelmű globális minta alapján töltsük, különben maradjon Nincs.
-                if bool(row.get("_pantolo_missing_pant")):
-                    global_inferred = infer_pant_from_global_context(row)
-                    row["pantType"] = global_inferred if global_inferred else "Nincs"
-                    if row["pantType"] == "Nincs" and dominant_pant and can_use_dominant_for_missing(row):
-                        row["pantType"] = normalize_pant_label(dominant_pant)
-                    continue
+                row["pantType"] = "Nincs" if bool(row.get("_pantolo_explicit_nincs")) else "-"
 
-                global_inferred = infer_pant_from_global_context(row)
-                if global_inferred:
-                    row["pantType"] = global_inferred
-                    continue
-                strict_inferred = infer_pant_type_strict_first_row(row, row_index)
-                if strict_inferred:
-                    row["pantType"] = strict_inferred
-                    continue
-                inferred_pant = infer_pant_type(row)
-                if inferred_pant:
-                    row["pantType"] = normalize_pant_label(inferred_pant)
-                elif dominant_pant and folded(clean_text(row.get("handleDrill"))) == "furva":
-                    row["pantType"] = normalize_pant_label(dominant_pant)
-                elif not bool(row.get("_pantolo_explicit_nincs")):
-                    # Hiányos parser-sor esetén ne állítsunk be hamis "Nincs"-et.
-                    row["pantType"] = "-"
-                else:
-                    row["pantType"] = "Nincs"
-
-        # 2. passz: ahol a forrásban hiányzott a pánt (Fúrva-val indult a sor),
-        # globális mintából korrigáljuk, ha egyértelműen azonosítható.
-        for row in rows:
-            if not bool(row.get("_pantolo_missing_pant")):
-                continue
-            if folded(clean_text(row.get("handleDrill"))) != "furva":
-                continue
-            target_size = clean_text(row.get("size"))
-            target_opening = folded(clean_text(row.get("openingDir")))
-            target_door = canonical_pantolo_door(row.get("doorType"))
-            if not target_size or not target_opening or target_opening in {"-", "nincs"}:
-                continue
-
-            candidates: set[str] = set()
-            for candidate in all_pantolo_rows:
-                if candidate is row:
-                    continue
-                if bool(candidate.get("_pantolo_missing_pant")):
-                    continue
-                candidate_pant = clean_text(candidate.get("pantType"))
-                if not candidate_pant or folded(candidate_pant) in {"-", "nincs"}:
-                    continue
-                if clean_text(candidate.get("size")) != target_size:
-                    continue
-                if folded(clean_text(candidate.get("openingDir"))) != target_opening:
-                    continue
-                if canonical_pantolo_door(candidate.get("doorType")) != target_door:
-                    continue
-                candidates.add(candidate_pant)
-
-            if len(candidates) == 1:
-                row["pantType"] = normalize_pant_label(next(iter(candidates)))
-
-        # 3. passz (first-row korrekció): ha a box első sora hiányzó pántos
-        # és továbbra is Nincs/-, akkor vegye át a box első explicit pántját.
-        if rows:
-            first_row = rows[0]
-            first_pant = clean_text(first_row.get("pantType"))
-            first_missing = bool(first_row.get("_pantolo_missing_pant"))
-            first_drill = folded(clean_text(first_row.get("handleDrill")))
-            if first_missing and first_drill == "furva" and folded(first_pant) in {"nincs", "-", ""}:
-                replacement = None
-                for candidate in rows[1:]:
-                    candidate_pant = clean_text(candidate.get("pantType"))
-                    if candidate_pant and folded(candidate_pant) not in {"nincs", "-", ""}:
-                        replacement = candidate_pant
-                        break
-                if replacement:
-                    first_row["pantType"] = normalize_pant_label(replacement)
+        # Nincs második/harmadik pánt-korrekciós passz: nincs találgatás.
 
         for row in rows:
             if "_pantolo_explicit_nincs" in row:
