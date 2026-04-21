@@ -51,7 +51,7 @@ def render_manufacturing_page(
     )
     recent_chips_html = "".join(
         (
-            f'<a class="mfg-chip-link{" is-active" if str(entry.get("number", "")) == selected_number else ""}" '
+            f'<a class="mfg-chip-link{" is-active" if str(entry.get("number", "")) == selected_number else ""}{" is-complete" if bool(entry.get("is_complete")) else ""}" '
             f'href="{route}?production={urllib.parse.quote(str(entry.get("number", "")))}{selected_operation_query}">'
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
             f'<span class="mfg-chip-number">{html.escape(str(entry.get("number", "")))}</span>'
@@ -59,13 +59,21 @@ def render_manufacturing_page(
         )
         for entry in recent_productions[:10]
     )
+    toolbar_markup = (
+        f"""
+    <section class="mfg-toolbar">
+      <div class="mfg-chip-row">{recent_chips_html}</div>
+    </section>
+        """
+        if recent_chips_html
+        else ""
+    )
     picker_href = f"{route}?production={urllib.parse.quote(selected_number)}" if selected_number else route
     operation_buttons_html = "".join(
         (
             f'<a class="mfg-operation-button{" is-active" if str(item.get("key", "")) == selected_operation_key else ""}" '
             f'href="{route}?production={urllib.parse.quote(selected_number)}&operation={urllib.parse.quote(str(item.get("key", "")))}">'
             f'<strong>{html.escape(str(item.get("label", "")))}</strong>'
-            f'<span>{html.escape(str(item.get("hint", "")))}</span>'
             f"</a>"
         )
         for item in operations
@@ -75,7 +83,6 @@ def render_manufacturing_page(
         <div class="mfg-operation-copy">
           <span class="mfg-kicker">Művelet</span>
           <h2>Mit szeretnél csinálni?</h2>
-          <p>Válaszd ki a műveletet, és utána a mostani munkanézet nyílik meg a kiválasztott gyártásra.</p>
         </div>
         <div class="mfg-operation-grid">
           {operation_buttons_html}
@@ -454,6 +461,19 @@ def render_manufacturing_page(
       border-color: #111827;
       color: #111827;
       background: #eef2f6;
+    }}
+    .mfg-chip-link.is-complete {{
+      border-color: rgba(12, 141, 87, 0.42);
+      background: #e8f8ef;
+      color: #0b6c44;
+    }}
+    .mfg-chip-link.is-complete .mfg-chip-number {{
+      color: #0b6c44;
+    }}
+    .mfg-chip-link.is-complete.is-active {{
+      border-color: #0b6c44;
+      background: #dcf3e7;
+      color: #0b6c44;
     }}
     .mfg-chip-date {{
       font-size: 0.67rem;
@@ -1168,8 +1188,8 @@ def render_manufacturing_page(
       box-shadow: inset 3px 0 0 var(--mfg-red-line);
     }}
     .mfg-row.is-done {{
-      background: #1f7a46;
-      box-shadow: inset 5px 0 0 #0f4f2f;
+      background: linear-gradient(180deg, #12a566, #0c8d57);
+      box-shadow: inset 5px 0 0 #0a7448;
       color: #f4fff8;
     }}
     .mfg-row.is-muted {{
@@ -1263,24 +1283,8 @@ def render_manufacturing_page(
       color: #f4fff8;
     }}
     .mfg-row.is-done .mfg-row-qty {{
-      background: #0f4f2f;
+      background: #0a7448;
       color: #ffffff;
-    }}
-    .mfg-row.is-cnc-fiokelo.is-green,
-    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-main,
-    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-meta,
-    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-side,
-    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-qty,
-    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-code,
-    .mfg-row.is-cnc-fiokelo.is-green .mfg-row-meta span,
-    .mfg-row.is-cnc-fiokelo.is-red,
-    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-main,
-    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-meta,
-    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-side,
-    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-qty,
-    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-code,
-    .mfg-row.is-cnc-fiokelo.is-red .mfg-row-meta span {{
-      color: var(--mfg-text);
     }}
     .mfg-row-main {{
       display: grid;
@@ -1773,9 +1777,7 @@ def render_manufacturing_page(
   <div class="mfg-page">
     {notice_markup}
 
-    <section class="mfg-toolbar">
-      <div class="mfg-chip-row">{recent_chips_html}</div>
-    </section>
+    {toolbar_markup}
 
     {operation_panel_html if active_document is None else operation_header_html}
 
@@ -2060,29 +2062,79 @@ def render_manufacturing_page(
         return 0;
       }};
       const normalizedSectionSortKey = (sectionKey) => String(sectionKey || "__default__");
+      const activeSectionsForSortLookup = () => {{
+        const document = currentDocument();
+        if (!document) return [];
+        const currentSpecialView = specialViewForKey(document, currentViewKey);
+        if (currentSpecialView && Array.isArray(currentSpecialView.sections)) {{
+          return currentSpecialView.sections;
+        }}
+        return Array.isArray(document.sections) ? document.sections : [];
+      }};
+      const sectionByKeyInDocument = (document, sectionKey) => {{
+        if (!document) return null;
+        const targetKey = String(sectionKey || "").trim();
+        const activeSections = activeSectionsForSortLookup();
+        return activeSections.find((section) => String(section?.key || "").trim() === targetKey) || null;
+      }};
+      const defaultSortStateForSection = (sectionKey) => {{
+        const document = currentDocument();
+        const section = sectionByKeyInDocument(document, sectionKey);
+        const columnLayout = String(section?.columnLayout || "").trim();
+        if (columnLayout === "cnc-fiokelo") {{
+          return {{ key: "color", direction: "asc" }};
+        }}
+        return {{ key: "pdf", direction: "asc" }};
+      }};
       const getSectionSortState = (sectionKey) => {{
         const normalizedKey = normalizedSectionSortKey(sectionKey);
-        return sectionSortState[normalizedKey] || {{ key: "pdf", direction: "asc" }};
+        return sectionSortState[normalizedKey] || defaultSortStateForSection(sectionKey);
       }};
       const compareRowsBySort = (leftRow, rightRow, sectionKey) => {{
         const sortState = getSectionSortState(sectionKey);
         if (sortState.key === "pdf") return 0;
         const leftValue = rowSortValue(leftRow, sortState.key);
         const rightValue = rowSortValue(rightRow, sortState.key);
-        let result = 0;
+        let primaryResult = 0;
         if (Array.isArray(leftValue) && Array.isArray(rightValue)) {{
-          result = compareArrays(leftValue, rightValue);
+          primaryResult = compareArrays(leftValue, rightValue);
         }} else if (typeof leftValue === "number" && typeof rightValue === "number") {{
-          result = leftValue - rightValue;
+          primaryResult = leftValue - rightValue;
         }} else {{
-          result = String(leftValue).localeCompare(String(rightValue), "hu-HU", {{ numeric: true, sensitivity: "base" }});
+          primaryResult = String(leftValue).localeCompare(String(rightValue), "hu-HU", {{ numeric: true, sensitivity: "base" }});
         }}
+
+        if (primaryResult !== 0) {{
+          return sortState.direction === "desc" ? -primaryResult : primaryResult;
+        }}
+
+        // Color sort: keep same color grouped, then size descending by default.
+        if (sortState.key === "color") {{
+          const leftSize = parseSizeParts(leftRow?.size || "");
+          const rightSize = parseSizeParts(rightRow?.size || "");
+          const section = sectionByKeyInDocument(currentDocument(), sectionKey);
+          const columnLayout = String(section?.columnLayout || "").trim();
+          const sizeResult =
+            columnLayout === "cnc-fiokelo"
+              ? compareArrays(leftSize, rightSize)
+              : compareArrays(rightSize, leftSize);
+          if (sizeResult !== 0) return sizeResult;
+        }}
+        // Fiókelő default sort: size first, color second.
+        if (sortState.key === "size") {{
+          const leftColor = normalizeSortText(leftRow?.color || "");
+          const rightColor = normalizeSortText(rightRow?.color || "");
+          const colorResult = leftColor.localeCompare(rightColor, "hu-HU", {{ numeric: true, sensitivity: "base" }});
+          if (colorResult !== 0) return colorResult;
+        }}
+
+        let result = 0;
         if (result === 0) {{
           const leftFallback = normalizeSortText(leftRow.code || leftRow.row_id);
           const rightFallback = normalizeSortText(rightRow.code || rightRow.row_id);
           result = leftFallback.localeCompare(rightFallback, "hu-HU", {{ numeric: true, sensitivity: "base" }});
         }}
-        return sortState.direction === "desc" ? -result : result;
+        return result;
       }};
       const sortedRowsForView = (rows, sectionKey) => {{
         const items = Array.isArray(rows) ? [...rows] : [];

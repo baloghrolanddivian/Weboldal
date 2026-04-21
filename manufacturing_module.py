@@ -170,6 +170,21 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
     return None
 
 
+def _find_etikett_egyeb_szerelveny_path(folder: Path) -> Path | None:
+    if not folder.exists():
+        return None
+    candidate = folder / "Etikett_egyeb_szerelveny.pdf"
+    if candidate.exists():
+        return candidate
+    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
+        if not path.is_file() or path.suffix.lower() != ".pdf":
+            continue
+        folded_name = _fold_hu(path.name)
+        if "etikett" in folded_name and "szerelveny" in folded_name:
+            return path
+    return None
+
+
 def _find_cnc_path(folder: Path) -> Path | None:
     candidate = folder / "CNC.pdf"
     if candidate.exists():
@@ -1433,6 +1448,201 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
     )
 
 
+def _etikett_known_field_names() -> set[str]:
+    labels = (
+        "Megrendelés száma",
+        "Leírás",
+        "Modell",
+        "Szín",
+        "Front színe",
+        "Hosszúság",
+        "Hosszúság cm",
+        "Szélesség",
+        "Szélesség cm",
+        "Front méret",
+        "Ajtó típus",
+        "Fogantyú típus",
+        "Fogantyú furat",
+        "Pánt típus",
+        "Rendelési kód",
+        "Rendelés kód",
+        "Korpusz színe",
+        "Vastagság mm",
+        "Élzárás",
+    )
+    return {_fold_hu(label) for label in labels}
+
+
+def _etikett_field_value(lines: list[str], field_candidates: tuple[str, ...], known_fields: set[str]) -> str:
+    folded_candidates = {_fold_hu(item) for item in field_candidates}
+    folded_lines = [_fold_hu(line) for line in lines]
+    for index, raw_line in enumerate(lines):
+        clean_line = _clean_text(raw_line)
+        folded_line = folded_lines[index]
+        folded_line_label = folded_line[:-1] if folded_line.endswith(":") else folded_line
+        value_start = -1
+        if folded_line in folded_candidates or folded_line_label in folded_candidates:
+            if index + 1 < len(lines) and _clean_text(lines[index + 1]) == ":":
+                value_start = index + 2
+            else:
+                value_start = index + 1
+        else:
+            inline_match = re.match(r"^(.*?):\s*(.*)$", clean_line)
+            if inline_match:
+                head = _fold_hu(inline_match.group(1))
+                if head in folded_candidates:
+                    inline_value = _clean_text(inline_match.group(2))
+                    if inline_value:
+                        return inline_value
+                    value_start = index + 1
+        if value_start == -1:
+            continue
+
+        parts: list[str] = []
+        cursor = value_start
+        while cursor < len(lines):
+            token = _clean_text(lines[cursor])
+            if not token:
+                cursor += 1
+                continue
+            folded_token = _fold_hu(token)
+            folded_token_label = folded_token[:-1] if folded_token.endswith(":") else folded_token
+            if _is_final_code(token) or folded_token.startswith("www.divian.hu") or folded_token.startswith("ko "):
+                break
+            if folded_token in known_fields or folded_token_label in known_fields:
+                break
+            if cursor + 1 < len(lines) and _clean_text(lines[cursor + 1]) == ":" and folded_token not in {"-", "/"}:
+                break
+            if token == ":":
+                cursor += 1
+                continue
+            parts.append(token)
+            cursor += 1
+        if parts:
+            return _clean_text(" ".join(parts))
+    return ""
+
+
+def _etikett_to_mm(value: str) -> int:
+    text = _clean_text(value).replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return 0
+    number = float(match.group(0))
+    if number <= 120:
+        number *= 10.0
+    return int(round(number))
+
+
+def _parse_etikett_front_size(lines: list[str], known_fields: set[str]) -> str:
+    length_value = _etikett_field_value(lines, ("Hosszúság", "Hosszúság cm"), known_fields)
+    width_value = _etikett_field_value(lines, ("Szélesség", "Szélesség cm"), known_fields)
+    if length_value and width_value:
+        length_mm = _etikett_to_mm(length_value)
+        width_mm = _etikett_to_mm(width_value)
+        if length_mm and width_mm:
+            return f"{length_mm} x {width_mm} x 18"
+
+    front_size = _etikett_field_value(lines, ("Front méret",), known_fields)
+    if front_size:
+        slash_match = re.search(r"(\d{1,3})\s*/\s*(\d{1,3})", front_size)
+        if slash_match:
+            first = _etikett_to_mm(slash_match.group(1))
+            second = _etikett_to_mm(slash_match.group(2))
+            if first and second:
+                return f"{first} x {second} x 18"
+        return front_size
+    return "Méret nélkül"
+
+
+def _etikett_product_name(lines: list[str], known_fields: set[str]) -> str:
+    for index in range(1, min(len(lines), 24)):
+        if _clean_text(lines[index]) != ":":
+            continue
+        previous = _clean_text(lines[index - 1])
+        if not previous:
+            continue
+        folded_previous = _fold_hu(previous)
+        if folded_previous in known_fields:
+            continue
+        if re.fullmatch(r"\d+", previous):
+            continue
+        return previous
+    return ""
+
+
+def _etikett_quantity(lines: list[str]) -> int:
+    for index in range(min(len(lines), 30) - 2):
+        if _clean_text(lines[index]) != ":":
+            continue
+        amount = _clean_text(lines[index + 1])
+        unit = _fold_hu(_clean_text(lines[index + 2]))
+        if re.fullmatch(r"-?\d+", amount) and unit == "db":
+            return int(amount)
+    return 1
+
+
+def _etikett_front_page(lines: list[str], known_fields: set[str]) -> bool:
+    joined = "\n".join(lines)
+    folded_joined = _fold_hu(joined)
+    if any(marker in folded_joined for marker in ("front szine", "front meret", "ajto tipus")):
+        return True
+
+    product_name = _etikett_product_name(lines, known_fields)
+    folded_product = _fold_hu(product_name)
+    return any(marker in folded_product for marker in ("front", "fiokelo", "ajto"))
+
+
+def parse_front_etikett(path: Path) -> ManufacturingDocument:
+    pages = _pdf_lines(path)
+    known_fields = _etikett_known_field_names()
+    section_label = "Etikett frontok"
+    section_key = _slugify(section_label)
+    rows: list[ManufacturingRow] = []
+
+    for page_number, lines in enumerate(pages, start=1):
+        if not lines or not _etikett_front_page(lines, known_fields):
+            continue
+
+        model = _etikett_field_value(lines, ("Modell",), known_fields)
+        color = _etikett_field_value(lines, ("Front színe", "Szín"), known_fields)
+        name = _etikett_field_value(lines, ("Leírás",), known_fields) or _etikett_product_name(lines, known_fields) or "Front etikett"
+        size = _parse_etikett_front_size(lines, known_fields)
+        door_type = _etikett_field_value(lines, ("Ajtó típus",), known_fields)
+        quantity = max(1, _etikett_quantity(lines))
+        code = next((_normalize_final_code(token) for token in reversed(lines) if _is_final_code(token)), "")
+        if not code:
+            continue
+
+        detail_parts = [part for part in (model, door_type, "Etikett címke") if _clean_text(part)]
+        detail = " · ".join(detail_parts)
+        rows.append(
+            ManufacturingRow(
+                row_id=_row_hash("front_etikett", section_label, code, name, size, str(page_number)),
+                name=name,
+                detail=detail,
+                size=size,
+                color=color or "Szín nélkül",
+                edge="-",
+                quantity=quantity,
+                code=code,
+                doc_key="front_etikett",
+                section_key=section_key,
+                section_label=section_label,
+                page_number=page_number,
+            )
+        )
+
+    sections = (ManufacturingSection(key=section_key, label=section_label, rows=tuple(rows)),) if rows else tuple()
+    return ManufacturingDocument(
+        key="front_etikett",
+        label="Front címkék (Etikett)",
+        file_name=path.name,
+        sections=sections,
+        row_count=len(rows),
+    )
+
+
 def load_production_bundle(production_number: str) -> dict:
     folder = production_folder(production_number)
     if not folder.exists():
@@ -1454,6 +1664,14 @@ def load_production_bundle(production_number: str) -> dict:
             front_doc = None
         if front_doc is not None:
             documents.append(asdict(front_doc))
+    etikett_path = _find_etikett_egyeb_szerelveny_path(folder)
+    if etikett_path is not None:
+        try:
+            etikett_doc = parse_front_etikett(etikett_path)
+        except Exception:
+            etikett_doc = None
+        if etikett_doc is not None and etikett_doc.row_count:
+            documents.append(asdict(etikett_doc))
 
     cnc_path = _find_cnc_path(folder)
     if cnc_path is not None:

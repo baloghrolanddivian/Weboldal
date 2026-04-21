@@ -987,7 +987,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-17-pantolo-parse-v28"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-17-front-etikett-v29"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -2089,6 +2089,7 @@ MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
     "alkatresz_kesz": "Alkatrész kész",
     "front_osszekeszito": "Front összekészítő",
+    "front_etikett": "Etikett frontok",
     "cnc": "CNC",
     "fiokelo_furas": "Fiókelő fúrás",
     "pantolo": "Pántoló",
@@ -2236,7 +2237,7 @@ def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tup
 
 
 def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
-    raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito",))
+    raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito", "front_etikett"))
 
     def folded(value: object) -> str:
         text = str(value or "").strip().lower()
@@ -2410,6 +2411,8 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
     grouped_sections: dict[str, dict] = {}
     for section in raw_sections:
+        section_key_text = str(section.get("key", "")).strip().lower()
+        row_source = "etikett" if section_key_text.startswith("front_etikett::") else "front"
         for raw_row in section.get("rows", []):
             if not isinstance(raw_row, dict):
                 continue
@@ -2436,6 +2439,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
             row["columnLayout"] = "front-standard"
+            row["frontSource"] = row_source
             grouped_sections[section_slug]["rows"].append(row)
 
     material_order = {"Fóliás": 0, "Bútorlapos": 1}
@@ -3368,23 +3372,40 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return ""
         return text
 
-    def upper_quantity_hint_from_detail(detail: object, edge: object, side_type: object) -> int:
+    def upper_quantity_hint_from_detail(detail: object, edge: object, side_type: object, hardware_type: object) -> int:
         text = clean_text(detail)
         edge_text = clean_text(edge)
         side_text = clean_text(side_type)
-        if not text or not edge_text or not side_text or side_text == "-":
+        hardware_text = clean_text(hardware_type)
+        if not text or not edge_text:
             return 0
+        folded_text = folded(text)
+        marker_positions = []
+        for marker in ("felso oldal", "felso vegzaro", "teto-fenek mart", "eft fenek excenteres"):
+            marker_index = folded_text.find(marker)
+            if marker_index > 0:
+                marker_positions.append(marker_index)
+        scan_text = clean_text(text[:min(marker_positions)]) if marker_positions else text
+        if not scan_text:
+            scan_text = text
         candidates: list[int] = []
         patterns = [
             # "1H2R 13 N"
-            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(side_text)}\b",
+            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(side_text)}\b" if side_text and side_text != "-" else "",
             # "1H2R N 13"
-            rf"{re.escape(edge_text)}\s*{re.escape(side_text)}\s*(\d{{1,3}})\b",
+            rf"{re.escape(edge_text)}\s*{re.escape(side_text)}\s*(\d{{1,3}})\b" if side_text and side_text != "-" else "",
+            # "1H2R 13 N" where N is hardware type
+            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(hardware_text)}\b" if hardware_text and hardware_text != "-" else "",
+            # "1H2R N 13" where N is hardware type
+            rf"{re.escape(edge_text)}\s*{re.escape(hardware_text)}\s*(\d{{1,3}})\b" if hardware_text and hardware_text != "-" else "",
             # merged OCR token: "1H2R13N"
-            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(side_text)}",
+            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(side_text)}" if side_text and side_text != "-" else "",
+            rf"{re.escape(edge_text)}\s*(\d{{1,3}})\s*{re.escape(hardware_text)}" if hardware_text and hardware_text != "-" else "",
         ]
         for pattern in patterns:
-            for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            if not pattern:
+                continue
+            for match in re.finditer(pattern, scan_text, flags=re.IGNORECASE):
                 try:
                     value = int(match.group(1))
                 except Exception:
@@ -3645,7 +3666,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 side_type, hardware_type = parse_upper_detail_v2(raw_row.get("detail"))
                 color, side_type = split_upper_color_and_side_v2(color, side_type)
                 raw_quantity = int(raw_row.get("quantity", 0) or 0)
-                quantity_hint = upper_quantity_hint_from_detail(raw_row.get("detail"), edge, side_type)
+                quantity_hint = upper_quantity_hint_from_detail(raw_row.get("detail"), edge, side_type, hardware_type)
                 sarok_quantity_hint = upper_sarok_quantity_hint(raw_row.get("detail"), edge)
                 if quantity_hint > raw_quantity:
                     raw_quantity = quantity_hint
@@ -5449,6 +5470,21 @@ def _manufacturing_view_bundle(
     front_sections, front_row_count = _manufacturing_front_sections(raw_bundle, current_number)
     front_folias_sections = [dict(section) for section in front_sections if "· Fóliás" in str(section.get("label", ""))]
     front_butorlapos_sections = [dict(section) for section in front_sections if "· Bútorlapos" in str(section.get("label", ""))]
+
+    def _filter_front_sections_by_source(sections: list[dict], source: str) -> list[dict]:
+        filtered_sections: list[dict] = []
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            rows = [row for row in section.get("rows", []) if isinstance(row, dict) and str(row.get("frontSource", "")).strip().lower() == source]
+            if not rows:
+                continue
+            cloned = dict(section)
+            cloned["rows"] = rows
+            filtered_sections.append(cloned)
+        return filtered_sections
+
+    front_etikett_sections = _filter_front_sections_by_source(front_sections, "etikett")
     documents.append(
         {
             "key": "front_osszekeszites",
@@ -5469,6 +5505,12 @@ def _manufacturing_view_bundle(
                     "label": "Bútorlapos",
                     "count": sum(len(section.get("rows", [])) for section in front_butorlapos_sections),
                     "sections": front_butorlapos_sections,
+                },
+                {
+                    "key": "front-etikett",
+                    "label": "Etikett frontok",
+                    "count": sum(len(section.get("rows", [])) for section in front_etikett_sections),
+                    "sections": front_etikett_sections,
                 },
             ],
             "allowSplit": False,
