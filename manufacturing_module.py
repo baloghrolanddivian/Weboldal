@@ -950,13 +950,18 @@ def _looks_like_potential_row_start(tokens: list[str], index: int, max_name_toke
     token = _clean_text(tokens[index] if index < len(tokens) else "")
     if not token or token in {":", "-"} or token.lower() == "x":
         return False
+    folded_token = _fold_hu(token)
+    # Some CNC pages contain compact first-column values like
+    # "Felső oldal 1H2R" as a single token. Treat these as valid row starts.
+    if re.fullmatch(r"(felso oldal|also oldal)(?:\s+1h(?:2r)?)?", folded_token):
+        return True
     if token.startswith("Oldal ") or _looks_like_cnc_section_header(token) or _looks_like_fiokelo_header(token):
         return False
     if re.fullmatch(r"-?\d+", token):
         return False
     if any(character.isdigit() for character in token):
         return False
-    folded = _fold_hu(token)
+    folded = folded_token
     if folded in {"te", "ri", "jo", "n"}:
         return False
     if re.fullmatch(r"[A-Z]{1,4}", token):
