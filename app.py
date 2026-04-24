@@ -987,7 +987,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-21-cnc-compact-upper-rowstart-v31"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-23-cnc-upper-360-fkf-v44"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -2497,6 +2497,17 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             ("ú", "u"),
             ("ü", "u"),
             ("ű", "u"),
+            ("Ăˇ", "a"),
+            ("Ă©", "e"),
+            ("Ă­", "i"),
+            ("Ăł", "o"),
+            ("Ă¶", "o"),
+            ("Ĺ‘", "o"),
+            ("Ăş", "u"),
+            ("ĂĽ", "u"),
+            ("Ĺ±", "u"),
+            ("Ăµ", "o"),
+            ("Ă»", "u"),
             ("õ", "o"),
             ("û", "u"),
         ):
@@ -2545,6 +2556,9 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             return "Nincs"
         folded_label = folded(label)
         folded_compact = re.sub(r"\s+", " ", folded_label).strip()
+        # OCR variánsok: "ráüt.165°-os klipp", "raut 165 klipp", stb.
+        if "165" in folded_compact and "klipp" in folded_compact:
+            return "Csill. ráüt. 165°-os klipp"
         if folded_compact in {"raut", "raut.", "ráüt", "ráüt."}:
             return "Ráüt."
         if folded_compact.startswith("raut.tip") or folded_compact.startswith("ráüt.tip"):
@@ -2575,6 +2589,46 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             filtered.append(token)
         final_text = re.sub(r"\s+", " ", " ".join(filtered)).strip() or raw
         return final_text, had_hutos
+
+    def strip_model_prefix_from_color(color_value: object, model_value: object) -> str:
+        color_text = clean_text(color_value)
+        model_text = clean_text(model_value)
+        if not color_text or not model_text:
+            return color_text
+        color_fold = folded(color_text)
+        model_fold = folded(model_text)
+        color_parts = [normalize_token(part) for part in color_fold.split() if normalize_token(part)]
+        if not color_parts:
+            return color_text
+        if color_parts[0] == normalize_token(model_fold):
+            original_parts = [clean_text(part) for part in color_text.split() if clean_text(part)]
+            if len(original_parts) >= 2:
+                stripped = " ".join(original_parts[1:]).strip()
+                if stripped:
+                    return stripped
+        if color_fold.startswith(model_fold + " "):
+            stripped = color_text[len(model_text):].strip()
+            if stripped:
+                return stripped
+        return color_text
+
+    def is_generic_pantolo_color(value: object) -> bool:
+        color = folded(clean_text(value))
+        if not color or color == "-":
+            return True
+        generic_tokens = {
+            "folias",
+            "fóliás",
+            "matt",
+            "sm",
+            "mf",
+        }
+        parts = [normalize_token(part) for part in color.split() if normalize_token(part)]
+        if not parts:
+            return True
+        if len(parts) == 1 and parts[0] in generic_tokens:
+            return True
+        return False
 
     def normalize_handle_type(drill_value: object, handle_value: object) -> str:
         handle = normalize_nincs_text(handle_value)
@@ -2676,17 +2730,35 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     grouped_sections: dict[str, dict] = {}
     grouped_order: list[str] = []
     row_count = 0
+    last_valid_color_by_front_model: dict[tuple[str, str], str] = {}
+    last_valid_color_by_front: dict[str, str] = {}
+    unresolved_rows_by_front_model: dict[tuple[str, str], list[dict]] = {}
 
     for section in raw_sections:
         for raw_row in section.get("rows", []):
             if not isinstance(raw_row, dict):
                 continue
             row = dict(raw_row)
-            color, _had_hutos_in_color = canonical_pantolo_color(row.get("color"))
             model_label = clean_text(row.get("name")) or "-"
+            color, _had_hutos_in_color = canonical_pantolo_color(row.get("color"))
+            color = strip_model_prefix_from_color(color, model_label)
             size_label = clean_text(row.get("size")) or "-"
             quantity_value = int(row.get("quantity") or 0)
             front_type, tail_parts = parse_front_type(row.get("detail"))
+            front_type = clean_text(front_type) or "-"
+            model_label = clean_text(row.get("name")) or "-"
+            color_key = (front_type, model_label)
+            if is_generic_pantolo_color(color):
+                fallback_color = last_valid_color_by_front_model.get(color_key)
+                if not fallback_color:
+                    fallback_color = last_valid_color_by_front.get(front_type)
+                if fallback_color:
+                    color = fallback_color
+                else:
+                    color = "-"
+            else:
+                last_valid_color_by_front_model[color_key] = color
+                last_valid_color_by_front[front_type] = color
             first_tail = clean_text(tail_parts[0]) if tail_parts else ""
             first_tail_token = clean_text(first_tail.split(" ", 1)[0]) if first_tail else ""
             first_tail_norm = normalize_token(first_tail_token)
@@ -2732,7 +2804,9 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 }
                 grouped_order.append(group_key)
             row["name"] = color
+            row["color"] = color
             row["detail"] = ""
+            row["frontType"] = front_type
             row["modelLabel"] = model_label
             row["color23"] = "-"
             row["pantType"] = normalize_pant_label(pant_type or "Nincs")
@@ -2744,10 +2818,131 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             row["columnLayout"] = "pantolo"
             row["hideSubtitle"] = True
             grouped_sections[group_key]["rows"].append(row)
+            if color == "-":
+                unresolved_rows_by_front_model.setdefault(color_key, []).append(row)
+            else:
+                for pending_row in unresolved_rows_by_front_model.pop(color_key, []):
+                    pending_row["name"] = color
             row_count += quantity_value
 
-    sections = [grouped_sections[key] for key in grouped_order]
+    # Rebuild groups after color backfill so rows that were initially "-" can
+    # move into their correct color box once the real color appears later.
+    rebuilt_sections: dict[str, dict] = {}
+    rebuilt_order: list[str] = []
+    for group_key in grouped_order:
+        section_rows = grouped_sections.get(group_key, {}).get("rows", [])
+        for row in section_rows:
+            if not isinstance(row, dict):
+                continue
+            front_type = clean_text(row.get("frontType")) or "-"
+            color = clean_text(row.get("name")) or "-"
+            model_label = clean_text(row.get("modelLabel")) or "-"
+            rebuilt_group_key = _manufacturing_local_slug(f"pantolo::{front_type}::{color}::{model_label}")
+            rebuilt_group_label = f"Front típus: {front_type} | {color} | {model_label}"
+            if rebuilt_group_key not in rebuilt_sections:
+                rebuilt_sections[rebuilt_group_key] = {
+                    "key": f"pantolo::{rebuilt_group_key}",
+                    "label": rebuilt_group_label,
+                    "rows": [],
+                    "columnLayout": "pantolo",
+                }
+                rebuilt_order.append(rebuilt_group_key)
+            rebuilt_sections[rebuilt_group_key]["rows"].append(row)
+
+    sections = [rebuilt_sections[key] for key in rebuilt_order]
     all_pantolo_rows = [row for section in sections for row in section.get("rows", []) if isinstance(row, dict)]
+
+    def apply_hutos_suffix(base_color: str, has_hutos: bool) -> str:
+        color_text = clean_text(base_color) or "-"
+        if color_text == "-" or not has_hutos:
+            return color_text
+        if "hutos" in folded(color_text):
+            return color_text
+        return f"{color_text} Hűtős"
+
+    def is_bad_pantolo_section_color(row: dict) -> bool:
+        color_text = clean_text(row.get("name"))
+        if is_generic_pantolo_color(color_text):
+            return True
+        stripped = strip_model_prefix_from_color(color_text, row.get("modelLabel"))
+        return clean_text(stripped) != color_text
+
+    def resolve_nearest_section_color(index: int) -> str:
+        current = all_pantolo_rows[index]
+        front_type = clean_text(current.get("frontType")) or "-"
+        model_label = clean_text(current.get("modelLabel")) or "-"
+        previous_match: tuple[int, str] | None = None
+        next_match: tuple[int, str] | None = None
+        for probe in range(index - 1, -1, -1):
+            candidate = all_pantolo_rows[probe]
+            if clean_text(candidate.get("frontType")) != front_type:
+                continue
+            if clean_text(candidate.get("modelLabel")) != model_label:
+                continue
+            candidate_color = clean_text(candidate.get("name"))
+            candidate_color = strip_model_prefix_from_color(candidate_color, candidate.get("modelLabel"))
+            if is_generic_pantolo_color(candidate_color):
+                continue
+            previous_match = (index - probe, candidate_color)
+            break
+        for probe in range(index + 1, len(all_pantolo_rows)):
+            candidate = all_pantolo_rows[probe]
+            if clean_text(candidate.get("frontType")) != front_type:
+                continue
+            if clean_text(candidate.get("modelLabel")) != model_label:
+                continue
+            candidate_color = clean_text(candidate.get("name"))
+            candidate_color = strip_model_prefix_from_color(candidate_color, candidate.get("modelLabel"))
+            if is_generic_pantolo_color(candidate_color):
+                continue
+            next_match = (probe - index, candidate_color)
+            break
+        if previous_match and next_match:
+            if clean_text(previous_match[1]) == clean_text(next_match[1]):
+                return previous_match[1]
+            return previous_match[1] if previous_match[0] <= next_match[0] else next_match[1]
+        if previous_match:
+            return previous_match[1]
+        if next_match:
+            return next_match[1]
+        return "-"
+
+    needs_color_regroup = False
+    for index, row in enumerate(all_pantolo_rows):
+        if not is_bad_pantolo_section_color(row):
+            continue
+        resolved_color = resolve_nearest_section_color(index)
+        original_color, had_hutos = canonical_pantolo_color(row.get("color"))
+        resolved_color = strip_model_prefix_from_color(resolved_color, row.get("modelLabel"))
+        resolved_color = apply_hutos_suffix(resolved_color, had_hutos)
+        if clean_text(resolved_color) and clean_text(resolved_color) != clean_text(row.get("name")):
+            row["name"] = resolved_color
+            row["color"] = resolved_color
+            needs_color_regroup = True
+
+    if needs_color_regroup:
+        regrouped_sections: dict[str, dict] = {}
+        regrouped_order: list[str] = []
+        for row in all_pantolo_rows:
+            front_type = clean_text(row.get("frontType")) or "-"
+            color = clean_text(row.get("name")) or "-"
+            model_label = clean_text(row.get("modelLabel")) or "-"
+            regrouped_group_key = _manufacturing_local_slug(f"pantolo::{front_type}::{color}::{model_label}")
+            regrouped_group_label = f"Front típus: {front_type} | {color} | {model_label}"
+            if regrouped_group_key not in regrouped_sections:
+                regrouped_sections[regrouped_group_key] = {
+                    "key": f"pantolo::{regrouped_group_key}",
+                    "label": regrouped_group_label,
+                    "rows": [],
+                    "columnLayout": "pantolo",
+                }
+                regrouped_order.append(regrouped_group_key)
+            regrouped_sections[regrouped_group_key]["rows"].append(row)
+        sections = [regrouped_sections[key] for key in regrouped_order]
+        all_pantolo_rows = [row for section in sections for row in section.get("rows", []) if isinstance(row, dict)]
+
+    for row in all_pantolo_rows:
+        row["color"] = clean_text(row.get("name")) or "-"
 
     def canonical_pantolo_door(value: object) -> str:
         text = folded(clean_text(value))
@@ -3251,12 +3446,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             (r"\s+Sarok\s+fels[őo]$", "Sarok felső"),
             (r"\s+Fels[őo]\s+felny[ií]l[oó]s$", "Felnyíló"),
             (r"\s+F_?2A$", "F2A"),
-            (r"\s+EF60(?:_?72)?$", "EF60"),
+            (r"\s+EF60_?72$", "EF60_72"),
+            (r"\s+EF60$", "EF60"),
             (r"\s+FNY$", "FNY"),
             (r"\s+EFT$", "EFT"),
             (r"\s+FVZ$", "FVZ"),
             (r"\s+FMFS$", "FMFS"),
             (r"\s+FMF$", "FMF"),
+            (r"\s+FKF\s+Tiplis$", "FKF Tiplis"),
             (r"\s+FKF$", "FKF"),
             (r"\s+FZN$", "FZN"),
             (r"\s+FÜF$", "FÜF"),
@@ -3308,12 +3505,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             (r"\s+Sarok\s+fels[őo]\b.*$", "Sarok felső"),
             (r"\s+Fels[őo]\s+felny[ií]l[oó]s\b.*$", "Felnyíló"),
             (r"\s+F_?2A\b.*$", "F2A"),
-            (r"\s+EF60(?:_?72)?\b.*$", "EF60"),
+            (r"\s+EF60_?72\b.*$", "EF60_72"),
+            (r"\s+EF60\b.*$", "EF60"),
             (r"\s+FNY\b.*$", "FNY"),
             (r"\s+EFT\b.*$", "EFT"),
             (r"\s+FVZ\b.*$", "FVZ"),
             (r"\s+FMFS\b.*$", "FMFS"),
             (r"\s+FMF\b.*$", "FMF"),
+            (r"\s+FKF\s+Tiplis\b.*$", "FKF Tiplis"),
             (r"\s+FKF\b.*$", "FKF"),
             (r"\s+FZN\b.*$", "FZN"),
             (r"\s+FÜF\b.*$", "FÜF"),
@@ -5193,16 +5392,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     rack2_box3_rows = [
         row for row in rack2_source_rows
         if upper_row_id(row) not in rack2_primary_assigned_ids
+        and not is_upper_360x330(row)
         and (not is_upper_sarok_bucket_size(row) or is_upper_360_fmf(row))
         and (
             clean_text(row.get("size")).startswith("595 x ")
-            or is_upper_360x330(row)
             or is_upper_360_special(row)
             or is_upper_680(row)
             or is_upper_fuf_or_fzn(row)
         )
     ]
-    all_360_fmf_rows = [row for row in non_fvz_upper_rows if is_upper_360_fmf(row)]
+    all_360_fmf_rows = [
+        row for row in non_fvz_upper_rows
+        if is_upper_360_fmf(row) and not is_upper_360x330(row)
+    ]
     for row in all_360_fmf_rows:
         if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
@@ -5217,16 +5419,22 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     rack2_box3_ids = {upper_row_id(row) for row in rack2_box3_rows}
+    rack1_box360_rows = [row for row in rack1_source_rows if is_upper_360x330(row)]
+    rack2_box360_rows = [row for row in rack2_source_rows if is_upper_360x330(row)]
+    rack1_box360_ids = {upper_row_id(row) for row in rack1_box360_rows}
+    rack2_box360_ids = {upper_row_id(row) for row in rack2_box360_rows}
     rack2_box4_rows = [
         row for row in non_fvz_upper_rows
         if (
-            (is_upper_sarok(row) and not is_upper_360_fmf(row))
-            or (is_upper_sarok_bucket_size(row) and not is_upper_360_fmf(row))
+            ((is_upper_sarok(row) and not is_upper_360_fmf(row)) and not is_upper_360x330(row))
+            or ((is_upper_sarok_bucket_size(row) and not is_upper_360_fmf(row)) and not is_upper_360x330(row))
             or (
                 upper_row_id(row) not in rack1_box1_ids
                 and upper_row_id(row) not in rack1_box2_ids
                 and upper_row_id(row) not in rack1_box3_ids
+                and upper_row_id(row) not in rack1_box360_ids
                 and upper_row_id(row) not in rack2_primary_assigned_ids
+                and upper_row_id(row) not in rack2_box360_ids
                 and upper_row_id(row) not in rack2_box3_ids
                 and row not in zille_rows
             )
@@ -5246,16 +5454,16 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
     rack1_box3_rows = [row for row in rack1_box3_rows if upper_row_id(row) not in rack2_box3_ids]
     rack1_box3_ids = {upper_row_id(row) for row in rack1_box3_rows}
-    rack1_box360_rows: list[dict] = []
-    rack2_box360_rows: list[dict] = []
     upper_assigned_ids = {
         str(row.get("row_id", ""))
         for bucket in (
             rack1_box1_rows,
             rack1_box2_rows,
+            rack1_box360_rows,
             rack1_box3_rows,
             rack2_box1_rows,
             rack2_box2_rows,
+            rack2_box360_rows,
             rack2_box3_rows,
             rack2_box4_rows,
             vegzaro_raklap_rows,
@@ -5283,9 +5491,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     upper_sections = []
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
     add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
     add_upper_section("1-es raklap · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
     add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("2-es raklap · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("2-es raklap · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")

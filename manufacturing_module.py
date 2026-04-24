@@ -918,6 +918,17 @@ def _fold_hu(value: str) -> str:
         "ú": "u",
         "ü": "u",
         "ű": "u",
+        "Ăˇ": "a",
+        "Ă©": "e",
+        "Ă­": "i",
+        "Ăł": "o",
+        "Ă¶": "o",
+        "Ĺ‘": "o",
+        "Ăş": "u",
+        "ĂĽ": "u",
+        "Ĺ±": "u",
+        "Ăµ": "o",
+        "Ă»": "u",
         "õ": "o",
         "û": "u",
     }
@@ -1289,7 +1300,7 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
     rows: list[ManufacturingRow] = []
     row_index = 0
     current_front_type: str | None = None
-    known_models = {"anna", "antonia", "laura", "kinga", "zille", "doroti", "kira", "kata", "klio", "petra", "ibiza", "etna"}
+    known_models = {"anna", "antonia", "laura", "kinga", "zille", "doroti", "kira", "kata", "klio", "petra", "ibiza", "etna", "olivia"}
     pant_markers = ("raut", "csill", "pant", "nincs", "klipp", "pill", "45", "165")
     header_tokens = {
         "szin",
@@ -1393,20 +1404,35 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
         page_number = int(stream[dimension_index][1])
         front_type = _clean_text(stream[dimension_index][2]) or "Pántolás"
 
-        model_index = -1
-        for probe, part in enumerate(pre_tokens):
-            if _fold_hu(part) in known_models:
-                model_index = probe
-                break
+        model_positions = [probe for probe, part in enumerate(pre_tokens) if _fold_hu(part) in known_models]
+        model_index = model_positions[-1] if model_positions else -1
 
         color_tokens: list[str] = []
         pant_tokens: list[str] = []
         model_label = ""
         if model_index != -1:
             model_label = _clean_text(pre_tokens[model_index])
-            pre_head = pre_tokens[:model_index]
+            # Some first rows in a box can leak an extra "<color> <model>" pair
+            # from the section title before the actual row tokens.
+            # Keep only the last row-local tokens before the detected model.
+            pre_head_start = max(0, model_index - 3)
+            if len(model_positions) >= 2:
+                # Example:
+                #   Canyon tölgy | Anna | Canyon tölgy | Ráüt.tip. | Anna
+                # The first "<color> <model>" pair belongs to the repeated box header,
+                # not to the row itself. Start after the previous model token.
+                pre_head_start = max(pre_head_start, model_positions[-2] + 1)
+            pre_head = pre_tokens[pre_head_start:model_index]
         else:
-            pre_head = pre_tokens
+            # Unknown model name (not in known_models): assume the model is the
+            # last token before size, and parse color/pant from the preceding tail.
+            if pre_tokens:
+                model_index = len(pre_tokens) - 1
+                model_label = _clean_text(pre_tokens[model_index])
+                pre_head_start = max(0, model_index - 3)
+                pre_head = pre_tokens[pre_head_start:model_index]
+            else:
+                pre_head = []
 
         pant_start = -1
         for probe, part in enumerate(pre_head):
