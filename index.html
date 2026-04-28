@@ -36,50 +36,9 @@
           <a href="#modules">Modulok</a>
         </nav>
 
-        <a class="nav-cta" href="#divian-ai">Divian-AI</a>
       </header>
 
       <main class="home-shell">
-        <section class="ai-section" id="divian-ai">
-          <article class="ai-card reveal">
-            <div class="ai-head">
-              <div>
-                <p class="section-label">Divian-AI</p>
-                <h2>Kérdezz a Divianról</h2>
-                <p>Termékekről, konyhákról, színekről és alapinformációkról válaszol a nyilvános webes források alapján.</p>
-              </div>
-
-              <div class="ai-ready-badge" id="divian-ai-ready-badge">
-                Webes források ellenőrzése...
-              </div>
-            </div>
-
-            <div class="ai-grid">
-              <div class="ai-panel ai-chat-panel">
-                <div class="ai-thread" id="divian-ai-thread" aria-live="polite"></div>
-
-                <form class="ai-form ai-chat-form" id="divian-ai-form">
-                  <label class="ai-label" for="divian-ai-question">Kérdés</label>
-                  <textarea
-                    id="divian-ai-question"
-                    name="question"
-                    placeholder="Például: Milyen bútorlap színeink vannak?"
-                    maxlength="1000"
-                  ></textarea>
-
-                  <div class="ai-actions">
-                    <button class="button button-primary" id="divian-ai-submit" type="submit">
-                      Küldés
-                    </button>
-                    <div class="ai-status" id="divian-ai-status">
-                      A Divian-AI a nyilvános webes forrásokat használja.
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </article>
-        </section>
 
         <section class="landing-grid" id="hero">
           <article class="landing-card reveal">
@@ -101,7 +60,6 @@
                 </p>
 
                 <div class="home-actions">
-                  <a class="button button-primary" href="#divian-ai">Divian-AI</a>
                   <a class="button button-secondary" href="#modules">Feladat választás</a>
                 </div>
 
@@ -231,11 +189,34 @@
                 <div class="module-status">Aktív modul</div>
                 <div class="module-number">09</div>
               </div>
-              <h3>Divian-AI tudásbázis</h3>
-              <p>Fájlok feltöltése, indexelése és visszakérdezése belső céges tudásforrásként.</p>
-              <div class="module-meta">Fájl feltöltés -> kérdezz-felelek</div>
-              <a class="button button-secondary" href="/apps/ai-tudasbazis">Megnyitás</a>
+              <h3>Anyag raktár leltár</h3>
+              <p>Anyagraktári tételek számlálása ICG kód szerinti kategóriákban, InSight exporttal.</p>
+              <div class="module-meta">Excel -> ICG kategóriák -> leltár export</div>
+              <a class="button button-secondary" href="/apps/anyag-raktar">Megnyitás</a>
             </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">10</div>
+              </div>
+              <h3>Félkész raktár leltár</h3>
+              <p>Félkész raktári tételek számlálása szín szerinti kategóriákban, InSight exporttal.</p>
+              <div class="module-meta">Excel -> szín kategóriák -> leltár export</div>
+              <a class="button button-secondary" href="/apps/felkesz-raktar">Megnyitás</a>
+            </article>
+
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">11</div>
+              </div>
+              <h3>Félkész front leltár</h3>
+              <p>Félkész frontok számlálása szín szerinti kategóriákban, InSight exporttal.</p>
+              <div class="module-meta">Excel -> szín kategóriák -> leltár export</div>
+              <a class="button button-secondary" href="/apps/felkesz-front">Megnyitás</a>
+            </article>
+
           </div>
         </section>
       </main>
