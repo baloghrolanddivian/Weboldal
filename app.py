@@ -13878,6 +13878,48 @@ def _material_inventory_store_exports(session: dict) -> None:
     )
 
 
+def _material_inventory_hydrate_book_qty(session: dict | None) -> bool:
+    if not isinstance(session, dict):
+        return False
+    rows = session.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return False
+    if any(str(row.get("book_qty", "")).strip() for row in rows if isinstance(row, dict)):
+        return False
+
+    meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_STOCK_META_PATH)
+    stored_name = str(meta.get("stored_name", "")).strip()
+    original_name = str(meta.get("original_name", "")).strip() or stored_name
+    if not stored_name:
+        return False
+    stock_path = MATERIAL_INVENTORY_RUNTIME_DIR / stored_name
+    if not stock_path.is_file():
+        return False
+
+    try:
+        source_session = build_material_inventory_session(original_name, stock_path.read_bytes())
+    except Exception:
+        return False
+
+    book_by_key: dict[tuple[str, str], str] = {}
+    for source_row in source_session.get("rows", []):
+        if not isinstance(source_row, dict):
+            continue
+        key = (str(source_row.get("part_number", "")), str(source_row.get("icg_code", "")))
+        book_by_key[key] = str(source_row.get("book_qty", "") or "")
+
+    changed = False
+    for row in rows:
+        if not isinstance(row, dict) or str(row.get("book_qty", "")).strip():
+            continue
+        key = (str(row.get("part_number", "")), str(row.get("icg_code", "")))
+        book_qty = book_by_key.get(key, "")
+        if book_qty:
+            row["book_qty"] = book_qty
+            changed = True
+    return changed
+
+
 def _semifinished_inventory_saved_stock_name() -> str:
     meta = _matt_inventory_read_meta(SEMIFINISHED_INVENTORY_STOCK_META_PATH)
     return str(meta.get("original_name", "")).strip()
@@ -14022,6 +14064,8 @@ def render_material_inventory_form(
         saved_insight_name = _material_inventory_saved_insight_name()
         saved_summary_name = _material_inventory_saved_summary_name()
     session = load_material_inventory_session_from_path(session_path)
+    if not is_semifinished and _material_inventory_hydrate_book_qty(session):
+        save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
     active_view = _material_inventory_normalize_view(view_mode)
     color_page_title = "Félkész front leltár" if is_semifinished_front else "Félkész raktár leltár"
     color_board_title = "Félkész front számolás" if is_semifinished_front else "Félkész raktár számolás"
@@ -14029,7 +14073,7 @@ def render_material_inventory_form(
     page_title = color_page_title if is_semifinished else "Anyagraktár leltár"
     board_title = color_board_title if is_semifinished else "Anyagraktár számolás"
     upload_title = color_upload_title if is_semifinished else "Anyagraktár leltár."
-    required_columns = "Alkatr.-szám · Alkatr.-leírás · SZIN · SZIN.Desc" if is_semifinished else "Alkatr.-szám · Alkatr.-leírás · ICG kód · Könyvelési mennyiség"
+    required_columns = "Alkatr.-szám · Alkatr.-leírás · SZIN · SZIN.Desc" if is_semifinished else "Alkatr.-szám · Alkatr.-leírás · Könyvelési mennyiség · ICG kód"
     category_help = "Csak a számoláshoz szükséges felület. Szín szerint válassz kategóriát." if is_semifinished else "Csak a számoláshoz szükséges felület. ICG kód szerint válassz kategóriát."
     upload_copy = "Feltöltés után a leltár szín szerint szétbontva jelenik meg. A véglegesítés InSight listát és összesítőt készít." if is_semifinished else "Feltöltés után a leltár ICG kód szerint szétbontva jelenik meg. A véglegesítés InSight listát és összesítőt készít."
     color_upload_button = "Félkész front leltár indítása" if is_semifinished_front else "Félkész raktár leltár indítása"
@@ -14276,9 +14320,9 @@ def render_material_inventory_form(
     .matinv-table {{ width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; }}
     .matinv-table th {{ padding:10px 10px; background:#f8fafc; color:#475569; text-align:left; font-size:.72rem; font-weight:800; text-transform:uppercase; }}
     .matinv-table td {{ padding:10px 10px; border-top:1px solid rgba(15,23,42,.07); font-weight:700; vertical-align:middle; }}
-    .matinv-col-description {{ width:28%; }}
-    .matinv-col-book {{ width:11%; }}
-    .matinv-col-total {{ width:11%; }}
+    .matinv-col-description {{ width:26%; }}
+    .matinv-col-book {{ width:14%; }}
+    .matinv-col-total {{ width:10%; }}
     .matinv-col-adjust {{ width:50%; }}
     .matinv-board.is-semifinished .matinv-col-description {{ width:30%; }}
     .matinv-board.is-semifinished .matinv-col-color {{ width:18%; }}
@@ -14309,10 +14353,10 @@ def render_material_inventory_form(
       .matinv-search {{ grid-template-columns:1fr; gap:6px; }}
       .matinv-table th {{ padding:8px 6px; font-size:.62rem; letter-spacing:.02em; }}
       .matinv-table td {{ padding:8px 6px; font-size:.84rem; }}
-      .matinv-col-description {{ width:30%; }}
-      .matinv-col-book {{ width:10%; }}
+      .matinv-col-description {{ width:28%; }}
+      .matinv-col-book {{ width:14%; }}
       .matinv-col-total {{ width:10%; }}
-      .matinv-col-adjust {{ width:50%; }}
+      .matinv-col-adjust {{ width:48%; }}
       .matinv-board.is-semifinished .matinv-col-description {{ width:30%; }}
       .matinv-board.is-semifinished .matinv-col-color {{ width:18%; }}
       .matinv-board.is-semifinished .matinv-col-total {{ width:12%; }}

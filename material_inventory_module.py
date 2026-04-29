@@ -291,6 +291,7 @@ def _read_xlsx_rows(payload: bytes) -> list[dict]:
         raise ValueError("A feltöltött anyagraktár fájl üres.") from exc
     header_map = _header_map(header_row)
     _ensure_required_headers(header_map)
+    _apply_material_book_qty_fallback(header_map, header_row)
     rows: list[dict] = []
     for values in rows_iter:
         item = _row_from_values(header_map, values)
@@ -310,6 +311,7 @@ def _read_csv_rows(payload: bytes) -> list[dict]:
         raise ValueError("A feltöltött anyagraktár CSV üres.") from exc
     header_map = _header_map(header_row)
     _ensure_required_headers(header_map)
+    _apply_material_book_qty_fallback(header_map, header_row)
     rows: list[dict] = []
     for values in reader:
         item = _row_from_values(header_map, values)
@@ -397,6 +399,24 @@ def _header_map(header_row: tuple | list) -> dict[str, int]:
                 result[key] = index
                 break
     return result
+
+
+def _apply_material_book_qty_fallback(header_map: dict[str, int], header_row: tuple | list) -> None:
+    """Anyagraktár files use the 3rd column for the bookkeeping quantity in practice.
+
+    Keep explicit header detection first, but if the column name is not recognized,
+    fall back to column C as long as it is not already used by another required field.
+    """
+    if "book_qty" in header_map or len(header_row) < 3:
+        return
+    fallback_index = 2
+    used_by_required = {
+        key: index
+        for key, index in header_map.items()
+        if key in {"part_number", "description", "icg_code", "exclude"}
+    }
+    if fallback_index not in used_by_required.values():
+        header_map["book_qty"] = fallback_index
 
 
 def _ensure_required_headers(header_map: dict[str, int]) -> None:
