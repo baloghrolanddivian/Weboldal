@@ -79,6 +79,8 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
         "phase_label": "Számlálás",
         "finalized_at": "",
         "serial_sizes": sorted(serial_sizes, key=_size_sort_key),
+        "category_label": "Méret",
+        "inventory_style": "simple-size",
         "rows": rows,
     }
 
@@ -344,7 +346,11 @@ def finalize_inventory(session: dict, allow_missing: bool = False) -> tuple[bool
     if str(session.get("phase")) == "finalized":
         return False, "A leltar mar le van zarva."
 
-    active_rows = _active_rows_for_phase(session, 2)
+    active_rows = [
+        row
+        for row in session.get("rows", [])
+        if _is_visible_inventory_row(row) and row.get("status") != "resolved"
+    ]
     missing_count = sum(1 for row in active_rows if _row_input_value(row) is None)
     if missing_count and not allow_missing:
         return False, f"Meg {missing_count} frontnal nincs vegleges darabszam."
@@ -558,15 +564,17 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
             str(row.get("color", "")).strip(),
             bool(row.get("is_serial")),
         )
-    active_rows = _active_rows_for_phase(session, int(session.get("phase", 0) or 0)) if not finalized else [row for row in source_rows if _is_visible_inventory_row(row)]
-    active_rows = list(active_rows)
+    active_rows = [
+        row
+        for row in source_rows
+        if _is_visible_inventory_row(row) and (finalized or row.get("status") != "resolved")
+    ]
 
-    serial_rows = [row for row in active_rows if row.get("is_serial")]
-    custom_rows = [row for row in active_rows if not row.get("is_serial")]
+    serial_rows = active_rows
+    custom_rows: list[dict] = []
 
     categories: list[dict] = []
     categories.append({"key": "all", "label": "Összes", "count": len(serial_rows), "complete": bool(serial_rows) and all(str(row.get("input_qty", "")).strip() for row in serial_rows)})
-    categories.append({"key": "egyedi", "label": "Egyedi", "count": len(custom_rows), "complete": bool(custom_rows) and all(str(row.get("input_qty", "")).strip() for row in custom_rows)})
 
     size_buckets: dict[str, list[dict]] = {}
     for row in serial_rows:
@@ -578,13 +586,11 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
         bucket_rows = size_buckets[size_key]
         categories.append({"key": size_key, "label": size_key, "count": len(bucket_rows), "complete": bool(bucket_rows) and all(str(row.get("input_qty", "")).strip() for row in bucket_rows)})
 
-    allowed_keys = {item["key"] for item in categories if item["count"] > 0} | {"all", "egyedi"}
-    active_category = selected_category if selected_category in allowed_keys else ("all" if serial_rows else ("egyedi" if custom_rows else "all"))
+    allowed_keys = {item["key"] for item in categories if item["count"] > 0} | {"all"}
+    active_category = selected_category if selected_category in allowed_keys else "all"
 
     if active_category == "all":
         visible_rows = serial_rows
-    elif active_category == "egyedi":
-        visible_rows = custom_rows
     else:
         visible_rows = [row for row in serial_rows if row.get("category") == active_category]
 
@@ -673,31 +679,32 @@ def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | No
     desc_index = _find_header_index(header_map, ("alkatr", "leiras"))
     qty_index = _find_header_index(header_map, ("rend", "all", "rakt", "keszl")) or _find_header_index(header_map, ("rend", "all"))
     color_index = _find_header_index(header_map, ("szin", "desc")) or _find_header_index(header_map, ("szin",))
+    exclude_index = _find_header_index(header_map, ("leltarbol", "ki"))
 
-    if None in {part_index, desc_index, qty_index}:
-        raise ValueError("A front készletfájlban kell alkatrészszám, leírás és készlet oszlop.")
+    if None in {part_index, desc_index}:
+        raise ValueError("A front leltárfájlban kell alkatrészszám és leírás oszlop.")
 
     items: list[dict] = []
     for row in rows[1:]:
-        if max(part_index, desc_index, qty_index) >= len(row):
+        if max(part_index, desc_index) >= len(row):
             continue
         part_number = _normalize_part_number(row[part_index])
         if not part_number:
             continue
-        description = str(row[desc_index] or "").strip()
-        quantity = _parse_non_negative_int(row[qty_index])
-        color_value = row[color_index] if color_index is not None and color_index < len(row) else ""
-        if quantity is None or quantity <= 0:
+        exclude_value = row[exclude_index] if exclude_index is not None and exclude_index < len(row) else ""
+        if _is_inventory_excluded_flag(exclude_value):
             continue
+        description = str(row[desc_index] or "").strip()
+        quantity = _parse_non_negative_int(row[qty_index]) if qty_index is not None and qty_index < len(row) else 0
+        color_value = row[color_index] if color_index is not None and color_index < len(row) else ""
         if not _looks_like_front(part_number, description):
             continue
         model = _extract_model_value(description, part_number)
         color = _normalize_inventory_row_color(model, _extract_color_value(description, color_value), description)
         size = _extract_front_size(description, part_number)
-        is_serial = bool(serial_sizes) and size in serial_sizes
+        is_serial = bool(size)
         is_glass = _is_glass_front(part_number, description)
-        if (not is_glass) and _is_excluded_inventory_row(model, color, is_serial):
-            continue
+        special_category = _inventory_special_category(part_number, description)
         items.append(
             {
                 "part_number": part_number,
@@ -707,12 +714,13 @@ def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | No
                 "size": size,
                 "is_serial": is_serial,
                 "is_glass": is_glass,
+                "special_category": special_category,
                 "quantity": quantity,
             }
         )
 
     if not items:
-        raise ValueError("A front készletfájlban nem találtam raktáron lévő front sorokat.")
+        raise ValueError("A front leltárfájlban nem találtam front sorokat.")
     return items
 
 
@@ -720,6 +728,7 @@ def _looks_like_front(part_number: str, description: str) -> bool:
     folded_description = _fold_text(description)
     return (
         str(part_number or "").strip().upper().startswith("NFA_")
+        or str(part_number or "").strip().upper().startswith("NFA")
         or str(part_number or "").strip().upper().startswith("NFAU_")
         or str(part_number or "").strip().upper().startswith("NFAH_")
         or str(part_number or "").strip().upper().startswith("NFAL_")
@@ -729,6 +738,11 @@ def _looks_like_front(part_number: str, description: str) -> bool:
         or "tak.s" in str(description or "").lower()
         or "sarok tak" in folded_description
     )
+
+
+def _is_inventory_excluded_flag(value: object) -> bool:
+    text = _fold_text(value)
+    return text not in {"", "0", "nem", "false", "no"}
 
 
 def _load_serial_sizes() -> set[str]:
@@ -762,18 +776,20 @@ def _repair_session(session: dict, session_path: Path | None = None) -> bool:
         description = str(row.get("description", ""))
         part_number = str(row.get("part_number", ""))
         size = _extract_front_size(description, part_number)
-        is_serial = bool(size) and size in serial_sizes
+        is_serial = bool(size)
         is_glass = _is_glass_front(part_number, description)
+        special_category = str(row.get("special_category", "")).strip() or _inventory_special_category(part_number, description)
         model = str(row.get("model", "")).strip() or _extract_model_value(description, part_number)
         color = _normalize_inventory_row_color(model, str(row.get("color", "")).strip(), description)
         color_label = _inventory_color_label(model, color, is_serial)
-        category = _inventory_category_key(size, is_serial, is_glass)
+        category = _inventory_category_key(size, is_serial, is_glass, special_category)
 
         for key, value in (
             ("size", size),
             ("is_serial", is_serial),
             ("is_glass", is_glass),
             ("category", category),
+            ("special_category", special_category),
             ("model", model),
             ("color", color),
             ("color_label", color_label),
@@ -828,8 +844,9 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
     model = str(item.get("model", "")).strip() or _extract_model_value(description, part_number)
     color = _normalize_inventory_row_color(model, str(item.get("color", "")).strip(), description)
     size = str(item.get("size", "")).strip() or _extract_front_size(description, part_number)
-    is_serial = bool(size) and size in serial_sizes
+    is_serial = bool(size)
     is_glass = bool(item.get("is_glass")) or _is_glass_front(part_number, description)
+    special_category = str(item.get("special_category", "")).strip() or _inventory_special_category(part_number, description)
     return {
         "row_id": part_number,
         "part_number": part_number,
@@ -839,9 +856,10 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
         "color_label": _inventory_color_label(model, color, is_serial),
         "stock_qty": int(item.get("quantity", 0) or 0),
         "size": size,
-        "category": _inventory_category_key(size, is_serial, is_glass),
+        "category": _inventory_category_key(size, is_serial, is_glass, special_category),
         "is_serial": is_serial,
         "is_glass": is_glass,
+        "special_category": special_category,
         "input_qty": "",
         "resolved_qty": None,
         "first_check_qty": None,
@@ -1038,7 +1056,9 @@ def _is_visible_inventory_row(row: dict) -> bool:
     row["is_glass"] = is_glass
     row["size"] = size
     row["color_label"] = _inventory_color_label(model, color, is_serial)
-    return not (not is_glass and _is_excluded_inventory_row(model, color, is_serial))
+    row["special_category"] = str(row.get("special_category", "")).strip() or _inventory_special_category(row.get("part_number", ""), row.get("description", ""))
+    row["category"] = _inventory_category_key(size, is_serial, is_glass, row.get("special_category", ""))
+    return True
 
 
 def _normalize_inventory_sort_mode(value: object) -> str:
@@ -1075,27 +1095,45 @@ def _size_sort_key(value: str) -> tuple[int, int, str]:
     return (int(match.group(1)), int(match.group(2)), str(value or ""))
 
 
-def _inventory_category_key(size: str, is_serial: bool, is_glass: bool) -> str:
+def _inventory_category_key(size: str, is_serial: bool, is_glass: bool, special_category: str = "") -> str:
+    special = str(special_category or "").strip()
+    clean_size = str(size or "").strip()
+    if special == "Üveges" and clean_size:
+        return f"Üveges - {clean_size}"
+    if special:
+        return special
     if not is_serial:
         return "egyedi"
-    clean_size = str(size or "").strip()
-    if is_glass and clean_size:
-        return f"Üveges - {clean_size}"
     return clean_size
 
 
 def _inventory_category_sort_key(value: str) -> tuple[int, int, int, str]:
     clean_value = str(value or "").strip()
+    special_order = {"Íves": 1, "Üveges": 2, "Blende": 3}
+    if clean_value in special_order:
+        return (0, special_order[clean_value], 0, clean_value)
     if clean_value == "egyedi":
-        return (2, 9999, 9999, clean_value)
+        return (9, 9999, 9999, clean_value)
     if clean_value.lower().startswith("üveges - ".lower()):
         base_size = clean_value.split("-", 1)[1].strip()
         w, h, _ = _size_sort_key(base_size)
-        return (1, w, h, clean_value)
+        return (2, w, h, clean_value)
     w, h, _ = _size_sort_key(clean_value)
     if w != 9999 or h != 9999:
-        return (0, w, h, clean_value)
-    return (3, 9999, 9999, clean_value)
+        return (1, w, h, clean_value)
+    return (8, 9999, 9999, clean_value)
+
+
+def _inventory_special_category(part_number: object, description: object) -> str:
+    part = str(part_number or "").strip().upper()
+    folded_description = _fold_text(description)
+    if "blende" in folded_description or part.startswith("NFAB"):
+        return "Blende"
+    if _is_glass_front(part, description):
+        return "Üveges"
+    if "ives" in folded_description or part.startswith("NFAIA") or re.search(r"\d+x\d+(?:x\d+)?[JB](?:_|$)", part):
+        return "Íves"
+    return ""
 
 
 def _is_glass_front(part_number: object, description: object = "") -> bool:

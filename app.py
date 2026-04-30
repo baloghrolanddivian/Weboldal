@@ -3749,7 +3749,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_token = clean_text(token)
             folded_token = folded(clean_token)
             return (
-                folded(clean_token) == "also oldal"
+                "also oldal" in folded(clean_token)
                 or folded(clean_token).startswith("as takarosav")
                 or clean_token.startswith("Kamra")
                 or folded(clean_token).startswith("takarolap as")
@@ -3975,10 +3975,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_token = clean_text(token)
             folded_token = folded(clean_token)
             return (
-                folded(clean_token) == "also oldal"
-                or folded(clean_token).startswith("as takarosav")
+                folded_token in {"also oldal", "alsó oldal"}
+                or "also oldal" in folded_token
+                or "alsó oldal" in folded_token
+                or folded_token.startswith("as takarosav")
+                or folded_token.startswith("as takarósáv")
                 or clean_token.startswith("Kamra")
                 or folded(clean_token).startswith("takarolap as")
+                or folded(clean_token).startswith("takarólap as")
                 or clean_token.startswith("Oldal ")
                 or bool(re.fullmatch(r"[12]-es\s+als.*", folded_token))
                 or bool(re.fullmatch(r"[12]-es\s+fels.*", folded_token))
@@ -3995,7 +3999,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     current_label = token
                     index += 1
                     continue
-                if "als" not in folded(current_label) or folded(token) != "also oldal":
+                token_folded = folded(token)
+                if "also oldal" not in token_folded and "alsó oldal" not in token_folded:
                     index += 1
                     continue
                 if index + 5 >= len(lines):
@@ -4003,7 +4008,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     continue
                 size_tokens = [clean_text(lines[index + offset]) for offset in range(1, 6)]
                 size_label = " ".join(size_tokens)
-                if size_label not in {"724 x 505 x 18", "724 x 520 x 18", "824 x 505 x 18"}:
+                if size_label not in {"724 x 505 x 18", "724 x 520 x 18", "724 x 550 x 18", "824 x 505 x 18"}:
                     index += 1
                     continue
 
@@ -4054,7 +4059,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "ar",
                     "kira",
                     "nyitott",
-                } and size_label not in {"724 x 505 x 18", "724 x 520 x 18", "824 x 505 x 18"}:
+                } and size_label not in {"724 x 505 x 18", "724 x 520 x 18", "724 x 550 x 18", "824 x 505 x 18"}:
                     index = cursor
                     continue
 
@@ -14624,7 +14629,7 @@ def render_front_inventory_form(
       <section class="frontinv-board is-empty">
         <div class="frontinv-empty">
           <strong>Még nincs aktív frontleltár.</strong>
-          <p>Töltsd fel az aktuális frontkészletet, és utána indulhat a külön leltárnézet.</p>
+          <p>Töltsd fel a fóliás front leltárlistát, és utána indulhat a külön leltárnézet.</p>
         </div>
       </section>
     """
@@ -14650,11 +14655,11 @@ def render_front_inventory_form(
             <strong>{view_model['active_row_count']}</strong>
           </article>
           <article>
-            <span>Széria</span>
+            <span>Méret szerint</span>
             <strong>{view_model['serial_row_count']}</strong>
           </article>
           <article>
-            <span>Egyedi</span>
+            <span>Egyéb</span>
             <strong>{view_model['custom_row_count']}</strong>
           </article>
           <article>
@@ -14758,7 +14763,7 @@ def render_front_inventory_form(
             """
             rows_html = "".join(
                 f"""
-                  <tr class="frontinv-row is-final">
+                  <tr class="frontinv-row is-final" data-frontinv-row data-frontinv-search-text="{html.escape(' '.join(str(row.get(key, '')) for key in ('description', 'color', 'color_label', 'size', 'category')), quote=True)}">
                     <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
                     <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color_label', row.get('color', '')) or '-'))}</span></td>
                     <td class="is-count"><span class="frontinv-count-pill">{int(row.get('counted_qty', 0) or 0)}</span></td>
@@ -14787,7 +14792,7 @@ def render_front_inventory_form(
         else:
             rows_html = "".join(
                 f"""
-                  <tr class="frontinv-row{' is-counted' if str(row.get('input_qty', '')).strip() else ''}" data-frontinv-row>
+                  <tr class="frontinv-row{' is-counted' if str(row.get('input_qty', '')).strip() else ''}" data-frontinv-row data-frontinv-search-text="{html.escape(' '.join(str(row.get(key, '')) for key in ('description', 'color', 'color_label', 'size', 'category')), quote=True)}">
                     <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
                     <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color_label', row.get('color', '')) or '-'))}</span></td>
                     <td class="is-count">
@@ -14809,41 +14814,28 @@ def render_front_inventory_form(
             if not rows_html:
                 rows_html = '<tr><td colspan="3" class="frontinv-empty-row">Ehhez a kategóriához most nincs megjeleníthető front.</td></tr>'
 
-            if phase_value == "0":
-                phase_title = "Első számlálás"
-                phase_copy = "Írják be minden front tényleges darabszámát. Ha van beírt szám, a sor zöldre vált."
-            elif phase_value == "1":
-                phase_title = "Eltérő frontok újraszámolása"
-                phase_copy = "Most csak azok a frontok maradtak, ahol eltérés volt. A korábbi készlet és az előző beírás itt már nem látszik."
-            else:
-                phase_title = "Végső ellenőrzés"
-                phase_copy = "Csak az 5 darabnál nagyobb eltérésű frontok maradtak. Ezeket még egyszer kell beírni, utána lezárható a leltár."
-
-            action_route = FRONT_INVENTORY_CHECK_ROUTE if phase_value in {"0", "1"} else FRONT_INVENTORY_FINALIZE_ROUTE
-            action_label = "Ellenőrzés" if phase_value in {"0", "1"} else "Véglegesítés"
+            phase_title = "Egykörös számlálás"
+            phase_copy = "Írják be a tényleges darabszámot. A leltár itt nem fut több ellenőrzési körön, lezáráskor készül az export."
+            action_route = FRONT_INVENTORY_FINALIZE_ROUTE
+            action_label = "Leltár lezárása"
             admin_action_html = f"""
-              <div class="frontinv-phase-callout{' is-final' if phase_value == '2' else ''}">
+              <div class="frontinv-phase-callout">
                 <div>
                   <strong>{html.escape(phase_title)}</strong>
                   <p>{html.escape(phase_copy)}</p>
                 </div>
                 <div class="frontinv-admin-actions">
                   <a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>
-                  <form method="post" action="{FRONT_INVENTORY_MISSING_ROUTE}">
+                  <form method="post" action="{action_route}">
+                    <input type="hidden" name="selected_view" value="admin" />
                     <input type="hidden" name="sort_mode" value="{html.escape(view_model['sort_mode'])}" />
-                    <button class="button button-secondary frontinv-open-button" type="submit">Hiányzó darabszámok</button>
+                    <button class="button button-primary frontinv-action-button" type="submit">{html.escape(action_label)}</button>
                   </form>
-                  {f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}">Legutóbbi ellenőrzési riport</a>' if saved_check_report_name else ''}
-                    <form method="post" action="{action_route}">
-                      <input type="hidden" name="selected_view" value="admin" />
-                      <input type="hidden" name="sort_mode" value="{html.escape(view_model['sort_mode'])}" />
-                      <button class="button button-primary frontinv-action-button" type="submit">{html.escape(action_label)}</button>
-                    </form>
-                  </div>
                 </div>
-              """
+              </div>
+            """
             inventory_status_html = f"""
-              <div class="frontinv-phase-callout{' is-final' if phase_value == '2' else ''}">
+              <div class="frontinv-phase-callout">
                 <div>
                   <strong>{html.escape(phase_title)}</strong>
                   <p>{html.escape(phase_copy)}</p>
@@ -14884,6 +14876,10 @@ def render_front_inventory_form(
             <div class="frontinv-category-row">
               {categories_html}
             </div>
+            <label class="frontinv-search">
+              <span>Keresés leírás, szín vagy méret alapján</span>
+              <input type="search" data-frontinv-search placeholder="Írj be részletet..." autocomplete="off" />
+            </label>
             {inventory_status_html}
 
             <div class="frontinv-table-wrap">
@@ -14920,15 +14916,15 @@ def render_front_inventory_form(
         <div class="frontinv-upload-head">
           <div class="frontinv-copy">
             <span class="frontinv-tag">Tablet leltár</span>
-            <strong>Front készlet leltározás.</strong>
-            <p>Feltöltöd az aktuális frontkészletet, a kollégák pedig külön leltár nézetben, gyorsan tudják írni a darabszámokat.</p>
+            <strong>Fóliás front leltározás.</strong>
+            <p>Feltöltöd a leltározandó fóliás front listát, a kollégák pedig külön leltár nézetben, méretkategóriák szerint írják a darabszámokat.</p>
           </div>
           <div class="frontinv-visual" aria-hidden="true">
             <div class="frontinv-visual-pill">Készlet</div>
             <div class="frontinv-visual-line"></div>
             <div class="frontinv-visual-pill">Számlálás</div>
             <div class="frontinv-visual-line"></div>
-            <div class="frontinv-visual-pill is-strong">Ellenőrzés</div>
+            <div class="frontinv-visual-pill is-strong">Lezárás</div>
           </div>
         </div>
 
@@ -14938,10 +14934,10 @@ def render_front_inventory_form(
 
         <form class="frontinv-upload-form" method="post" action="{FRONT_INVENTORY_PROCESS_ROUTE}" enctype="multipart/form-data">
           <label class="frontinv-field">
-            <span>Aktuális készlet</span>
-            <strong>Front készletfájl</strong>
+            <span>Leltározandó lista</span>
+            <strong>Fóliás front leltárfájl</strong>
             <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
-            <small>Alkatrészszám, leírás, készlet és lehetőleg szín oszlop kell hozzá. A feltöltés új leltármenetet indít.</small>
+            <small>Szükséges oszlopok: Alkatr.-szám, Alkatr.-leírás, SZIN.Desc. A Leltarbol_ki oszlopban jelölt sorok kimaradnak.</small>
           </label>
 
           <div class="frontinv-action-row">
@@ -15245,6 +15241,36 @@ def render_front_inventory_form(
       overflow-x: auto;
       padding-bottom: 4px;
     }
+  .frontinv-search {
+    display: grid;
+    grid-template-columns: auto minmax(220px, 420px);
+    align-items: center;
+    justify-content: start;
+    gap: 10px;
+    margin-top: 10px;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .frontinv-search input {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 15px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0f172a;
+    font: 800 0.95rem/1 Manrope, sans-serif;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .frontinv-search input:focus {
+    outline: none;
+    border-color: #0f172a;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  }
     .frontinv-chip {
       display: inline-flex;
       align-items: center;
@@ -15541,6 +15567,10 @@ def render_front_inventory_form(
       font-size: 1rem;
       padding: 0 10px;
     }
+    .frontinv-search {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
   }
   @media (max-width: 1100px) {
     .frontinv-upload-head,
@@ -15603,6 +15633,7 @@ def render_front_inventory_form(
   const categoryRow = root.querySelector(".frontinv-category-row");
   const categoryChips = Array.from(root.querySelectorAll(".frontinv-chip"));
   const inputFields = Array.from(root.querySelectorAll("[data-frontinv-input]"));
+  const searchInput = root.querySelector("[data-frontinv-search]");
   const scrollStorageKey = "frontinv-category-scroll";
   const alertModal = document.querySelector("[data-frontinv-alert]");
   const alertTitle = alertModal ? alertModal.querySelector("[data-frontinv-alert-title]") : null;
@@ -15614,6 +15645,22 @@ def render_front_inventory_form(
     ? Array.from(categoryRow.querySelectorAll(".frontinv-chip")).find((chip) => chip.classList.contains("is-active"))
     : null;
   let audioContext = null;
+
+  const normalizeSearchText = (value) => String(value || "")
+    .toLocaleLowerCase("hu-HU")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const applyFrontInventorySearch = () => {
+    if (!searchInput) {
+      return;
+    }
+    const terms = normalizeSearchText(searchInput.value.trim()).split(/\\s+/).filter(Boolean);
+    root.querySelectorAll("[data-frontinv-row]").forEach((row) => {
+      const searchable = normalizeSearchText(row.getAttribute("data-frontinv-search-text") || row.textContent || "");
+      row.hidden = terms.length > 0 && !terms.every((term) => searchable.includes(term));
+    });
+  };
 
   const ensureAudioContext = () => {
     if (audioContext) {
@@ -15895,6 +15942,11 @@ def render_front_inventory_form(
     });
   }
 
+  if (searchInput) {
+    searchInput.addEventListener("input", applyFrontInventorySearch);
+    applyFrontInventorySearch();
+  }
+
   inputFields.forEach((input) => {
     syncRowState(input);
     input.addEventListener("input", () => {
@@ -15972,7 +16024,7 @@ def render_front_inventory_form(
 
     return _render_nettfront_layout(
         heading="Front leltár",
-        lead="Tablet-optimalizált leltárnézet széria és egyedi frontokhoz, több lépcsős ellenőrzéssel.",
+        lead="Tablet-optimalizált, egykörös fóliás front leltár méretkategóriákkal és kereséssel.",
         intro_label="Inventory",
         content_html=content_html,
         side_html="",
@@ -17520,12 +17572,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             stock_file = files.get("stock_file")
 
             if stock_file is None:
-                self.respond_front_inventory_form("A front készletfájl feltöltése kötelező.")
+                self.respond_front_inventory_form("A fóliás front leltárfájl feltöltése kötelező.")
                 return
 
             stock_name, stock_bytes = stock_file
             if not front_inventory_file_name_allowed(stock_name):
-                self.respond_front_inventory_form("A front készletfájl csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_front_inventory_form("A fóliás front leltárfájl csak XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
