@@ -85,7 +85,7 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
     }
 
 
-def update_row_input(session: dict, row_id: str, raw_value: str) -> tuple[bool, str]:
+def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "add") -> tuple[bool, str]:
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott frontsort nem találom."
@@ -94,17 +94,24 @@ def update_row_input(session: dict, row_id: str, raw_value: str) -> tuple[bool, 
     if row.get("status") != "pending":
         return False, "Ez a sor már lezárt állapotban van."
 
+    clean_mode = str(mode or "add").strip().lower()
+    if clean_mode not in {"add", "subtract"}:
+        return False, "Csak plusz vagy minusz muvelet hasznalhato."
+
     clean_value = str(raw_value or "").strip()
     if not clean_value:
-        row["input_qty"] = ""
-        _touch_session(session)
         return True, ""
 
     parsed_value = _parse_non_negative_int(clean_value)
     if parsed_value is None:
         return False, "Csak nem negatív egész darabszám adható meg."
 
-    row["input_qty"] = str(parsed_value)
+    current_value = _row_input_value(row) or 0
+    next_value = current_value + parsed_value if clean_mode == "add" else current_value - parsed_value
+    if next_value < 0:
+        return False, "A levonas utan nem lehet negativ a darabszam."
+
+    row["input_qty"] = str(next_value)
     _touch_session(session)
     return True, ""
 

@@ -14792,20 +14792,17 @@ def render_front_inventory_form(
         else:
             rows_html = "".join(
                 f"""
-                  <tr class="frontinv-row{' is-counted' if str(row.get('input_qty', '')).strip() else ''}" data-frontinv-row data-frontinv-search-text="{html.escape(' '.join(str(row.get(key, '')) for key in ('description', 'color', 'color_label', 'size', 'category')), quote=True)}">
+                  <tr class="frontinv-row{' is-counted' if str(row.get('input_qty', '')).strip() else ''}" data-frontinv-row data-row-id="{html.escape(str(row.get('row_id', '')))}" data-frontinv-current-value="{html.escape(str(row.get('input_qty', '')), quote=True)}" data-frontinv-search-text="{html.escape(' '.join(str(row.get(key, '')) for key in ('description', 'color', 'color_label', 'size', 'category')), quote=True)}">
                     <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
                     <td class="is-color"><span class="frontinv-color-chip">{html.escape(str(row.get('color_label', row.get('color', '')) or '-'))}</span></td>
                     <td class="is-count">
-                      <input
-                        class="frontinv-input"
-                        type="number"
-                        min="0"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        value="{html.escape(str(row.get('input_qty', '')))}"
-                        data-frontinv-input
-                        data-row-id="{html.escape(str(row.get('row_id', '')))}"
-                      />
+                      <div class="frontinv-count-control">
+                        <span class="frontinv-count-pill" data-frontinv-total>{html.escape(str(row.get('input_qty', '') or '0'))}</span>
+                        <div class="frontinv-adjust">
+                          <label><span>+</span><input class="frontinv-input" type="number" min="0" inputmode="numeric" autocomplete="off" placeholder="0" data-frontinv-input data-mode="add" data-row-id="{html.escape(str(row.get('row_id', '')))}" /></label>
+                          <label><span>-</span><input class="frontinv-input" type="number" min="0" inputmode="numeric" autocomplete="off" placeholder="0" data-frontinv-input data-mode="subtract" data-row-id="{html.escape(str(row.get('row_id', '')))}" /></label>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 """
@@ -14961,6 +14958,56 @@ def render_front_inventory_form(
 
     extra_script = """
 <style>
+  :root {
+    --frontinv-text: #0f172a;
+    --frontinv-muted: #64748b;
+    --frontinv-line: #d8e0ea;
+    --frontinv-accent: #0c8d57;
+    --frontinv-accent-strong: #12a566;
+  }
+  .frontinv-admin-page {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 8% 4%, rgba(18, 165, 102, 0.16), transparent 28rem),
+      linear-gradient(180deg, #f8fbfc 0%, #eef3f7 42%, #e9f0f5 100%);
+    color: var(--frontinv-text);
+    font-family: Manrope, sans-serif;
+  }
+  .frontinv-admin-stage {
+    width: min(1280px, calc(100% - 28px));
+    margin: 16px auto 42px;
+    display: grid;
+    gap: 16px;
+  }
+  .frontinv-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 22px 24px;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #ffffff 0%, #f7fffb 100%);
+    box-shadow: 0 22px 55px rgba(15, 23, 42, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+  }
+  .frontinv-top h1 {
+    margin: 6px 0 0;
+    font: 800 1.55rem/1.05 "Space Grotesk", sans-serif;
+    letter-spacing: -0.03em;
+  }
+  .frontinv-top a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 0 15px;
+    border-radius: 999px;
+    color: #0f172a;
+    text-decoration: none;
+    font-weight: 900;
+    background: #ffffff;
+    border: 1px solid var(--frontinv-line);
+  }
   .frontinv-shell {
     display: grid;
     gap: 16px;
@@ -15002,16 +15049,17 @@ def render_front_inventory_form(
     overflow: hidden;
     border-radius: 26px;
     border: 1px solid rgba(7, 16, 24, 0.08);
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    background: rgba(255, 255, 255, 0.94);
     color: #0f172a;
-    box-shadow: 0 18px 40px rgba(10, 18, 30, 0.08);
+    box-shadow: 0 24px 58px rgba(15, 23, 42, 0.09);
   }
   .frontinv-upload-card::before,
   .frontinv-board::before {
     content: "";
     position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at top right, rgba(15, 23, 42, 0.04), transparent 28%);
+    inset: 0 0 auto 0;
+    height: 5px;
+    background: linear-gradient(90deg, var(--frontinv-accent-strong), #86efac, #dbeafe);
     pointer-events: none;
   }
   .frontinv-upload-card {
@@ -15060,8 +15108,8 @@ def render_front_inventory_form(
     min-height: 28px;
     padding: 0 12px;
     border-radius: 999px;
-    background: #eef2ff;
-    color: #243b53;
+    background: #edf7f2;
+    color: #0c7650;
     font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -15160,7 +15208,10 @@ def render_front_inventory_form(
     min-width: 210px;
     min-height: 52px;
     border-radius: 16px;
-    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+    background: linear-gradient(180deg, var(--frontinv-accent-strong), var(--frontinv-accent));
+    border-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 12px 24px rgba(12, 141, 87, 0.20);
   }
   .frontinv-open-button {
     min-width: 190px;
@@ -15418,7 +15469,7 @@ def render_front_inventory_form(
     width: 220px;
   }
   .frontinv-table td.is-count {
-    width: 190px;
+    width: 300px;
   }
   .frontinv-board.is-worker .frontinv-table td.is-description {
     min-width: 0;
@@ -15428,7 +15479,7 @@ def render_front_inventory_form(
     width: 180px;
   }
   .frontinv-board.is-worker .frontinv-table td.is-count {
-    width: 150px;
+    width: 280px;
   }
   .frontinv-color-chip {
     display: inline-flex;
@@ -15444,8 +15495,8 @@ def render_front_inventory_form(
   }
   .frontinv-input {
     width: 100%;
-    min-height: 52px;
-    padding: 0 16px;
+    min-height: 44px;
+    padding: 0 10px;
     border-radius: 16px;
     border: 1px solid rgba(15, 23, 42, 0.12);
     background: #ffffff;
@@ -15454,10 +15505,34 @@ def render_front_inventory_form(
     font-weight: 800;
     text-align: center;
   }
+  .frontinv-count-control {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+  .frontinv-adjust {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .frontinv-adjust label {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
   .frontinv-input:focus {
     outline: none;
     border-color: #0f172a;
     box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+  }
+  .frontinv-input.is-error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
   }
   .frontinv-count-pill {
     display: inline-flex;
@@ -15560,12 +15635,22 @@ def render_front_inventory_form(
       justify-content: center;
     }
     .frontinv-board.is-worker .frontinv-table td.is-count {
-      width: 118px;
+      width: 240px;
     }
     .frontinv-board.is-worker .frontinv-input {
-      min-height: 44px;
-      font-size: 1rem;
-      padding: 0 10px;
+      min-height: 38px;
+      font-size: 0.94rem;
+      padding: 0 6px;
+    }
+    .frontinv-count-control {
+      gap: 6px;
+    }
+    .frontinv-adjust {
+      gap: 5px;
+    }
+    .frontinv-adjust label {
+      font-size: 0.7rem;
+      gap: 3px;
     }
     .frontinv-search {
       grid-template-columns: 1fr;
@@ -15573,6 +15658,15 @@ def render_front_inventory_form(
     }
   }
   @media (max-width: 1100px) {
+    .frontinv-admin-stage {
+      width: calc(100% - 16px);
+      margin: 10px auto 28px;
+      gap: 12px;
+    }
+    .frontinv-top {
+      align-items: flex-start;
+      flex-direction: column;
+    }
     .frontinv-upload-head,
     .frontinv-board-head,
     .frontinv-phase-callout {
@@ -15627,11 +15721,9 @@ def render_front_inventory_form(
     return;
   }
 
-  const timers = new Map();
-  const draftValues = new Map();
-  const inFlightSaves = new Map();
   const categoryRow = root.querySelector(".frontinv-category-row");
   const categoryChips = Array.from(root.querySelectorAll(".frontinv-chip"));
+  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
   const inputFields = Array.from(root.querySelectorAll("[data-frontinv-input]"));
   const searchInput = root.querySelector("[data-frontinv-search]");
   const scrollStorageKey = "frontinv-category-scroll";
@@ -15764,40 +15856,58 @@ def render_front_inventory_form(
   window.addEventListener("pointerdown", unlockAudio, { passive: true });
   window.addEventListener("keydown", unlockAudio, { passive: true });
 
-  const getRowId = (input) => input.getAttribute("data-row-id") || "";
+  const getRowId = (input) => input.getAttribute("data-row-id") || input.closest("[data-frontinv-row]")?.getAttribute("data-row-id") || "";
+  const getRowCurrentValue = (row) => String(row?.getAttribute("data-frontinv-current-value") || "").trim();
   let countedRowCount = 0;
 
-  const syncRowState = (input) => {
-    const isCounted = input.value.trim() !== "";
-    const wasCounted = input.dataset.frontinvCounted === "1";
-    if (isCounted !== wasCounted) {
-      countedRowCount += isCounted ? 1 : -1;
-    }
-    input.dataset.frontinvCounted = isCounted ? "1" : "0";
-    const row = input.closest("[data-frontinv-row]");
+  const syncRowState = (row) => {
     if (!row) {
       return;
     }
+    const isCounted = getRowCurrentValue(row) !== "";
+    const wasCounted = row.dataset.frontinvCounted === "1";
+    if (isCounted !== wasCounted) {
+      countedRowCount += isCounted ? 1 : -1;
+    }
+    row.dataset.frontinvCounted = isCounted ? "1" : "0";
     row.classList.toggle("is-counted", isCounted);
+  };
+
+  const setRowValue = (row, value) => {
+    if (!row) {
+      return;
+    }
+    const nextValue = String(value || "").trim();
+    row.setAttribute("data-frontinv-current-value", nextValue);
+    const total = row.querySelector("[data-frontinv-total]");
+    if (total) {
+      total.textContent = nextValue || "0";
+    }
+    syncRowState(row);
   };
 
   const syncCurrentCategoryState = () => {
     if (!currentCategoryChip) {
       return;
     }
-    const hasRows = inputFields.length > 0;
-    const isComplete = hasRows && countedRowCount === inputFields.length;
+    const hasRows = rowElements.length > 0;
+    const isComplete = hasRows && countedRowCount === rowElements.length;
     currentCategoryChip.classList.toggle("is-complete", isComplete);
   };
 
-  const submitValue = (rowId, value) => {
-    if (!rowId) {
+  const saveAdjustment = (input) => {
+    const rowId = getRowId(input);
+    const value = input.value.trim();
+    const mode = input.getAttribute("data-mode") || "";
+    if (!rowId || !value || input.dataset.frontinvSaving === "1") {
       return;
     }
+    input.dataset.frontinvSaving = "1";
+    input.classList.remove("is-error");
     const formData = new URLSearchParams();
     formData.set("row_id", rowId);
     formData.set("value", value);
-    inFlightSaves.set(rowId, value);
+    formData.set("mode", mode);
     fetch(stateRoute, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
@@ -15809,28 +15919,21 @@ def render_front_inventory_form(
         if (!response.ok) {
           throw new Error("save failed");
         }
+        return response.json();
       })
-      .catch(() => {})
+      .then((payload) => {
+        const row = input.closest("[data-frontinv-row]");
+        setRowValue(row, payload && Object.prototype.hasOwnProperty.call(payload, "value") ? payload.value : "");
+        input.value = "";
+        syncCurrentCategoryState();
+      })
+      .catch(() => {
+        input.classList.add("is-error");
+        window.setTimeout(() => input.classList.remove("is-error"), 1200);
+      })
       .finally(() => {
-        inFlightSaves.delete(rowId);
-        const latestDraft = draftValues.get(rowId);
-        if (latestDraft !== undefined && latestDraft !== value) {
-          submitValue(rowId, latestDraft);
-        }
+        input.dataset.frontinvSaving = "0";
       });
-  };
-
-  const saveValue = (input) => {
-    const rowId = getRowId(input);
-    if (!rowId) {
-      return;
-    }
-    const value = input.value;
-    draftValues.set(rowId, value);
-    if (inFlightSaves.has(rowId)) {
-      return;
-    }
-    submitValue(rowId, value);
   };
 
   if (categoryRow) {
@@ -15878,25 +15981,10 @@ def render_front_inventory_form(
       const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object"
         ? payload.row_inputs
         : {};
-      inputFields.forEach((input) => {
-        const rowId = getRowId(input);
+      rowElements.forEach((row) => {
+        const rowId = row.getAttribute("data-row-id") || "";
         const nextValue = Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId) ? String(remoteRowInputs[rowId] || "") : "";
-        const draftValue = draftValues.get(rowId);
-        if (draftValue !== undefined) {
-          if (draftValue === nextValue) {
-            draftValues.delete(rowId);
-          } else {
-            if (document.activeElement !== input && input.value !== draftValue) {
-              input.value = draftValue;
-              syncRowState(input);
-            }
-            return;
-          }
-        }
-        if (document.activeElement !== input && input.value !== nextValue) {
-          input.value = nextValue;
-          syncRowState(input);
-        }
+        setRowValue(row, nextValue);
       });
       syncCurrentCategoryState();
       showAlert(payload && payload.worker_alert && typeof payload.worker_alert === "object" ? payload.worker_alert : null);
@@ -15947,42 +16035,16 @@ def render_front_inventory_form(
     applyFrontInventorySearch();
   }
 
+  rowElements.forEach((row) => syncRowState(row));
   inputFields.forEach((input) => {
-    syncRowState(input);
-    input.addEventListener("input", () => {
-      draftValues.set(getRowId(input), input.value);
-      syncRowState(input);
-      syncCurrentCategoryState();
-      const key = getRowId(input);
-      if (timers.has(key)) {
-        clearTimeout(timers.get(key));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveAdjustment(input);
       }
-      timers.set(
-        key,
-        window.setTimeout(() => {
-          saveValue(input);
-          timers.delete(key);
-        }, 360),
-      );
     });
-    input.addEventListener("blur", () => {
-      syncCurrentCategoryState();
-      const key = getRowId(input);
-      if (timers.has(key)) {
-        clearTimeout(timers.get(key));
-        timers.delete(key);
-      }
-      saveValue(input);
-    });
-    input.addEventListener("change", () => {
-      syncCurrentCategoryState();
-      const key = getRowId(input);
-      if (timers.has(key)) {
-        clearTimeout(timers.get(key));
-        timers.delete(key);
-      }
-      saveValue(input);
-    });
+    input.addEventListener("blur", () => saveAdjustment(input));
+    input.addEventListener("change", () => saveAdjustment(input));
   });
   syncCurrentCategoryState();
   };
@@ -16022,16 +16084,37 @@ def render_front_inventory_form(
 """
         return worker_page.encode("utf-8")
 
-    return _render_nettfront_layout(
-        heading="Front leltár",
-        lead="Tablet-optimalizált, egykörös fóliás front leltár méretkategóriákkal és kereséssel.",
-        intro_label="Inventory",
-        content_html=content_html,
-        side_html="",
-        notice_html=notice_html,
-        extra_script=extra_script,
-        single_column=True,
-    )
+    admin_page = f"""<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Divian-HUB | Front leltár</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles.css" />
+  {extra_script}
+</head>
+<body class="frontinv-admin-page">
+  <main class="frontinv-admin-stage">
+    <header class="frontinv-top">
+      <div>
+        <span class="frontinv-tag">Divian-HUB</span>
+        <h1>Fóliás front leltár</h1>
+      </div>
+      <a href="/">Vissza a modulokhoz</a>
+    </header>
+    {notice_html}
+    {content_html}
+  </main>
+</body>
+</html>
+"""
+    return admin_page.encode("utf-8")
 
 
 def _extract_uploaded_pdf(headers, body: bytes) -> tuple[str | None, bytes | None]:
@@ -17628,6 +17711,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 session,
                 form_data.get("row_id", ""),
                 form_data.get("value", ""),
+                form_data.get("mode", ""),
             )
             if not success:
                 self.send_response(400)
@@ -17638,9 +17722,21 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 return
             save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
-            self.send_response(204)
+            updated_row = next(
+                (
+                    row
+                    for row in session.get("rows", [])
+                    if isinstance(row, dict) and str(row.get("row_id", "")) == str(form_data.get("row_id", ""))
+                ),
+                {},
+            )
+            payload = json.dumps({"value": str(updated_row.get("input_qty", ""))}, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
+            self.wfile.write(payload)
             return
 
         if path == FRONT_INVENTORY_PRESENCE_ROUTE:
