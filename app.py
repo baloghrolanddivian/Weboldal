@@ -239,6 +239,8 @@ SHOPFLOOR_USERNAME = os.getenv("SHOPFLOOR_USERNAME", "alkatresz")
 SHOPFLOOR_PASSWORD = os.getenv("SHOPFLOOR_PASSWORD", "PPddaa1234")
 SHOPFLOOR_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_CHECKPOINT_ID", "103"))
 SHOPFLOOR_TAB_ID = int(os.getenv("SHOPFLOOR_TAB_ID", "178"))
+SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID", "104"))
+SHOPFLOOR_ASSEMBLY_TAB_ID = int(os.getenv("SHOPFLOOR_ASSEMBLY_TAB_ID", "181"))
 SHOPFLOOR_PROCESS_PAYLOAD = {
     "allowAnonymousInventory": False,
     "cdsmId": 4,
@@ -1402,7 +1404,30 @@ def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
     return connection_id
 
 
-def _shopfloor_report_con_ready(con_code: str) -> tuple[int, str]:
+def _shopfloor_process_payload(con_id: int, validate_data: object | None = None) -> bytes:
+    payload = dict(SHOPFLOOR_PROCESS_PAYLOAD)
+    payload["conId"] = con_id
+    if validate_data is not None:
+        payload["validateData"] = validate_data
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+
+def _shopfloor_extract_validate_data(response_body: str) -> object | None:
+    try:
+        payload = json.loads(response_body or "null")
+    except json.JSONDecodeError:
+        return None
+    if payload is None:
+        return None
+    if isinstance(payload, dict):
+        for key in ("validateData", "data", "result"):
+            value = payload.get(key)
+            if value is not None:
+                return value
+    return payload
+
+
+def _shopfloor_report_con_ready(con_code: str, *, use_assembly_validate: bool = False) -> tuple[int, str, str]:
     con_text = str(con_code or "").strip().upper()
     match = re.fullmatch(r"CON(\d{1,12})", con_text)
     if not match:
@@ -1411,35 +1436,55 @@ def _shopfloor_report_con_ready(con_code: str) -> tuple[int, str]:
 
     auth_header = _shopfloor_auth_header()
     connection_id = _shopfloor_negotiate_connection_id(auth_header)
-    payload = dict(SHOPFLOOR_PROCESS_PAYLOAD)
-    payload["conId"] = con_id
-    process_url = (
-        f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{SHOPFLOOR_CHECKPOINT_ID}"
-        f"/tabs/{SHOPFLOOR_TAB_ID}/processscan/{con_text}?connectionId={urllib.parse.quote(connection_id, safe='')}"
-    )
-    req = urllib.request.Request(
-        process_url,
-        method="POST",
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": auth_header,
-            "Content-Type": "application/json",
-        },
-    )
+    checkpoint_id = SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID if use_assembly_validate else SHOPFLOOR_CHECKPOINT_ID
+    tab_id = SHOPFLOOR_ASSEMBLY_TAB_ID if use_assembly_validate else SHOPFLOOR_TAB_ID
+    quoted_connection_id = urllib.parse.quote(connection_id, safe="")
+    request_body = _shopfloor_process_payload(con_id)
+    headers = {"Authorization": auth_header, "Content-Type": "application/json"}
     context = ssl._create_unverified_context()
-    try:
-        with urllib.request.urlopen(req, context=context, timeout=20) as response:
-            body = response.read().decode("utf-8", errors="ignore")
-            return int(response.getcode() or 0), body
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")
-        return int(exc.code or 0), body
+
+    def endpoint_url(endpoint_name: str) -> str:
+        return (
+            f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{checkpoint_id}"
+            f"/tabs/{tab_id}/{endpoint_name}/{con_text}?connectionId={quoted_connection_id}"
+        )
+
+    def submit(endpoint_name: str, data: bytes) -> tuple[int, str]:
+        req = urllib.request.Request(
+            endpoint_url(endpoint_name),
+            method="POST",
+            data=data,
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(req, context=context, timeout=20) as response:
+                body = response.read().decode("utf-8", errors="ignore")
+                return int(response.getcode() or 0), body
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            return int(exc.code or 0), body
+
+    if use_assembly_validate:
+        validate_status_code, validate_response_body = submit("validatescan", request_body)
+        if not 200 <= int(validate_status_code) < 300:
+            return validate_status_code, validate_response_body, "validatescan"
+        validate_data = _shopfloor_extract_validate_data(validate_response_body)
+        process_body = _shopfloor_process_payload(con_id, validate_data)
+        process_status_code, process_response_body = submit("processscan", process_body)
+        return process_status_code, process_response_body, "processscan"
+
+    status_code, response_body = submit("processscan", request_body)
+    return status_code, response_body, "processscan"
 
 
 def _extract_con_code(value: object) -> str:
     text = str(value or "").strip().upper()
     match = re.search(r"\bCON\D*?(\d{6,})\b", text)
     return f"CON{match.group(1)}" if match else ""
+
+
+def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
+    return str(category_key or "").strip() == "korpusz-osszekeszito"
 
 
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
@@ -16970,6 +17015,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 return
 
             production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
+            category_key = str(payload.get("category_key", "")).strip()
             raw_entries = payload.get("entries")
             if not production_number:
                 self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártási szám."})
@@ -16985,6 +17031,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 row_id = str(item.get("row_id", "")).strip()
                 state_key = str(item.get("state_key", "")).strip()
                 code = _extract_con_code(item.get("code", ""))
+                entry_category_key = str(item.get("category_key") or category_key).strip()
                 source_row_ids = (
                     [str(value).strip() for value in item.get("source_row_ids", []) if str(value).strip()]
                     if isinstance(item.get("source_row_ids"), list)
@@ -16997,6 +17044,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         "row_id": row_id,
                         "state_key": state_key,
                         "code": code,
+                        "category_key": entry_category_key,
                         "source_row_ids": source_row_ids,
                     }
                 )
@@ -17004,21 +17052,42 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_json(400, {"ok": False, "error": "Nem találtam érvényes CON kódot a zöld sorokban."})
                 return
 
-            codes = sorted({str(entry.get("code", "")).strip().upper() for entry in entries if entry.get("code")})
+            scan_targets = sorted(
+                {
+                    (
+                        str(entry.get("code", "")).strip().upper(),
+                        _manufacturing_uses_assembly_ready_endpoint(entry.get("category_key", "")),
+                    )
+                    for entry in entries
+                    if entry.get("code")
+                }
+            )
             failures: list[dict[str, str | int]] = []
-            success_codes: set[str] = set()
-            for code in codes:
+            success_targets: set[tuple[str, bool]] = set()
+            for code, use_assembly_validate in scan_targets:
+                fallback_endpoint = "validatescan+processscan" if use_assembly_validate else "processscan"
                 try:
-                    status_code, response_body = _shopfloor_report_con_ready(code)
+                    status_code, response_body, endpoint_name = _shopfloor_report_con_ready(
+                        code,
+                        use_assembly_validate=use_assembly_validate,
+                    )
                 except Exception as exc:
-                    failures.append({"code": code, "status": 0, "error": str(exc)})
+                    failures.append(
+                        {
+                            "code": code,
+                            "endpoint": fallback_endpoint,
+                            "status": 0,
+                            "error": str(exc),
+                        }
+                    )
                     continue
-                if int(status_code) == 200:
-                    success_codes.add(code)
+                if 200 <= int(status_code) < 300:
+                    success_targets.add((code, use_assembly_validate))
                 else:
                     failures.append(
                         {
                             "code": code,
+                            "endpoint": endpoint_name,
                             "status": int(status_code),
                             "error": str(response_body or "").strip()[:300],
                         }
@@ -17029,6 +17098,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             try:
                 for entry in entries:
                     entry_code = str(entry.get("code", "")).strip().upper()
+                    entry_use_assembly_validate = _manufacturing_uses_assembly_ready_endpoint(entry.get("category_key", ""))
                     target_ids = [
                         str(entry.get("row_id", "")).strip(),
                         *[str(value).strip() for value in entry.get("source_row_ids", []) if str(value).strip()],
@@ -17037,7 +17107,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     for target_id in target_ids:
                         if target_id and target_id not in unique_target_ids:
                             unique_target_ids.append(target_id)
-                    if entry_code not in success_codes:
+                    if (entry_code, entry_use_assembly_validate) not in success_targets:
                         skipped_row_ids.extend(unique_target_ids)
                         continue
                     for target_id in unique_target_ids:
@@ -17049,13 +17119,29 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             unique_done_ids = sorted(set(done_row_ids))
             unique_skipped_ids = sorted(set(skipped_row_ids))
+            attempted_count = len(scan_targets)
+            success_count = len(success_targets)
+            failed_count = max(0, attempted_count - success_count)
             ok = not failures
+            error_message = ""
+            if failures:
+                first_failure = failures[0]
+                error_message = (
+                    "Shopfloor hívás sikertelen: "
+                    f"{first_failure.get('code', '')} "
+                    f"{first_failure.get('endpoint', '')} "
+                    f"HTTP {first_failure.get('status', 0)}"
+                ).strip()
             self.respond_json(
                 200 if ok else 207,
                 {
                     "ok": ok,
+                    "error": error_message,
                     "production_number": production_number,
-                    "reported_codes": sorted(success_codes),
+                    "attempted_count": attempted_count,
+                    "success_count": success_count,
+                    "failed_count": failed_count,
+                    "reported_codes": sorted({code for code, _use_assembly_validate in success_targets}),
                     "failed": failures,
                     "done_row_ids": unique_done_ids,
                     "skipped_row_ids": unique_skipped_ids,

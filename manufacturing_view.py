@@ -1936,6 +1936,7 @@ def render_manufacturing_page(
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
       const rowStateValue = (row) => selectionState[rowStateKey(row)] || "";
+      const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
       const countStateInDocument = (document, wanted) => flattenRows(document)
         .filter((row) => rowStateValue(row) === wanted)
@@ -2235,7 +2236,7 @@ def render_manufacturing_page(
               .map((section) => ({{
                 ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                  currentSubcategoryKey === "plain" ? !rowStateValue(row) : (currentSubcategoryKey === "green" ? isGreenLikeState(rowStateValue(row)) : rowStateValue(row) === currentSubcategoryKey)
+                  currentSubcategoryKey === "plain" ? !rowStateValue(row) : (currentSubcategoryKey === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === currentSubcategoryKey)
                 ),
               }}))
               .filter((section) => section.rows.length);
@@ -2279,7 +2280,7 @@ def render_manufacturing_page(
               .map((section) => ({{
                 ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                  currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isGreenLikeState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
+                  currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
                 ),
               }}))
               .filter((section) => section.rows.length);
@@ -2289,7 +2290,7 @@ def render_manufacturing_page(
         if (false && documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           const combinedRows = sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []).filter((row) => {{
             if (currentViewKey === "plain") return !rowStateValue(row);
-            if (currentViewKey === "green") return isGreenLikeState(rowStateValue(row));
+            if (currentViewKey === "green") return isReadyGreenState(rowStateValue(row));
             if (currentViewKey === "red") return rowStateValue(row) === "red";
             return true;
           }});
@@ -2320,7 +2321,7 @@ def render_manufacturing_page(
               key: section.key,
               label: section.label,
               rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isGreenLikeState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
+                currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
               ),
             }}))
             .filter((section) => section.rows.length);
@@ -2356,7 +2357,7 @@ def render_manufacturing_page(
           const korpuszSubTabs = [
             {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows) }},
             {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)), stateClass: "" }},
-            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => isGreenLikeState(rowStateValue(row))), stateClass: "" }},
+            {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
             {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
             ...currentKorpuszSections.map((section) => ({{
               key: section.key,
@@ -2392,7 +2393,7 @@ def render_manufacturing_page(
         const specialTabs = [
           {{ key: "all", label: "Összes", count: countRowsInSections(overviewSections), stateClass: tabStateClassForRows(overviewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])) }},
           {{ key: "plain", label: "Simák", count: countRowsInSections(overviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
-          {{ key: "green", label: "Zöldek", count: countRowsInSections(overviewSections, (row) => isGreenLikeState(rowStateValue(row))), stateClass: "" }},
+          {{ key: "green", label: "Zöldek", count: countRowsInSections(overviewSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
           {{ key: "red", label: "Pirosak", count: countRowsInSections(overviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
           ...documentSpecialViews.map((view) => ({{
             key: String(view?.key || ""),
@@ -2817,7 +2818,7 @@ def render_manufacturing_page(
         if (canReportReady) {{
           const greenRows = buildGroupsForView(document)
             .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
-            .filter((row) => isGreenLikeState(rowStateValue(row)));
+            .filter((row) => isReadyGreenState(rowStateValue(row)));
           reportReadyButtonNode.disabled = greenRows.length === 0;
         }} else {{
           reportReadyButtonNode.disabled = true;
@@ -3132,7 +3133,7 @@ def render_manufacturing_page(
 
         const visibleRows = buildGroupsForView(document)
           .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
-          .filter((row) => isGreenLikeState(rowStateValue(row)));
+          .filter((row) => isReadyGreenState(rowStateValue(row)));
         if (!visibleRows.length) {{
           setStatus("Nincs készre jelentendő zöld sor.", "is-error");
           return;
@@ -3143,6 +3144,7 @@ def render_manufacturing_page(
           const match = joined.toUpperCase().match(/\\bCON\\D*?(\\d{{6,}})\\b/);
           return match ? `CON${{match[1]}}` : "";
         }};
+        const categoryKey = String(currentViewKey || "").trim();
         const entries = visibleRows
           .map((row) => {{
             const rowId = String(row?.row_id || "").trim();
@@ -3152,7 +3154,7 @@ def render_manufacturing_page(
               ? row.sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)
               : [];
             if (!rowId || !stateKey || !code) return null;
-            return {{ row_id: rowId, state_key: stateKey, code, source_row_ids: sourceRowIds }};
+            return {{ row_id: rowId, state_key: stateKey, code, category_key: categoryKey, source_row_ids: sourceRowIds }};
           }})
           .filter(Boolean);
         if (!entries.length) {{
@@ -3169,11 +3171,12 @@ def render_manufacturing_page(
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({{
               production_number: productionNumber,
+              category_key: categoryKey,
               entries,
             }}),
           }});
           const result = await response.json().catch(() => ({{}}));
-          if (!response.ok || !result.ok) {{
+          if (!response.ok) {{
             throw new Error(result.error || "A készre jelentés nem sikerült.");
           }}
           const doneRowIds = new Set(
@@ -3185,6 +3188,14 @@ def render_manufacturing_page(
             selectionState[`${{productionNumber}}::${{rowId}}`] = "done";
           }}
           renderAll();
+          const attemptedCount = Number.isFinite(Number(result.attempted_count)) ? Number(result.attempted_count) : entries.length;
+          const successCount = Number.isFinite(Number(result.success_count)) ? Number(result.success_count) : doneRowIds.size;
+          const failedCount = Number.isFinite(Number(result.failed_count)) ? Number(result.failed_count) : Math.max(0, attemptedCount - successCount);
+          window.alert(`Készre jelentés összesítő\n\nPróbált csipogni: ${{attemptedCount}}\nSikerült: ${{successCount}}\nNem sikerült: ${{failedCount}}`);
+          if (!result.ok) {{
+            setStatus(result.error || `Készre jelentés részben sikerült: ${{successCount}} sikeres, ${{failedCount}} sikertelen.`, "is-error");
+            return;
+          }}
           setStatus("Készre jelentés sikeres. A tételek zárolva lettek.", "is-success");
         }} catch (error) {{
           setStatus(error instanceof Error ? error.message : "A készre jelentés nem sikerült.", "is-error");
