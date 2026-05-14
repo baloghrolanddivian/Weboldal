@@ -5324,6 +5324,29 @@ def _party_has_vat_number(lines: list[str]) -> bool:
     )
 
 
+def _extract_party_vat_number(lines: list[str]) -> str:
+    vat_label_pattern = r"\b(?:VAT\s*(?:ID\s*)?(?:NO\.?|NUMBER)|TAX\s*NO\.?|AD[ÓO]SZ[ÁA]M)\b"
+    for idx, line in enumerate(lines):
+        cleaned = _clean_spaces(line)
+        if not cleaned:
+            continue
+
+        label_match = re.search(vat_label_pattern, cleaned, re.IGNORECASE)
+        if not label_match:
+            continue
+
+        value = cleaned[label_match.end() :].strip(" :.-#")
+        if value:
+            return value
+
+        for candidate in lines[idx + 1 : idx + 3]:
+            candidate_value = _clean_spaces(candidate).strip(" :.-#")
+            if candidate_value:
+                return candidate_value
+
+    return ""
+
+
 def _require_party_vat_numbers(data: InvoiceData) -> None:
     missing: list[str] = []
     if not _party_has_vat_number(data.supplier_lines):
@@ -6493,7 +6516,13 @@ def _html_text(value: str) -> str:
 def _html_party(lines: list[str]) -> str:
     if not lines:
         return html.escape(NO_DATA)
-    return "<br>".join(html.escape(_clean_spaces(line)) for line in lines if _clean_spaces(line))
+    html_lines: list[str] = []
+    for line in lines:
+        cleaned = _clean_spaces(line)
+        if not cleaned:
+            continue
+        html_lines.append(html.escape(cleaned))
+    return "<br>".join(html_lines)
 
 
 def _html_table_rows(rows: list[tuple[str, str]]) -> str:
@@ -6650,7 +6679,6 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     rounded_gross_weight = _format_rounded_weight(data.total_gross_weight) if data.total_gross_weight else ""
     invoice_date_display = _format_invoice_date(data.invoice_date)
     due_date_display = _format_invoice_date(data.due_date)
-    generated_at = datetime.now().strftime("%Y.%m.%d %H:%M")
     source_label = html.escape(source_filename) if source_filename else "feltöltött PDF"
     compact_mode = len(data.items) >= 10 or (len(data.supplier_lines) + len(data.buyer_lines)) >= 12
     body_class = "compact" if compact_mode else ""
@@ -6662,6 +6690,18 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         "generic": "Általános sablon",
         "": "Általános sablon",
     }.get(data.invoice_profile, "Általános sablon")
+
+    supplier_vat_number = _extract_party_vat_number(data.supplier_lines)
+    buyer_vat_number = _extract_party_vat_number(data.buyer_lines)
+    important_fields = [
+        ("Eladó VAT szám", supplier_vat_number),
+        ("Vevő VAT szám", buyer_vat_number),
+        ("Számlaszám", data.invoice_number),
+        ("Számla dátuma", invoice_date_display),
+        ("Pénznem", data.currency),
+        ("Összeg", data.total_net),
+    ]
+    important_rows = _html_table_rows(important_fields)
 
     info_field_rows = [
         ("Számlaszám", data.invoice_number),
@@ -6737,6 +6777,34 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
           <th class="right">Nettó érték</th>
         </tr>
         """
+
+    important_box_html = f"""
+    <section class="important-box">
+      <h2>Fontos Adatok</h2>
+      <table class="important-grid">
+        <tbody>{important_rows}</tbody>
+      </table>
+    </section>
+"""
+
+    parties_html = f"""
+    <section class="parties">
+      <article class="panel">
+        <h2>Eladó</h2>
+        <p>{_html_party(data.supplier_lines)}</p>
+      </article>
+      <article class="panel">
+        <h2>Vevő</h2>
+        <p>{_html_party(data.buyer_lines)}</p>
+      </article>
+    </section>
+"""
+    identity_html = f"""
+    <section class="identity-grid">
+      {parties_html}
+      {important_box_html}
+    </section>
+"""
 
     page = f"""<!doctype html>
 <html lang="hu">
@@ -6912,6 +6980,19 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       position: relative;
       z-index: 1;
     }}
+    .identity-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(72mm, .92fr);
+      gap: .6rem;
+      align-items: stretch;
+      margin-bottom: .62rem;
+      position: relative;
+      z-index: 1;
+    }}
+    .identity-grid .parties,
+    .identity-grid .important-box {{
+      margin-bottom: 0;
+    }}
     .meta-grid {{
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -6923,6 +7004,42 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     }}
     .meta-card {{
       min-width: 0;
+    }}
+    .important-box {{
+      margin: 0 0 .62rem;
+      padding: .46rem .54rem;
+      border: 1px solid #d5e5e6;
+      border-left: 4px double var(--ink-deep);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fefefe 0%, #f4fbfb 100%);
+      position: relative;
+      z-index: 1;
+    }}
+    .important-box h2 {{
+      margin: 0 0 .24rem 0;
+      font-size: .76rem;
+      color: var(--accent-strong);
+      text-transform: uppercase;
+      letter-spacing: .14em;
+    }}
+    .important-grid {{
+      margin: 0;
+      table-layout: fixed;
+      font-size: .79rem;
+    }}
+    .important-grid th,
+    .important-grid td {{
+      padding: 6px;
+      line-height: 1.28;
+    }}
+    .important-grid th {{
+      width: 44%;
+      white-space: nowrap;
+    }}
+    .important-grid td {{
+      font-size: .86rem;
+      font-weight: 800;
+      color: var(--ink-deep);
     }}
     .panel {{
       border: 1px solid #d5e5e6;
@@ -7059,6 +7176,9 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       .meta-grid {{
         grid-template-columns: 1fr;
       }}
+      .identity-grid {{
+        grid-template-columns: 1fr;
+      }}
       .parties {{
         grid-template-columns: 1fr;
       }}
@@ -7074,11 +7194,17 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       }}
     }}
     @page {{
-      size: A4 portrait;
+      size: 210mm 297mm;
       margin: 6mm;
     }}
     @media print {{
+      html {{
+        width: 210mm;
+        min-height: 297mm;
+      }}
       body {{
+        width: 210mm;
+        min-height: 297mm;
         padding: 0;
         background: #fff;
         -webkit-print-color-adjust: exact;
@@ -7087,7 +7213,8 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       .toolbar {{ display: none; }}
       .sheet {{
         margin: 0;
-        width: 100%;
+        width: 198mm;
+        max-width: 198mm;
         min-height: auto;
         padding: 8.8mm 9mm 8.2mm;
         border: 1px solid #d6e7e8;
@@ -7095,6 +7222,21 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         border-radius: 0;
         box-shadow: none;
         transform: none;
+      }}
+      .identity-grid {{
+        grid-template-columns: minmax(0, 2fr) minmax(72mm, .92fr);
+        align-items: stretch;
+      }}
+      .meta-grid {{
+        grid-template-columns: 1fr 1fr;
+      }}
+      .identity-grid .parties,
+      .parties {{
+        grid-template-columns: 1fr 1fr;
+      }}
+      .identity-grid .important-box,
+      .identity-grid .parties {{
+        margin-bottom: 0;
       }}
       a {{ color: inherit; text-decoration: none; }}
     }}
@@ -7120,20 +7262,10 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         <div>Gyártó<strong>{html.escape(data.supplier_name or NO_DATA)}</strong></div>
         <div>Sablon<strong>{profile_label}</strong></div>
         <div>Forrás<strong>{source_label}</strong></div>
-        <div>Generálás<strong>{generated_at}</strong></div>
       </div>
     </header>
 
-    <section class="parties">
-      <article class="panel">
-        <h2>Eladó</h2>
-        <p>{_html_party(data.supplier_lines)}</p>
-      </article>
-      <article class="panel">
-        <h2>Vevő</h2>
-        <p>{_html_party(data.buyer_lines)}</p>
-      </article>
-    </section>
+{identity_html}
 
     <section class="meta-grid">
       <article class="meta-card">
@@ -16580,48 +16712,14 @@ def _download_payload_for_kind(kind: str, job_id: str, artifact: str) -> tuple[b
 
 def _build_invoice_response(file_name: str, file_data: bytes) -> tuple[int, bytes, str, dict[str, str]]:
     chunks = split_pdf_by_invoice(file_data)
-    if len(chunks) <= 1:
-        chunk = chunks[0]
-        parsed = parse_invoice_data(chunk.text)
-        _require_party_vat_numbers(parsed)
-        source_label = file_name
-        if chunk.page_from != chunk.page_to:
-            source_label = f"{file_name} (oldalak: {chunk.page_from}-{chunk.page_to})"
-        printable_html = create_printable_html(parsed, source_filename=source_label)
-        return 200, printable_html, "text/html; charset=utf-8", {"Cache-Control": "no-store"}
-
-    zip_buffer = io.BytesIO()
-    summary_lines = [
-        f"Forrás PDF: {file_name}",
-        f"Felismert számlák: {len(chunks)}",
-        "",
-    ]
-
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for idx, chunk in enumerate(chunks, start=1):
-            parsed = parse_invoice_data(chunk.text)
-            _require_party_vat_numbers(parsed)
-            invoice_no = parsed.invoice_number or chunk.invoice_hint or f"invoice_{idx:02d}"
-            safe_no = re.sub(r"[^A-Za-z0-9._-]+", "_", invoice_no).strip("._-")
-            if not safe_no:
-                safe_no = f"invoice_{idx:02d}"
-
-            page_span = f"{chunk.page_from}" if chunk.page_from == chunk.page_to else f"{chunk.page_from}-{chunk.page_to}"
-            source_label = f"{file_name} (oldalak: {page_span})"
-            html_bytes = create_printable_html(parsed, source_filename=source_label)
-            html_name = f"{idx:02d}_{safe_no}_nyomtathato.html"
-            archive.writestr(html_name, html_bytes)
-            summary_lines.append(f"{idx}. számla: {invoice_no} (oldalak: {page_span}) -> {html_name}")
-
-        archive.writestr("00_lista.txt", "\n".join(summary_lines))
-
-    payload = zip_buffer.getvalue()
-    zip_name = f"{re.sub(r'[^A-Za-z0-9._-]+', '_', file_name.rsplit('.', 1)[0])}_szamlak.zip"
-    quoted_name = urllib.parse.quote(zip_name)
-    return 200, payload, "application/zip", {
-        "Cache-Control": "no-store",
-        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}",
-    }
+    chunk = chunks[0]
+    parsed = parse_invoice_data(chunk.text)
+    _require_party_vat_numbers(parsed)
+    source_label = file_name
+    if chunk.page_from != chunk.page_to:
+        source_label = f"{file_name} (oldalak: {chunk.page_from}-{chunk.page_to})"
+    printable_html = create_printable_html(parsed, source_filename=source_label)
+    return 200, printable_html, "text/html; charset=utf-8", {"Cache-Control": "no-store"}
 
 
 class ReusableThreadingHTTPServer(ThreadingHTTPServer):
