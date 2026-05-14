@@ -7199,20 +7199,23 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     }}
     @media print {{
       html {{
-        width: 210mm;
+        width: 100%;
         min-height: 297mm;
       }}
       body {{
-        width: 210mm;
-        min-height: 297mm;
+        width: 100%;
+        min-height: 285mm;
         padding: 0;
         background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }}
       .toolbar {{ display: none; }}
       .sheet {{
-        margin: 0;
+        margin: 0 auto;
         width: 198mm;
         max-width: 198mm;
         min-height: auto;
