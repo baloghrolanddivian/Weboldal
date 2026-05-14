@@ -123,6 +123,9 @@ PORT = int(os.getenv("DIVIAN_HUB_PORT", "5000"))
 NO_DATA = "Nincs adat"
 BASE_DIR = Path(__file__).resolve().parent
 RUNTIME_DIR = BASE_DIR / "runtime"
+SAVED_SELLER_VAT_NUMBERS = {
+    "kronospan": "SK2020070866",
+}
 DEV_RELOAD_ROUTE = "/__dev__/events"
 DEV_CHILD_ENV = "DIVIAN_HUB_DEV_CHILD"
 DEV_RELOAD_TOKEN_ENV = "DIVIAN_HUB_RELOAD_TOKEN"
@@ -5168,6 +5171,10 @@ class InvoiceChunk:
     page_to: int
 
 
+class MissingInvoiceDataError(ValueError):
+    pass
+
+
 def _clean_spaces(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
@@ -5294,6 +5301,39 @@ def _match_first(text: str, patterns: list[str], flags: int = re.IGNORECASE | re
     return ""
 
 
+def _saved_seller_vat_number(profile: str, supplier_name: str = "") -> str:
+    normalized_profile = _clean_spaces(profile).lower()
+    if normalized_profile in SAVED_SELLER_VAT_NUMBERS:
+        return SAVED_SELLER_VAT_NUMBERS[normalized_profile]
+
+    normalized_supplier = _clean_spaces(supplier_name).lower()
+    for key, vat_number in SAVED_SELLER_VAT_NUMBERS.items():
+        if key in normalized_supplier:
+            return vat_number
+    return ""
+
+
+def _party_has_vat_number(lines: list[str]) -> bool:
+    joined = "\n".join(_clean_spaces(line) for line in lines if _clean_spaces(line))
+    return bool(
+        re.search(
+            r"\b(?:VAT\s*(?:ID\s*)?(?:NO\.?|NUMBER)|TAX\s*NO\.?|AD[ÓO]SZ[ÁA]M)\b",
+            joined,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _require_party_vat_numbers(data: InvoiceData) -> None:
+    missing: list[str] = []
+    if not _party_has_vat_number(data.supplier_lines):
+        missing.append("eladó VAT Number")
+    if not _party_has_vat_number(data.buyer_lines):
+        missing.append("vevő VAT Number")
+    if missing:
+        raise MissingInvoiceDataError(f"Adat nem található: {', '.join(missing)}")
+
+
 def _pdf_unescape(value: str) -> str:
     value = value.replace(r"\n", " ").replace(r"\r", " ").replace(r"\t", " ")
     value = value.replace(r"\(", "(").replace(r"\)", ")").replace(r"\\", "\\")
@@ -5353,6 +5393,108 @@ def _extract_text_pages_from_pdf(pdf_bytes: bytes) -> list[str]:
         return [(page.extract_text() or "").strip() for page in reader.pages]
     except Exception:
         return []
+
+
+# Image OCR extractor kept here for later targeted use. Do not wire this into the
+# invoice module as a general fallback; Kronospan seller VAT is stored explicitly.
+#
+# def _pdf_filter_names(raw_filter) -> set[str]:
+#     if raw_filter is None:
+#         return set()
+#     if isinstance(raw_filter, (list, tuple)):
+#         return {str(item) for item in raw_filter}
+#     return {str(raw_filter)}
+#
+#
+# def _ocr_image_file(image_path: Path) -> str:
+#     if os.name != "nt":
+#         return ""
+#
+#     ocr_script = BASE_DIR / "tools" / "windows_ocr.ps1"
+#     if not ocr_script.exists():
+#         return ""
+#
+#     try:
+#         completed = subprocess.run(
+#             [
+#                 "powershell",
+#                 "-ExecutionPolicy",
+#                 "Bypass",
+#                 "-File",
+#                 str(ocr_script),
+#                 "-Path",
+#                 str(image_path.resolve()),
+#             ],
+#             capture_output=True,
+#             encoding="utf-8",
+#             errors="replace",
+#             text=True,
+#             timeout=20,
+#             check=False,
+#         )
+#     except Exception:
+#         return ""
+#
+#     if completed.returncode != 0:
+#         return ""
+#     return _clean_spaces(completed.stdout)
+#
+#
+# def _extract_pdf_dct_image_ocr_pages(pdf_bytes: bytes) -> list[str]:
+#     if PdfReader is None or os.name != "nt":
+#         return []
+#
+#     try:
+#         reader = PdfReader(io.BytesIO(pdf_bytes))
+#     except Exception:
+#         return []
+#
+#     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+#     image_text_by_hash: dict[str, str] = {}
+#     page_ocr_texts: list[str] = []
+#
+#     for page in reader.pages:
+#         page_parts: list[str] = []
+#         try:
+#             resources = page.get("/Resources") or {}
+#             xobjects = resources.get("/XObject") or {}
+#             if hasattr(xobjects, "get_object"):
+#                 xobjects = xobjects.get_object()
+#         except Exception:
+#             page_ocr_texts.append("")
+#             continue
+#
+#         for image_object in xobjects.values():
+#             try:
+#                 obj = image_object.get_object() if hasattr(image_object, "get_object") else image_object
+#                 if str(obj.get("/Subtype")) != "/Image":
+#                     continue
+#                 if "/DCTDecode" not in _pdf_filter_names(obj.get("/Filter")):
+#                     continue
+#                 image_data = obj.get_data()
+#             except Exception:
+#                 continue
+#
+#             digest = hashlib.sha256(image_data).hexdigest()
+#             if digest not in image_text_by_hash:
+#                 temp_path = RUNTIME_DIR / f"pdf-ocr-{digest[:16]}-{uuid.uuid4().hex[:8]}.jpg"
+#                 try:
+#                     temp_path.write_bytes(image_data)
+#                     image_text_by_hash[digest] = _ocr_image_file(temp_path)
+#                 except Exception:
+#                     image_text_by_hash[digest] = ""
+#                 finally:
+#                     try:
+#                         temp_path.unlink(missing_ok=True)
+#                     except Exception:
+#                         pass
+#
+#             if image_text_by_hash[digest]:
+#                 page_parts.append(image_text_by_hash[digest])
+#
+#         page_ocr_texts.append("\n".join(page_parts))
+#
+#     return page_ocr_texts
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -5951,6 +6093,12 @@ def _parse_kronospan_invoice_data(lines: list[str], text: str) -> InvoiceData:
                 break
 
     vat_no = _match_first(normalized_text, [r"VAT\s*-\s*NO\.?\s*([A-Z0-9]+?)(?:DELIVERY|\s|$)"])
+    seller_vat_id = _match_first(
+        normalized_text,
+        [r"VAT\s*ID\s*NO[\W_:.]*([A-Z]{2}\s*\d[\d\s]{5,})"],
+    ).replace(" ", "")
+    if not seller_vat_id:
+        seller_vat_id = _saved_seller_vat_number(data.invoice_profile, data.supplier_name)
     tax_idx = _find_index(lines, r"^Tax No\.")
     if tax_idx != -1:
         data.buyer_lines = [line for line in lines[max(0, tax_idx - 4) : tax_idx] if line]
@@ -5963,6 +6111,8 @@ def _parse_kronospan_invoice_data(lines: list[str], text: str) -> InvoiceData:
     data.buyer_lines = list(dict.fromkeys(data.buyer_lines))
 
     data.supplier_lines = [data.supplier_name]
+    if seller_vat_id:
+        data.supplier_lines.append(f"VAT ID No.: {seller_vat_id}")
     for label in ("BANK:", "IBAN:", "SWIFT:"):
         idx = _find_index(lines, f"^{re.escape(label)}")
         if idx != -1:
@@ -16433,6 +16583,7 @@ def _build_invoice_response(file_name: str, file_data: bytes) -> tuple[int, byte
     if len(chunks) <= 1:
         chunk = chunks[0]
         parsed = parse_invoice_data(chunk.text)
+        _require_party_vat_numbers(parsed)
         source_label = file_name
         if chunk.page_from != chunk.page_to:
             source_label = f"{file_name} (oldalak: {chunk.page_from}-{chunk.page_to})"
@@ -16449,6 +16600,7 @@ def _build_invoice_response(file_name: str, file_data: bytes) -> tuple[int, byte
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for idx, chunk in enumerate(chunks, start=1):
             parsed = parse_invoice_data(chunk.text)
+            _require_party_vat_numbers(parsed)
             invoice_no = parsed.invoice_number or chunk.invoice_hint or f"invoice_{idx:02d}"
             safe_no = re.sub(r"[^A-Za-z0-9._-]+", "_", invoice_no).strip("._-")
             if not safe_no:
@@ -18512,7 +18664,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.respond_form("Csak PDF fájl tölthető fel.")
             return
 
-        status, payload, content_type, headers = _build_invoice_response(file_name, file_data)
+        try:
+            status, payload, content_type, headers = _build_invoice_response(file_name, file_data)
+        except MissingInvoiceDataError as exc:
+            self.respond_form(str(exc))
+            return
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         for header_name, header_value in headers.items():
