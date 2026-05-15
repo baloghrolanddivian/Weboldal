@@ -1082,6 +1082,7 @@ def render_manufacturing_page(
     }}
     .mfg-row {{
       width: 100%;
+      min-height: 50px;
       padding: 7px 10px;
       border-radius: 0;
       border: 0;
@@ -1736,7 +1737,8 @@ def render_manufacturing_page(
         padding-left: 10px;
       }}
       .mfg-content.is-split .mfg-row {{
-        padding: 6px 8px;
+        min-height: 52px;
+        padding: 7px 8px;
         gap: 4px;
       }}
       .mfg-content.is-split .mfg-row-title {{
@@ -1744,7 +1746,7 @@ def render_manufacturing_page(
       }}
       .mfg-content.is-split .mfg-row-meta span {{
         font-size: 0.76rem;
-        min-height: 24px;
+        min-height: 26px;
       }}
       .mfg-content.is-split .mfg-row-meta span.is-size {{
         font-size: 0.72rem;
@@ -1755,7 +1757,7 @@ def render_manufacturing_page(
         line-height: 1.08;
       }}
       .mfg-content.is-split .mfg-row-qty {{
-        min-height: 24px;
+        min-height: 26px;
         padding: 0 6px;
         font-size: 0.76rem;
       }}
