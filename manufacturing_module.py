@@ -407,6 +407,31 @@ def _looks_like_code_fragment(token: str) -> bool:
     return "_" in normalized or any(character.isalpha() for character in normalized)
 
 
+def _normalized_code_fragment(token: str) -> str:
+    normalized = unicodedata.normalize("NFKD", _clean_text(token))
+    return "".join(character for character in normalized if not unicodedata.combining(character))
+
+
+def _looks_like_alkatresz_code_start(token: str) -> bool:
+    normalized = _normalized_code_fragment(token)
+    if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
+        return False
+    return "_" in normalized or any(character.isdigit() for character in normalized)
+
+
+def _looks_like_alkatresz_code_continuation(token: str) -> bool:
+    raw_token = _clean_text(token)
+    normalized = _normalized_code_fragment(raw_token)
+    if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
+        return False
+    if "_" in normalized or any(character.isdigit() for character in normalized):
+        return True
+    if "-" in normalized:
+        return False
+    letters = [character for character in raw_token if character.isalpha()]
+    return 0 < len(normalized) <= 4 and any(character.isupper() for character in letters)
+
+
 def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number: int) -> list[ManufacturingRow]:
     rows: list[ManufacturingRow] = []
     section_key = _slugify(section_label)
@@ -540,7 +565,7 @@ def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[Manufactu
     row_index = 0
 
     start_index = 0
-    while start_index < len(tokens) and not _looks_like_code_fragment(tokens[start_index]):
+    while start_index < len(tokens) and not _looks_like_alkatresz_code_start(tokens[start_index]):
         start_index += 1
     working_tokens = tokens[start_index:]
 
@@ -579,7 +604,11 @@ def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[Manufactu
 
         code_parts: list[str] = []
         name_start_index = 0
-        while name_start_index < dimension_index and _looks_like_code_fragment(segment[name_start_index]):
+        if not _looks_like_alkatresz_code_start(segment[name_start_index]):
+            continue
+        code_parts.append(segment[name_start_index])
+        name_start_index += 1
+        while name_start_index < dimension_index and _looks_like_alkatresz_code_continuation(segment[name_start_index]):
             code_parts.append(segment[name_start_index])
             name_start_index += 1
         if not code_parts:
