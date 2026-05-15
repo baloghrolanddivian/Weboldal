@@ -267,7 +267,10 @@ SHOPFLOOR_PROCESS_PAYLOAD = {
 MATT_INVENTORY_ROUTE = "/apps/matt-raktarertek"
 MATT_INVENTORY_PROCESS_ROUTE = f"{MATT_INVENTORY_ROUTE}/process"
 MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
+ADMIN_INVENTORY_GROUP_ROUTE = "/apps/admin-leltar"
+PRODUCTION_INVENTORY_GROUP_ROUTE = "/apps/gyartas-leltar"
 FRONT_INVENTORY_ROUTE = "/apps/front-leltar"
+FRONT_INVENTORY_WORKER_ROUTE = f"{FRONT_INVENTORY_ROUTE}/leltar"
 FRONT_INVENTORY_PROCESS_ROUTE = f"{FRONT_INVENTORY_ROUTE}/process"
 FRONT_INVENTORY_STATE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/state"
 FRONT_INVENTORY_CHECK_ROUTE = f"{FRONT_INVENTORY_ROUTE}/ellenorzes"
@@ -279,18 +282,21 @@ FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/downloa
 FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/insight-script"
 FRONT_INVENTORY_ALERT_CLEAR_ROUTE = f"{FRONT_INVENTORY_ROUTE}/alert-clear"
 MATERIAL_INVENTORY_ROUTE = "/apps/anyag-raktar"
+MATERIAL_INVENTORY_WORKER_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/leltar"
 MATERIAL_INVENTORY_PROCESS_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/process"
 MATERIAL_INVENTORY_STATE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/state"
 MATERIAL_INVENTORY_FINALIZE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/veglegesites"
 MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/insight"
 MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_INVENTORY_ROUTE = "/apps/felkesz-raktar"
+SEMIFINISHED_INVENTORY_WORKER_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/leltar"
 SEMIFINISHED_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/process"
 SEMIFINISHED_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/state"
 SEMIFINISHED_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/veglegesites"
 SEMIFINISHED_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/insight"
 SEMIFINISHED_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_FRONT_INVENTORY_ROUTE = "/apps/felkesz-front"
+SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/leltar"
 SEMIFINISHED_FRONT_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/process"
 SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/state"
 SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/veglegesites"
@@ -14060,6 +14066,108 @@ def _semifinished_front_inventory_store_exports(session: dict) -> None:
     )
 
 
+def _material_inventory_worker_route(inventory_kind: str) -> str:
+    clean_inventory_kind = str(inventory_kind or "").strip().lower()
+    if clean_inventory_kind == "semifinished_front":
+        return SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE
+    if clean_inventory_kind == "semifinished":
+        return SEMIFINISHED_INVENTORY_WORKER_ROUTE
+    return MATERIAL_INVENTORY_WORKER_ROUTE
+
+
+def render_inventory_group_page(group: str) -> bytes:
+    clean_group = str(group or "").strip().lower()
+    is_production = clean_group == "production"
+    title = "Gyártás Leltár" if is_production else "Admin Leltár"
+    label = "Gyártási leltár nézetek" if is_production else "Admin leltár modulok"
+    description = (
+        "A kollégák önálló leltárnézetei, közvetlenül a számoláshoz."
+        if is_production
+        else "A leltárak kezelőfelületei feltöltéshez, lezáráshoz és exporthoz."
+    )
+    cards = (
+        (
+            ("Front leltár", "Fóliás frontok számolása méret és szín alapján.", "Front -> leltár nézet", FRONT_INVENTORY_WORKER_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári tételek számolása ICG kód szerinti kategóriákban.", "Anyag -> számolás", MATERIAL_INVENTORY_WORKER_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári tételek számolása szín szerinti kategóriákban.", "Félkész -> számolás", SEMIFINISHED_INVENTORY_WORKER_ROUTE),
+            ("Félkész front leltár", "Félkész frontok számolása szín szerinti kategóriákban.", "Félkész front -> számolás", SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE),
+        )
+        if is_production
+        else (
+            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front leltár", FRONT_INVENTORY_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag raktár", MATERIAL_INVENTORY_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész raktár", SEMIFINISHED_INVENTORY_ROUTE),
+            ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", SEMIFINISHED_FRONT_INVENTORY_ROUTE),
+        )
+    )
+    cards_html = "".join(
+        f"""
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">{index:02d}</div>
+              </div>
+              <h3>{html.escape(card_title)}</h3>
+              <p>{html.escape(card_description)}</p>
+              <div class="module-meta">{html.escape(card_meta)}</div>
+              <a class="button button-secondary" href="{html.escape(card_href)}">Megnyitás</a>
+            </article>
+        """
+        for index, (card_title, card_description, card_meta, card_href) in enumerate(cards, start=1)
+    )
+    page = f"""<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Divian-HUB | {html.escape(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+      <div class="grid-overlay"></div>
+
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Divian-HUB kezdőoldal">
+          <span class="brand-mark"></span>
+          <span class="brand-text">
+            <strong>Divian-HUB</strong>
+            <small>Céges modulplatform</small>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="/">Főoldal</a>
+          <a href="#modules">Modulok</a>
+        </nav>
+      </header>
+
+      <main class="home-shell">
+        <section class="module-section" id="modules">
+          <div class="section-head reveal">
+            <p class="section-label">{html.escape(label)}</p>
+            <h2>{html.escape(title)}</h2>
+            <p>{html.escape(description)}</p>
+          </div>
+          <div class="module-grid">
+            {cards_html}
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/script.js"></script>
+  </body>
+</html>"""
+    return page.encode("utf-8")
+
+
 def _material_inventory_normalize_view(value: str) -> str:
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
@@ -14130,8 +14238,9 @@ def render_material_inventory_form(
     color_empty_copy = "Töltsd fel a leltározandó félkész front listát, utána színek szerint külön kategóriákban lehet számolni." if is_semifinished_front else "Töltsd fel a leltározandó félkész listát, utána színek szerint külön kategóriákban lehet számolni."
     upload_button = color_upload_button if is_semifinished else "Anyagraktár leltár indítása"
     empty_copy = color_empty_copy if is_semifinished else "Töltsd fel a leltározandó anyaglistát, utána ICG kód szerint külön kategóriákban lehet számolni."
+    worker_route = _material_inventory_worker_route(clean_inventory_kind)
     admin_href = route
-    inventory_href = route if session is None else f"{route}?view=leltar"
+    inventory_href = worker_route
     if active_view == "leltar":
         view_switch_html = """
           <div class="matinv-view-switch is-worker-only">
@@ -14162,7 +14271,7 @@ def render_material_inventory_form(
         categories_html = "".join(
             f"""
               <a class="matinv-chip{' is-complete' if item.get('complete') else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                 href="{route}?view=leltar&category={urllib.parse.quote(item['key'])}">
+                 href="{worker_route}?category={urllib.parse.quote(item['key'])}">
                 <span>{html.escape(str(item['label']))}</span>
                 <strong>{int(item['count'])}</strong>
               </a>
@@ -14426,7 +14535,7 @@ def render_material_inventory_form(
         <span class="matinv-tag">Divian-HUB</span>
         <h1>{page_title}</h1>
       </div>
-      <a href="/">Vissza a modulokhoz</a>
+      <a href="{PRODUCTION_INVENTORY_GROUP_ROUTE if active_view == 'leltar' else ADMIN_INVENTORY_GROUP_ROUTE}">Vissza a modulokhoz</a>
     </header>
     {notice_html}
     {view_switch_html}
@@ -14651,9 +14760,9 @@ def render_front_inventory_form(
 
     admin_href = FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     inventory_href = (
-        FRONT_INVENTORY_ROUTE
-        if session is None
-        else f"{FRONT_INVENTORY_ROUTE}?view=leltar&sort={urllib.parse.quote(sort_mode)}"
+        FRONT_INVENTORY_WORKER_ROUTE
+        if sort_mode == "default"
+        else f"{FRONT_INVENTORY_WORKER_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     )
     if active_view == "leltar":
         view_switch_html = """
@@ -14685,7 +14794,7 @@ def render_front_inventory_form(
         categories_html = "".join(
             f"""
               <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-live' if item['key'] in active_presence_categories else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                  href="{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
+                  href="{FRONT_INVENTORY_WORKER_ROUTE}?category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
                 <span>{html.escape(item['label'])}</span>
                 <strong>{item['count']}</strong>
               </a>
@@ -14713,7 +14822,7 @@ def render_front_inventory_form(
           </article>
         """
 
-        inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
+        inventory_open_href = f"{FRONT_INVENTORY_WORKER_ROUTE}?category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
         current_sort_mode = str(view_model.get("sort_mode", "default") or "default")
 
         def frontinv_sort_href(sort_key: str) -> str:
@@ -14723,7 +14832,9 @@ def render_front_inventory_form(
                 next_sort = "default"
             else:
                 next_sort = sort_key
-            return f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
+            sort_base_route = FRONT_INVENTORY_WORKER_ROUTE if active_view == "leltar" else FRONT_INVENTORY_ROUTE
+            sort_view_part = "" if active_view == "leltar" else f"view={urllib.parse.quote(active_view)}&"
+            return f"{sort_base_route}?{sort_view_part}category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
 
         def frontinv_sort_label(label: str, sort_key: str) -> str:
             indicator = ""
@@ -16151,7 +16262,7 @@ def render_front_inventory_form(
         <span class="frontinv-tag">Divian-HUB</span>
         <h1>Fóliás front leltár</h1>
       </div>
-      <a href="/">Vissza a modulokhoz</a>
+      <a href="{ADMIN_INVENTORY_GROUP_ROUTE}">Vissza a modulokhoz</a>
     </header>
     {notice_html}
     {content_html}
@@ -16557,11 +16668,59 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == ADMIN_INVENTORY_GROUP_ROUTE:
+            body = render_inventory_group_page("admin")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == PRODUCTION_INVENTORY_GROUP_ROUTE:
+            body = render_inventory_group_page("production")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == MATERIAL_INVENTORY_WORKER_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            body = render_material_inventory_form(selected_category=selected_category, view_mode="leltar")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == MATERIAL_INVENTORY_ROUTE:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
             body = render_material_inventory_form(selected_category=selected_category, view_mode=selected_view)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == SEMIFINISHED_INVENTORY_WORKER_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            body = render_material_inventory_form(
+                selected_category=selected_category,
+                view_mode="leltar",
+                inventory_kind="semifinished",
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -16587,6 +16746,22 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            body = render_material_inventory_form(
+                selected_category=selected_category,
+                view_mode="leltar",
+                inventory_kind="semifinished_front",
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == SEMIFINISHED_FRONT_INVENTORY_ROUTE:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
@@ -16596,6 +16771,20 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 view_mode=selected_view,
                 inventory_kind="semifinished_front",
             )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FRONT_INVENTORY_WORKER_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            _front_inventory_ensure_insight_artifacts(load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH))
+            body = render_front_inventory_form(selected_category=selected_category, sort_mode=selected_sort, view_mode="leltar")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
