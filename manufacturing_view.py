@@ -830,6 +830,9 @@ def render_manufacturing_page(
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
     }}
+    .mfg-content.is-overview:not(.is-split):not(.is-single-column-overview) .mfg-section-card {{
+      grid-column: 1 / -1;
+    }}
     .mfg-content.is-single-column-overview {{
       display: block;
       min-width: 0;
