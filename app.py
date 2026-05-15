@@ -14087,16 +14087,16 @@ def render_inventory_group_page(group: str) -> bytes:
     )
     cards = (
         (
-            ("Front leltár", "Fóliás frontok számolása méret és szín alapján.", "Front -> leltár nézet", FRONT_INVENTORY_WORKER_ROUTE),
+            ("Front leltár", "Fóliás frontok számolása méret és szín alapján.", "Front -> számolás", FRONT_INVENTORY_WORKER_ROUTE),
             ("Anyag raktár leltár", "Anyagraktári tételek számolása ICG kód szerinti kategóriákban.", "Anyag -> számolás", MATERIAL_INVENTORY_WORKER_ROUTE),
             ("Félkész raktár leltár", "Félkész raktári tételek számolása szín szerinti kategóriákban.", "Félkész -> számolás", SEMIFINISHED_INVENTORY_WORKER_ROUTE),
             ("Félkész front leltár", "Félkész frontok számolása szín szerinti kategóriákban.", "Félkész front -> számolás", SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE),
         )
         if is_production
         else (
-            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front leltár", FRONT_INVENTORY_ROUTE),
-            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag raktár", MATERIAL_INVENTORY_ROUTE),
-            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész raktár", SEMIFINISHED_INVENTORY_ROUTE),
+            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front", FRONT_INVENTORY_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag", MATERIAL_INVENTORY_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész", SEMIFINISHED_INVENTORY_ROUTE),
             ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", SEMIFINISHED_FRONT_INVENTORY_ROUTE),
         )
     )
