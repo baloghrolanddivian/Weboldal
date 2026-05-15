@@ -14145,7 +14145,6 @@ def render_inventory_group_page(group: str) -> bytes:
         </a>
         <nav class="nav">
           <a href="/">Főoldal</a>
-          <a href="#modules">Modulok</a>
         </nav>
       </header>
 
