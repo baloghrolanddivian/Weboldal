@@ -123,6 +123,9 @@ PORT = int(os.getenv("DIVIAN_HUB_PORT", "5000"))
 NO_DATA = "Nincs adat"
 BASE_DIR = Path(__file__).resolve().parent
 RUNTIME_DIR = BASE_DIR / "runtime"
+SAVED_SELLER_VAT_NUMBERS = {
+    "kronospan": "SK2020070866",
+}
 DEV_RELOAD_ROUTE = "/__dev__/events"
 DEV_CHILD_ENV = "DIVIAN_HUB_DEV_CHILD"
 DEV_RELOAD_TOKEN_ENV = "DIVIAN_HUB_RELOAD_TOKEN"
@@ -5168,6 +5171,10 @@ class InvoiceChunk:
     page_to: int
 
 
+class MissingInvoiceDataError(ValueError):
+    pass
+
+
 def _clean_spaces(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
@@ -5294,6 +5301,62 @@ def _match_first(text: str, patterns: list[str], flags: int = re.IGNORECASE | re
     return ""
 
 
+def _saved_seller_vat_number(profile: str, supplier_name: str = "") -> str:
+    normalized_profile = _clean_spaces(profile).lower()
+    if normalized_profile in SAVED_SELLER_VAT_NUMBERS:
+        return SAVED_SELLER_VAT_NUMBERS[normalized_profile]
+
+    normalized_supplier = _clean_spaces(supplier_name).lower()
+    for key, vat_number in SAVED_SELLER_VAT_NUMBERS.items():
+        if key in normalized_supplier:
+            return vat_number
+    return ""
+
+
+def _party_has_vat_number(lines: list[str]) -> bool:
+    joined = "\n".join(_clean_spaces(line) for line in lines if _clean_spaces(line))
+    return bool(
+        re.search(
+            r"\b(?:VAT\s*(?:ID\s*)?(?:NO\.?|NUMBER)|TAX\s*NO\.?|AD[ÓO]SZ[ÁA]M)\b",
+            joined,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _extract_party_vat_number(lines: list[str]) -> str:
+    vat_label_pattern = r"\b(?:VAT\s*(?:ID\s*)?(?:NO\.?|NUMBER)|TAX\s*NO\.?|AD[ÓO]SZ[ÁA]M)\b"
+    for idx, line in enumerate(lines):
+        cleaned = _clean_spaces(line)
+        if not cleaned:
+            continue
+
+        label_match = re.search(vat_label_pattern, cleaned, re.IGNORECASE)
+        if not label_match:
+            continue
+
+        value = cleaned[label_match.end() :].strip(" :.-#")
+        if value:
+            return value
+
+        for candidate in lines[idx + 1 : idx + 3]:
+            candidate_value = _clean_spaces(candidate).strip(" :.-#")
+            if candidate_value:
+                return candidate_value
+
+    return ""
+
+
+def _require_party_vat_numbers(data: InvoiceData) -> None:
+    missing: list[str] = []
+    if not _party_has_vat_number(data.supplier_lines):
+        missing.append("eladó VAT Number")
+    if not _party_has_vat_number(data.buyer_lines):
+        missing.append("vevő VAT Number")
+    if missing:
+        raise MissingInvoiceDataError(f"Adat nem található: {', '.join(missing)}")
+
+
 def _pdf_unescape(value: str) -> str:
     value = value.replace(r"\n", " ").replace(r"\r", " ").replace(r"\t", " ")
     value = value.replace(r"\(", "(").replace(r"\)", ")").replace(r"\\", "\\")
@@ -5353,6 +5416,108 @@ def _extract_text_pages_from_pdf(pdf_bytes: bytes) -> list[str]:
         return [(page.extract_text() or "").strip() for page in reader.pages]
     except Exception:
         return []
+
+
+# Image OCR extractor kept here for later targeted use. Do not wire this into the
+# invoice module as a general fallback; Kronospan seller VAT is stored explicitly.
+#
+# def _pdf_filter_names(raw_filter) -> set[str]:
+#     if raw_filter is None:
+#         return set()
+#     if isinstance(raw_filter, (list, tuple)):
+#         return {str(item) for item in raw_filter}
+#     return {str(raw_filter)}
+#
+#
+# def _ocr_image_file(image_path: Path) -> str:
+#     if os.name != "nt":
+#         return ""
+#
+#     ocr_script = BASE_DIR / "tools" / "windows_ocr.ps1"
+#     if not ocr_script.exists():
+#         return ""
+#
+#     try:
+#         completed = subprocess.run(
+#             [
+#                 "powershell",
+#                 "-ExecutionPolicy",
+#                 "Bypass",
+#                 "-File",
+#                 str(ocr_script),
+#                 "-Path",
+#                 str(image_path.resolve()),
+#             ],
+#             capture_output=True,
+#             encoding="utf-8",
+#             errors="replace",
+#             text=True,
+#             timeout=20,
+#             check=False,
+#         )
+#     except Exception:
+#         return ""
+#
+#     if completed.returncode != 0:
+#         return ""
+#     return _clean_spaces(completed.stdout)
+#
+#
+# def _extract_pdf_dct_image_ocr_pages(pdf_bytes: bytes) -> list[str]:
+#     if PdfReader is None or os.name != "nt":
+#         return []
+#
+#     try:
+#         reader = PdfReader(io.BytesIO(pdf_bytes))
+#     except Exception:
+#         return []
+#
+#     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+#     image_text_by_hash: dict[str, str] = {}
+#     page_ocr_texts: list[str] = []
+#
+#     for page in reader.pages:
+#         page_parts: list[str] = []
+#         try:
+#             resources = page.get("/Resources") or {}
+#             xobjects = resources.get("/XObject") or {}
+#             if hasattr(xobjects, "get_object"):
+#                 xobjects = xobjects.get_object()
+#         except Exception:
+#             page_ocr_texts.append("")
+#             continue
+#
+#         for image_object in xobjects.values():
+#             try:
+#                 obj = image_object.get_object() if hasattr(image_object, "get_object") else image_object
+#                 if str(obj.get("/Subtype")) != "/Image":
+#                     continue
+#                 if "/DCTDecode" not in _pdf_filter_names(obj.get("/Filter")):
+#                     continue
+#                 image_data = obj.get_data()
+#             except Exception:
+#                 continue
+#
+#             digest = hashlib.sha256(image_data).hexdigest()
+#             if digest not in image_text_by_hash:
+#                 temp_path = RUNTIME_DIR / f"pdf-ocr-{digest[:16]}-{uuid.uuid4().hex[:8]}.jpg"
+#                 try:
+#                     temp_path.write_bytes(image_data)
+#                     image_text_by_hash[digest] = _ocr_image_file(temp_path)
+#                 except Exception:
+#                     image_text_by_hash[digest] = ""
+#                 finally:
+#                     try:
+#                         temp_path.unlink(missing_ok=True)
+#                     except Exception:
+#                         pass
+#
+#             if image_text_by_hash[digest]:
+#                 page_parts.append(image_text_by_hash[digest])
+#
+#         page_ocr_texts.append("\n".join(page_parts))
+#
+#     return page_ocr_texts
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -5951,6 +6116,12 @@ def _parse_kronospan_invoice_data(lines: list[str], text: str) -> InvoiceData:
                 break
 
     vat_no = _match_first(normalized_text, [r"VAT\s*-\s*NO\.?\s*([A-Z0-9]+?)(?:DELIVERY|\s|$)"])
+    seller_vat_id = _match_first(
+        normalized_text,
+        [r"VAT\s*ID\s*NO[\W_:.]*([A-Z]{2}\s*\d[\d\s]{5,})"],
+    ).replace(" ", "")
+    if not seller_vat_id:
+        seller_vat_id = _saved_seller_vat_number(data.invoice_profile, data.supplier_name)
     tax_idx = _find_index(lines, r"^Tax No\.")
     if tax_idx != -1:
         data.buyer_lines = [line for line in lines[max(0, tax_idx - 4) : tax_idx] if line]
@@ -5963,6 +6134,8 @@ def _parse_kronospan_invoice_data(lines: list[str], text: str) -> InvoiceData:
     data.buyer_lines = list(dict.fromkeys(data.buyer_lines))
 
     data.supplier_lines = [data.supplier_name]
+    if seller_vat_id:
+        data.supplier_lines.append(f"VAT ID No.: {seller_vat_id}")
     for label in ("BANK:", "IBAN:", "SWIFT:"):
         idx = _find_index(lines, f"^{re.escape(label)}")
         if idx != -1:
@@ -6343,7 +6516,13 @@ def _html_text(value: str) -> str:
 def _html_party(lines: list[str]) -> str:
     if not lines:
         return html.escape(NO_DATA)
-    return "<br>".join(html.escape(_clean_spaces(line)) for line in lines if _clean_spaces(line))
+    html_lines: list[str] = []
+    for line in lines:
+        cleaned = _clean_spaces(line)
+        if not cleaned:
+            continue
+        html_lines.append(html.escape(cleaned))
+    return "<br>".join(html_lines)
 
 
 def _html_table_rows(rows: list[tuple[str, str]]) -> str:
@@ -6500,7 +6679,6 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     rounded_gross_weight = _format_rounded_weight(data.total_gross_weight) if data.total_gross_weight else ""
     invoice_date_display = _format_invoice_date(data.invoice_date)
     due_date_display = _format_invoice_date(data.due_date)
-    generated_at = datetime.now().strftime("%Y.%m.%d %H:%M")
     source_label = html.escape(source_filename) if source_filename else "feltöltött PDF"
     compact_mode = len(data.items) >= 10 or (len(data.supplier_lines) + len(data.buyer_lines)) >= 12
     body_class = "compact" if compact_mode else ""
@@ -6512,6 +6690,18 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         "generic": "Általános sablon",
         "": "Általános sablon",
     }.get(data.invoice_profile, "Általános sablon")
+
+    supplier_vat_number = _extract_party_vat_number(data.supplier_lines)
+    buyer_vat_number = _extract_party_vat_number(data.buyer_lines)
+    important_fields = [
+        ("Eladó VAT szám", supplier_vat_number),
+        ("Vevő VAT szám", buyer_vat_number),
+        ("Számlaszám", data.invoice_number),
+        ("Számla dátuma", invoice_date_display),
+        ("Pénznem", data.currency),
+        ("Összeg", data.total_net),
+    ]
+    important_rows = _html_table_rows(important_fields)
 
     info_field_rows = [
         ("Számlaszám", data.invoice_number),
@@ -6587,6 +6777,34 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
           <th class="right">Nettó érték</th>
         </tr>
         """
+
+    important_box_html = f"""
+    <section class="important-box">
+      <h2>Fontos Adatok</h2>
+      <table class="important-grid">
+        <tbody>{important_rows}</tbody>
+      </table>
+    </section>
+"""
+
+    parties_html = f"""
+    <section class="parties">
+      <article class="panel">
+        <h2>Eladó</h2>
+        <p>{_html_party(data.supplier_lines)}</p>
+      </article>
+      <article class="panel">
+        <h2>Vevő</h2>
+        <p>{_html_party(data.buyer_lines)}</p>
+      </article>
+    </section>
+"""
+    identity_html = f"""
+    <section class="identity-grid">
+      {parties_html}
+      {important_box_html}
+    </section>
+"""
 
     page = f"""<!doctype html>
 <html lang="hu">
@@ -6762,6 +6980,19 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       position: relative;
       z-index: 1;
     }}
+    .identity-grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(72mm, .92fr);
+      gap: .6rem;
+      align-items: stretch;
+      margin-bottom: .62rem;
+      position: relative;
+      z-index: 1;
+    }}
+    .identity-grid .parties,
+    .identity-grid .important-box {{
+      margin-bottom: 0;
+    }}
     .meta-grid {{
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -6773,6 +7004,42 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     }}
     .meta-card {{
       min-width: 0;
+    }}
+    .important-box {{
+      margin: 0 0 .62rem;
+      padding: .46rem .54rem;
+      border: 1px solid #d5e5e6;
+      border-left: 4px double var(--ink-deep);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fefefe 0%, #f4fbfb 100%);
+      position: relative;
+      z-index: 1;
+    }}
+    .important-box h2 {{
+      margin: 0 0 .24rem 0;
+      font-size: .76rem;
+      color: var(--accent-strong);
+      text-transform: uppercase;
+      letter-spacing: .14em;
+    }}
+    .important-grid {{
+      margin: 0;
+      table-layout: fixed;
+      font-size: .79rem;
+    }}
+    .important-grid th,
+    .important-grid td {{
+      padding: 6px;
+      line-height: 1.28;
+    }}
+    .important-grid th {{
+      width: 44%;
+      white-space: nowrap;
+    }}
+    .important-grid td {{
+      font-size: .86rem;
+      font-weight: 800;
+      color: var(--ink-deep);
     }}
     .panel {{
       border: 1px solid #d5e5e6;
@@ -6909,6 +7176,9 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       .meta-grid {{
         grid-template-columns: 1fr;
       }}
+      .identity-grid {{
+        grid-template-columns: 1fr;
+      }}
       .parties {{
         grid-template-columns: 1fr;
       }}
@@ -6924,20 +7194,30 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       }}
     }}
     @page {{
-      size: A4 portrait;
+      size: 210mm 297mm;
       margin: 6mm;
     }}
     @media print {{
+      html {{
+        width: 100%;
+        min-height: 297mm;
+      }}
       body {{
+        width: 100%;
+        min-height: 285mm;
         padding: 0;
         background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }}
       .toolbar {{ display: none; }}
       .sheet {{
-        margin: 0;
-        width: 100%;
+        margin: 0 auto;
+        width: 198mm;
+        max-width: 198mm;
         min-height: auto;
         padding: 8.8mm 9mm 8.2mm;
         border: 1px solid #d6e7e8;
@@ -6945,6 +7225,21 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         border-radius: 0;
         box-shadow: none;
         transform: none;
+      }}
+      .identity-grid {{
+        grid-template-columns: minmax(0, 2fr) minmax(72mm, .92fr);
+        align-items: stretch;
+      }}
+      .meta-grid {{
+        grid-template-columns: 1fr 1fr;
+      }}
+      .identity-grid .parties,
+      .parties {{
+        grid-template-columns: 1fr 1fr;
+      }}
+      .identity-grid .important-box,
+      .identity-grid .parties {{
+        margin-bottom: 0;
       }}
       a {{ color: inherit; text-decoration: none; }}
     }}
@@ -6970,20 +7265,10 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         <div>Gyártó<strong>{html.escape(data.supplier_name or NO_DATA)}</strong></div>
         <div>Sablon<strong>{profile_label}</strong></div>
         <div>Forrás<strong>{source_label}</strong></div>
-        <div>Generálás<strong>{generated_at}</strong></div>
       </div>
     </header>
 
-    <section class="parties">
-      <article class="panel">
-        <h2>Eladó</h2>
-        <p>{_html_party(data.supplier_lines)}</p>
-      </article>
-      <article class="panel">
-        <h2>Vevő</h2>
-        <p>{_html_party(data.buyer_lines)}</p>
-      </article>
-    </section>
+{identity_html}
 
     <section class="meta-grid">
       <article class="meta-card">
@@ -16430,46 +16715,14 @@ def _download_payload_for_kind(kind: str, job_id: str, artifact: str) -> tuple[b
 
 def _build_invoice_response(file_name: str, file_data: bytes) -> tuple[int, bytes, str, dict[str, str]]:
     chunks = split_pdf_by_invoice(file_data)
-    if len(chunks) <= 1:
-        chunk = chunks[0]
-        parsed = parse_invoice_data(chunk.text)
-        source_label = file_name
-        if chunk.page_from != chunk.page_to:
-            source_label = f"{file_name} (oldalak: {chunk.page_from}-{chunk.page_to})"
-        printable_html = create_printable_html(parsed, source_filename=source_label)
-        return 200, printable_html, "text/html; charset=utf-8", {"Cache-Control": "no-store"}
-
-    zip_buffer = io.BytesIO()
-    summary_lines = [
-        f"Forrás PDF: {file_name}",
-        f"Felismert számlák: {len(chunks)}",
-        "",
-    ]
-
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for idx, chunk in enumerate(chunks, start=1):
-            parsed = parse_invoice_data(chunk.text)
-            invoice_no = parsed.invoice_number or chunk.invoice_hint or f"invoice_{idx:02d}"
-            safe_no = re.sub(r"[^A-Za-z0-9._-]+", "_", invoice_no).strip("._-")
-            if not safe_no:
-                safe_no = f"invoice_{idx:02d}"
-
-            page_span = f"{chunk.page_from}" if chunk.page_from == chunk.page_to else f"{chunk.page_from}-{chunk.page_to}"
-            source_label = f"{file_name} (oldalak: {page_span})"
-            html_bytes = create_printable_html(parsed, source_filename=source_label)
-            html_name = f"{idx:02d}_{safe_no}_nyomtathato.html"
-            archive.writestr(html_name, html_bytes)
-            summary_lines.append(f"{idx}. számla: {invoice_no} (oldalak: {page_span}) -> {html_name}")
-
-        archive.writestr("00_lista.txt", "\n".join(summary_lines))
-
-    payload = zip_buffer.getvalue()
-    zip_name = f"{re.sub(r'[^A-Za-z0-9._-]+', '_', file_name.rsplit('.', 1)[0])}_szamlak.zip"
-    quoted_name = urllib.parse.quote(zip_name)
-    return 200, payload, "application/zip", {
-        "Cache-Control": "no-store",
-        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}",
-    }
+    chunk = chunks[0]
+    parsed = parse_invoice_data(chunk.text)
+    _require_party_vat_numbers(parsed)
+    source_label = file_name
+    if chunk.page_from != chunk.page_to:
+        source_label = f"{file_name} (oldalak: {chunk.page_from}-{chunk.page_to})"
+    printable_html = create_printable_html(parsed, source_filename=source_label)
+    return 200, printable_html, "text/html; charset=utf-8", {"Cache-Control": "no-store"}
 
 
 class ReusableThreadingHTTPServer(ThreadingHTTPServer):
@@ -18512,7 +18765,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.respond_form("Csak PDF fájl tölthető fel.")
             return
 
-        status, payload, content_type, headers = _build_invoice_response(file_name, file_data)
+        try:
+            status, payload, content_type, headers = _build_invoice_response(file_name, file_data)
+        except MissingInvoiceDataError as exc:
+            self.respond_form(str(exc))
+            return
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         for header_name, header_value in headers.items():
