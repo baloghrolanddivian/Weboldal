@@ -270,7 +270,9 @@ MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
 ADMIN_INVENTORY_GROUP_ROUTE = "/apps/admin-leltar"
 PRODUCTION_INVENTORY_GROUP_ROUTE = "/apps/gyartas-leltar"
 FRONT_INVENTORY_ROUTE = "/apps/front-leltar"
-FRONT_INVENTORY_WORKER_ROUTE = f"{FRONT_INVENTORY_ROUTE}/leltar"
+ADMIN_FRONT_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/front-leltar"
+FRONT_INVENTORY_LEGACY_WORKER_ROUTE = f"{FRONT_INVENTORY_ROUTE}/leltar"
+FRONT_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/front-leltar"
 FRONT_INVENTORY_PROCESS_ROUTE = f"{FRONT_INVENTORY_ROUTE}/process"
 FRONT_INVENTORY_STATE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/state"
 FRONT_INVENTORY_CHECK_ROUTE = f"{FRONT_INVENTORY_ROUTE}/ellenorzes"
@@ -282,21 +284,27 @@ FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/downloa
 FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/insight-script"
 FRONT_INVENTORY_ALERT_CLEAR_ROUTE = f"{FRONT_INVENTORY_ROUTE}/alert-clear"
 MATERIAL_INVENTORY_ROUTE = "/apps/anyag-raktar"
-MATERIAL_INVENTORY_WORKER_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/leltar"
+ADMIN_MATERIAL_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/anyag-raktar"
+MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/leltar"
+MATERIAL_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/anyag-raktar"
 MATERIAL_INVENTORY_PROCESS_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/process"
 MATERIAL_INVENTORY_STATE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/state"
 MATERIAL_INVENTORY_FINALIZE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/veglegesites"
 MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/insight"
 MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_INVENTORY_ROUTE = "/apps/felkesz-raktar"
-SEMIFINISHED_INVENTORY_WORKER_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/leltar"
+ADMIN_SEMIFINISHED_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/felkesz-raktar"
+SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/leltar"
+SEMIFINISHED_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/felkesz-raktar"
 SEMIFINISHED_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/process"
 SEMIFINISHED_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/state"
 SEMIFINISHED_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/veglegesites"
 SEMIFINISHED_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/insight"
 SEMIFINISHED_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_FRONT_INVENTORY_ROUTE = "/apps/felkesz-front"
-SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/leltar"
+ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/felkesz-front"
+SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/leltar"
+SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/felkesz-front"
 SEMIFINISHED_FRONT_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/process"
 SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/state"
 SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/veglegesites"
@@ -14075,6 +14083,15 @@ def _material_inventory_worker_route(inventory_kind: str) -> str:
     return MATERIAL_INVENTORY_WORKER_ROUTE
 
 
+def _material_inventory_admin_route(inventory_kind: str) -> str:
+    clean_inventory_kind = str(inventory_kind or "").strip().lower()
+    if clean_inventory_kind == "semifinished_front":
+        return ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE
+    if clean_inventory_kind == "semifinished":
+        return ADMIN_SEMIFINISHED_INVENTORY_ROUTE
+    return ADMIN_MATERIAL_INVENTORY_ROUTE
+
+
 def render_inventory_group_page(group: str) -> bytes:
     clean_group = str(group or "").strip().lower()
     is_production = clean_group == "production"
@@ -14094,10 +14111,10 @@ def render_inventory_group_page(group: str) -> bytes:
         )
         if is_production
         else (
-            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front", FRONT_INVENTORY_ROUTE),
-            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag", MATERIAL_INVENTORY_ROUTE),
-            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész", SEMIFINISHED_INVENTORY_ROUTE),
-            ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", SEMIFINISHED_FRONT_INVENTORY_ROUTE),
+            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front", ADMIN_FRONT_INVENTORY_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag", ADMIN_MATERIAL_INVENTORY_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész", ADMIN_SEMIFINISHED_INVENTORY_ROUTE),
+            ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE),
         )
     )
     cards_html = "".join(
@@ -14238,7 +14255,7 @@ def render_material_inventory_form(
     upload_button = color_upload_button if is_semifinished else "Anyagraktár leltár indítása"
     empty_copy = color_empty_copy if is_semifinished else "Töltsd fel a leltározandó anyaglistát, utána ICG kód szerint külön kategóriákban lehet számolni."
     worker_route = _material_inventory_worker_route(clean_inventory_kind)
-    admin_href = route
+    admin_href = _material_inventory_admin_route(clean_inventory_kind)
     inventory_href = worker_route
     if active_view == "leltar":
         view_switch_html = """
@@ -14757,7 +14774,7 @@ def render_front_inventory_form(
     active_view = _front_inventory_normalize_view(view_mode)
     active_presence_categories = _front_inventory_active_presence_categories()
 
-    admin_href = FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
+    admin_href = ADMIN_FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{ADMIN_FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     inventory_href = (
         FRONT_INVENTORY_WORKER_ROUTE
         if sort_mode == "default"
@@ -14831,7 +14848,7 @@ def render_front_inventory_form(
                 next_sort = "default"
             else:
                 next_sort = sort_key
-            sort_base_route = FRONT_INVENTORY_WORKER_ROUTE if active_view == "leltar" else FRONT_INVENTORY_ROUTE
+            sort_base_route = FRONT_INVENTORY_WORKER_ROUTE if active_view == "leltar" else ADMIN_FRONT_INVENTORY_ROUTE
             sort_view_part = "" if active_view == "leltar" else f"view={urllib.parse.quote(active_view)}&"
             return f"{sort_base_route}?{sort_view_part}category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
 
@@ -16687,7 +16704,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MATERIAL_INVENTORY_WORKER_ROUTE:
+        if path in {MATERIAL_INVENTORY_WORKER_ROUTE, MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             body = render_material_inventory_form(selected_category=selected_category, view_mode="leltar")
@@ -16699,7 +16716,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MATERIAL_INVENTORY_ROUTE:
+        if path in {MATERIAL_INVENTORY_ROUTE, ADMIN_MATERIAL_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -16712,7 +16729,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_INVENTORY_WORKER_ROUTE:
+        if path in {SEMIFINISHED_INVENTORY_WORKER_ROUTE, SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             body = render_material_inventory_form(
@@ -16728,7 +16745,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_INVENTORY_ROUTE:
+        if path in {SEMIFINISHED_INVENTORY_ROUTE, ADMIN_SEMIFINISHED_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -16745,7 +16762,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE:
+        if path in {SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE, SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             body = render_material_inventory_form(
@@ -16761,7 +16778,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_FRONT_INVENTORY_ROUTE:
+        if path in {SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -16778,7 +16795,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == FRONT_INVENTORY_WORKER_ROUTE:
+        if path in {FRONT_INVENTORY_WORKER_ROUTE, FRONT_INVENTORY_LEGACY_WORKER_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
@@ -16792,7 +16809,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == FRONT_INVENTORY_ROUTE:
+        if path in {FRONT_INVENTORY_ROUTE, ADMIN_FRONT_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _front_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
