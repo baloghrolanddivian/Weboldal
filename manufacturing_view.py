@@ -1943,6 +1943,13 @@ def render_manufacturing_page(
       const rowStateValue = (row) => selectionState[rowStateKey(row)] || "";
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
+      const canReportReadyForCurrentView = (document) => {{
+        const documentKey = String(document?.key || "");
+        if (!reportReadyRoute) return false;
+        if (documentKey === "korpusz_osszekeszites") return currentSubcategoryKey === "green";
+        if (documentKey === "front_osszekeszites") return currentViewKey === "green";
+        return false;
+      }};
       const countStateInDocument = (document, wanted) => flattenRows(document)
         .filter((row) => rowStateValue(row) === wanted)
         .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
@@ -2713,9 +2720,6 @@ def render_manufacturing_page(
                                   ? ""
                                   : `
                                       <div class="mfg-row-barcode-wrap">
-                                        <div class="mfg-row-barcode">
-                                          <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
-                                        </div>
                                         <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
                                       </div>
                                     `
@@ -2815,10 +2819,7 @@ def render_manufacturing_page(
         }}
         renderDocTabs();
         renderSectionTabs(document);
-        const canReportReady =
-          String(document?.key || "") === "korpusz_osszekeszites" &&
-          currentSubcategoryKey === "green" &&
-          Boolean(reportReadyRoute);
+        const canReportReady = canReportReadyForCurrentView(document);
         reportReadyButtonNode.style.display = canReportReady ? "inline-flex" : "none";
         if (canReportReady) {{
           const greenRows = buildGroupsForView(document)
@@ -3128,10 +3129,7 @@ def render_manufacturing_page(
 
       reportReadyButtonNode.addEventListener("click", async () => {{
         const document = currentDocument();
-        const canReportReady =
-          String(document?.key || "") === "korpusz_osszekeszites" &&
-          currentSubcategoryKey === "green" &&
-          Boolean(reportReadyRoute);
+        const canReportReady = canReportReadyForCurrentView(document);
         if (!canReportReady || reportReadyButtonNode.disabled) return;
         const isConfirmed = await requestConfirmModal();
         if (!isConfirmed) return;
@@ -3149,6 +3147,7 @@ def render_manufacturing_page(
           const match = joined.toUpperCase().match(/\\bCON\\D*?(\\d{{6,}})\\b/);
           return match ? `CON${{match[1]}}` : "";
         }};
+        const documentKey = String(document?.key || "").trim();
         const categoryKey = String(currentViewKey || "").trim();
         const entries = visibleRows
           .map((row) => {{
@@ -3159,7 +3158,7 @@ def render_manufacturing_page(
               ? row.sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)
               : [];
             if (!rowId || !stateKey || !code) return null;
-            return {{ row_id: rowId, state_key: stateKey, code, category_key: categoryKey, source_row_ids: sourceRowIds }};
+            return {{ row_id: rowId, state_key: stateKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};
           }})
           .filter(Boolean);
         if (!entries.length) {{
@@ -3176,6 +3175,7 @@ def render_manufacturing_page(
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({{
               production_number: productionNumber,
+              document_key: documentKey,
               category_key: categoryKey,
               entries,
             }}),
