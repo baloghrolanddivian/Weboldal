@@ -6030,6 +6030,8 @@ def _parse_items(lines: list[str]) -> list[InvoiceItem]:
 def _detect_invoice_profile(lines: list[str], text: str) -> str:
     upper_text = text.upper()
     if "KASTAMONU" in upper_text:
+        if "CREDIT NOTE" in upper_text:
+            return "kastamonu_credit"
         return "kastamonu"
 
     if "GAMET SP. Z O.O." in upper_text or "GAMET SP. Z O.O." in upper_text.replace("Ł", "L"):
@@ -6048,6 +6050,10 @@ def _detect_invoice_profile(lines: list[str], text: str) -> str:
         return "divian"
 
     return "generic"
+
+
+def _is_signed_number_token(value: str) -> bool:
+    return bool(re.fullmatch(r"-?[0-9][0-9.,]*", value))
 
 
 def _extract_decimal_from_token(token: str) -> str:
@@ -6292,6 +6298,108 @@ def _parse_kastamonu_or_generic_invoice_data(lines: list[str]) -> InvoiceData:
         data.vat_19 = _match_first(normalized_text, [r"VAT\(?19%?\)?\s*[:\-]?\s*([0-9][0-9.,]*)"])
 
     data.items = _parse_items(lines)
+    if data.supplier_lines:
+        data.supplier_name = data.supplier_lines[0]
+    return data
+
+
+def _parse_kastamonu_credit_note_items(lines: list[str]) -> list[InvoiceItem]:
+    items: list[InvoiceItem] = []
+    for line in lines:
+        tokens = line.split()
+        if len(tokens) < 7 or not _is_integer_token(tokens[0]):
+            continue
+        if not re.fullmatch(r"[A-Z0-9\-/]+", tokens[1], re.IGNORECASE):
+            continue
+        if not (
+            _is_signed_number_token(tokens[-1])
+            and _is_signed_number_token(tokens[-2])
+            and re.fullmatch(r"[A-Za-z0-9]{1,8}", tokens[-3])
+        ):
+            continue
+
+        pcs_total = ""
+        description_end = -3
+        if len(tokens) >= 8 and _is_integer_token(tokens[-4]):
+            pcs_total = tokens[-4]
+            description_end = -5 if len(tokens) >= 9 and _is_signed_number_token(tokens[-5]) else -4
+
+        description = " ".join(tokens[2:description_end]).strip()
+        if not description:
+            continue
+
+        items.append(
+            InvoiceItem(
+                row_no=tokens[0],
+                article_code=tokens[1],
+                description=_clean_spaces(description),
+                pcs_total=pcs_total,
+                unit=tokens[-3],
+                unit_price=tokens[-2],
+                net_value=tokens[-1],
+            )
+        )
+
+    return items
+
+
+def _parse_kastamonu_credit_note_data(lines: list[str], text: str) -> InvoiceData:
+    normalized_text = "\n".join(lines)
+    data = InvoiceData(invoice_profile="kastamonu_credit")
+
+    data.supplier_lines = _extract_block(lines, r"^(SELLER|SUPPLIER)\b", [r"^CREDIT\s+NOTE\b", r"^DATE\b"])
+    data.buyer_lines = _extract_block(
+        lines,
+        r"^(BUYER|CUSTOMER|BILL TO)\b",
+        [r"^CONSIGNEE\b", r"^ORDER\s+CONFIRMATION\b", r"^NR\.?$", r"^ARTICLE\b"],
+    )
+
+    data.invoice_number = _match_first(
+        normalized_text,
+        [
+            r"DATE\s*:\s*[0-9./-]+\s*NO\s*:\s*([A-Z0-9/\-]+)",
+            r"CREDIT\s+NOTE\s*(?:NO|NUMBER|#)\s*[:\-]?\s*([A-Z0-9/\-]+)",
+            r"DOC\.?\s*NO\.?\s*[:\-]?\s*([A-Z0-9/\-]+)",
+        ],
+    )
+    data.invoice_date = _match_first(
+        normalized_text,
+        [
+            r"\bDATE\s*:\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})",
+            r"CREDIT\s+NOTE\s*DATE\s*[:\-]?\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})",
+        ],
+    )
+    data.order_confirmation_no = _match_first(normalized_text, [r"ORDER\s*CONFIRMATION\s*NO\s*:\s*([A-Z0-9#/\-]+)"])
+    data.client_ref_no = _match_first(normalized_text, [r"INVOICE\s*REF\s*:\s*(.+)"])
+    data.currency = _match_first(
+        normalized_text,
+        [
+            r"TOTAL\s*\(([A-Z]{3})\)",
+            r"VALUE\s*\(([A-Z]{3})\)",
+            r"PRICE/UM\s*\(([A-Z]{3})\)",
+        ],
+    )
+    data.total_net = _match_first(
+        normalized_text,
+        [
+            r"^TOTAL\s+VALUE\s*\([A-Z]{3}\)\s*(-?[0-9][0-9.,]*)\s*$",
+            r"NET\s*(?:VALUE|AMOUNT)\s*[:\-]?\s*(-?[0-9][0-9.,]*)",
+        ],
+    )
+    data.total_gross = _match_first(
+        normalized_text,
+        [
+            r"^TOTAL\s*\([A-Z]{3}\)\s*(-?[0-9][0-9.,]*)\s*$",
+            r"GROSS\s*(?:VALUE|AMOUNT|TOTAL)\s*[:\-]?\s*(-?[0-9][0-9.,]*)",
+        ],
+    )
+    if not data.total_gross:
+        data.total_gross = data.total_net
+
+    if re.search(r"\b(?:VAT|TVA)\(?0%?\)?", normalized_text, re.IGNORECASE):
+        data.vat_0 = "0,00"
+
+    data.items = _parse_kastamonu_credit_note_items(lines)
     if data.supplier_lines:
         data.supplier_name = data.supplier_lines[0]
     return data
@@ -6812,6 +6920,8 @@ def _parse_divian_invoice_data(lines: list[str], text: str) -> InvoiceData:
 def parse_invoice_data(text: str) -> InvoiceData:
     lines = [_clean_spaces(raw) for raw in text.splitlines() if _clean_spaces(raw)]
     profile = _detect_invoice_profile(lines, text)
+    if profile == "kastamonu_credit":
+        return _parse_kastamonu_credit_note_data(lines, text)
     if profile == "kronospan":
         return _parse_kronospan_invoice_data(lines, text)
     if profile == "gamet":
@@ -6909,6 +7019,10 @@ def _is_takarotabla_item(description: str) -> bool:
     return normalized.startswith("PAL BRUT")
 
 
+def _is_kastamonu_credit_profile(invoice_profile: str) -> bool:
+    return _clean_spaces(invoice_profile).lower() == "kastamonu_credit"
+
+
 def _detect_product_type(description: str, article_code: str = "", invoice_profile: str = "") -> str:
     normalized_description = _fix_hungarian_mojibake(_clean_spaces(description)).upper()
     normalized_code = _fix_hungarian_mojibake(_clean_spaces(article_code)).upper()
@@ -6917,6 +7031,8 @@ def _detect_product_type(description: str, article_code: str = "", invoice_profi
     description_prefix = normalized_description.split(" ", 1)[0] if normalized_description else ""
     code_prefix = normalized_code.split(" ", 1)[0] if normalized_code else ""
 
+    if normalized_profile == "kastamonu_credit":
+        return "J\u00f3v\u00e1\u00edr\u00e1s"
     if _is_takarotabla_item(description):
         return "takarótábla"
     if normalized_profile == "gamet" and (normalized_code == "TRANSPORT" or "KOSZT TRANSPORTU" in normalized_description):
@@ -6963,6 +7079,19 @@ def _detect_product_type(description: str, article_code: str = "", invoice_profi
 
 def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> str:
     product_type = _detect_product_type(item.description, item.article_code, invoice_profile=invoice_profile)
+    if _is_kastamonu_credit_profile(invoice_profile):
+        return (
+            "<tr>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.row_no))}</td>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.article_code))}</td>"
+            f"<td class='center'>{html.escape(product_type)}</td>"
+            f"<td>{html.escape(_item_value_or_default(item.description))}</td>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.pcs_total))}</td>"
+            f"<td class='center'>{html.escape(_item_value_or_default(item.unit))}</td>"
+            f"<td class='right'>{html.escape(_item_value_or_default(item.unit_price))}</td>"
+            f"<td class='right'>{html.escape(_item_value_or_default(item.net_value))}</td>"
+            "</tr>"
+        )
     missing_placeholder = "-" if product_type == "takarótábla" else NO_DATA
     if _fix_hungarian_mojibake(_clean_spaces(invoice_profile)).lower() == "gamet":
         return (
@@ -6994,7 +7123,9 @@ def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> st
 
 def _render_invoice_total_row(data: InvoiceData) -> str:
     total_value = _item_value_or_default(data.total_gross or data.total_net)
-    if _fix_hungarian_mojibake(_clean_spaces(data.invoice_profile)).lower() == "gamet":
+    if _is_kastamonu_credit_profile(data.invoice_profile):
+        colspan = "7"
+    elif _fix_hungarian_mojibake(_clean_spaces(data.invoice_profile)).lower() == "gamet":
         colspan = "6"
     else:
         colspan = "9"
@@ -7026,6 +7157,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     body_class = "compact" if compact_mode else ""
     profile_label = {
         "kastamonu": "Kastamonu sablon",
+        "kastamonu_credit": "Kastamonu J\u00f3v\u00e1\u00edr\u00f3",
         "kronospan": "Kronospan sablon",
         "gamet": "Gamet sablon",
         "divian": "DIVI sablon",
@@ -7053,7 +7185,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         ("Szállítólevél száma", data.delivery_note_no),
     ]
     keep_labels = {"Számlaszám", "Számla dátuma"}
-    if data.invoice_profile != "gamet":
+    if data.invoice_profile != "gamet" and not _is_kastamonu_credit_profile(data.invoice_profile):
         info_field_rows.append(("Gépjármű azonosító", vehicle_plates))
         keep_labels.add("Gépjármű azonosító")
     info_fields = _non_empty_rows(info_field_rows, keep_labels=keep_labels)
@@ -7066,9 +7198,14 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     summary_fields_raw: list[tuple[str, str]] = [
         ("Pénznem", data.currency),
         ("Összeg", data.total_net),
-        (discount_label, data.discount_amount),
-        ("Kedvezményes összeg", data.total_gross),
     ]
+    if not _is_kastamonu_credit_profile(data.invoice_profile):
+        summary_fields_raw.extend(
+            [
+                (discount_label, data.discount_amount),
+                ("Kedvezményes összeg", data.total_gross),
+            ]
+        )
     summary_fields_raw.extend(
         [
             ("Nettó tömeg (kg)", rounded_net_weight),
@@ -7078,7 +7215,11 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     )
     summary_fields = _non_empty_rows(
         summary_fields_raw,
-        keep_labels={"Pénznem", "Összeg", "Kedvezményes összeg"},
+        keep_labels=(
+            {"Pénznem", "Összeg"}
+            if _is_kastamonu_credit_profile(data.invoice_profile)
+            else {"Pénznem", "Összeg", "Kedvezményes összeg"}
+        ),
     )
     summary_rows = _html_table_rows(summary_fields)
 
@@ -7089,10 +7230,28 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         )
         item_rows += _render_invoice_total_row(data)
     else:
-        empty_colspan = "7" if data.invoice_profile == "gamet" else "10"
+        if _is_kastamonu_credit_profile(data.invoice_profile):
+            empty_colspan = "8"
+        elif data.invoice_profile == "gamet":
+            empty_colspan = "7"
+        else:
+            empty_colspan = "10"
         item_rows = f"<tr><td colspan='{empty_colspan}'>Nem sikerült tételsorokat felismerni.</td></tr>"
 
-    if data.invoice_profile == "gamet":
+    if _is_kastamonu_credit_profile(data.invoice_profile):
+        items_header = """
+        <tr>
+          <th class="center">Ssz.</th>
+          <th class="center">Cikksz&aacute;m</th>
+          <th class="center">Term&eacute;k t&iacute;pus</th>
+          <th>Megnevez&eacute;s</th>
+          <th class="center">&Ouml;ssz. db</th>
+          <th class="center">ME</th>
+          <th class="right">Egys&eacute;g&aacute;r</th>
+          <th class="right">Nett&oacute; &eacute;rt&eacute;k</th>
+        </tr>
+        """
+    elif data.invoice_profile == "gamet":
         items_header = """
         <tr>
           <th class="center">Ssz.</th>
