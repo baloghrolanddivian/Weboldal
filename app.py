@@ -270,7 +270,12 @@ SHOPFLOOR_PROCESS_PAYLOAD = {
 MATT_INVENTORY_ROUTE = "/apps/matt-raktarertek"
 MATT_INVENTORY_PROCESS_ROUTE = f"{MATT_INVENTORY_ROUTE}/process"
 MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
+ADMIN_INVENTORY_GROUP_ROUTE = "/apps/admin-leltar"
+PRODUCTION_INVENTORY_GROUP_ROUTE = "/apps/gyartas-leltar"
 FRONT_INVENTORY_ROUTE = "/apps/front-leltar"
+ADMIN_FRONT_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/front-leltar"
+FRONT_INVENTORY_LEGACY_WORKER_ROUTE = f"{FRONT_INVENTORY_ROUTE}/leltar"
+FRONT_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/front-leltar"
 FRONT_INVENTORY_PROCESS_ROUTE = f"{FRONT_INVENTORY_ROUTE}/process"
 FRONT_INVENTORY_STATE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/state"
 FRONT_INVENTORY_CHECK_ROUTE = f"{FRONT_INVENTORY_ROUTE}/ellenorzes"
@@ -282,20 +287,32 @@ FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/downloa
 FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/insight-script"
 FRONT_INVENTORY_ALERT_CLEAR_ROUTE = f"{FRONT_INVENTORY_ROUTE}/alert-clear"
 MATERIAL_INVENTORY_ROUTE = "/apps/anyag-raktar"
+ADMIN_MATERIAL_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/anyag-raktar"
+MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/leltar"
+MATERIAL_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/anyag-raktar"
 MATERIAL_INVENTORY_PROCESS_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/process"
 MATERIAL_INVENTORY_STATE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/state"
+MATERIAL_INVENTORY_PRESENCE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/presence"
 MATERIAL_INVENTORY_FINALIZE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/veglegesites"
 MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/insight"
 MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_INVENTORY_ROUTE = "/apps/felkesz-raktar"
+ADMIN_SEMIFINISHED_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/felkesz-raktar"
+SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/leltar"
+SEMIFINISHED_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/felkesz-raktar"
 SEMIFINISHED_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/process"
 SEMIFINISHED_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/state"
+SEMIFINISHED_INVENTORY_PRESENCE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/presence"
 SEMIFINISHED_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/veglegesites"
 SEMIFINISHED_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/insight"
 SEMIFINISHED_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_FRONT_INVENTORY_ROUTE = "/apps/felkesz-front"
+ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/felkesz-front"
+SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/leltar"
+SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/felkesz-front"
 SEMIFINISHED_FRONT_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/process"
 SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/state"
+SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/presence"
 SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/veglegesites"
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/download/insight"
 SEMIFINISHED_FRONT_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/download/osszesito"
@@ -319,6 +336,7 @@ FRONT_INVENTORY_INSIGHT_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "insight-bevet
 MATERIAL_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "anyag-raktar"
 MATERIAL_INVENTORY_SESSION_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "session.json"
 MATERIAL_INVENTORY_STOCK_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+MATERIAL_INVENTORY_PRESENCE_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "presence.json"
 MATERIAL_INVENTORY_INSIGHT_WORKBOOK_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 MATERIAL_INVENTORY_INSIGHT_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 MATERIAL_INVENTORY_SUMMARY_WORKBOOK_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
@@ -326,6 +344,7 @@ MATERIAL_INVENTORY_SUMMARY_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "osszesi
 SEMIFINISHED_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "felkesz-raktar"
 SEMIFINISHED_INVENTORY_SESSION_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "session.json"
 SEMIFINISHED_INVENTORY_STOCK_META_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+SEMIFINISHED_INVENTORY_PRESENCE_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "presence.json"
 SEMIFINISHED_INVENTORY_INSIGHT_WORKBOOK_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 SEMIFINISHED_INVENTORY_INSIGHT_META_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 SEMIFINISHED_INVENTORY_SUMMARY_WORKBOOK_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
@@ -333,6 +352,7 @@ SEMIFINISHED_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / 
 SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "felkesz-front"
 SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "session.json"
 SEMIFINISHED_FRONT_INVENTORY_STOCK_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+SEMIFINISHED_FRONT_INVENTORY_PRESENCE_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "presence.json"
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 SEMIFINISHED_FRONT_INVENTORY_SUMMARY_WORKBOOK_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
@@ -14667,6 +14687,116 @@ def _semifinished_front_inventory_store_exports(session: dict) -> None:
     )
 
 
+def _material_inventory_worker_route(inventory_kind: str) -> str:
+    clean_inventory_kind = str(inventory_kind or "").strip().lower()
+    if clean_inventory_kind == "semifinished_front":
+        return SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE
+    if clean_inventory_kind == "semifinished":
+        return SEMIFINISHED_INVENTORY_WORKER_ROUTE
+    return MATERIAL_INVENTORY_WORKER_ROUTE
+
+
+def _material_inventory_admin_route(inventory_kind: str) -> str:
+    clean_inventory_kind = str(inventory_kind or "").strip().lower()
+    if clean_inventory_kind == "semifinished_front":
+        return ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE
+    if clean_inventory_kind == "semifinished":
+        return ADMIN_SEMIFINISHED_INVENTORY_ROUTE
+    return ADMIN_MATERIAL_INVENTORY_ROUTE
+
+
+def render_inventory_group_page(group: str) -> bytes:
+    clean_group = str(group or "").strip().lower()
+    is_production = clean_group == "production"
+    title = "Gyártás Leltár" if is_production else "Admin Leltár"
+    label = "Gyártási leltár nézetek" if is_production else "Admin leltár modulok"
+    description = (
+        "A kollégák önálló leltárnézetei, közvetlenül a számoláshoz."
+        if is_production
+        else "A leltárak kezelőfelületei feltöltéshez, lezáráshoz és exporthoz."
+    )
+    cards = (
+        (
+            ("Front leltár", "Fóliás frontok számolása méret és szín alapján.", "Front -> számolás", FRONT_INVENTORY_WORKER_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári tételek számolása ICG kód szerinti kategóriákban.", "Anyag -> számolás", MATERIAL_INVENTORY_WORKER_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári tételek számolása szín szerinti kategóriákban.", "Félkész -> számolás", SEMIFINISHED_INVENTORY_WORKER_ROUTE),
+            ("Félkész front leltár", "Félkész frontok számolása szín szerinti kategóriákban.", "Félkész front -> számolás", SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE),
+        )
+        if is_production
+        else (
+            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front", ADMIN_FRONT_INVENTORY_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag", ADMIN_MATERIAL_INVENTORY_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész", ADMIN_SEMIFINISHED_INVENTORY_ROUTE),
+            ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE),
+        )
+    )
+    cards_html = "".join(
+        f"""
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">{index:02d}</div>
+              </div>
+              <h3>{html.escape(card_title)}</h3>
+              <p>{html.escape(card_description)}</p>
+              <div class="module-meta">{html.escape(card_meta)}</div>
+              <a class="button button-secondary" href="{html.escape(card_href)}">Megnyitás</a>
+            </article>
+        """
+        for index, (card_title, card_description, card_meta, card_href) in enumerate(cards, start=1)
+    )
+    page = f"""<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Divian-HUB | {html.escape(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+      <div class="grid-overlay"></div>
+
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Divian-HUB kezdőoldal">
+          <span class="brand-mark"></span>
+          <span class="brand-text">
+            <strong>Divian-HUB</strong>
+            <small>Céges modulplatform</small>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="/">Főoldal</a>
+        </nav>
+      </header>
+
+      <main class="home-shell">
+        <section class="module-section" id="modules">
+          <div class="section-head reveal">
+            <p class="section-label">{html.escape(label)}</p>
+            <h2>{html.escape(title)}</h2>
+            <p>{html.escape(description)}</p>
+          </div>
+          <div class="module-grid">
+            {cards_html}
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/script.js"></script>
+  </body>
+</html>"""
+    return page.encode("utf-8")
+
+
 def _material_inventory_normalize_view(value: str) -> str:
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
@@ -14737,8 +14867,9 @@ def render_material_inventory_form(
     color_empty_copy = "Töltsd fel a leltározandó félkész front listát, utána színek szerint külön kategóriákban lehet számolni." if is_semifinished_front else "Töltsd fel a leltározandó félkész listát, utána színek szerint külön kategóriákban lehet számolni."
     upload_button = color_upload_button if is_semifinished else "Anyagraktár leltár indítása"
     empty_copy = color_empty_copy if is_semifinished else "Töltsd fel a leltározandó anyaglistát, utána ICG kód szerint külön kategóriákban lehet számolni."
-    admin_href = route
-    inventory_href = route if session is None else f"{route}?view=leltar"
+    worker_route = _material_inventory_worker_route(clean_inventory_kind)
+    admin_href = _material_inventory_admin_route(clean_inventory_kind)
+    inventory_href = worker_route
     if active_view == "leltar":
         view_switch_html = """
           <div class="matinv-view-switch is-worker-only">
@@ -14769,7 +14900,7 @@ def render_material_inventory_form(
         categories_html = "".join(
             f"""
               <a class="matinv-chip{' is-complete' if item.get('complete') else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                 href="{route}?view=leltar&category={urllib.parse.quote(item['key'])}">
+                 href="{worker_route}?category={urllib.parse.quote(item['key'])}">
                 <span>{html.escape(str(item['label']))}</span>
                 <strong>{int(item['count'])}</strong>
               </a>
@@ -15033,7 +15164,7 @@ def render_material_inventory_form(
         <span class="matinv-tag">Divian-HUB</span>
         <h1>{page_title}</h1>
       </div>
-      <a href="/">Vissza a modulokhoz</a>
+      <a href="{PRODUCTION_INVENTORY_GROUP_ROUTE if active_view == 'leltar' else ADMIN_INVENTORY_GROUP_ROUTE}">Vissza a modulokhoz</a>
     </header>
     {notice_html}
     {view_switch_html}
@@ -15230,6 +15361,540 @@ def _front_inventory_build_sync_payload(selected_category: str) -> dict:
     }
 
 
+def _unified_inventory_config(kind: str) -> dict:
+    clean_kind = str(kind or "").strip().lower()
+    configs = {
+        "material": {
+            "kind": "material",
+            "title": "Anyagraktár leltár",
+            "board_title": "Anyagraktár számolás",
+            "session_path": MATERIAL_INVENTORY_SESSION_PATH,
+            "presence_path": MATERIAL_INVENTORY_PRESENCE_PATH,
+            "state_route": MATERIAL_INVENTORY_STATE_ROUTE,
+            "presence_route": MATERIAL_INVENTORY_PRESENCE_ROUTE,
+            "worker_route": MATERIAL_INVENTORY_WORKER_ROUTE,
+            "columns": (
+                {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "book_qty", "label": "Könyvelési menny.", "class": "is-book-qty", "sort": "book_qty"},
+            ),
+            "search_label": "Keresés leírás alapján",
+            "search_keys": ("description",),
+            "empty_text": "Még nincs aktív anyagraktár leltár.",
+            "one_cycle": False,
+        },
+        "semifinished": {
+            "kind": "semifinished",
+            "title": "Félkész raktár leltár",
+            "board_title": "Félkész raktár számolás",
+            "session_path": SEMIFINISHED_INVENTORY_SESSION_PATH,
+            "presence_path": SEMIFINISHED_INVENTORY_PRESENCE_PATH,
+            "state_route": SEMIFINISHED_INVENTORY_STATE_ROUTE,
+            "presence_route": SEMIFINISHED_INVENTORY_PRESENCE_ROUTE,
+            "worker_route": SEMIFINISHED_INVENTORY_WORKER_ROUTE,
+            "columns": (
+                {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "icg_code", "label": "Szín", "class": "is-color", "sort": "color"},
+            ),
+            "search_label": "Keresés leírás vagy szín alapján",
+            "search_keys": ("description", "icg_code"),
+            "empty_text": "Még nincs aktív félkész raktár leltár.",
+            "one_cycle": False,
+        },
+        "semifinished_front": {
+            "kind": "semifinished_front",
+            "title": "Félkész front leltár",
+            "board_title": "Félkész front számolás",
+            "session_path": SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH,
+            "presence_path": SEMIFINISHED_FRONT_INVENTORY_PRESENCE_PATH,
+            "state_route": SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE,
+            "presence_route": SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE,
+            "worker_route": SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
+            "columns": (
+                {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "icg_code", "label": "Szín", "class": "is-color", "sort": "color"},
+            ),
+            "search_label": "Keresés leírás vagy szín alapján",
+            "search_keys": ("description", "icg_code"),
+            "empty_text": "Még nincs aktív félkész front leltár.",
+            "one_cycle": False,
+        },
+    }
+    return configs.get(clean_kind, configs["material"])
+
+
+def _unified_inventory_load_session(config: dict) -> dict | None:
+    return load_material_inventory_session_from_path(config["session_path"])
+
+
+def _unified_inventory_build_view_model(config: dict, selected_category: str, sort_mode: str = "default") -> dict:
+    session = _unified_inventory_load_session(config)
+    if session is None:
+        return {"session": None, "categories": [], "selected_category": "all", "visible_rows": [], "finalized": False}
+    if config.get("kind") == "material" and _material_inventory_hydrate_book_qty(session):
+        save_material_inventory_session_to_path(config["session_path"], session)
+    view_model = build_material_inventory_view_model(session, selected_category)
+    active_sort = _unified_inventory_normalize_sort(sort_mode)
+    rows = list(view_model.get("visible_rows", []))
+    if active_sort != "default":
+        reverse = active_sort.endswith("_desc")
+        base_sort = active_sort[:-5] if reverse else active_sort
+        rows = sorted(rows, key=lambda row: _unified_inventory_sort_key(row, base_sort), reverse=reverse)
+    view_model["visible_rows"] = rows
+    view_model["sort_mode"] = active_sort
+    view_model["session"] = session
+    return view_model
+
+
+def _unified_inventory_normalize_sort(value: object) -> str:
+    clean_value = str(value or "").strip().lower()
+    allowed = {"default", "description", "description_desc", "book_qty", "book_qty_desc", "color", "color_desc", "count", "count_desc"}
+    return clean_value if clean_value in allowed else "default"
+
+
+def _unified_inventory_decimal(value: object) -> Decimal:
+    clean_value = str(value or "").strip().replace(",", ".")
+    if not clean_value:
+        return Decimal("0")
+    try:
+        return Decimal(clean_value)
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def _unified_inventory_sort_key(row: dict, sort_key: str) -> tuple:
+    if sort_key == "book_qty":
+        return (_unified_inventory_decimal(row.get("book_qty")), _clean_sort_text(row.get("description", "")))
+    if sort_key == "color":
+        return (_clean_sort_text(row.get("icg_code", "")), _clean_sort_text(row.get("description", "")))
+    if sort_key == "count":
+        return (_unified_inventory_decimal(row.get("counted_qty", row.get("input_qty", ""))), _clean_sort_text(row.get("description", "")))
+    return (_clean_sort_text(row.get("description", "")), _clean_sort_text(row.get("part_number", "")))
+
+
+def _clean_sort_text(value: object) -> str:
+    return unicodedata.normalize("NFKD", str(value or "").strip()).casefold()
+
+
+def _unified_inventory_load_presence(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _unified_inventory_save_presence(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _unified_inventory_touch_presence(config: dict, token: str, category: str, clear: bool = False) -> list[str]:
+    clean_token = str(token or "").strip()
+    path = config["presence_path"]
+    snapshot = _unified_inventory_load_presence(path)
+    if clean_token:
+        if clear:
+            snapshot.pop(clean_token, None)
+        else:
+            snapshot[clean_token] = {
+                "category": str(category or "").strip(),
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+            }
+
+    now = datetime.now()
+    active_categories: list[str] = []
+    for key, item in list(snapshot.items()):
+        if not isinstance(item, dict):
+            snapshot.pop(key, None)
+            continue
+        try:
+            updated_at = datetime.fromisoformat(str(item.get("updated_at", "")))
+        except ValueError:
+            snapshot.pop(key, None)
+            continue
+        if (now - updated_at).total_seconds() > 20:
+            snapshot.pop(key, None)
+            continue
+        category_value = str(item.get("category", "")).strip()
+        if category_value:
+            active_categories.append(category_value)
+
+    _unified_inventory_save_presence(path, snapshot)
+    return sorted(set(active_categories))
+
+
+def _unified_inventory_sync_payload(config: dict, selected_category: str) -> dict:
+    view_model = _unified_inventory_build_view_model(config, selected_category)
+    session = view_model.get("session")
+    if session is None:
+        return {"category_states": {}, "row_inputs": {}, "updated_at": ""}
+    row_inputs = {
+        str(row.get("row_id", "")): str(row.get("input_qty", "") or "")
+        for row in view_model.get("visible_rows", [])
+    }
+    category_states = {
+        str(item.get("key", "")): bool(item.get("complete"))
+        for item in view_model.get("categories", [])
+    }
+    return {"category_states": category_states, "row_inputs": row_inputs, "updated_at": str(session.get("updated_at", ""))}
+
+
+def render_unified_inventory_worker_page(kind: str, selected_category: str = "", sort_mode: str = "default") -> bytes:
+    config = _unified_inventory_config(kind)
+    view_model = _unified_inventory_build_view_model(config, selected_category, sort_mode)
+    session = view_model.get("session")
+    current_sort = str(view_model.get("sort_mode", "default") or "default")
+    selected = str(view_model.get("selected_category", "all") or "all")
+
+    def sort_href(sort_key: str) -> str:
+        if current_sort == sort_key:
+            next_sort = f"{sort_key}_desc"
+        elif current_sort == f"{sort_key}_desc":
+            next_sort = "default"
+        else:
+            next_sort = sort_key
+        return f"{config['worker_route']}?category={urllib.parse.quote(selected)}&sort={urllib.parse.quote(next_sort)}"
+
+    def sort_label(label: str, sort_key: str) -> str:
+        indicator = ""
+        if current_sort == sort_key:
+            indicator = " ↑"
+        elif current_sort == f"{sort_key}_desc":
+            indicator = " ↓"
+        return f'<a class="frontinv-sort-head" href="{sort_href(sort_key)}">{html.escape(label)}{indicator}</a>'
+
+    if session is None:
+        content_html = f"""
+          <section class="frontinv-board is-worker is-empty">
+            <div class="frontinv-empty">
+              <strong>{html.escape(config["empty_text"])}</strong>
+              <p>Az admin felületen töltsd fel a forrásfájlt, utána ez a teszt nézet ugyanazt az aktív leltárt használja.</p>
+            </div>
+          </section>
+        """
+    else:
+        categories_html = "".join(
+            f"""
+              <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-active' if item['key'] == selected else ''}"
+                 href="{config['worker_route']}?category={urllib.parse.quote(str(item['key']))}&sort={urllib.parse.quote(current_sort)}">
+                <span>{html.escape(str(item.get('label', '')))}</span>
+                <strong>{int(item.get('count', 0))}</strong>
+              </a>
+            """
+            for item in view_model.get("categories", [])
+        )
+        headers_html = "".join(
+            f"<th>{sort_label(str(column['label']), str(column['sort']))}</th>"
+            for column in config["columns"]
+        )
+        colgroup_html = "".join('<col />' for _ in config["columns"]) + '<col class="frontinv-count-col" />'
+        rows_html = ""
+        finalized = bool(view_model.get("finalized"))
+        for row in view_model.get("visible_rows", []):
+            search_text = " ".join(str(row.get(key, "")) for key in config["search_keys"])
+            row_cells = "".join(
+                f'<td class="{html.escape(str(column["class"]))}">{_unified_inventory_cell_html(row, str(column["key"]))}</td>'
+                for column in config["columns"]
+            )
+            current_value = str(row.get("counted_qty", row.get("input_qty", "")) or "")
+            rows_html += f"""
+              <tr class="frontinv-row{' is-counted' if current_value.strip() or finalized else ''}" data-frontinv-row data-row-id="{html.escape(str(row.get('row_id', '')))}" data-frontinv-current-value="{html.escape(current_value, quote=True)}" data-frontinv-search-text="{html.escape(search_text, quote=True)}">
+                {row_cells}
+                <td class="is-count">
+                  <div class="frontinv-count-control">
+                    <span class="frontinv-count-pill" data-frontinv-total>{html.escape(current_value or '0')}</span>
+                    <div class="frontinv-adjust">
+                      <label><span>+</span><input class="frontinv-input" type="number" min="0" inputmode="decimal" autocomplete="off" placeholder="0" data-frontinv-input data-mode="add" data-row-id="{html.escape(str(row.get('row_id', '')))}" {'disabled' if finalized else ''} /></label>
+                      <label><span>-</span><input class="frontinv-input" type="number" min="0" inputmode="decimal" autocomplete="off" placeholder="0" data-frontinv-input data-mode="subtract" data-row-id="{html.escape(str(row.get('row_id', '')))}" {'disabled' if finalized else ''} /></label>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            """
+        if not rows_html:
+            colspan = len(config["columns"]) + 1
+            rows_html = f'<tr><td colspan="{colspan}" class="frontinv-empty-row">Ebben a kategóriában nincs tétel.</td></tr>'
+
+        status_html = ""
+        if config.get("one_cycle"):
+            status_html = """
+              <div class="frontinv-phase-callout">
+                <div>
+                  <strong>Egykörös számlálás</strong>
+                  <p>Írják be a tényleges darabszámot. A leltár itt nem fut több ellenőrzési körön, lezáráskor készül az export.</p>
+                </div>
+              </div>
+            """
+        content_html = f"""
+          <section class="frontinv-board is-worker" data-unified-inventory-root data-front-inventory-root data-state-route="{html.escape(config['state_route'])}" data-presence-route="{html.escape(config['presence_route'])}" data-category="{html.escape(selected)}" data-storage-prefix="unifiedinv-{html.escape(config['kind'])}">
+            <div class="frontinv-board-head">
+              <div>
+                <span class="frontinv-tag">Leltár nézet</span>
+                <strong>{html.escape(config["board_title"])}</strong>
+                <p>Forrás: {html.escape(str(session.get('source_name', '')))} · Utoljára frissítve: {html.escape(_front_inventory_format_timestamp(str(session.get('updated_at', ''))))}</p>
+              </div>
+              <div class="frontinv-board-stamp">{html.escape(str(session.get('phase_label', 'Számlálás')))}</div>
+            </div>
+
+            <div class="frontinv-category-row">{categories_html}</div>
+            <label class="frontinv-search">
+              <span>{html.escape(config["search_label"])}</span>
+              <input type="search" data-frontinv-search placeholder="Írj be részletet..." autocomplete="off" />
+            </label>
+            {status_html}
+
+            <div class="frontinv-table-wrap">
+              <table class="frontinv-table">
+                <colgroup>{colgroup_html}</colgroup>
+                <thead>
+                  <tr>
+                    {headers_html}
+                    <th>{sort_label("Darabszám", "count")}</th>
+                  </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+              </table>
+            </div>
+            <div class="frontinv-generated-by">generated by Divian-HUB</div>
+          </section>
+        """
+
+    page = f"""<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Divian-HUB | {html.escape(config["title"])} teszt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  {_unified_inventory_style()}
+</head>
+<body class="frontinv-worker-stage">
+  {content_html}
+  {_unified_inventory_script()}
+</body>
+</html>"""
+    return page.encode("utf-8")
+
+
+def _unified_inventory_cell_html(row: dict, key: str) -> str:
+    value = str(row.get(key, "") or "-")
+    if key == "icg_code":
+        return f'<span class="frontinv-color-chip">{html.escape(value)}</span>'
+    return html.escape(value)
+
+
+def _unified_inventory_style() -> str:
+    return """
+<style>
+  :root { --frontinv-text:#0f172a; --frontinv-muted:#64748b; --frontinv-line:#d8e0ea; --frontinv-accent:#0c8d57; --frontinv-accent-strong:#12a566; }
+  * { box-sizing:border-box; }
+  body.frontinv-worker-stage { margin:0; min-height:100dvh; background:#f8fafc; color:var(--frontinv-text); font-family:Manrope, sans-serif; }
+  .frontinv-board { position:relative; overflow:hidden; background:rgba(255,255,255,.96); color:#0f172a; }
+  .frontinv-board::before { content:""; position:absolute; inset:0 0 auto 0; height:5px; background:linear-gradient(90deg,var(--frontinv-accent-strong),#86efac,#dbeafe); pointer-events:none; }
+  .frontinv-board.is-worker { min-height:100dvh; border-radius:0; border:0; box-shadow:none; padding:18px 20px 24px; }
+  .frontinv-board-head { position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:start; }
+  .frontinv-board-head strong,.frontinv-empty strong,.frontinv-phase-callout strong { font-family:"Space Grotesk", sans-serif; color:#0f172a; }
+  .frontinv-board-head strong { font-size:clamp(1.35rem,2.8vw,2rem); line-height:1; }
+  .frontinv-board-head p,.frontinv-empty p,.frontinv-phase-callout p,.frontinv-generated-by { margin:6px 0 0; color:#64748b; line-height:1.55; }
+  .frontinv-tag { display:inline-flex; align-items:center; width:fit-content; min-height:28px; padding:0 12px; border-radius:999px; background:#edf7f2; color:#0c7650; font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .frontinv-board-stamp { white-space:nowrap; font-size:.85rem; font-weight:800; padding:10px 14px; border-radius:18px; background:rgba(255,255,255,.86); border:1px solid rgba(15,23,42,.08); color:#475569; }
+  .frontinv-category-row { display:flex; gap:10px; margin-top:14px; overflow-x:auto; padding-bottom:4px; }
+  .frontinv-chip { display:inline-flex; align-items:center; gap:10px; min-height:42px; padding:0 14px; border-radius:999px; border:1px solid rgba(15,23,42,.12); background:#fff; color:#0f172a; text-decoration:none; white-space:nowrap; font-weight:800; }
+  .frontinv-chip strong { display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; padding:0 8px; border-radius:999px; background:#f1f5f9; font-size:.84rem; }
+  .frontinv-chip.is-active { background:#0f172a; color:#fff; border-color:#0f172a; }
+  .frontinv-chip.is-active strong { background:rgba(255,255,255,.14); color:#fff; }
+  .frontinv-chip.is-complete { background:rgba(22,163,74,.12); border-color:rgba(22,163,74,.38); color:#166534; }
+  .frontinv-chip.is-complete strong { background:rgba(22,163,74,.16); color:#166534; }
+  .frontinv-chip.is-live:not(.is-active) { background:rgba(37,99,235,.10); border-color:rgba(37,99,235,.34); color:#1d4ed8; }
+  .frontinv-chip.is-live:not(.is-active) strong { background:rgba(37,99,235,.14); color:#1d4ed8; }
+  .frontinv-search { display:grid; grid-template-columns:auto minmax(220px,420px); align-items:center; justify-content:start; gap:10px; margin-top:10px; color:#475569; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+  .frontinv-search input { width:100%; min-height:42px; padding:0 15px; border:1px solid rgba(15,23,42,.12); border-radius:999px; background:#fff; color:#0f172a; font:800 .95rem/1 Manrope, sans-serif; text-transform:none; letter-spacing:0; }
+  .frontinv-search input:focus,.frontinv-input:focus { outline:none; border-color:#0f172a; box-shadow:0 0 0 3px rgba(15,23,42,.08); }
+  .frontinv-phase-callout { margin-top:14px; padding:16px 18px; border-radius:20px; background:#fff; border:1px solid rgba(15,23,42,.08); }
+  .frontinv-table-wrap { margin-top:14px; overflow-x:hidden; border-radius:20px; border:1px solid rgba(15,23,42,.08); background:#fff; }
+  .frontinv-table { width:100%; border-collapse:collapse; min-width:0; table-layout:fixed; }
+  .frontinv-table thead th { padding:14px 18px; border-bottom:1px solid rgba(15,23,42,.08); background:#f8fafc; color:#475569; font-size:.8rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; text-align:left; white-space:nowrap; }
+  .frontinv-sort-head { color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+  .frontinv-table tbody td { padding:14px 18px; border-bottom:1px solid rgba(15,23,42,.06); color:#0f172a; vertical-align:middle; }
+  .frontinv-table tbody tr:nth-child(2n) { background:rgba(248,250,252,.72); }
+  .frontinv-row.is-counted { background:rgba(22,163,74,.10) !important; }
+  .frontinv-table td.is-description { font-weight:800; }
+  .frontinv-table td.is-book-qty { width:180px; color:#475569; font-weight:800; }
+  .frontinv-table td.is-color { width:220px; }
+  .frontinv-count-col,.frontinv-table td.is-count { width:32%; }
+  .frontinv-color-chip { display:inline-flex; align-items:center; min-height:36px; padding:0 14px; border-radius:999px; background:linear-gradient(180deg,#eff6ff 0%,#dbeafe 100%); border:1px solid rgba(37,99,235,.14); color:#1d4ed8; font-weight:800; white-space:nowrap; }
+  .frontinv-count-control { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; }
+  .frontinv-count-pill { display:inline-flex; align-items:center; justify-content:center; min-width:72px; min-height:42px; padding:0 14px; border-radius:999px; background:#0f172a; color:#fff; font-weight:800; }
+  .frontinv-adjust { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .frontinv-adjust label { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:4px; color:#64748b; font-size:.78rem; font-weight:900; }
+  .frontinv-input { width:100%; min-height:44px; padding:0 10px; border-radius:16px; border:1px solid rgba(15,23,42,.12); background:#fff; color:#0f172a; font-size:1.1rem; font-weight:800; text-align:center; }
+  .frontinv-input.is-error { border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.14); }
+  .frontinv-empty { display:grid; gap:8px; padding:34px 28px; }
+  .frontinv-empty-row { color:#64748b; text-align:center; padding:26px 18px !important; }
+  .frontinv-generated-by { margin-top:16px; padding-top:12px; border-top:1px dashed rgba(15,23,42,.12); text-align:right; font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  @media (orientation:portrait) and (max-width:1100px) {
+    .frontinv-board.is-worker .frontinv-table thead th,.frontinv-board.is-worker .frontinv-table tbody td { padding:12px 10px; }
+    .frontinv-board.is-worker .frontinv-table thead th { font-size:.7rem; letter-spacing:.05em; }
+    .frontinv-board.is-worker .frontinv-table td.is-description { font-size:.92rem; line-height:1.25; }
+    .frontinv-board.is-worker .frontinv-color-chip { min-height:32px; padding:0 10px; font-size:.8rem; line-height:1.15; white-space:normal; text-align:center; justify-content:center; }
+    .frontinv-input { min-height:38px; font-size:.94rem; padding:0 6px; }
+    .frontinv-count-control { gap:6px; }
+    .frontinv-adjust { gap:5px; }
+    .frontinv-adjust label { font-size:.7rem; gap:3px; }
+    .frontinv-search { grid-template-columns:1fr; gap:6px; }
+  }
+  @media (max-width:720px) {
+    .frontinv-board.is-worker { padding:14px 14px 20px; }
+    .frontinv-board-head { grid-template-columns:minmax(0,1fr); gap:10px; }
+  }
+</style>
+"""
+
+
+def _unified_inventory_script() -> str:
+    return """
+<script>
+(() => {
+  const root = document.querySelector("[data-unified-inventory-root]");
+  if (!root) return;
+  const stateRoute = root.getAttribute("data-state-route") || "";
+  const presenceRoute = root.getAttribute("data-presence-route") || "";
+  const categoryValue = root.getAttribute("data-category") || "";
+  const storagePrefix = root.getAttribute("data-storage-prefix") || "unifiedinv";
+  const categoryRow = root.querySelector(".frontinv-category-row");
+  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
+  const searchInput = root.querySelector("[data-frontinv-search]");
+  const normalizeSearchText = (value) => String(value || "").toLocaleLowerCase("hu-HU").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const applySearch = () => {
+    if (!searchInput) return;
+    const terms = normalizeSearchText(searchInput.value.trim()).split(/\\s+/).filter(Boolean);
+    root.querySelectorAll("[data-frontinv-row]").forEach((row) => {
+      const searchable = normalizeSearchText(row.getAttribute("data-frontinv-search-text") || row.textContent || "");
+      row.hidden = terms.length > 0 && !terms.every((term) => searchable.includes(term));
+    });
+  };
+  const setRowValue = (row, value) => {
+    if (!row) return;
+    const nextValue = String(value || "").trim();
+    row.setAttribute("data-frontinv-current-value", nextValue);
+    const total = row.querySelector("[data-frontinv-total]");
+    if (total) total.textContent = nextValue || "0";
+    row.classList.toggle("is-counted", nextValue !== "");
+  };
+  const saveAdjustment = (input) => {
+    const rowId = input.getAttribute("data-row-id") || input.closest("[data-frontinv-row]")?.getAttribute("data-row-id") || "";
+    const value = input.value.trim();
+    const mode = input.getAttribute("data-mode") || "";
+    if (!stateRoute || !rowId || !value || input.dataset.frontinvSaving === "1") return;
+    input.dataset.frontinvSaving = "1";
+    input.classList.remove("is-error");
+    const formData = new URLSearchParams();
+    formData.set("row_id", rowId);
+    formData.set("value", value);
+    formData.set("mode", mode);
+    fetch(stateRoute, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: formData.toString(),
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("save failed");
+        return response.json();
+      })
+      .then((payload) => {
+        setRowValue(input.closest("[data-frontinv-row]"), payload && Object.prototype.hasOwnProperty.call(payload, "value") ? payload.value : "");
+        input.value = "";
+      })
+      .catch(() => {
+        input.classList.add("is-error");
+        window.setTimeout(() => input.classList.remove("is-error"), 1200);
+      })
+      .finally(() => {
+        input.dataset.frontinvSaving = "0";
+      });
+  };
+  searchInput?.addEventListener("input", applySearch);
+  applySearch();
+  root.querySelectorAll("[data-frontinv-input]").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveAdjustment(input);
+      }
+    });
+    input.addEventListener("blur", () => saveAdjustment(input));
+  });
+  if (categoryRow) {
+    const scrollStorageKey = `${storagePrefix}-category-scroll`;
+    const savedScroll = Number(window.sessionStorage.getItem(scrollStorageKey) || "0");
+    if (savedScroll > 0) categoryRow.scrollLeft = savedScroll;
+    categoryRow.addEventListener("scroll", () => window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft)), { passive: true });
+    categoryRow.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft)));
+    });
+  }
+  if (presenceRoute && categoryValue) {
+    const tokenStorageKey = `${storagePrefix}-presence-token`;
+    let token = window.sessionStorage.getItem(tokenStorageKey);
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      window.sessionStorage.setItem(tokenStorageKey, token);
+    }
+    const applyRemoteState = (payload) => {
+      const activeSet = new Set(Array.isArray(payload && payload.active_categories) ? payload.active_categories : []);
+      const categoryStates = payload && payload.category_states && typeof payload.category_states === "object" ? payload.category_states : {};
+      root.querySelectorAll(".frontinv-chip").forEach((chip) => {
+        const href = chip.getAttribute("href") || "";
+        let chipCategory = "";
+        try { chipCategory = new URL(href, window.location.origin).searchParams.get("category") || "all"; } catch { chipCategory = ""; }
+        chip.classList.toggle("is-live", activeSet.has(chipCategory));
+        chip.classList.toggle("is-complete", Boolean(categoryStates[chipCategory]));
+      });
+      const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object" ? payload.row_inputs : {};
+      rowElements.forEach((row) => {
+        const rowId = row.getAttribute("data-row-id") || "";
+        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) setRowValue(row, remoteRowInputs[rowId]);
+      });
+    };
+    const touchPresence = (clear = false) => {
+      const formData = new URLSearchParams();
+      formData.set("token", token);
+      formData.set("category", categoryValue);
+      if (clear) formData.set("clear", "1");
+      const payload = formData.toString();
+      if (clear && navigator.sendBeacon) {
+        navigator.sendBeacon(presenceRoute, new Blob([payload], { type: "application/x-www-form-urlencoded; charset=UTF-8" }));
+        return;
+      }
+      fetch(presenceRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: payload,
+        credentials: "same-origin",
+        cache: "no-store",
+        keepalive: clear,
+      }).then((response) => response.ok ? response.json() : null).then((payload) => {
+        if (payload) applyRemoteState(payload);
+      }).catch(() => {});
+    };
+    touchPresence(false);
+    const intervalId = window.setInterval(() => touchPresence(false), 5000);
+    window.addEventListener("pagehide", () => {
+      window.clearInterval(intervalId);
+      touchPresence(true);
+    });
+  }
+})();
+</script>
+"""
+
+
 def _front_inventory_normalize_view(value: str) -> str:
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
@@ -15256,11 +15921,11 @@ def render_front_inventory_form(
     active_view = _front_inventory_normalize_view(view_mode)
     active_presence_categories = _front_inventory_active_presence_categories()
 
-    admin_href = FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
+    admin_href = ADMIN_FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{ADMIN_FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     inventory_href = (
-        FRONT_INVENTORY_ROUTE
-        if session is None
-        else f"{FRONT_INVENTORY_ROUTE}?view=leltar&sort={urllib.parse.quote(sort_mode)}"
+        FRONT_INVENTORY_WORKER_ROUTE
+        if sort_mode == "default"
+        else f"{FRONT_INVENTORY_WORKER_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     )
     if active_view == "leltar":
         view_switch_html = """
@@ -15292,7 +15957,7 @@ def render_front_inventory_form(
         categories_html = "".join(
             f"""
               <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-live' if item['key'] in active_presence_categories else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                  href="{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
+                  href="{FRONT_INVENTORY_WORKER_ROUTE}?category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
                 <span>{html.escape(item['label'])}</span>
                 <strong>{item['count']}</strong>
               </a>
@@ -15320,7 +15985,7 @@ def render_front_inventory_form(
           </article>
         """
 
-        inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
+        inventory_open_href = f"{FRONT_INVENTORY_WORKER_ROUTE}?category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
         current_sort_mode = str(view_model.get("sort_mode", "default") or "default")
 
         def frontinv_sort_href(sort_key: str) -> str:
@@ -15330,7 +15995,9 @@ def render_front_inventory_form(
                 next_sort = "default"
             else:
                 next_sort = sort_key
-            return f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
+            sort_base_route = FRONT_INVENTORY_WORKER_ROUTE if active_view == "leltar" else ADMIN_FRONT_INVENTORY_ROUTE
+            sort_view_part = "" if active_view == "leltar" else f"view={urllib.parse.quote(active_view)}&"
+            return f"{sort_base_route}?{sort_view_part}category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
 
         def frontinv_sort_label(label: str, sort_key: str) -> str:
             indicator = ""
@@ -16758,7 +17425,7 @@ def render_front_inventory_form(
         <span class="frontinv-tag">Divian-HUB</span>
         <h1>Fóliás front leltár</h1>
       </div>
-      <a href="/">Vissza a modulokhoz</a>
+      <a href="{ADMIN_INVENTORY_GROUP_ROUTE}">Vissza a modulokhoz</a>
     </header>
     {notice_html}
     {content_html}
@@ -17132,7 +17799,63 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MATERIAL_INVENTORY_ROUTE:
+        if path == ADMIN_INVENTORY_GROUP_ROUTE:
+            body = render_inventory_group_page("admin")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == PRODUCTION_INVENTORY_GROUP_ROUTE:
+            body = render_inventory_group_page("production")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {
+            MATERIAL_INVENTORY_WORKER_ROUTE,
+            MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE,
+            SEMIFINISHED_INVENTORY_WORKER_ROUTE,
+            SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE,
+            SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
+            SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE,
+        }:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            if path in {
+                SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
+                SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE,
+            }:
+                inventory_kind = "semifinished_front"
+            elif path in {
+                SEMIFINISHED_INVENTORY_WORKER_ROUTE,
+                SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE,
+            }:
+                inventory_kind = "semifinished"
+            else:
+                inventory_kind = "material"
+            body = render_unified_inventory_worker_page(
+                inventory_kind,
+                selected_category=selected_category,
+                sort_mode=selected_sort,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {MATERIAL_INVENTORY_ROUTE, ADMIN_MATERIAL_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -17145,7 +17868,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_INVENTORY_ROUTE:
+        if path in {SEMIFINISHED_INVENTORY_ROUTE, ADMIN_SEMIFINISHED_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -17162,7 +17885,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_FRONT_INVENTORY_ROUTE:
+        if path in {SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -17179,7 +17902,21 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == FRONT_INVENTORY_ROUTE:
+        if path in {FRONT_INVENTORY_WORKER_ROUTE, FRONT_INVENTORY_LEGACY_WORKER_ROUTE}:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            _front_inventory_ensure_insight_artifacts(load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH))
+            body = render_front_inventory_form(selected_category=selected_category, sort_mode=selected_sort, view_mode="leltar")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {FRONT_INVENTORY_ROUTE, ADMIN_FRONT_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _front_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -18039,6 +18776,26 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(payload)
+            return
+
+        if path in {MATERIAL_INVENTORY_PRESENCE_ROUTE, SEMIFINISHED_INVENTORY_PRESENCE_ROUTE, SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE}:
+            if path == SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE:
+                config = _unified_inventory_config("semifinished_front")
+            elif path == SEMIFINISHED_INVENTORY_PRESENCE_ROUTE:
+                config = _unified_inventory_config("semifinished")
+            else:
+                config = _unified_inventory_config("material")
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            active_categories = _unified_inventory_touch_presence(
+                config,
+                form_data.get("token", ""),
+                form_data.get("category", ""),
+                clear=form_data.get("clear", "") == "1",
+            )
+            sync_payload = _unified_inventory_sync_payload(config, form_data.get("category", ""))
+            self.respond_json(200, {"ok": True, "active_categories": active_categories, **sync_payload})
             return
 
         if path == MATERIAL_INVENTORY_FINALIZE_ROUTE:
