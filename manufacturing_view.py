@@ -40,6 +40,12 @@ def render_manufacturing_page(
     total_rows = int(active_document.get("row_count", 0) or 0) if isinstance(active_document, dict) else 0
     green_count = sum(1 for value in selection_state.values() if value == "green")
     red_count = sum(1 for value in selection_state.values() if value == "red")
+    active_source_label = str(active_document.get("sourceLabel", "")).strip() if isinstance(active_document, dict) else ""
+    active_source_markup = (
+        f'<span class="mfg-operation-source">{html.escape(active_source_label)}</span>'
+        if active_source_label
+        else ""
+    )
 
     notice_markup = ""
     if message:
@@ -95,6 +101,7 @@ def render_manufacturing_page(
         <div>
           <span class="mfg-kicker">Kiválasztott művelet</span>
           <strong>{html.escape(str(active_document.get("label", "")))}</strong>
+          {active_source_markup}
         </div>
         <a class="mfg-picker-back" href="{picker_href}">Másik művelet</a>
       </section>
@@ -333,6 +340,13 @@ def render_manufacturing_page(
       margin-top: 4px;
       font-size: 1rem;
       font-weight: 800;
+    }}
+    .mfg-operation-source {{
+      display: block;
+      margin-top: 2px;
+      color: var(--mfg-muted);
+      font-size: 0.78rem;
+      font-weight: 700;
     }}
     .mfg-picker-back {{
       min-height: 40px;

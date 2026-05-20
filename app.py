@@ -340,7 +340,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-05-19-cnc-xml-13764-v61"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-05-20-cnc-xml-default-v62"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -2540,7 +2540,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     return sections, row_count
 
 
-def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict]]:
+def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str]:
     raw_sections, _ = _manufacturing_document_sections(bundle, production_number, ("cnc", "fiokelo_furas"))
     using_xml_cnc_source = False
 
@@ -2560,28 +2560,26 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             .replace("Û", "Ű")
         )
 
-    def cnc_xml_source_sections() -> list[dict]:
-        if _manufacturing_normalize_number(production_number) != "13764":
-            return []
+    def cnc_xml_source_sections() -> tuple[list[dict], bool]:
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
-            return []
+            return [], False
         folder = Path(folder_text)
         xml_path = folder / "CNC.xml"
         if not xml_path.is_file():
             try:
                 xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "cnc.xml"), xml_path)
             except OSError:
-                return []
+                return [], False
         if not xml_path.is_file():
-            return []
+            return [], False
 
         try:
             import xml.etree.ElementTree as ET
 
             root = ET.parse(xml_path).getroot()
         except Exception:
-            return []
+            return [], True
 
         def local_name(tag: object) -> str:
             return str(tag or "").rsplit("}", 1)[-1].strip()
@@ -2709,16 +2707,17 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "rows": rows,
                 }
             )
-        return sections
+        return sections, True
 
-    xml_cnc_sections = cnc_xml_source_sections()
-    if xml_cnc_sections:
+    xml_cnc_sections, xml_cnc_available = cnc_xml_source_sections()
+    if xml_cnc_available:
         raw_sections = [
             section
             for section in raw_sections
             if not str(section.get("key", "")).startswith("cnc::")
         ] + xml_cnc_sections
         using_xml_cnc_source = True
+    cnc_source_type = "XML" if using_xml_cnc_source else "PDF"
 
     def size_parts(size_label: object) -> tuple[int, ...]:
         parts = [int(part.strip()) for part in re.split(r"[xX]", str(size_label or "")) if part.strip().isdigit()]
@@ -5194,7 +5193,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "hideTab": True,
             }
         )
-    return main_sections, row_count, special_views
+    return main_sections, row_count, special_views, cnc_source_type
 
 
 def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
@@ -5376,11 +5375,13 @@ def _manufacturing_view_bundle(
         }
     )
 
-    cnc_sections, cnc_row_count, cnc_special_views = _manufacturing_cnc_sections(raw_bundle, current_number)
+    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type = _manufacturing_cnc_sections(raw_bundle, current_number)
     documents.append(
         {
             "key": "cnc_furas",
             "label": "CNC fúrás",
+            "sourceType": cnc_source_type,
+            "sourceLabel": f"Beolvasva: {cnc_source_type}",
             "file_name": "",
             "sections": cnc_sections,
             "row_count": cnc_row_count,
