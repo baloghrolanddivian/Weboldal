@@ -973,6 +973,8 @@ def _looks_like_potential_row_start(tokens: list[str], index: int, max_name_toke
     if any(character.isdigit() for character in token):
         return False
     folded = folded_token
+    if folded.startswith("avz") or _looks_like_edge(token):
+        return False
     if folded in {"te", "ri", "jo", "n"}:
         return False
     if re.fullmatch(r"[A-Z]{1,4}", token):
@@ -1013,7 +1015,9 @@ def _split_cnc_color_and_detail(tokens: list[str]) -> tuple[str, str]:
         "eft 68",
         "ffm",
         "sarok felso",
+        "avz",
         "avz b",
+        "avz j",
         "kmtb60",
         "kmth75",
         "kmth60",

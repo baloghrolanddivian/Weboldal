@@ -270,7 +270,12 @@ SHOPFLOOR_PROCESS_PAYLOAD = {
 MATT_INVENTORY_ROUTE = "/apps/matt-raktarertek"
 MATT_INVENTORY_PROCESS_ROUTE = f"{MATT_INVENTORY_ROUTE}/process"
 MATT_INVENTORY_DOWNLOAD_ROUTE = f"{MATT_INVENTORY_ROUTE}/download/excel"
+ADMIN_INVENTORY_GROUP_ROUTE = "/apps/admin-leltar"
+PRODUCTION_INVENTORY_GROUP_ROUTE = "/apps/gyartas-leltar"
 FRONT_INVENTORY_ROUTE = "/apps/front-leltar"
+ADMIN_FRONT_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/front-leltar"
+FRONT_INVENTORY_LEGACY_WORKER_ROUTE = f"{FRONT_INVENTORY_ROUTE}/leltar"
+FRONT_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/front-leltar"
 FRONT_INVENTORY_PROCESS_ROUTE = f"{FRONT_INVENTORY_ROUTE}/process"
 FRONT_INVENTORY_STATE_ROUTE = f"{FRONT_INVENTORY_ROUTE}/state"
 FRONT_INVENTORY_CHECK_ROUTE = f"{FRONT_INVENTORY_ROUTE}/ellenorzes"
@@ -282,20 +287,32 @@ FRONT_INVENTORY_INSIGHT_EXCEL_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/downloa
 FRONT_INVENTORY_INSIGHT_SCRIPT_DOWNLOAD_ROUTE = f"{FRONT_INVENTORY_ROUTE}/download/insight-script"
 FRONT_INVENTORY_ALERT_CLEAR_ROUTE = f"{FRONT_INVENTORY_ROUTE}/alert-clear"
 MATERIAL_INVENTORY_ROUTE = "/apps/anyag-raktar"
+ADMIN_MATERIAL_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/anyag-raktar"
+MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/leltar"
+MATERIAL_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/anyag-raktar"
 MATERIAL_INVENTORY_PROCESS_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/process"
 MATERIAL_INVENTORY_STATE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/state"
+MATERIAL_INVENTORY_PRESENCE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/presence"
 MATERIAL_INVENTORY_FINALIZE_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/veglegesites"
 MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/insight"
 MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{MATERIAL_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_INVENTORY_ROUTE = "/apps/felkesz-raktar"
+ADMIN_SEMIFINISHED_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/felkesz-raktar"
+SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/leltar"
+SEMIFINISHED_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/felkesz-raktar"
 SEMIFINISHED_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/process"
 SEMIFINISHED_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/state"
+SEMIFINISHED_INVENTORY_PRESENCE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/presence"
 SEMIFINISHED_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/veglegesites"
 SEMIFINISHED_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/insight"
 SEMIFINISHED_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{SEMIFINISHED_INVENTORY_ROUTE}/download/osszesito"
 SEMIFINISHED_FRONT_INVENTORY_ROUTE = "/apps/felkesz-front"
+ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE = f"{ADMIN_INVENTORY_GROUP_ROUTE}/felkesz-front"
+SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/leltar"
+SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE = f"{PRODUCTION_INVENTORY_GROUP_ROUTE}/felkesz-front"
 SEMIFINISHED_FRONT_INVENTORY_PROCESS_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/process"
 SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/state"
+SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/presence"
 SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/veglegesites"
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_DOWNLOAD_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/download/insight"
 SEMIFINISHED_FRONT_INVENTORY_SUMMARY_DOWNLOAD_ROUTE = f"{SEMIFINISHED_FRONT_INVENTORY_ROUTE}/download/osszesito"
@@ -319,6 +336,7 @@ FRONT_INVENTORY_INSIGHT_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "insight-bevet
 MATERIAL_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "anyag-raktar"
 MATERIAL_INVENTORY_SESSION_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "session.json"
 MATERIAL_INVENTORY_STOCK_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+MATERIAL_INVENTORY_PRESENCE_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "presence.json"
 MATERIAL_INVENTORY_INSIGHT_WORKBOOK_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 MATERIAL_INVENTORY_INSIGHT_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 MATERIAL_INVENTORY_SUMMARY_WORKBOOK_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
@@ -326,6 +344,7 @@ MATERIAL_INVENTORY_SUMMARY_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "osszesi
 SEMIFINISHED_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "felkesz-raktar"
 SEMIFINISHED_INVENTORY_SESSION_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "session.json"
 SEMIFINISHED_INVENTORY_STOCK_META_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+SEMIFINISHED_INVENTORY_PRESENCE_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "presence.json"
 SEMIFINISHED_INVENTORY_INSIGHT_WORKBOOK_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 SEMIFINISHED_INVENTORY_INSIGHT_META_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 SEMIFINISHED_INVENTORY_SUMMARY_WORKBOOK_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
@@ -333,6 +352,7 @@ SEMIFINISHED_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_INVENTORY_RUNTIME_DIR / 
 SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "felkesz-front"
 SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "session.json"
 SEMIFINISHED_FRONT_INVENTORY_STOCK_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+SEMIFINISHED_FRONT_INVENTORY_PRESENCE_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "presence.json"
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 SEMIFINISHED_FRONT_INVENTORY_SUMMARY_WORKBOOK_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
@@ -343,7 +363,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-04-23-cnc-upper-360-fkf-v44"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-05-20-cnc-xml-default-v62"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -2543,8 +2563,9 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     return sections, row_count
 
 
-def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict]]:
+def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str]:
     raw_sections, _ = _manufacturing_document_sections(bundle, production_number, ("cnc", "fiokelo_furas"))
+    using_xml_cnc_source = False
 
     def folded(value: object) -> str:
         text = str(value or "").strip().lower()
@@ -2561,6 +2582,165 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             .replace("û", "ű")
             .replace("Û", "Ű")
         )
+
+    def cnc_xml_source_sections() -> tuple[list[dict], bool]:
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return [], False
+        folder = Path(folder_text)
+        xml_path = folder / "CNC.xml"
+        if not xml_path.is_file():
+            try:
+                xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "cnc.xml"), xml_path)
+            except OSError:
+                return [], False
+        if not xml_path.is_file():
+            return [], False
+
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.parse(xml_path).getroot()
+        except Exception:
+            return [], True
+
+        def local_name(tag: object) -> str:
+            return str(tag or "").rsplit("}", 1)[-1].strip()
+
+        def folded_ascii(value: object) -> str:
+            text = unicodedata.normalize("NFKD", clean_text(value))
+            text = "".join(char for char in text if not unicodedata.combining(char))
+            return re.sub(r"\s+", " ", text).strip().lower()
+
+        def tag_key(tag: object) -> str:
+            return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
+
+        def whole_number(value: object) -> str:
+            text = clean_text(value).replace(",", ".")
+            if not text:
+                return ""
+            try:
+                return str(int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP)))
+            except (InvalidOperation, ValueError):
+                match = re.search(r"-?\d+(?:\.\d+)?", text)
+                if not match:
+                    return ""
+                try:
+                    return str(int(Decimal(match.group(0)).to_integral_value(rounding=ROUND_HALF_UP)))
+                except Exception:
+                    return ""
+
+        def quantity_value(value: object) -> int:
+            number_text = whole_number(value)
+            if not number_text:
+                return 1
+            try:
+                return int(number_text)
+            except ValueError:
+                return 1
+
+        def drawer_drill_value(value: object) -> str:
+            code = re.sub(r"[^a-z0-9]+", "", folded_ascii(value)).upper()
+            if code == "N":
+                return "Nincs"
+            if code == "T":
+                return "Teleszkóp"
+            if code == "BH":
+                return "Box Hettich"
+            return ""
+
+        def con_fields(con_element: object) -> dict[str, str]:
+            fields: dict[str, str] = {}
+            for child in list(con_element):
+                key = tag_key(getattr(child, "tag", ""))
+                if key and key not in fields:
+                    fields[key] = clean_text(getattr(child, "text", ""))
+            return fields
+
+        def field_value(fields: dict[str, str], *names: str) -> str:
+            for name in names:
+                value = fields.get(tag_key(name), "")
+                if value:
+                    return value
+            return ""
+
+        section_rows: dict[str, list[dict]] = {}
+        row_index = 0
+        for con_element in root.iter():
+            if tag_key(getattr(con_element, "tag", "")) != "con":
+                continue
+            fields = con_fields(con_element)
+            section_label = field_value(fields, "KorpTipPer")
+            section_folded = folded_ascii(section_label)
+            is_lower_xml_section = "als" in section_folded
+            is_upper_xml_section = "fels" in section_folded
+            if not is_lower_xml_section and not is_upper_xml_section:
+                continue
+
+            length = whole_number(field_value(fields, "Hossz"))
+            width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
+            thickness = whole_number(field_value(fields, "Vastag"))
+            size_parts_for_label = [part for part in (length, width, thickness) if part]
+            size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
+            name = field_value(fields, "Leiras", "Leírás") or "Tétel"
+            color = field_value(fields, "Szin", "Szín")
+            edge = field_value(fields, "Elzaras", "Élzárás") or "-"
+            side_type = field_value(fields, "Oldal_Tip", "Oldal Tip")
+            hardware_type = field_value(fields, "VASALAT_TIP", "Vasalat Tip")
+            cnc_tag_value = field_value(fields, "CNC")
+            cnc_detail = "" if re.sub(r"[^a-z0-9]+", "", folded_ascii(cnc_tag_value)).upper() == "N" else cnc_tag_value
+            drawer_drill = drawer_drill_value(field_value(fields, "FIOKSIN_FURAS", "Fióksín Fúrás"))
+            quantity = quantity_value(field_value(fields, "conQuantity"))
+            detail = clean_text(" ".join(part for part in (drawer_drill if is_lower_xml_section else "", side_type, edge, cnc_detail, hardware_type) if part and part != "-"))
+            row_index += 1
+            row_id = hashlib.sha1(
+                f"cnc-xml|{production_number}|{row_index}|{section_label}|{name}|{size_label}|{color}|{edge}|{side_type}|{drawer_drill}|{quantity}".encode("utf-8")
+            ).hexdigest()[:16]
+            section_rows.setdefault(section_label, []).append(
+                {
+                    "row_id": row_id,
+                    "state_key": _manufacturing_state_key(production_number, row_id),
+                    "production_number": _manufacturing_normalize_number(production_number),
+                    "name": name,
+                    "source_name": name,
+                    "size": size_label,
+                    "color": color,
+                    "drawer_drill": drawer_drill,
+                    "side_type": side_type,
+                    "hardware_type": hardware_type,
+                    "edge": edge,
+                    "quantity": quantity,
+                    "detail": detail,
+                    "code": f"CNCXML-{row_index:04d}",
+                    "doc_key": "cnc",
+                    "section_key": _manufacturing_local_slug(section_label),
+                    "section_label": section_label,
+                    "page_number": 1,
+                }
+            )
+
+        sections: list[dict] = []
+        for section_label, rows in section_rows.items():
+            if not rows:
+                continue
+            sections.append(
+                {
+                    "key": f"cnc::{_manufacturing_local_slug(section_label)}",
+                    "label": section_label,
+                    "rows": rows,
+                }
+            )
+        return sections, True
+
+    xml_cnc_sections, xml_cnc_available = cnc_xml_source_sections()
+    if xml_cnc_available:
+        raw_sections = [
+            section
+            for section in raw_sections
+            if not str(section.get("key", "")).startswith("cnc::")
+        ] + xml_cnc_sections
+        using_xml_cnc_source = True
+    cnc_source_type = "XML" if using_xml_cnc_source else "PDF"
 
     def size_parts(size_label: object) -> tuple[int, ...]:
         parts = [int(part.strip()) for part in re.split(r"[xX]", str(size_label or "")) if part.strip().isdigit()]
@@ -2611,11 +2791,23 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     def cnc_display_name(name: object) -> str:
         text = clean_text(name)
         folded_text = folded(text)
-        if "also oldal" in folded_text:
+        if "hatlap also" in folded_text or "tlap als" in folded_text:
+            return "Hátlap alsó"
+        vegzaro_folded_match = re.search(r"vegzaro\s+also\s+oldal(?:\s+([bj]))?", folded_text)
+        if vegzaro_folded_match:
+            suffix = str(vegzaro_folded_match.group(1) or "").upper()
+            return clean_text(f"Végzáró alsó oldal {suffix}")
+        hatlap_match = re.search(r"h[aá]tlap\s+als[oó]", text, flags=re.IGNORECASE)
+        if hatlap_match and hatlap_match.start() > 0:
+            return clean_text(text[hatlap_match.start():])
+        vegzaro_match = re.search(r"v[eé]gz[aá]r[oó]\s+als[oó]\s+oldal(?:\s+[BJ])?", text, flags=re.IGNORECASE)
+        if vegzaro_match and vegzaro_match.start() > 0:
+            return clean_text(text[vegzaro_match.start():])
+        if folded_text == "also oldal":
             return "Alsó oldal"
-        if "felso oldal" in folded_text:
+        if folded_text == "felso oldal":
             return "Felső oldal"
-        if "also fenek" in folded_text:
+        if folded_text == "also fenek":
             return "Alsó fenék"
         if "fiokelo" in folded_text:
             return "Fiókelő"
@@ -2639,8 +2831,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             drawer_drill = "Teleszkópos"
             remainder = clean_text(text[len("Teleszkópos "):].strip())
         if text.startswith("AVZ "):
-            drawer_drill = "AVZ"
-            remainder = clean_text(text[4:].strip())
+            tokens = [clean_text(token) for token in text.split() if clean_text(token)]
+            avz_suffix = tokens[1] if len(tokens) > 1 and tokens[1] in {"B", "J", "N"} else ""
+            side_type = clean_text(" ".join(["AVZ", avz_suffix]))
+            tail_tokens = tokens[2:] if avz_suffix else tokens[1:]
+            edge_pattern = re.compile(r"^\d+H(?:\dR)?$")
+            parsed_edge = ""
+            hardware_type = ""
+            if tail_tokens and edge_pattern.fullmatch(tail_tokens[0]):
+                parsed_edge = tail_tokens[0]
+                tail_tokens = tail_tokens[1:]
+            if tail_tokens:
+                hardware_type = clean_text(" ".join(tail_tokens))
+            return "", side_type, parsed_edge, hardware_type
         if text.startswith("Box Hettich "):
             drawer_drill = "Box Hettich"
             remainder = clean_text(text[len("Box Hettich "):].strip())
@@ -2677,7 +2880,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if trailing_tokens:
                 hardware_type = clean_text(" ".join(trailing_tokens))
             return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
-        if drawer_drill == "AVZ" and len(tokens) == 1 and tokens[0] in {"N", "KESB", "GTEL", "B"}:
+        if drawer_drill == "AVZ" and len(tokens) == 1 and tokens[0] in {"N", "KESB", "GTEL", "B", "J"}:
             return drawer_drill, "", "", tokens[0]
         if len(tokens) >= 2 and edge_pattern.fullmatch(tokens[-2]) and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"}:
             parsed_edge = tokens[-2]
@@ -2989,6 +3192,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 color = clean_text(raw_row.get("color"))
                 raw_edge = clean_text(raw_row.get("edge")) or "-"
                 drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(raw_row.get("detail"))
+                direct_drawer_drill = clean_text(raw_row.get("drawer_drill"))
+                direct_side_type = clean_text(raw_row.get("side_type"))
+                direct_hardware_type = clean_text(raw_row.get("hardware_type"))
+                if direct_drawer_drill or direct_side_type or direct_hardware_type:
+                    drawer_drill = direct_drawer_drill
+                    side_type = canonical_side_type(direct_side_type)
+                    hardware_type = direct_hardware_type
                 color, side_type = split_lower_color_and_side_v2(color, side_type)
 
                 folded_name = folded(name)
@@ -3059,6 +3269,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text or "egyeb"
 
     def build_expected_upper_excenter_counts() -> dict[tuple[str, str, str, str, str, str, str], int]:
+        if using_xml_cnc_source:
+            return {}
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return {}
@@ -3188,6 +3400,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 color = clean_text(raw_row.get("color"))
                 edge = clean_text(raw_row.get("edge")) or "-"
                 side_type, hardware_type = parse_upper_detail_v2(raw_row.get("detail"))
+                direct_side_type = clean_text(raw_row.get("side_type"))
+                direct_hardware_type = clean_text(raw_row.get("hardware_type"))
+                if direct_side_type or direct_hardware_type:
+                    side_type = direct_side_type
+                    hardware_type = direct_hardware_type
                 color, side_type = split_upper_color_and_side_v2(color, side_type)
                 raw_quantity = int(raw_row.get("quantity", 0) or 0)
                 quantity_hint = upper_quantity_hint_from_detail(raw_row.get("detail"), edge, side_type, hardware_type)
@@ -3572,6 +3789,22 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             }
         )
 
+    def hide_lower_subtitles(rows: list[dict]) -> None:
+        for row in rows:
+            if isinstance(row, dict):
+                row["hideSubtitle"] = True
+
+    def set_kinga_anna_subtitles(rows: list[dict]) -> None:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row["detail"] = clean_text(" ".join(
+                part
+                for part in (clean_text(row.get("drawer_drill")), clean_text(row.get("side_type")))
+                if part and part != "-"
+            ))
+            row.pop("hideSubtitle", None)
+
     def aggregate_lower_rows(rows: list[dict], group_fields: tuple[str, ...], *, hide_subtitle: bool = False) -> list[dict]:
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
@@ -3663,7 +3896,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         source_name_folded = folded(row.get("source_name"))
         return (
             size_label in {"724 x 505 x 18", "725 x 505 x 18"}
-            and "fiokos" in source_name_folded
+            and ("fiokos" in source_name_folded or is_boxos_side_type(row))
             and folded(row.get("name")) == "also oldal"
             and not is_as_takarosav_row(row)
             and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
@@ -3676,6 +3909,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return is_boxos_target_row(row) and folded(row.get("drawer_drill")).startswith("teleszk")
 
     def build_raw_normal_also_box_rows() -> list[dict]:
+        if using_xml_cnc_source:
+            return []
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return []
@@ -3782,6 +4017,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_kinga_anna_box_rows() -> list[dict]:
+        if using_xml_cnc_source:
+            return []
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return []
@@ -3896,6 +4133,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_boxos_box_rows() -> list[dict]:
+        if using_xml_cnc_source:
+            return []
         alkatresz_sections, _ = _manufacturing_document_sections(
             bundle,
             production_number,
@@ -4008,6 +4247,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_egyebek_box_rows() -> list[dict]:
+        if using_xml_cnc_source:
+            return []
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return []
@@ -4089,6 +4330,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 color = clean_text(" ".join(payload_tokens[:detail_start]))
                 detail = clean_text(" ".join(payload_tokens[detail_start:]))
                 drawer_drill, side_type, parsed_edge, hardware_type = parse_lower_detail(detail)
+                if folded(drawer_drill) == "avz" or re.search(r"\bavz\b", folded(detail)):
+                    index = cursor
+                    continue
                 side_type_normalized = normalize_side_type(side_type)
                 if (
                     size_label in {"724 x 505 x 18", "824 x 505 x 18"}
@@ -4137,6 +4381,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_takarolap_rows() -> list[dict]:
+        if using_xml_cnc_source:
+            return []
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return []
@@ -4272,9 +4518,27 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
         return "fvz" in combined
 
+    def is_avz_lower_row(row: dict) -> bool:
+        combined = " ".join(
+            [
+                folded(row.get("side_type")),
+                folded(row.get("drawer_drill")),
+                folded(row.get("detail")),
+            ]
+        )
+        return bool(re.search(r"\bavz\b", combined))
+
+    box_avz_source_rows = [row for row in lower_rows if is_avz_lower_row(row)]
+    box_avz_ids = {str(row.get("row_id", "")) for row in box_avz_source_rows}
+    box_avz_rows = aggregate_lower_rows(
+        box_avz_source_rows,
+        ("name", "size", "color", "drawer_drill", "side_type", "edge"),
+    )
+
     box1_source_rows = [
         row for row in lower_rows
         if is_normal_also_row(row) and clean_text(row.get("size")) == "724 x 505 x 18"
+        and str(row.get("row_id", "")) not in box_avz_ids
     ]
     box1_extra_rows = build_raw_boxos_teleszkop_rows()
     box1_display_rows = (build_raw_normal_also_box_rows() or box1_source_rows) + box1_extra_rows
@@ -4285,7 +4549,17 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     )
     box1_rows.sort(key=lambda row: (folded(row.get("color")), folded(row.get("name"))))
     box1_ids = {str(row.get("row_id", "")) for row in box1_source_rows}
-    box2_source_rows = [row for row in lower_rows if is_boxos_box_hettich_row(row)]
+    if using_xml_cnc_source and box1_extra_rows:
+        box1_ids.update(
+            str(row.get("row_id", ""))
+            for row in lower_rows
+            if is_boxos_teleszkop_row(row)
+        )
+    box2_source_rows = [
+        row for row in lower_rows
+        if is_boxos_box_hettich_row(row)
+        and str(row.get("row_id", "")) not in box_avz_ids
+    ]
     box2_display_rows = build_raw_boxos_box_rows() or box2_source_rows
     box2_rows = aggregate_lower_rows(
         box2_display_rows,
@@ -4296,6 +4570,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         row for row in lower_rows
         if row.get("size") == "824 x 505 x 18"
         and normalize_side_type(row.get("side_type")) in {"normals also", "aaf fiokos ajtos", "af 1+2 fiokos"}
+        and str(row.get("row_id", "")) not in box_avz_ids
         and str(row.get("row_id", "")) not in box1_ids
         and str(row.get("row_id", "")) not in box2_ids
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
@@ -4304,26 +4579,30 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     box3_ids = {str(row.get("row_id", "")) for row in box3_rows}
     box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
     box3_rows = [dict(row) for row in box3_display_rows if isinstance(row, dict)]
-    box_fvz_rows = [
+    box_fvz_source_rows = [
         row for row in lower_rows
         if is_fvz_row(row)
+        and str(row.get("row_id", "")) not in box_avz_ids
         and str(row.get("row_id", "")) not in box1_ids
         and str(row.get("row_id", "")) not in box2_ids
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
         and not is_as_takarosav_row(row)
     ]
+    box_fvz_ids = {str(row.get("row_id", "")) for row in box_fvz_source_rows}
     box_fvz_rows = aggregate_lower_rows(
-        box_fvz_rows,
+        box_fvz_source_rows,
         ("name", "size", "color", "drawer_drill", "side_type", "edge"),
     )
-    box4_rows = [
+    box4_source_rows = [
         row for row in lower_rows
-        if str(row.get("row_id", "")) not in box1_ids and str(row.get("row_id", "")) not in box2_ids and str(row.get("row_id", "")) not in box3_ids
+        if str(row.get("row_id", "")) not in box_avz_ids and str(row.get("row_id", "")) not in box1_ids and str(row.get("row_id", "")) not in box2_ids and str(row.get("row_id", "")) not in box3_ids
         and not is_fvz_row(row)
         and not is_as_takarosav_row(row)
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+        and normalize_side_type(row.get("side_type")) in lower_box_order
     ]
-    box4_display_rows = build_raw_egyebek_box_rows() or box4_rows
+    box4_ids = {str(row.get("row_id", "")) for row in box4_source_rows}
+    box4_display_rows = build_raw_egyebek_box_rows() or box4_source_rows
     box4_rows = aggregate_lower_rows(
         box4_display_rows,
         ("name", "size", "color", "drawer_drill", "side_type", "edge"),
@@ -4336,12 +4615,20 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             row["side_type"] = "AR golyós tel."
         elif side_norm == "ar":
             row["side_type"] = "AR"
-    box5_rows = [row for row in lower_rows if is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))]
-    box6_rows = [
+    box5_rows = [
+        row for row in lower_rows
+        if str(row.get("row_id", "")) not in box_avz_ids
+        and is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+    ]
+    box5_ids = {str(row.get("row_id", "")) for row in box5_rows}
+    box6_source_rows = [
         row for row in lower_rows
         if is_as_takarosav_row(row)
+        and str(row.get("row_id", "")) not in box_avz_ids
         and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
     ]
+    box6_ids = {str(row.get("row_id", "")) for row in box6_source_rows}
+    box6_rows = list(box6_source_rows)
     box6_takarolap_rows = [row for row in box6_rows if is_takarolap_as_row(row)]
     raw_takarolap_rows = build_raw_takarolap_rows()
     if raw_takarolap_rows:
@@ -4350,6 +4637,28 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             ("name", "size", "color", "drawer_drill", "side_type", "edge"),
         )
     box6_rows = [row for row in box6_rows if not is_takarolap_as_row(row)]
+    categorized_lower_ids = {
+        row_id
+        for row_id in (
+            box_avz_ids
+            | box1_ids
+            | box2_ids
+            | box3_ids
+            | box_fvz_ids
+            | box4_ids
+            | box5_ids
+            | box6_ids
+        )
+        if row_id
+    }
+    uncategorized_lower_rows = [
+        row for row in lower_rows
+        if using_xml_cnc_source
+        and str(row.get("row_id", ""))
+        and str(row.get("row_id", "")) not in categorized_lower_ids
+    ]
+    for row in uncategorized_lower_rows:
+        row["hideSubtitle"] = True
 
     box2_rows.sort(
         key=lambda row: (
@@ -4369,6 +4678,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
     )
     box_fvz_rows.sort(
+        key=lambda row: (
+            clean_text(row.get("color")),
+            size_parts(row.get("size")),
+            clean_text(row.get("name")),
+            clean_text(row.get("side_type")),
+        )
+    )
+    box_avz_rows.sort(
         key=lambda row: (
             clean_text(row.get("color")),
             size_parts(row.get("size")),
@@ -4405,10 +4722,15 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
     )
 
+    set_kinga_anna_subtitles(box3_rows)
+    for rows_without_subtitles in (box1_rows, box2_rows, box_fvz_rows, box_avz_rows, box4_rows):
+        hide_lower_subtitles(rows_without_subtitles)
+
     add_lower_section("Normáls alsó · 724 x 505 x 18", box1_rows, "box1")
     add_lower_section("Boxosok", box2_rows, "box2")
     add_lower_section("Kinga/Anna", box3_rows, "box3", hide_side_type=True)
     add_lower_section("FVZ", box_fvz_rows, "box-fvz")
+    add_lower_section("Alsó Végzáró", box_avz_rows, "box-avz")
     add_lower_section("Egyebek", box4_rows, "box4")
     add_lower_section("Kamrák", box5_rows, "box5")
     add_lower_section("AS takarósávok · Takarólap AS, 165 mellé", box6_takarolap_rows, "box6-takarolap")
@@ -4468,7 +4790,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
             group_key = (
-                clean_text(row.get("sourceGroup")),
                 clean_text(row.get("name")),
                 clean_text(row.get("size")),
                 clean_text(row.get("color")),
@@ -4595,6 +4916,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             ).hexdigest()
             section_row["row_id"] = scoped_row_id
             section_row["state_key"] = _manufacturing_state_key(production_number, scoped_row_id)
+            section_row["hideSubtitle"] = True
         upper_sections.append(
             {
                 "key": f"cnc-felso::{key_suffix}",
@@ -4876,7 +5198,25 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "sections": front_sections,
         },
     ]
-    return main_sections, row_count, special_views
+    if uncategorized_lower_rows:
+        special_views.append(
+            {
+                "key": "cnc-uncategorized-overview",
+                "label": "Kategorizálatlan",
+                "count": len(uncategorized_lower_rows),
+                "sections": [
+                    {
+                        "key": "cnc-overview::uncategorized",
+                        "label": "Kategorizálatlan",
+                        "rows": uncategorized_lower_rows,
+                        "columnLayout": "cnc-lower",
+                    }
+                ],
+                "overviewOnly": True,
+                "hideTab": True,
+            }
+        )
+    return main_sections, row_count, special_views, cnc_source_type
 
 
 def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
@@ -5058,11 +5398,13 @@ def _manufacturing_view_bundle(
         }
     )
 
-    cnc_sections, cnc_row_count, cnc_special_views = _manufacturing_cnc_sections(raw_bundle, current_number)
+    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type = _manufacturing_cnc_sections(raw_bundle, current_number)
     documents.append(
         {
             "key": "cnc_furas",
             "label": "CNC fúrás",
+            "sourceType": cnc_source_type,
+            "sourceLabel": f"Beolvasva: {cnc_source_type}",
             "file_name": "",
             "sections": cnc_sections,
             "row_count": cnc_row_count,
@@ -14345,6 +14687,116 @@ def _semifinished_front_inventory_store_exports(session: dict) -> None:
     )
 
 
+def _material_inventory_worker_route(inventory_kind: str) -> str:
+    clean_inventory_kind = str(inventory_kind or "").strip().lower()
+    if clean_inventory_kind == "semifinished_front":
+        return SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE
+    if clean_inventory_kind == "semifinished":
+        return SEMIFINISHED_INVENTORY_WORKER_ROUTE
+    return MATERIAL_INVENTORY_WORKER_ROUTE
+
+
+def _material_inventory_admin_route(inventory_kind: str) -> str:
+    clean_inventory_kind = str(inventory_kind or "").strip().lower()
+    if clean_inventory_kind == "semifinished_front":
+        return ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE
+    if clean_inventory_kind == "semifinished":
+        return ADMIN_SEMIFINISHED_INVENTORY_ROUTE
+    return ADMIN_MATERIAL_INVENTORY_ROUTE
+
+
+def render_inventory_group_page(group: str) -> bytes:
+    clean_group = str(group or "").strip().lower()
+    is_production = clean_group == "production"
+    title = "Gyártás Leltár" if is_production else "Admin Leltár"
+    label = "Gyártási leltár nézetek" if is_production else "Admin leltár modulok"
+    description = (
+        "A kollégák önálló leltárnézetei, közvetlenül a számoláshoz."
+        if is_production
+        else "A leltárak kezelőfelületei feltöltéshez, lezáráshoz és exporthoz."
+    )
+    cards = (
+        (
+            ("Front leltár", "Fóliás frontok számolása méret és szín alapján.", "Front -> számolás", FRONT_INVENTORY_WORKER_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári tételek számolása ICG kód szerinti kategóriákban.", "Anyag -> számolás", MATERIAL_INVENTORY_WORKER_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári tételek számolása szín szerinti kategóriákban.", "Félkész -> számolás", SEMIFINISHED_INVENTORY_WORKER_ROUTE),
+            ("Félkész front leltár", "Félkész frontok számolása szín szerinti kategóriákban.", "Félkész front -> számolás", SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE),
+        )
+        if is_production
+        else (
+            ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front", ADMIN_FRONT_INVENTORY_ROUTE),
+            ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag", ADMIN_MATERIAL_INVENTORY_ROUTE),
+            ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész", ADMIN_SEMIFINISHED_INVENTORY_ROUTE),
+            ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE),
+        )
+    )
+    cards_html = "".join(
+        f"""
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Aktív modul</div>
+                <div class="module-number">{index:02d}</div>
+              </div>
+              <h3>{html.escape(card_title)}</h3>
+              <p>{html.escape(card_description)}</p>
+              <div class="module-meta">{html.escape(card_meta)}</div>
+              <a class="button button-secondary" href="{html.escape(card_href)}">Megnyitás</a>
+            </article>
+        """
+        for index, (card_title, card_description, card_meta, card_href) in enumerate(cards, start=1)
+    )
+    page = f"""<!DOCTYPE html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Divian-HUB | {html.escape(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+      <div class="grid-overlay"></div>
+
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Divian-HUB kezdőoldal">
+          <span class="brand-mark"></span>
+          <span class="brand-text">
+            <strong>Divian-HUB</strong>
+            <small>Céges modulplatform</small>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="/">Főoldal</a>
+        </nav>
+      </header>
+
+      <main class="home-shell">
+        <section class="module-section" id="modules">
+          <div class="section-head reveal">
+            <p class="section-label">{html.escape(label)}</p>
+            <h2>{html.escape(title)}</h2>
+            <p>{html.escape(description)}</p>
+          </div>
+          <div class="module-grid">
+            {cards_html}
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/script.js"></script>
+  </body>
+</html>"""
+    return page.encode("utf-8")
+
+
 def _material_inventory_normalize_view(value: str) -> str:
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
@@ -14415,8 +14867,9 @@ def render_material_inventory_form(
     color_empty_copy = "Töltsd fel a leltározandó félkész front listát, utána színek szerint külön kategóriákban lehet számolni." if is_semifinished_front else "Töltsd fel a leltározandó félkész listát, utána színek szerint külön kategóriákban lehet számolni."
     upload_button = color_upload_button if is_semifinished else "Anyagraktár leltár indítása"
     empty_copy = color_empty_copy if is_semifinished else "Töltsd fel a leltározandó anyaglistát, utána ICG kód szerint külön kategóriákban lehet számolni."
-    admin_href = route
-    inventory_href = route if session is None else f"{route}?view=leltar"
+    worker_route = _material_inventory_worker_route(clean_inventory_kind)
+    admin_href = _material_inventory_admin_route(clean_inventory_kind)
+    inventory_href = worker_route
     if active_view == "leltar":
         view_switch_html = """
           <div class="matinv-view-switch is-worker-only">
@@ -14447,7 +14900,7 @@ def render_material_inventory_form(
         categories_html = "".join(
             f"""
               <a class="matinv-chip{' is-complete' if item.get('complete') else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                 href="{route}?view=leltar&category={urllib.parse.quote(item['key'])}">
+                 href="{worker_route}?category={urllib.parse.quote(item['key'])}">
                 <span>{html.escape(str(item['label']))}</span>
                 <strong>{int(item['count'])}</strong>
               </a>
@@ -14711,7 +15164,7 @@ def render_material_inventory_form(
         <span class="matinv-tag">Divian-HUB</span>
         <h1>{page_title}</h1>
       </div>
-      <a href="/">Vissza a modulokhoz</a>
+      <a href="{PRODUCTION_INVENTORY_GROUP_ROUTE if active_view == 'leltar' else ADMIN_INVENTORY_GROUP_ROUTE}">Vissza a modulokhoz</a>
     </header>
     {notice_html}
     {view_switch_html}
@@ -14908,6 +15361,540 @@ def _front_inventory_build_sync_payload(selected_category: str) -> dict:
     }
 
 
+def _unified_inventory_config(kind: str) -> dict:
+    clean_kind = str(kind or "").strip().lower()
+    configs = {
+        "material": {
+            "kind": "material",
+            "title": "Anyagraktár leltár",
+            "board_title": "Anyagraktár számolás",
+            "session_path": MATERIAL_INVENTORY_SESSION_PATH,
+            "presence_path": MATERIAL_INVENTORY_PRESENCE_PATH,
+            "state_route": MATERIAL_INVENTORY_STATE_ROUTE,
+            "presence_route": MATERIAL_INVENTORY_PRESENCE_ROUTE,
+            "worker_route": MATERIAL_INVENTORY_WORKER_ROUTE,
+            "columns": (
+                {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "book_qty", "label": "Könyvelési menny.", "class": "is-book-qty", "sort": "book_qty"},
+            ),
+            "search_label": "Keresés leírás alapján",
+            "search_keys": ("description",),
+            "empty_text": "Még nincs aktív anyagraktár leltár.",
+            "one_cycle": False,
+        },
+        "semifinished": {
+            "kind": "semifinished",
+            "title": "Félkész raktár leltár",
+            "board_title": "Félkész raktár számolás",
+            "session_path": SEMIFINISHED_INVENTORY_SESSION_PATH,
+            "presence_path": SEMIFINISHED_INVENTORY_PRESENCE_PATH,
+            "state_route": SEMIFINISHED_INVENTORY_STATE_ROUTE,
+            "presence_route": SEMIFINISHED_INVENTORY_PRESENCE_ROUTE,
+            "worker_route": SEMIFINISHED_INVENTORY_WORKER_ROUTE,
+            "columns": (
+                {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "icg_code", "label": "Szín", "class": "is-color", "sort": "color"},
+            ),
+            "search_label": "Keresés leírás vagy szín alapján",
+            "search_keys": ("description", "icg_code"),
+            "empty_text": "Még nincs aktív félkész raktár leltár.",
+            "one_cycle": False,
+        },
+        "semifinished_front": {
+            "kind": "semifinished_front",
+            "title": "Félkész front leltár",
+            "board_title": "Félkész front számolás",
+            "session_path": SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH,
+            "presence_path": SEMIFINISHED_FRONT_INVENTORY_PRESENCE_PATH,
+            "state_route": SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE,
+            "presence_route": SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE,
+            "worker_route": SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
+            "columns": (
+                {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "icg_code", "label": "Szín", "class": "is-color", "sort": "color"},
+            ),
+            "search_label": "Keresés leírás vagy szín alapján",
+            "search_keys": ("description", "icg_code"),
+            "empty_text": "Még nincs aktív félkész front leltár.",
+            "one_cycle": False,
+        },
+    }
+    return configs.get(clean_kind, configs["material"])
+
+
+def _unified_inventory_load_session(config: dict) -> dict | None:
+    return load_material_inventory_session_from_path(config["session_path"])
+
+
+def _unified_inventory_build_view_model(config: dict, selected_category: str, sort_mode: str = "default") -> dict:
+    session = _unified_inventory_load_session(config)
+    if session is None:
+        return {"session": None, "categories": [], "selected_category": "all", "visible_rows": [], "finalized": False}
+    if config.get("kind") == "material" and _material_inventory_hydrate_book_qty(session):
+        save_material_inventory_session_to_path(config["session_path"], session)
+    view_model = build_material_inventory_view_model(session, selected_category)
+    active_sort = _unified_inventory_normalize_sort(sort_mode)
+    rows = list(view_model.get("visible_rows", []))
+    if active_sort != "default":
+        reverse = active_sort.endswith("_desc")
+        base_sort = active_sort[:-5] if reverse else active_sort
+        rows = sorted(rows, key=lambda row: _unified_inventory_sort_key(row, base_sort), reverse=reverse)
+    view_model["visible_rows"] = rows
+    view_model["sort_mode"] = active_sort
+    view_model["session"] = session
+    return view_model
+
+
+def _unified_inventory_normalize_sort(value: object) -> str:
+    clean_value = str(value or "").strip().lower()
+    allowed = {"default", "description", "description_desc", "book_qty", "book_qty_desc", "color", "color_desc", "count", "count_desc"}
+    return clean_value if clean_value in allowed else "default"
+
+
+def _unified_inventory_decimal(value: object) -> Decimal:
+    clean_value = str(value or "").strip().replace(",", ".")
+    if not clean_value:
+        return Decimal("0")
+    try:
+        return Decimal(clean_value)
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def _unified_inventory_sort_key(row: dict, sort_key: str) -> tuple:
+    if sort_key == "book_qty":
+        return (_unified_inventory_decimal(row.get("book_qty")), _clean_sort_text(row.get("description", "")))
+    if sort_key == "color":
+        return (_clean_sort_text(row.get("icg_code", "")), _clean_sort_text(row.get("description", "")))
+    if sort_key == "count":
+        return (_unified_inventory_decimal(row.get("counted_qty", row.get("input_qty", ""))), _clean_sort_text(row.get("description", "")))
+    return (_clean_sort_text(row.get("description", "")), _clean_sort_text(row.get("part_number", "")))
+
+
+def _clean_sort_text(value: object) -> str:
+    return unicodedata.normalize("NFKD", str(value or "").strip()).casefold()
+
+
+def _unified_inventory_load_presence(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _unified_inventory_save_presence(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _unified_inventory_touch_presence(config: dict, token: str, category: str, clear: bool = False) -> list[str]:
+    clean_token = str(token or "").strip()
+    path = config["presence_path"]
+    snapshot = _unified_inventory_load_presence(path)
+    if clean_token:
+        if clear:
+            snapshot.pop(clean_token, None)
+        else:
+            snapshot[clean_token] = {
+                "category": str(category or "").strip(),
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+            }
+
+    now = datetime.now()
+    active_categories: list[str] = []
+    for key, item in list(snapshot.items()):
+        if not isinstance(item, dict):
+            snapshot.pop(key, None)
+            continue
+        try:
+            updated_at = datetime.fromisoformat(str(item.get("updated_at", "")))
+        except ValueError:
+            snapshot.pop(key, None)
+            continue
+        if (now - updated_at).total_seconds() > 20:
+            snapshot.pop(key, None)
+            continue
+        category_value = str(item.get("category", "")).strip()
+        if category_value:
+            active_categories.append(category_value)
+
+    _unified_inventory_save_presence(path, snapshot)
+    return sorted(set(active_categories))
+
+
+def _unified_inventory_sync_payload(config: dict, selected_category: str) -> dict:
+    view_model = _unified_inventory_build_view_model(config, selected_category)
+    session = view_model.get("session")
+    if session is None:
+        return {"category_states": {}, "row_inputs": {}, "updated_at": ""}
+    row_inputs = {
+        str(row.get("row_id", "")): str(row.get("input_qty", "") or "")
+        for row in view_model.get("visible_rows", [])
+    }
+    category_states = {
+        str(item.get("key", "")): bool(item.get("complete"))
+        for item in view_model.get("categories", [])
+    }
+    return {"category_states": category_states, "row_inputs": row_inputs, "updated_at": str(session.get("updated_at", ""))}
+
+
+def render_unified_inventory_worker_page(kind: str, selected_category: str = "", sort_mode: str = "default") -> bytes:
+    config = _unified_inventory_config(kind)
+    view_model = _unified_inventory_build_view_model(config, selected_category, sort_mode)
+    session = view_model.get("session")
+    current_sort = str(view_model.get("sort_mode", "default") or "default")
+    selected = str(view_model.get("selected_category", "all") or "all")
+
+    def sort_href(sort_key: str) -> str:
+        if current_sort == sort_key:
+            next_sort = f"{sort_key}_desc"
+        elif current_sort == f"{sort_key}_desc":
+            next_sort = "default"
+        else:
+            next_sort = sort_key
+        return f"{config['worker_route']}?category={urllib.parse.quote(selected)}&sort={urllib.parse.quote(next_sort)}"
+
+    def sort_label(label: str, sort_key: str) -> str:
+        indicator = ""
+        if current_sort == sort_key:
+            indicator = " ↑"
+        elif current_sort == f"{sort_key}_desc":
+            indicator = " ↓"
+        return f'<a class="frontinv-sort-head" href="{sort_href(sort_key)}">{html.escape(label)}{indicator}</a>'
+
+    if session is None:
+        content_html = f"""
+          <section class="frontinv-board is-worker is-empty">
+            <div class="frontinv-empty">
+              <strong>{html.escape(config["empty_text"])}</strong>
+              <p>Az admin felületen töltsd fel a forrásfájlt, utána ez a teszt nézet ugyanazt az aktív leltárt használja.</p>
+            </div>
+          </section>
+        """
+    else:
+        categories_html = "".join(
+            f"""
+              <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-active' if item['key'] == selected else ''}"
+                 href="{config['worker_route']}?category={urllib.parse.quote(str(item['key']))}&sort={urllib.parse.quote(current_sort)}">
+                <span>{html.escape(str(item.get('label', '')))}</span>
+                <strong>{int(item.get('count', 0))}</strong>
+              </a>
+            """
+            for item in view_model.get("categories", [])
+        )
+        headers_html = "".join(
+            f"<th>{sort_label(str(column['label']), str(column['sort']))}</th>"
+            for column in config["columns"]
+        )
+        colgroup_html = "".join('<col />' for _ in config["columns"]) + '<col class="frontinv-count-col" />'
+        rows_html = ""
+        finalized = bool(view_model.get("finalized"))
+        for row in view_model.get("visible_rows", []):
+            search_text = " ".join(str(row.get(key, "")) for key in config["search_keys"])
+            row_cells = "".join(
+                f'<td class="{html.escape(str(column["class"]))}">{_unified_inventory_cell_html(row, str(column["key"]))}</td>'
+                for column in config["columns"]
+            )
+            current_value = str(row.get("counted_qty", row.get("input_qty", "")) or "")
+            rows_html += f"""
+              <tr class="frontinv-row{' is-counted' if current_value.strip() or finalized else ''}" data-frontinv-row data-row-id="{html.escape(str(row.get('row_id', '')))}" data-frontinv-current-value="{html.escape(current_value, quote=True)}" data-frontinv-search-text="{html.escape(search_text, quote=True)}">
+                {row_cells}
+                <td class="is-count">
+                  <div class="frontinv-count-control">
+                    <span class="frontinv-count-pill" data-frontinv-total>{html.escape(current_value or '0')}</span>
+                    <div class="frontinv-adjust">
+                      <label><span>+</span><input class="frontinv-input" type="number" min="0" inputmode="decimal" autocomplete="off" placeholder="0" data-frontinv-input data-mode="add" data-row-id="{html.escape(str(row.get('row_id', '')))}" {'disabled' if finalized else ''} /></label>
+                      <label><span>-</span><input class="frontinv-input" type="number" min="0" inputmode="decimal" autocomplete="off" placeholder="0" data-frontinv-input data-mode="subtract" data-row-id="{html.escape(str(row.get('row_id', '')))}" {'disabled' if finalized else ''} /></label>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            """
+        if not rows_html:
+            colspan = len(config["columns"]) + 1
+            rows_html = f'<tr><td colspan="{colspan}" class="frontinv-empty-row">Ebben a kategóriában nincs tétel.</td></tr>'
+
+        status_html = ""
+        if config.get("one_cycle"):
+            status_html = """
+              <div class="frontinv-phase-callout">
+                <div>
+                  <strong>Egykörös számlálás</strong>
+                  <p>Írják be a tényleges darabszámot. A leltár itt nem fut több ellenőrzési körön, lezáráskor készül az export.</p>
+                </div>
+              </div>
+            """
+        content_html = f"""
+          <section class="frontinv-board is-worker" data-unified-inventory-root data-front-inventory-root data-state-route="{html.escape(config['state_route'])}" data-presence-route="{html.escape(config['presence_route'])}" data-category="{html.escape(selected)}" data-storage-prefix="unifiedinv-{html.escape(config['kind'])}">
+            <div class="frontinv-board-head">
+              <div>
+                <span class="frontinv-tag">Leltár nézet</span>
+                <strong>{html.escape(config["board_title"])}</strong>
+                <p>Forrás: {html.escape(str(session.get('source_name', '')))} · Utoljára frissítve: {html.escape(_front_inventory_format_timestamp(str(session.get('updated_at', ''))))}</p>
+              </div>
+              <div class="frontinv-board-stamp">{html.escape(str(session.get('phase_label', 'Számlálás')))}</div>
+            </div>
+
+            <div class="frontinv-category-row">{categories_html}</div>
+            <label class="frontinv-search">
+              <span>{html.escape(config["search_label"])}</span>
+              <input type="search" data-frontinv-search placeholder="Írj be részletet..." autocomplete="off" />
+            </label>
+            {status_html}
+
+            <div class="frontinv-table-wrap">
+              <table class="frontinv-table">
+                <colgroup>{colgroup_html}</colgroup>
+                <thead>
+                  <tr>
+                    {headers_html}
+                    <th>{sort_label("Darabszám", "count")}</th>
+                  </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+              </table>
+            </div>
+            <div class="frontinv-generated-by">generated by Divian-HUB</div>
+          </section>
+        """
+
+    page = f"""<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Divian-HUB | {html.escape(config["title"])} teszt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  {_unified_inventory_style()}
+</head>
+<body class="frontinv-worker-stage">
+  {content_html}
+  {_unified_inventory_script()}
+</body>
+</html>"""
+    return page.encode("utf-8")
+
+
+def _unified_inventory_cell_html(row: dict, key: str) -> str:
+    value = str(row.get(key, "") or "-")
+    if key == "icg_code":
+        return f'<span class="frontinv-color-chip">{html.escape(value)}</span>'
+    return html.escape(value)
+
+
+def _unified_inventory_style() -> str:
+    return """
+<style>
+  :root { --frontinv-text:#0f172a; --frontinv-muted:#64748b; --frontinv-line:#d8e0ea; --frontinv-accent:#0c8d57; --frontinv-accent-strong:#12a566; }
+  * { box-sizing:border-box; }
+  body.frontinv-worker-stage { margin:0; min-height:100dvh; background:#f8fafc; color:var(--frontinv-text); font-family:Manrope, sans-serif; }
+  .frontinv-board { position:relative; overflow:hidden; background:rgba(255,255,255,.96); color:#0f172a; }
+  .frontinv-board::before { content:""; position:absolute; inset:0 0 auto 0; height:5px; background:linear-gradient(90deg,var(--frontinv-accent-strong),#86efac,#dbeafe); pointer-events:none; }
+  .frontinv-board.is-worker { min-height:100dvh; border-radius:0; border:0; box-shadow:none; padding:18px 20px 24px; }
+  .frontinv-board-head { position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px; align-items:start; }
+  .frontinv-board-head strong,.frontinv-empty strong,.frontinv-phase-callout strong { font-family:"Space Grotesk", sans-serif; color:#0f172a; }
+  .frontinv-board-head strong { font-size:clamp(1.35rem,2.8vw,2rem); line-height:1; }
+  .frontinv-board-head p,.frontinv-empty p,.frontinv-phase-callout p,.frontinv-generated-by { margin:6px 0 0; color:#64748b; line-height:1.55; }
+  .frontinv-tag { display:inline-flex; align-items:center; width:fit-content; min-height:28px; padding:0 12px; border-radius:999px; background:#edf7f2; color:#0c7650; font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .frontinv-board-stamp { white-space:nowrap; font-size:.85rem; font-weight:800; padding:10px 14px; border-radius:18px; background:rgba(255,255,255,.86); border:1px solid rgba(15,23,42,.08); color:#475569; }
+  .frontinv-category-row { display:flex; gap:10px; margin-top:14px; overflow-x:auto; padding-bottom:4px; }
+  .frontinv-chip { display:inline-flex; align-items:center; gap:10px; min-height:42px; padding:0 14px; border-radius:999px; border:1px solid rgba(15,23,42,.12); background:#fff; color:#0f172a; text-decoration:none; white-space:nowrap; font-weight:800; }
+  .frontinv-chip strong { display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; padding:0 8px; border-radius:999px; background:#f1f5f9; font-size:.84rem; }
+  .frontinv-chip.is-active { background:#0f172a; color:#fff; border-color:#0f172a; }
+  .frontinv-chip.is-active strong { background:rgba(255,255,255,.14); color:#fff; }
+  .frontinv-chip.is-complete { background:rgba(22,163,74,.12); border-color:rgba(22,163,74,.38); color:#166534; }
+  .frontinv-chip.is-complete strong { background:rgba(22,163,74,.16); color:#166534; }
+  .frontinv-chip.is-live:not(.is-active) { background:rgba(37,99,235,.10); border-color:rgba(37,99,235,.34); color:#1d4ed8; }
+  .frontinv-chip.is-live:not(.is-active) strong { background:rgba(37,99,235,.14); color:#1d4ed8; }
+  .frontinv-search { display:grid; grid-template-columns:auto minmax(220px,420px); align-items:center; justify-content:start; gap:10px; margin-top:10px; color:#475569; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+  .frontinv-search input { width:100%; min-height:42px; padding:0 15px; border:1px solid rgba(15,23,42,.12); border-radius:999px; background:#fff; color:#0f172a; font:800 .95rem/1 Manrope, sans-serif; text-transform:none; letter-spacing:0; }
+  .frontinv-search input:focus,.frontinv-input:focus { outline:none; border-color:#0f172a; box-shadow:0 0 0 3px rgba(15,23,42,.08); }
+  .frontinv-phase-callout { margin-top:14px; padding:16px 18px; border-radius:20px; background:#fff; border:1px solid rgba(15,23,42,.08); }
+  .frontinv-table-wrap { margin-top:14px; overflow-x:hidden; border-radius:20px; border:1px solid rgba(15,23,42,.08); background:#fff; }
+  .frontinv-table { width:100%; border-collapse:collapse; min-width:0; table-layout:fixed; }
+  .frontinv-table thead th { padding:14px 18px; border-bottom:1px solid rgba(15,23,42,.08); background:#f8fafc; color:#475569; font-size:.8rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; text-align:left; white-space:nowrap; }
+  .frontinv-sort-head { color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:4px; }
+  .frontinv-table tbody td { padding:14px 18px; border-bottom:1px solid rgba(15,23,42,.06); color:#0f172a; vertical-align:middle; }
+  .frontinv-table tbody tr:nth-child(2n) { background:rgba(248,250,252,.72); }
+  .frontinv-row.is-counted { background:rgba(22,163,74,.10) !important; }
+  .frontinv-table td.is-description { font-weight:800; }
+  .frontinv-table td.is-book-qty { width:180px; color:#475569; font-weight:800; }
+  .frontinv-table td.is-color { width:220px; }
+  .frontinv-count-col,.frontinv-table td.is-count { width:32%; }
+  .frontinv-color-chip { display:inline-flex; align-items:center; min-height:36px; padding:0 14px; border-radius:999px; background:linear-gradient(180deg,#eff6ff 0%,#dbeafe 100%); border:1px solid rgba(37,99,235,.14); color:#1d4ed8; font-weight:800; white-space:nowrap; }
+  .frontinv-count-control { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px; }
+  .frontinv-count-pill { display:inline-flex; align-items:center; justify-content:center; min-width:72px; min-height:42px; padding:0 14px; border-radius:999px; background:#0f172a; color:#fff; font-weight:800; }
+  .frontinv-adjust { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .frontinv-adjust label { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:4px; color:#64748b; font-size:.78rem; font-weight:900; }
+  .frontinv-input { width:100%; min-height:44px; padding:0 10px; border-radius:16px; border:1px solid rgba(15,23,42,.12); background:#fff; color:#0f172a; font-size:1.1rem; font-weight:800; text-align:center; }
+  .frontinv-input.is-error { border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.14); }
+  .frontinv-empty { display:grid; gap:8px; padding:34px 28px; }
+  .frontinv-empty-row { color:#64748b; text-align:center; padding:26px 18px !important; }
+  .frontinv-generated-by { margin-top:16px; padding-top:12px; border-top:1px dashed rgba(15,23,42,.12); text-align:right; font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  @media (orientation:portrait) and (max-width:1100px) {
+    .frontinv-board.is-worker .frontinv-table thead th,.frontinv-board.is-worker .frontinv-table tbody td { padding:12px 10px; }
+    .frontinv-board.is-worker .frontinv-table thead th { font-size:.7rem; letter-spacing:.05em; }
+    .frontinv-board.is-worker .frontinv-table td.is-description { font-size:.92rem; line-height:1.25; }
+    .frontinv-board.is-worker .frontinv-color-chip { min-height:32px; padding:0 10px; font-size:.8rem; line-height:1.15; white-space:normal; text-align:center; justify-content:center; }
+    .frontinv-input { min-height:38px; font-size:.94rem; padding:0 6px; }
+    .frontinv-count-control { gap:6px; }
+    .frontinv-adjust { gap:5px; }
+    .frontinv-adjust label { font-size:.7rem; gap:3px; }
+    .frontinv-search { grid-template-columns:1fr; gap:6px; }
+  }
+  @media (max-width:720px) {
+    .frontinv-board.is-worker { padding:14px 14px 20px; }
+    .frontinv-board-head { grid-template-columns:minmax(0,1fr); gap:10px; }
+  }
+</style>
+"""
+
+
+def _unified_inventory_script() -> str:
+    return """
+<script>
+(() => {
+  const root = document.querySelector("[data-unified-inventory-root]");
+  if (!root) return;
+  const stateRoute = root.getAttribute("data-state-route") || "";
+  const presenceRoute = root.getAttribute("data-presence-route") || "";
+  const categoryValue = root.getAttribute("data-category") || "";
+  const storagePrefix = root.getAttribute("data-storage-prefix") || "unifiedinv";
+  const categoryRow = root.querySelector(".frontinv-category-row");
+  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
+  const searchInput = root.querySelector("[data-frontinv-search]");
+  const normalizeSearchText = (value) => String(value || "").toLocaleLowerCase("hu-HU").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const applySearch = () => {
+    if (!searchInput) return;
+    const terms = normalizeSearchText(searchInput.value.trim()).split(/\\s+/).filter(Boolean);
+    root.querySelectorAll("[data-frontinv-row]").forEach((row) => {
+      const searchable = normalizeSearchText(row.getAttribute("data-frontinv-search-text") || row.textContent || "");
+      row.hidden = terms.length > 0 && !terms.every((term) => searchable.includes(term));
+    });
+  };
+  const setRowValue = (row, value) => {
+    if (!row) return;
+    const nextValue = String(value || "").trim();
+    row.setAttribute("data-frontinv-current-value", nextValue);
+    const total = row.querySelector("[data-frontinv-total]");
+    if (total) total.textContent = nextValue || "0";
+    row.classList.toggle("is-counted", nextValue !== "");
+  };
+  const saveAdjustment = (input) => {
+    const rowId = input.getAttribute("data-row-id") || input.closest("[data-frontinv-row]")?.getAttribute("data-row-id") || "";
+    const value = input.value.trim();
+    const mode = input.getAttribute("data-mode") || "";
+    if (!stateRoute || !rowId || !value || input.dataset.frontinvSaving === "1") return;
+    input.dataset.frontinvSaving = "1";
+    input.classList.remove("is-error");
+    const formData = new URLSearchParams();
+    formData.set("row_id", rowId);
+    formData.set("value", value);
+    formData.set("mode", mode);
+    fetch(stateRoute, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: formData.toString(),
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("save failed");
+        return response.json();
+      })
+      .then((payload) => {
+        setRowValue(input.closest("[data-frontinv-row]"), payload && Object.prototype.hasOwnProperty.call(payload, "value") ? payload.value : "");
+        input.value = "";
+      })
+      .catch(() => {
+        input.classList.add("is-error");
+        window.setTimeout(() => input.classList.remove("is-error"), 1200);
+      })
+      .finally(() => {
+        input.dataset.frontinvSaving = "0";
+      });
+  };
+  searchInput?.addEventListener("input", applySearch);
+  applySearch();
+  root.querySelectorAll("[data-frontinv-input]").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveAdjustment(input);
+      }
+    });
+    input.addEventListener("blur", () => saveAdjustment(input));
+  });
+  if (categoryRow) {
+    const scrollStorageKey = `${storagePrefix}-category-scroll`;
+    const savedScroll = Number(window.sessionStorage.getItem(scrollStorageKey) || "0");
+    if (savedScroll > 0) categoryRow.scrollLeft = savedScroll;
+    categoryRow.addEventListener("scroll", () => window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft)), { passive: true });
+    categoryRow.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft)));
+    });
+  }
+  if (presenceRoute && categoryValue) {
+    const tokenStorageKey = `${storagePrefix}-presence-token`;
+    let token = window.sessionStorage.getItem(tokenStorageKey);
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      window.sessionStorage.setItem(tokenStorageKey, token);
+    }
+    const applyRemoteState = (payload) => {
+      const activeSet = new Set(Array.isArray(payload && payload.active_categories) ? payload.active_categories : []);
+      const categoryStates = payload && payload.category_states && typeof payload.category_states === "object" ? payload.category_states : {};
+      root.querySelectorAll(".frontinv-chip").forEach((chip) => {
+        const href = chip.getAttribute("href") || "";
+        let chipCategory = "";
+        try { chipCategory = new URL(href, window.location.origin).searchParams.get("category") || "all"; } catch { chipCategory = ""; }
+        chip.classList.toggle("is-live", activeSet.has(chipCategory));
+        chip.classList.toggle("is-complete", Boolean(categoryStates[chipCategory]));
+      });
+      const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object" ? payload.row_inputs : {};
+      rowElements.forEach((row) => {
+        const rowId = row.getAttribute("data-row-id") || "";
+        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) setRowValue(row, remoteRowInputs[rowId]);
+      });
+    };
+    const touchPresence = (clear = false) => {
+      const formData = new URLSearchParams();
+      formData.set("token", token);
+      formData.set("category", categoryValue);
+      if (clear) formData.set("clear", "1");
+      const payload = formData.toString();
+      if (clear && navigator.sendBeacon) {
+        navigator.sendBeacon(presenceRoute, new Blob([payload], { type: "application/x-www-form-urlencoded; charset=UTF-8" }));
+        return;
+      }
+      fetch(presenceRoute, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: payload,
+        credentials: "same-origin",
+        cache: "no-store",
+        keepalive: clear,
+      }).then((response) => response.ok ? response.json() : null).then((payload) => {
+        if (payload) applyRemoteState(payload);
+      }).catch(() => {});
+    };
+    touchPresence(false);
+    const intervalId = window.setInterval(() => touchPresence(false), 5000);
+    window.addEventListener("pagehide", () => {
+      window.clearInterval(intervalId);
+      touchPresence(true);
+    });
+  }
+})();
+</script>
+"""
+
+
 def _front_inventory_normalize_view(value: str) -> str:
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
@@ -14934,11 +15921,11 @@ def render_front_inventory_form(
     active_view = _front_inventory_normalize_view(view_mode)
     active_presence_categories = _front_inventory_active_presence_categories()
 
-    admin_href = FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
+    admin_href = ADMIN_FRONT_INVENTORY_ROUTE if sort_mode == "default" else f"{ADMIN_FRONT_INVENTORY_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     inventory_href = (
-        FRONT_INVENTORY_ROUTE
-        if session is None
-        else f"{FRONT_INVENTORY_ROUTE}?view=leltar&sort={urllib.parse.quote(sort_mode)}"
+        FRONT_INVENTORY_WORKER_ROUTE
+        if sort_mode == "default"
+        else f"{FRONT_INVENTORY_WORKER_ROUTE}?sort={urllib.parse.quote(sort_mode)}"
     )
     if active_view == "leltar":
         view_switch_html = """
@@ -14970,7 +15957,7 @@ def render_front_inventory_form(
         categories_html = "".join(
             f"""
               <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-live' if item['key'] in active_presence_categories else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
-                  href="{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
+                  href="{FRONT_INVENTORY_WORKER_ROUTE}?category={urllib.parse.quote(item['key'])}&sort={urllib.parse.quote(view_model['sort_mode'])}">
                 <span>{html.escape(item['label'])}</span>
                 <strong>{item['count']}</strong>
               </a>
@@ -14998,7 +15985,7 @@ def render_front_inventory_form(
           </article>
         """
 
-        inventory_open_href = f"{FRONT_INVENTORY_ROUTE}?view=leltar&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
+        inventory_open_href = f"{FRONT_INVENTORY_WORKER_ROUTE}?category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(view_model['sort_mode'])}"
         current_sort_mode = str(view_model.get("sort_mode", "default") or "default")
 
         def frontinv_sort_href(sort_key: str) -> str:
@@ -15008,7 +15995,9 @@ def render_front_inventory_form(
                 next_sort = "default"
             else:
                 next_sort = sort_key
-            return f"{FRONT_INVENTORY_ROUTE}?view={active_view}&category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
+            sort_base_route = FRONT_INVENTORY_WORKER_ROUTE if active_view == "leltar" else ADMIN_FRONT_INVENTORY_ROUTE
+            sort_view_part = "" if active_view == "leltar" else f"view={urllib.parse.quote(active_view)}&"
+            return f"{sort_base_route}?{sort_view_part}category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
 
         def frontinv_sort_label(label: str, sort_key: str) -> str:
             indicator = ""
@@ -16436,7 +17425,7 @@ def render_front_inventory_form(
         <span class="frontinv-tag">Divian-HUB</span>
         <h1>Fóliás front leltár</h1>
       </div>
-      <a href="/">Vissza a modulokhoz</a>
+      <a href="{ADMIN_INVENTORY_GROUP_ROUTE}">Vissza a modulokhoz</a>
     </header>
     {notice_html}
     {content_html}
@@ -16810,7 +17799,63 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MATERIAL_INVENTORY_ROUTE:
+        if path == ADMIN_INVENTORY_GROUP_ROUTE:
+            body = render_inventory_group_page("admin")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == PRODUCTION_INVENTORY_GROUP_ROUTE:
+            body = render_inventory_group_page("production")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {
+            MATERIAL_INVENTORY_WORKER_ROUTE,
+            MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE,
+            SEMIFINISHED_INVENTORY_WORKER_ROUTE,
+            SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE,
+            SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
+            SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE,
+        }:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            if path in {
+                SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
+                SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE,
+            }:
+                inventory_kind = "semifinished_front"
+            elif path in {
+                SEMIFINISHED_INVENTORY_WORKER_ROUTE,
+                SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE,
+            }:
+                inventory_kind = "semifinished"
+            else:
+                inventory_kind = "material"
+            body = render_unified_inventory_worker_page(
+                inventory_kind,
+                selected_category=selected_category,
+                sort_mode=selected_sort,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {MATERIAL_INVENTORY_ROUTE, ADMIN_MATERIAL_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -16823,7 +17868,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_INVENTORY_ROUTE:
+        if path in {SEMIFINISHED_INVENTORY_ROUTE, ADMIN_SEMIFINISHED_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -16840,7 +17885,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == SEMIFINISHED_FRONT_INVENTORY_ROUTE:
+        if path in {SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _material_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -16857,7 +17902,21 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == FRONT_INVENTORY_ROUTE:
+        if path in {FRONT_INVENTORY_WORKER_ROUTE, FRONT_INVENTORY_LEGACY_WORKER_ROUTE}:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            selected_category = str(query.get("category", [""])[0] or "").strip()
+            selected_sort = str(query.get("sort", ["default"])[0] or "default").strip()
+            _front_inventory_ensure_insight_artifacts(load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH))
+            body = render_front_inventory_form(selected_category=selected_category, sort_mode=selected_sort, view_mode="leltar")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {FRONT_INVENTORY_ROUTE, ADMIN_FRONT_INVENTORY_ROUTE}:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             selected_category = str(query.get("category", [""])[0] or "").strip()
             selected_view = _front_inventory_normalize_view(str(query.get("view", ["admin"])[0] or "admin"))
@@ -17717,6 +18776,26 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(payload)
+            return
+
+        if path in {MATERIAL_INVENTORY_PRESENCE_ROUTE, SEMIFINISHED_INVENTORY_PRESENCE_ROUTE, SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE}:
+            if path == SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE:
+                config = _unified_inventory_config("semifinished_front")
+            elif path == SEMIFINISHED_INVENTORY_PRESENCE_ROUTE:
+                config = _unified_inventory_config("semifinished")
+            else:
+                config = _unified_inventory_config("material")
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            form_data = _parse_urlencoded_body(raw_body)
+            active_categories = _unified_inventory_touch_presence(
+                config,
+                form_data.get("token", ""),
+                form_data.get("category", ""),
+                clear=form_data.get("clear", "") == "1",
+            )
+            sync_payload = _unified_inventory_sync_payload(config, form_data.get("category", ""))
+            self.respond_json(200, {"ok": True, "active_categories": active_categories, **sync_payload})
             return
 
         if path == MATERIAL_INVENTORY_FINALIZE_ROUTE:

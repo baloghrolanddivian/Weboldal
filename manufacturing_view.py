@@ -40,6 +40,12 @@ def render_manufacturing_page(
     total_rows = int(active_document.get("row_count", 0) or 0) if isinstance(active_document, dict) else 0
     green_count = sum(1 for value in selection_state.values() if value == "green")
     red_count = sum(1 for value in selection_state.values() if value == "red")
+    active_source_label = str(active_document.get("sourceLabel", "")).strip() if isinstance(active_document, dict) else ""
+    active_source_markup = (
+        f'<span class="mfg-operation-source">{html.escape(active_source_label)}</span>'
+        if active_source_label
+        else ""
+    )
 
     notice_markup = ""
     if message:
@@ -95,6 +101,7 @@ def render_manufacturing_page(
         <div>
           <span class="mfg-kicker">Kiválasztott művelet</span>
           <strong>{html.escape(str(active_document.get("label", "")))}</strong>
+          {active_source_markup}
         </div>
         <a class="mfg-picker-back" href="{picker_href}">Másik művelet</a>
       </section>
@@ -333,6 +340,13 @@ def render_manufacturing_page(
       margin-top: 4px;
       font-size: 1rem;
       font-weight: 800;
+    }}
+    .mfg-operation-source {{
+      display: block;
+      margin-top: 2px;
+      color: var(--mfg-muted);
+      font-size: 0.78rem;
+      font-weight: 700;
     }}
     .mfg-picker-back {{
       min-height: 40px;
@@ -1898,9 +1912,11 @@ def render_manufacturing_page(
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
-      const overviewSectionsForDocument = (document) => {{
+      const overviewSectionsForDocument = (document, includeOverviewOnly = false) => {{
         if (String(document?.key || "") === "cnc_furas") {{
-          return specialViewsForDocument(document).flatMap((view) => Array.isArray(view?.sections) ? view.sections : []);
+          return specialViewsForDocument(document)
+            .filter((view) => includeOverviewOnly || !Boolean(view?.overviewOnly))
+            .flatMap((view) => Array.isArray(view?.sections) ? view.sections : []);
         }}
         return Array.isArray(document?.sections) ? document.sections : [];
       }};
@@ -2270,7 +2286,7 @@ def render_manufacturing_page(
             }}))
             .filter((section) => section.rows.length);
         }}
-        const sections = orderedSectionsForTabs(overviewSectionsForDocument(document));
+        const sections = orderedSectionsForTabs(overviewSectionsForDocument(document, currentViewKey === "all"));
         if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           if (currentViewKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
@@ -2385,17 +2401,18 @@ def render_manufacturing_page(
           return;
         }}
         const currentSpecialView = specialViewForKey(document, currentViewKey);
-        const overviewSections = overviewSectionsForDocument(document);
+        const overviewSections = overviewSectionsForDocument(document, true);
+        const stateOverviewSections = overviewSectionsForDocument(document, false);
         const sections = (currentSpecialView && !specialViewUsesRedFilter(currentSpecialView) && Array.isArray(currentSpecialView.sections))
           ? currentSpecialView.sections
           : overviewSections;
         const documentSpecialViews = specialViewsForDocument(document);
         const specialTabs = [
           {{ key: "all", label: "Összes", count: countRowsInSections(overviewSections), stateClass: tabStateClassForRows(overviewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])) }},
-          {{ key: "plain", label: "Simák", count: countRowsInSections(overviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
-          {{ key: "green", label: "Zöldek", count: countRowsInSections(overviewSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
-          {{ key: "red", label: "Pirosak", count: countRowsInSections(overviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
-          ...documentSpecialViews.map((view) => ({{
+          {{ key: "plain", label: "Simák", count: countRowsInSections(stateOverviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
+          {{ key: "green", label: "Zöldek", count: countRowsInSections(stateOverviewSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
+          {{ key: "red", label: "Pirosak", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
+          ...documentSpecialViews.filter((view) => !Boolean(view?.hideTab)).map((view) => ({{
             key: String(view?.key || ""),
             label: String(view?.label || ""),
             count: specialViewUsesRedFilter(view)
@@ -2551,8 +2568,8 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
                   ${{sortButtonMarkup(group.key, "size", "Méret")}}
                   ${{sortButtonMarkup(group.key, "color", "Szín")}}
-                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat típusa")}}
                   ${{sortButtonMarkup(group.key, "side_type", "Oldal típus")}}
+                  ${{sortButtonMarkup(group.key, "hardware_type", "Vasalat típusa")}}
                   ${{sortButtonMarkup(group.key, "edge", "Élzárás")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
