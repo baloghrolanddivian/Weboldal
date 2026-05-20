@@ -433,9 +433,13 @@ COLOR_FALLBACK_CODES = {
     "FEAS": "FEA",
 }
 
+PROCUREMENT_CODE_ALIASES = {
+    "NFAY_ANT_FFMM_1314x337": ["NFAY_ANT_FFMM_337x1314"],
+}
+
 
 def _procurement_code_fallbacks(kod: str) -> list[str]:
-    candidates: list[str] = []
+    candidates: list[str] = list(PROCUREMENT_CODE_ALIASES.get(kod, []))
 
     if kod.startswith("NFAY_"):
         candidates.append("NFA_" + kod[len("NFAY_") :])
