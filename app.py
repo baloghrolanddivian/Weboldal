@@ -1683,6 +1683,9 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         )
         return "uveges" in folded(combined) or "uveg" in folded(combined)
 
+    def is_pullout_front_row(row: dict) -> bool:
+        return "kihuzhato" in folded(clean_text(row.get("name")))
+
     def front_trait_label(row: dict, type_label: str) -> str:
         combined = " ".join(
             [
@@ -1749,6 +1752,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             row["isCurved"] = is_curved_front_row(raw_row)
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
+            row["isPullOut"] = is_pullout_front_row(row)
             row["columnLayout"] = "front-standard"
             grouped_sections[section_slug]["rows"].append(row)
 

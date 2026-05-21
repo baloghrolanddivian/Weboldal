@@ -1316,6 +1316,10 @@ def render_manufacturing_page(
       background: #eef6ff;
       box-shadow: inset 3px 0 0 #2563eb;
     }}
+    .mfg-row.is-pullout {{
+      background: #fff7ed;
+      box-shadow: inset 3px 0 0 #f97316;
+    }}
     .mfg-row.is-green {{
       background: #c9f0d8;
       box-shadow: inset 5px 0 0 var(--mfg-green-line);
@@ -1371,6 +1375,11 @@ def render_manufacturing_page(
       background: #dbeafe;
       color: #1d4ed8;
       border: 1px solid rgba(37, 99, 235, 0.16);
+    }}
+    .mfg-row-badge.is-pullout {{
+      background: #ffedd5;
+      color: #c2410c;
+      border: 1px solid rgba(194, 65, 12, 0.16);
     }}
     .mfg-row-badge.is-curved {{
       background: #f3e8ff;
@@ -2775,6 +2784,7 @@ def render_manufacturing_page(
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
+            const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Kihúzható</span>` : "";
             const traitBadgeMarkup = row.frontTrait === "Blende" ? `<span class="mfg-row-badge is-curved">Blende</span>` : "";
             const curvedBadgeMarkup = row.isCurved ? `<span class="mfg-row-badge is-curved">Íves</span>` : "";
             const modelToneClass = row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : "";
@@ -2790,12 +2800,12 @@ def render_manufacturing_page(
               ? `<span class="is-pill-black">${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`
               : `<span>${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`;
             return `
-              <button class="mfg-row${{rowClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
+              <button class="mfg-row${{rowClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
                         <div class="mfg-row-main">
-                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                           ${{subtitleMarkup}}
                         </div>
                         <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -2809,7 +2819,7 @@ def render_manufacturing_page(
                     : columnLayout === "cnc-upper"
                       ? `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -2848,7 +2858,7 @@ def render_manufacturing_page(
                         : columnLayout === "front-standard"
                           ? `
                               <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
                               <div class="mfg-row-meta is-model"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
@@ -2868,7 +2878,7 @@ def render_manufacturing_page(
                             `
                           : `
                               <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
                               <div class="mfg-row-meta">
