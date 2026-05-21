@@ -545,6 +545,39 @@ def render_manufacturing_page(
       gap: 10px;
       overflow: hidden;
     }}
+    .mfg-search-row {{
+      width: min(50vw, 620px);
+      max-width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      border-radius: 16px;
+      background: #f8fafc;
+      overflow: hidden;
+    }}
+    .mfg-search-row[hidden] {{
+      display: none;
+    }}
+    .mfg-search-input {{
+      flex: 1 1 auto;
+      min-width: 160px;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--mfg-line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--mfg-text);
+      font-size: 0.86rem;
+      font-weight: 700;
+      outline: none;
+    }}
+    .mfg-search-input:focus {{
+      border-color: #111827;
+      box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+    }}
     .mfg-status {{
       font-size: 0.76rem;
       padding: 0 4px;
@@ -844,6 +877,9 @@ def render_manufacturing_page(
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
     }}
+    .mfg-content.is-overview:not(.is-split):not(.is-single-column-overview) .mfg-section-card {{
+      grid-column: 1 / -1;
+    }}
     .mfg-content.is-single-column-overview {{
       display: block;
       min-width: 0;
@@ -930,9 +966,17 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo {{
       grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-expander,
+    .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-expander {{
+      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-partial,
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-partial {{
       grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-expander.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo > * {{
       display: inline-flex;
@@ -1054,8 +1098,14 @@ def render_manufacturing_page(
     .mfg-table-head.is-pantolo {{
       grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
     }}
+    .mfg-table-head.is-pantolo.is-with-expander {{
+      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
+    }}
     .mfg-table-head.is-pantolo.is-with-partial {{
       grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+    }}
+    .mfg-table-head.is-pantolo.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
     }}
     .mfg-table-head.is-front-standard {{
       grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
@@ -1081,11 +1131,15 @@ def render_manufacturing_page(
       align-self: start;
       max-height: calc(100vh - 244px);
       max-height: calc(100dvh - 244px);
+      max-height: min(68vh, calc(100vh - 244px));
+      max-height: min(68dvh, calc(100dvh - 244px));
       grid-template-rows: auto auto auto;
     }}
     .mfg-content.is-split .mfg-row-list {{
       max-height: calc(100vh - 338px);
       max-height: calc(100dvh - 338px);
+      max-height: min(58vh, calc(100vh - 338px));
+      max-height: min(58dvh, calc(100dvh - 338px));
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
@@ -1096,6 +1150,7 @@ def render_manufacturing_page(
     }}
     .mfg-row {{
       width: 100%;
+      min-height: 50px;
       padding: 7px 10px;
       border-radius: 0;
       border: 0;
@@ -1141,8 +1196,14 @@ def render_manufacturing_page(
     .mfg-row.is-pantolo {{
       grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
     }}
+    .mfg-row.is-pantolo.is-with-expander {{
+      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
+    }}
     .mfg-row.is-pantolo.is-with-partial {{
       grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+    }}
+    .mfg-row.is-pantolo.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
     }}
     .mfg-row.is-cnc-fiokelo .mfg-row-meta {{
       padding-top: 2px;
@@ -1275,6 +1336,10 @@ def render_manufacturing_page(
       background: #eef6ff;
       box-shadow: inset 3px 0 0 #2563eb;
     }}
+    .mfg-row.is-pullout {{
+      background: #fff7ed;
+      box-shadow: inset 3px 0 0 #f97316;
+    }}
     .mfg-row.is-green {{
       background: #c9f0d8;
       box-shadow: inset 5px 0 0 var(--mfg-green-line);
@@ -1283,6 +1348,10 @@ def render_manufacturing_page(
       background: #ffd4d4;
       box-shadow: inset 5px 0 0 var(--mfg-red-line);
     }}
+    .mfg-row.is-mixed {{
+      background: #fce7f3;
+      box-shadow: inset 5px 0 0 #d946ef;
+    }}
     .mfg-row.is-green .mfg-row-meta span,
     .mfg-row.is-green .mfg-row-code {{
       color: var(--mfg-green-text);
@@ -1290,6 +1359,9 @@ def render_manufacturing_page(
     .mfg-row.is-red .mfg-row-meta span,
     .mfg-row.is-red .mfg-row-code {{
       color: var(--mfg-red-text);
+    }}
+    .mfg-row.is-mixed .mfg-row-meta span {{
+      color: #86198f;
     }}
     .mfg-row.is-done .mfg-row-title,
     .mfg-row.is-done .mfg-row-meta span,
@@ -1330,6 +1402,11 @@ def render_manufacturing_page(
       background: #dbeafe;
       color: #1d4ed8;
       border: 1px solid rgba(37, 99, 235, 0.16);
+    }}
+    .mfg-row-badge.is-pullout {{
+      background: #ffedd5;
+      color: #c2410c;
+      border: 1px solid rgba(194, 65, 12, 0.16);
     }}
     .mfg-row-badge.is-curved {{
       background: #f3e8ff;
@@ -1392,6 +1469,91 @@ def render_manufacturing_page(
       white-space: nowrap;
       display: inline-flex;
       width: fit-content;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-mark {{
+      min-height: 28px;
+      padding: 0 9px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      color: #ffffff;
+      font-weight: 900;
+      justify-content: center;
+      width: fit-content;
+      max-width: 100%;
+      white-space: normal;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-dark-green {{
+      background: #065f46;
+      border-color: rgba(4, 120, 87, 0.34);
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-lime {{
+      background: #84cc16;
+      border-color: rgba(77, 124, 15, 0.34);
+      color: #1f3708;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-yellow {{
+      background: #facc15;
+      border-color: rgba(161, 98, 7, 0.3);
+      color: #3f2d05;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-orange {{
+      background: #f97316;
+      border-color: rgba(194, 65, 12, 0.32);
+      color: #ffffff;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-pink {{
+      background: #ec4899;
+      border-color: rgba(190, 24, 93, 0.3);
+      color: #ffffff;
+    }}
+    .mfg-row.is-pantolo-unit {{
+      background: #fbfcfe;
+      box-shadow: inset 5px 0 0 #cbd5e1;
+    }}
+    .mfg-row.is-pantolo-unit.is-green {{
+      background: #dcf7e6;
+    }}
+    .mfg-row.is-pantolo-unit.is-red {{
+      background: #ffe0e0;
+    }}
+    .mfg-row.is-pantolo-group.is-expanded,
+    .mfg-row.is-pantolo-unit {{
+      border-left: 4px solid #0f172a;
+      border-right: 4px solid #0f172a;
+    }}
+    .mfg-row.is-pantolo-group.is-expanded {{
+      border-top: 4px solid #0f172a;
+    }}
+    .mfg-row.is-pantolo-unit.is-last-unit {{
+      border-bottom: 4px solid #0f172a;
+    }}
+    .mfg-pantolo-expand-cell {{
+      display: grid;
+      align-items: center;
+      justify-items: center;
+      min-width: 0;
+    }}
+    .mfg-pantolo-expand {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      min-width: 42px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid rgba(17, 24, 39, 0.16);
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+    }}
+    .mfg-pantolo-expand.is-empty {{
+      pointer-events: none;
+      opacity: 0;
     }}
     .mfg-row-subtitle {{
       font-size: 0.7rem;
@@ -1539,8 +1701,11 @@ def render_manufacturing_page(
     }}
     .mfg-choice-actions {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
       gap: 10px;
+    }}
+    .mfg-choice-button[hidden] {{
+      display: none !important;
     }}
     .mfg-choice-button {{
       min-height: 42px;
@@ -1555,6 +1720,11 @@ def render_manufacturing_page(
     .mfg-choice-button.is-green {{
       background: #dff8e6;
       border-color: rgba(18, 106, 52, 0.22);
+    }}
+    .mfg-choice-button.is-red {{
+      background: #ffe2e2;
+      border-color: rgba(185, 48, 48, 0.24);
+      color: #9f2424;
     }}
     .mfg-choice-button.is-plain {{
       background: #f8fafc;
@@ -1712,9 +1882,17 @@ def render_manufacturing_page(
       .mfg-row.is-pantolo {{
         grid-template-columns: 0.9fr 0.64fr 0.72fr 0.66fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.34fr;
       }}
+      .mfg-table-head.is-pantolo.is-with-expander,
+      .mfg-row.is-pantolo.is-with-expander {{
+        grid-template-columns: 0.9fr 0.64fr 0.72fr 0.66fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.42fr 0.42fr;
+      }}
       .mfg-table-head.is-pantolo.is-with-partial,
       .mfg-row.is-pantolo.is-with-partial {{
         grid-template-columns: 0.88fr 0.62fr 0.7fr 0.62fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.32fr 0.28fr;
+      }}
+      .mfg-table-head.is-pantolo.is-with-expander.is-with-partial,
+      .mfg-row.is-pantolo.is-with-expander.is-with-partial {{
+        grid-template-columns: 0.88fr 0.62fr 0.7fr 0.62fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.38fr 0.28fr 0.38fr;
       }}
       .mfg-table-head,
       .mfg-row {{
@@ -1750,7 +1928,8 @@ def render_manufacturing_page(
         padding-left: 10px;
       }}
       .mfg-content.is-split .mfg-row {{
-        padding: 6px 8px;
+        min-height: 52px;
+        padding: 7px 8px;
         gap: 4px;
       }}
       .mfg-content.is-split .mfg-row-title {{
@@ -1758,7 +1937,7 @@ def render_manufacturing_page(
       }}
       .mfg-content.is-split .mfg-row-meta span {{
         font-size: 0.76rem;
-        min-height: 24px;
+        min-height: 26px;
       }}
       .mfg-content.is-split .mfg-row-meta span.is-size {{
         font-size: 0.72rem;
@@ -1769,7 +1948,7 @@ def render_manufacturing_page(
         line-height: 1.08;
       }}
       .mfg-content.is-split .mfg-row-qty {{
-        min-height: 24px;
+        min-height: 26px;
         padding: 0 6px;
         font-size: 0.76rem;
       }}
@@ -1800,6 +1979,9 @@ def render_manufacturing_page(
       <div class="mfg-tab-row" id="mfg-doc-tabs" style="display:none"></div>
       <div class="mfg-section-tab-row" id="mfg-section-tabs"></div>
       <div class="mfg-subsection-tab-row" id="mfg-subsection-tabs" style="display:none"></div>
+      <div class="mfg-search-row" id="mfg-search-row" hidden>
+        <input class="mfg-search-input" id="mfg-search-input" type="search" autocomplete="off" spellcheck="false" placeholder="Kereses..." />
+      </div>
       <div class="mfg-status-row">
         <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
         <div class="mfg-status-actions">
@@ -1819,6 +2001,7 @@ def render_manufacturing_page(
         <div class="mfg-choice-actions">
           <button class="mfg-choice-button is-plain" type="button" data-choice-action="plain">Sima</button>
           <button class="mfg-choice-button is-green" type="button" data-choice-action="green">Zöld</button>
+          <button class="mfg-choice-button is-red" type="button" data-choice-action="red" hidden>Piros</button>
         </div>
       </div>
     </div>
@@ -1843,13 +2026,15 @@ def render_manufacturing_page(
       const docTabsNode = document.getElementById("mfg-doc-tabs");
       const sectionTabsNode = document.getElementById("mfg-section-tabs");
       const subsectionTabsNode = document.getElementById("mfg-subsection-tabs");
+      const searchRowNode = document.getElementById("mfg-search-row");
+      const searchInputNode = document.getElementById("mfg-search-input");
       const contentNode = document.getElementById("mfg-content");
       const statusNode = document.getElementById("mfg-status");
       const reportReadyButtonNode = document.getElementById("mfg-report-ready");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
       const choiceModalNode = document.getElementById("mfg-choice-modal");
       const confirmModalNode = document.getElementById("mfg-confirm-modal");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
 
       let payload = {{}};
       try {{
@@ -1876,8 +2061,10 @@ def render_manufacturing_page(
       let layoutMode = "single";
       const sectionSortState = Object.create(null);
       const partialSaveTimers = new Map();
+      const expandedPantoloGroups = new Set();
       let pendingRedChoice = null;
       let pendingConfirmResolve = null;
+      let activeSearchText = "";
 
       const syncUrlForDocument = () => {{
         try {{
@@ -1903,6 +2090,7 @@ def render_manufacturing_page(
       const documentAllowsSplit = (document) => document?.allowSplit !== false;
       const documentUsesSingleColumnOverview = (document) => document?.singleColumnOverview === true;
       const documentHidesBarcode = (document) => document?.hideBarcodeColumn === true;
+      const documentUsesSearch = (document) => Boolean(document);
       const groupColumnLayout = (group) => {{
         const directLayout = String(group?.columnLayout || "").trim();
         if (directLayout) return directLayout;
@@ -1951,9 +2139,72 @@ def render_manufacturing_page(
       const specialViewUsesRedFilter = (view) => ["current-production-red", "all-productions-red"].includes(String(view?.key || ""));
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
-      const rowStateValue = (row) => selectionState[rowStateKey(row)] || "";
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
+      const pantoloQuantity = (row) => Math.max(1, Number(row?.meValue || row?.quantity || 0) || 1);
+      const isPantoloRow = (row) => String(row?.columnLayout || "").trim() === "pantolo";
+      const isPantoloGroupedRow = (row) => isPantoloRow(row) && !row?.isPantoloUnit && pantoloQuantity(row) > 1;
+      const pantoloUnitRowId = (row, index) => `${{String(row?.row_id || "")}}__pantolo_unit_${{index + 1}}`;
+      const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
+      const pantoloUnitStateKey = (row, index) => stateKeyForRowId(rowProductionNumber(row), pantoloUnitRowId(row, index));
+      const findRowById = (rowId) => {{
+        const targetId = String(rowId || "");
+        for (const document of documents) {{
+          for (const section of (Array.isArray(document?.sections) ? document.sections : [])) {{
+            const found = (Array.isArray(section?.rows) ? section.rows : []).find((row) => String(row?.row_id || "") === targetId);
+            if (found) return found;
+          }}
+        }}
+        return null;
+      }};
+      const pantoloHasExplicitUnitState = (row) => {{
+        if (!isPantoloGroupedRow(row)) return false;
+        for (let index = 0; index < pantoloQuantity(row); index += 1) {{
+          if (Object.prototype.hasOwnProperty.call(selectionState, pantoloUnitStateKey(row, index))) return true;
+        }}
+        return false;
+      }};
+      const pantoloUnitState = (row, index) => {{
+        const unitKey = pantoloUnitStateKey(row, index);
+        if (Object.prototype.hasOwnProperty.call(selectionState, unitKey)) return selectionState[unitKey] || "";
+        const parentState = selectionState[rowStateKey(row)] || "";
+        return pantoloHasExplicitUnitState(row) ? "" : parentState;
+      }};
+      const pantoloGroupState = (row) => {{
+        if (!isPantoloGroupedRow(row)) return selectionState[rowStateKey(row)] || "";
+        const states = Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => pantoloUnitState(row, index));
+        if (states.every((state) => !state)) return "";
+        if (states.every((state) => state === "red")) return "red";
+        if (states.every((state) => state === "done")) return "done";
+        if (states.every((state) => isGreenLikeState(state))) return "green";
+        return "mixed";
+      }};
+      const rowStateValue = (row) => {{
+        if (isPantoloGroupedRow(row)) return pantoloGroupState(row);
+        if (row?.isPantoloUnit) {{
+          const explicitState = selectionState[rowStateKey(row)] || "";
+          return explicitState || String(row?.inheritedState || "");
+        }}
+        return selectionState[rowStateKey(row)] || "";
+      }};
+      const pantoloGreenedCount = (row) => {{
+        if (isPantoloGroupedRow(row)) {{
+          let count = 0;
+          for (let index = 0; index < pantoloQuantity(row); index += 1) {{
+            if (isGreenLikeState(pantoloUnitState(row, index))) count += 1;
+          }}
+          return count;
+        }}
+        return isGreenLikeState(rowStateValue(row)) ? 1 : 0;
+      }};
+      const pantoloQuantityText = (row) => `${{pantoloGreenedCount(row)}}/${{pantoloQuantity(row)}}`;
+      const canReportReadyForCurrentView = (document) => {{
+        const documentKey = String(document?.key || "");
+        if (!reportReadyRoute) return false;
+        if (documentKey === "korpusz_osszekeszites") return currentSubcategoryKey === "green";
+        if (documentKey === "front_osszekeszites") return currentViewKey === "green";
+        return false;
+      }};
       const countStateInDocument = (document, wanted) => flattenRows(document)
         .filter((row) => rowStateValue(row) === wanted)
         .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
@@ -1967,7 +2218,7 @@ def render_manufacturing_page(
             .filter((row) => !predicate || predicate(row))
             .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
         }}, 0);
-      const specialViewKeys = new Set(["all", "plain", "green", "red"]);
+      const specialViewKeys = new Set(["all", "plain", "green", "red", "mixed"]);
       const isSpecialViewKey = (key, document = currentDocument()) =>
         specialViewKeys.has(String(key || "")) || Boolean(specialViewForKey(document, key));
       const barcodePatternFor = (value) => {{
@@ -2034,6 +2285,52 @@ def render_manufacturing_page(
         statusNode.textContent = message;
         statusNode.classList.remove("is-error", "is-success");
         if (tone) statusNode.classList.add(tone);
+      }};
+      const normalizeSearchText = (value) =>
+        String(value ?? "")
+          .toLocaleLowerCase("hu-HU")
+          .normalize("NFD")
+          .replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/\\s+/g, " ")
+          .trim();
+      const activeSearchTerms = () => normalizeSearchText(activeSearchText).split(" ").filter(Boolean);
+      const collectSearchParts = (value, parts = []) => {{
+        if (value == null) return parts;
+        if (Array.isArray(value)) {{
+          value.forEach((item) => collectSearchParts(item, parts));
+          return parts;
+        }}
+        if (typeof value === "object") {{
+          Object.values(value).forEach((item) => collectSearchParts(item, parts));
+          return parts;
+        }}
+        parts.push(String(value));
+        return parts;
+      }};
+      const rowMatchesSearch = (row, group, terms) => {{
+        if (!terms.length) return true;
+        const searchable = normalizeSearchText(collectSearchParts(row, [group?.label || "", group?.key || ""]).join(" "));
+        return terms.every((term) => searchable.includes(term));
+      }};
+      const filterGroupsBySearch = (groups, document) => {{
+        const terms = activeSearchTerms();
+        if (!documentUsesSearch(document) || !terms.length) return groups;
+        return (Array.isArray(groups) ? groups : [])
+          .map((group) => ({{
+            ...group,
+            rows: (Array.isArray(group?.rows) ? group.rows : []).filter((row) => rowMatchesSearch(row, group, terms)),
+          }}))
+          .filter((group) => Array.isArray(group.rows) && group.rows.length);
+      }};
+      const updateSearchControls = (activeDocument) => {{
+        const enabled = documentUsesSearch(activeDocument);
+        searchRowNode.hidden = !enabled;
+        if (!enabled) {{
+          activeSearchText = "";
+          searchInputNode.value = "";
+        }} else if (window.document.activeElement !== searchInputNode) {{
+          searchInputNode.value = activeSearchText;
+        }}
       }};
       const nextRowState = (currentState) => {{
         if (currentState === "green") return "red";
@@ -2238,6 +2535,30 @@ def render_manufacturing_page(
         }}
         return ordered;
       }};
+      const cncOverviewOnlySectionsForDocument = (document) => {{
+        if (String(document?.key || "") !== "cnc_furas") return [];
+        return specialViewsForDocument(document)
+          .filter((view) => Boolean(view?.overviewOnly))
+          .flatMap((view) => Array.isArray(view?.sections) ? view.sections : [])
+          .filter((section) => Array.isArray(section?.rows) && section.rows.length);
+      }};
+      const appendCncOverviewOnlySections = (document, sections, stateFilter = "") => {{
+        const baseSections = Array.isArray(sections) ? sections : [];
+        const existingKeys = new Set(baseSections.map((section) => String(section?.key || "")));
+        const extraSections = cncOverviewOnlySectionsForDocument(document)
+          .filter((section) => !existingKeys.has(String(section?.key || "")))
+          .map((section) => {{
+            if (!stateFilter) return section;
+            return {{
+              ...section,
+              rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
+                stateFilter === "plain" ? !rowStateValue(row) : (stateFilter === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === stateFilter)
+              ),
+            }};
+          }})
+          .filter((section) => Array.isArray(section.rows) && section.rows.length);
+        return [...baseSections, ...extraSections];
+      }};
 
       const buildGroupsForView = (document) => {{
         if (!document) return [];
@@ -2276,6 +2597,7 @@ def render_manufacturing_page(
               return sizeLabel === currentSubcategoryKey;
             }});
           }}
+          specialSections = appendCncOverviewOnlySections(document, specialSections);
           if (!specialViewUsesRedFilter(currentSpecialView)) {{
             return specialSections;
           }}
@@ -2286,13 +2608,16 @@ def render_manufacturing_page(
             }}))
             .filter((section) => section.rows.length);
         }}
-        const sections = orderedSectionsForTabs(overviewSectionsForDocument(document, currentViewKey === "all"));
-        if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
+        const overviewSections = overviewSectionsForDocument(document);
+        const sections = documentUsesSingleColumnOverview(document) && String(document?.key || "") === "cnc_furas"
+          ? appendCncOverviewOnlySections(document, overviewSections)
+          : orderedSectionsForTabs(overviewSections);
+        if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain" || currentViewKey === "mixed")) {{
           if (currentViewKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
           }}
-          if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
-            return sections
+          if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain" || currentViewKey === "mixed") {{
+            return appendCncOverviewOnlySections(document, sections, currentViewKey)
               .map((section) => ({{
                 ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
@@ -2331,7 +2656,7 @@ def render_manufacturing_page(
         if (currentViewKey === "all") {{
           return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
         }}
-        if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
+        if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain" || currentViewKey === "mixed") {{
           return sections
             .map((section) => ({{
               key: section.key,
@@ -2402,7 +2727,8 @@ def render_manufacturing_page(
         }}
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         const overviewSections = overviewSectionsForDocument(document, true);
-        const stateOverviewSections = overviewSectionsForDocument(document, false);
+        const stateOverviewSections = overviewSections;
+        const isPantoloDocumentForTabs = String(document?.key || "") === "pantolas";
         const sections = (currentSpecialView && !specialViewUsesRedFilter(currentSpecialView) && Array.isArray(currentSpecialView.sections))
           ? currentSpecialView.sections
           : overviewSections;
@@ -2412,16 +2738,20 @@ def render_manufacturing_page(
           {{ key: "plain", label: "Simák", count: countRowsInSections(stateOverviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
           {{ key: "green", label: "Zöldek", count: countRowsInSections(stateOverviewSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
           {{ key: "red", label: "Pirosak", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
-          ...documentSpecialViews.filter((view) => !Boolean(view?.hideTab)).map((view) => ({{
-            key: String(view?.key || ""),
-            label: String(view?.label || ""),
-            count: specialViewUsesRedFilter(view)
-              ? countRowsInSections(view?.sections, (row) => rowStateValue(row) === "red")
-              : totalQuantityForSections(view?.sections),
-            stateClass: specialViewUsesRedFilter(view)
-              ? ""
-              : tabStateClassForRows(Array.isArray(view?.sections) ? view.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : []),
-          }})),
+          ...(isPantoloDocumentForTabs ? [{{ key: "mixed", label: "Vegyes", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "mixed"), stateClass: "" }}] : []),
+          ...documentSpecialViews.filter((view) => !Boolean(view?.hideTab)).map((view) => {{
+            const viewSections = Array.isArray(view?.sections) ? view.sections : [];
+            return {{
+              key: String(view?.key || ""),
+              label: String(view?.label || ""),
+              count: specialViewUsesRedFilter(view)
+                ? countRowsInSections(viewSections, (row) => rowStateValue(row) === "red")
+                : totalQuantityForSections(viewSections),
+              stateClass: specialViewUsesRedFilter(view)
+                ? ""
+                : tabStateClassForRows(viewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])),
+            }};
+          }}),
         ];
         if (documentUsesSingleColumnOverview(document)) {{
           sectionTabsNode.innerHTML = specialTabs.map((item) => `
@@ -2472,26 +2802,31 @@ def render_manufacturing_page(
       const renderRows = (groups) => {{
         const document = currentDocument();
         const currentSpecialView = specialViewForKey(document, currentViewKey);
-        const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red" || Boolean(currentSpecialView);
+        const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "mixed" || Boolean(currentSpecialView);
         const isPantoloDocument = String(document?.key || "") === "pantolas";
         const isSplitMode = layoutMode === "double" && groups.length > 1 && (
           !isSpecialViewKey(currentViewKey) ||
-          (String(document?.key || "") === "korpusz_osszekeszites" && Boolean(currentSpecialView) && !["all", "plain", "green", "red"].includes(currentSubcategoryKey))
+          (String(document?.key || "") === "korpusz_osszekeszites" && Boolean(currentSpecialView) && !["all", "plain", "green", "red", "mixed"].includes(currentSubcategoryKey))
         );
         const useSingleColumnOverview = documentUsesSingleColumnOverview(document) && isOverviewMode;
         contentNode.classList.toggle("is-overview", isOverviewMode);
         contentNode.classList.toggle("is-single-column-overview", useSingleColumnOverview);
         contentNode.classList.toggle("is-split", isSplitMode);
         if (!groups.length) {{
-          const emptyLabel = currentSpecialView
+          const hasActiveSearch = documentUsesSearch(document) && activeSearchTerms().length > 0;
+          const emptyLabel = hasActiveSearch
+            ? "A keresesre nincs talalat."
+            : currentSpecialView
             ? `${{currentSpecialView.label}} nézetben nincs megjeleníthető sor.`
             : currentViewKey === "green"
               ? "Még nincs zöldre jelölt sor."
               : currentViewKey === "red"
                 ? "Még nincs pirosra jelölt sor."
-                : currentViewKey === "plain"
-                  ? "Minden sor kapott már kijelölést."
-                  : String(document?.placeholderMessage || "Ehhez a nézethez nincs megjeleníthető sor.");
+                : currentViewKey === "mixed"
+                  ? "Még nincs vegyes állapotú pántoló csoport."
+                  : currentViewKey === "plain"
+                    ? "Minden sor kapott már kijelölést."
+                    : String(document?.placeholderMessage || "Ehhez a nézethez nincs megjeleníthető sor.");
           contentNode.innerHTML = `
             <div class="mfg-empty">
               <div class="mfg-empty-copy">
@@ -2513,6 +2848,7 @@ def render_manufacturing_page(
             currentSubcategoryKey === "red" ||
             specialViewUsesRedFilter(currentSpecialView);
           const effectiveHideBarcode = hideBarcode || showPartialColumn;
+          const showPantoloExpanderColumn = columnLayout === "pantolo";
           const tableHeadClass = columnLayout === "cnc-lower"
             ? " is-cnc-lower"
             : columnLayout === "cnc-upper"
@@ -2522,10 +2858,11 @@ def render_manufacturing_page(
               : columnLayout === "pantolo"
                 ? " is-pantolo"
               : columnLayout === "front-standard"
-                ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
-              : effectiveHideBarcode
-                ? " is-no-barcode"
-                : "";
+              ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
+            : effectiveHideBarcode
+              ? " is-no-barcode"
+              : "";
+          const expanderClass = showPantoloExpanderColumn ? " is-with-expander" : "";
           const rowClass = columnLayout === "cnc-lower"
             ? " is-cnc-lower"
             : columnLayout === "cnc-upper"
@@ -2548,7 +2885,7 @@ def render_manufacturing_page(
               </div>
             `
             : "";
-          const tableHeadExtraClass = showPartialColumn ? " is-with-partial" : "";
+          const tableHeadExtraClass = `${{showPartialColumn ? " is-with-partial" : ""}}${{expanderClass}}`;
           const tableHeadMarkup = columnLayout === "cnc-lower"
             ? `
                 <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
@@ -2602,6 +2939,7 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "door_type", "AjtĂł tĂ­pus")}}
                   ${{sortButtonMarkup(group.key, "quantity", "ME")}}
                   ${{showPartialColumn ? "<span>HiĂˇnyzik</span>" : ""}}
+                  ${{showPantoloExpanderColumn ? "<span></span>" : ""}}
                 </div>
               `
             : columnLayout === "front-standard"
@@ -2639,6 +2977,7 @@ def render_manufacturing_page(
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
+            const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Kihúzható</span>` : "";
             const traitBadgeMarkup = row.frontTrait === "Blende" ? `<span class="mfg-row-badge is-curved">Blende</span>` : "";
             const curvedBadgeMarkup = row.isCurved ? `<span class="mfg-row-badge is-curved">Íves</span>` : "";
             const modelToneClass = row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : "";
@@ -2653,13 +2992,107 @@ def render_manufacturing_page(
             const fiokeloDrawerTypeMarkup = fiokeloDrawerTypeValue === "HE"
               ? `<span class="is-pill-black">${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`
               : `<span>${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`;
+            const pantoloNormalizeMarkText = (value) =>
+              String(value || "")
+                .trim()
+                .toLocaleLowerCase("hu-HU")
+                .normalize("NFD")
+                .replace(/[\\u0300-\\u036f]/g, "")
+                .replace(/\\s+/g, " ");
+            const pantoloCellClass = (baseClass, tone) =>
+              [baseClass, tone ? "is-pantolo-mark" : "", tone ? `is-pantolo-${{tone}}` : ""]
+                .filter(Boolean)
+                .join(" ");
+            const pantoloHandleDrillText = pantoloNormalizeMarkText(row.handleDrill);
+            const pantoloOpeningText = pantoloNormalizeMarkText(row.openingDir);
+            const pantoloDoorText = pantoloNormalizeMarkText(row.doorType);
+            const pantoloPantText = pantoloNormalizeMarkText(row.pantType);
+            const pantoloDoorIsCorner = pantoloDoorText.includes("sarok") || pantoloDoorText === "fsl";
+            const pantoloDoorIsKam = pantoloDoorText.includes("kam.");
+            const pantoloPantIsSpecial =
+              pantoloPantText.includes("3d") ||
+              pantoloPantText.includes("hutos") ||
+              pantoloPantText.includes("hettich");
+            let pantoloPantMark = "";
+            let pantoloHandleDrillMark = "";
+            let pantoloOpeningMark = "";
+            let pantoloDoorMark = "";
+            if (pantoloHandleDrillText === "nincs") {{
+              pantoloHandleDrillMark = "dark-green";
+            }}
+            if (pantoloOpeningText === "nincs") {{
+              pantoloOpeningMark = "dark-green";
+              pantoloDoorMark = "dark-green";
+            }} else if (pantoloOpeningText === "felnyilo") {{
+              pantoloOpeningMark = "lime";
+              pantoloDoorMark = "lime";
+            }}
+            if (pantoloDoorIsCorner) {{
+              pantoloPantMark = "yellow";
+              pantoloOpeningMark = "yellow";
+              pantoloDoorMark = "yellow";
+            }}
+            if (pantoloDoorIsKam) {{
+              pantoloDoorMark = "orange";
+            }}
+            if (pantoloPantIsSpecial) {{
+              pantoloPantMark = "pink";
+            }}
+            const pantoloIsGroup = isPantoloGroupedRow(row);
+            const pantoloGroupExpanded = pantoloIsGroup && expandedPantoloGroups.has(rowStateKey(row));
+            const pantoloGroupSourceRowIds = pantoloIsGroup
+              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => pantoloUnitRowId(row, index))
+              : [];
+            const sourceRowIdsForRow = pantoloIsGroup
+              ? Array.from(new Set([...(Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []), ...pantoloGroupSourceRowIds]))
+              : (Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []);
+            const pantoloExpandMarkup = pantoloIsGroup
+              ? `<span class="mfg-pantolo-expand" role="button" tabindex="0" data-pantolo-expand data-state-key="${{escapeHtml(rowStateKey(row))}}" aria-label="${{pantoloGroupExpanded ? "BezĂˇrĂˇs" : "KinyitĂˇs"}}">${{pantoloGroupExpanded ? "\\u25B2" : "\\u25BC"}}</span>`
+              : `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`;
+            const pantoloCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") => `
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-color", "")}}">${{escapeHtml(displayRow.color || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.color23 || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloPantMark)}}">${{escapeHtml(displayRow.pantType || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.modelLabel || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-size", "")}}">${{escapeHtml(displayRow.size || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloHandleDrillMark)}}">${{escapeHtml(displayRow.handleDrill || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.handleType || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloOpeningMark)}}">${{escapeHtml(displayRow.openingDir || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloDoorMark)}}">${{escapeHtml(displayRow.doorType || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="is-pill-black">${{escapeHtml(quantityText)}}</span></div>
+              ${{rowPartialMarkup}}
+              ${{showPantoloExpanderColumn ? `<div class="mfg-pantolo-expand-cell">${{expandMarkup}}</div>` : ""}}
+            `;
+            const pantoloChildRowsMarkup = pantoloGroupExpanded
+              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, unitIndex) => {{
+                  const unitRowId = pantoloUnitRowId(row, unitIndex);
+                  const unitStateKey = pantoloUnitStateKey(row, unitIndex);
+                  const unitState = pantoloUnitState(row, unitIndex);
+                  const unitRow = {{
+                    ...row,
+                    row_id: unitRowId,
+                    state_key: unitStateKey,
+                    quantity: 1,
+                    meValue: 1,
+                    isPantoloUnit: true,
+                    inheritedState: unitState,
+                  }};
+                  const unitPartialMarkup = showPartialColumn ? `<div class="mfg-row-partial-empty"></div>` : "";
+                  const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
+                  return `
+                    <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-source-row-ids="">
+                      ${{pantoloCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
+                    </button>
+                  `;
+                }}).join("")
+              : "";
             return `
-              <button class="mfg-row${{rowClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
+              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
                         <div class="mfg-row-main">
-                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                          <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                           ${{subtitleMarkup}}
                         </div>
                         <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -2673,7 +3106,7 @@ def render_manufacturing_page(
                     : columnLayout === "cnc-upper"
                       ? `
                           <div class="mfg-row-main">
-                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                            <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
@@ -2697,22 +3130,12 @@ def render_manufacturing_page(
                           `
                         : columnLayout === "pantolo"
                           ? `
-                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.color23 || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.pantType || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.handleDrill || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.handleType || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.openingDir || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.doorType || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(String(row.meValue || row.quantity || 0))}}</span></div>
-                              ${{partialMarkup}}
+                              ${{pantoloCellsMarkup(row, pantoloQuantityText(row), pantoloExpandMarkup, partialMarkup)}}
                             `
                         : columnLayout === "front-standard"
                           ? `
                               <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
                               <div class="mfg-row-meta is-model"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
@@ -2725,9 +3148,6 @@ def render_manufacturing_page(
                                   ? ""
                                   : `
                                       <div class="mfg-row-barcode-wrap">
-                                        <div class="mfg-row-barcode">
-                                          <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
-                                        </div>
                                         <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
                                       </div>
                                     `
@@ -2735,7 +3155,7 @@ def render_manufacturing_page(
                             `
                           : `
                               <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}</div>
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                                 ${{subtitleMarkup}}
                               </div>
                               <div class="mfg-row-meta">
@@ -2766,6 +3186,7 @@ def render_manufacturing_page(
                             `
                 }}
               </button>
+              ${{pantoloChildRowsMarkup}}
             `;
           }}).join("");
           const sectionClass = columnLayout === "pantolo" ? " is-pantolo" : "";
@@ -2827,13 +3248,12 @@ def render_manufacturing_page(
         }}
         renderDocTabs();
         renderSectionTabs(document);
-        const canReportReady =
-          String(document?.key || "") === "korpusz_osszekeszites" &&
-          currentSubcategoryKey === "green" &&
-          Boolean(reportReadyRoute);
+        updateSearchControls(document);
+        const visibleGroups = filterGroupsBySearch(buildGroupsForView(document), document);
+        const canReportReady = canReportReadyForCurrentView(document);
         reportReadyButtonNode.style.display = canReportReady ? "inline-flex" : "none";
         if (canReportReady) {{
-          const greenRows = buildGroupsForView(document)
+          const greenRows = visibleGroups
             .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
             .filter((row) => isReadyGreenState(rowStateValue(row)));
           reportReadyButtonNode.disabled = greenRows.length === 0;
@@ -2848,7 +3268,7 @@ def render_manufacturing_page(
           const mode = button.getAttribute("data-layout-mode") || "single";
           button.classList.toggle("is-active", mode === layoutMode);
         }});
-        renderRows(buildGroupsForView(document));
+        renderRows(visibleGroups);
         normalizePantoloHeaders();
         renderBarcodes();
         requestAnimationFrame(() => restoreScrollState(scrollState));
@@ -2901,6 +3321,91 @@ def render_manufacturing_page(
         void persistRowState(rowId, targetProductionNumber, stateKey, targetState, previousStateMap, sourceRowIds);
       }};
 
+      const persistStateUpdates = async (targetProductionNumber, updates, previousStateMap) => {{
+        try {{
+          for (const update of updates) {{
+            const rowId = String(update.rowId || "").trim();
+            if (!rowId) continue;
+            const response = await fetch(stateRoute, {{
+              method: "POST",
+              headers: {{ "Content-Type": "application/json" }},
+              body: JSON.stringify({{
+                production_number: targetProductionNumber,
+                row_id: rowId,
+                row_ids: [rowId],
+                state: update.state || "clear",
+              }}),
+            }});
+            const result = await response.json().catch(() => ({{}}));
+            if (!response.ok || !result.ok) {{
+              throw new Error(result.error || "A mentés nem sikerült.");
+            }}
+          }}
+          setStatus("Mentve.", "is-success");
+        }} catch (error) {{
+          for (const [previousKey, previousValue] of previousStateMap.entries()) {{
+            if (previousValue) selectionState[previousKey] = previousValue;
+            else delete selectionState[previousKey];
+          }}
+          renderAll();
+          setStatus(error instanceof Error ? error.message : "A mentés nem sikerült.", "is-error");
+        }}
+      }};
+
+      const normalizedPantoloParentStateFromUnitStates = (states) => {{
+        if (states.every((state) => !state)) return "";
+        if (states.every((state) => state === "red")) return "red";
+        if (states.every((state) => state === "done")) return "done";
+        if (states.every((state) => isGreenLikeState(state))) return "green";
+        return "";
+      }};
+
+      const applyPantoloUnitState = (parentRowId, unitRowId, targetProductionNumber, targetState) => {{
+        const parentRow = findRowById(parentRowId);
+        if (!parentRow || !unitRowId) return;
+        const scrollState = captureScrollState();
+        const total = pantoloQuantity(parentRow);
+        const parentKey = rowStateKey(parentRow);
+        const parentPreviousState = selectionState[parentKey] || "";
+        const updatesByRowId = new Map();
+        const trackedKeys = [parentKey];
+        const nextUnitStates = [];
+
+        for (let index = 0; index < total; index += 1) {{
+          const childRowId = pantoloUnitRowId(parentRow, index);
+          const childKey = pantoloUnitStateKey(parentRow, index);
+          trackedKeys.push(childKey);
+          let childState = pantoloUnitState(parentRow, index);
+          if (childRowId === unitRowId) {{
+            childState = targetState === "clear" ? "" : targetState;
+          }}
+          nextUnitStates.push(childState);
+          const explicitPrevious = selectionState[childKey] || "";
+          if (childState !== explicitPrevious) {{
+            updatesByRowId.set(childRowId, {{ rowId: childRowId, state: childState }});
+          }}
+        }}
+
+        const nextParentState = normalizedPantoloParentStateFromUnitStates(nextUnitStates);
+        if (nextParentState !== parentPreviousState) {{
+          updatesByRowId.set(parentRowId, {{ rowId: parentRowId, state: nextParentState }});
+        }}
+
+        const previousStateMap = new Map(trackedKeys.map((key) => [key, selectionState[key] || ""]));
+        for (let index = 0; index < total; index += 1) {{
+          const childKey = pantoloUnitStateKey(parentRow, index);
+          const childState = nextUnitStates[index] || "";
+          if (childState) selectionState[childKey] = childState;
+          else delete selectionState[childKey];
+        }}
+        if (nextParentState) selectionState[parentKey] = nextParentState;
+        else delete selectionState[parentKey];
+
+        renderAll(scrollState);
+        setStatus("Mentés...");
+        void persistStateUpdates(targetProductionNumber, Array.from(updatesByRowId.values()), previousStateMap);
+      }};
+
       const closeRedChoiceModal = () => {{
         pendingRedChoice = null;
         choiceModalNode.hidden = true;
@@ -2908,6 +3413,12 @@ def render_manufacturing_page(
 
       const openRedChoiceModal = (payload) => {{
         pendingRedChoice = payload;
+        const titleNode = choiceModalNode.querySelector(".mfg-choice-title");
+        const copyNode = choiceModalNode.querySelector(".mfg-choice-copy");
+        const redButton = choiceModalNode.querySelector('[data-choice-action="red"]');
+        if (titleNode) titleNode.textContent = payload?.allowRed ? "Vegyes pántoló csoport" : "Piros tétel áthelyezése";
+        if (copyNode) copyNode.textContent = payload?.allowRed ? "Milyen állapotot kapjon az egész csoport?" : "Hova kerüljön a kijelölt piros tétel?";
+        if (redButton instanceof HTMLElement) redButton.hidden = !payload?.allowRed;
         choiceModalNode.hidden = false;
       }};
 
@@ -3030,6 +3541,18 @@ def render_manufacturing_page(
         renderAll();
       }});
 
+      searchInputNode.addEventListener("keydown", (event) => {{
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        activeSearchText = searchInputNode.value || "";
+        renderAll();
+      }});
+
+      searchInputNode.addEventListener("input", () => {{
+        activeSearchText = searchInputNode.value || "";
+        renderAll();
+      }});
+
       layoutToggleNode.addEventListener("click", (event) => {{
         const button = event.target.closest("[data-layout-mode]");
         if (!(button instanceof HTMLElement)) return;
@@ -3072,6 +3595,17 @@ def render_manufacturing_page(
           renderAll();
           return;
         }}
+        const expandButton = event.target.closest("[data-pantolo-expand]");
+        if (expandButton instanceof HTMLElement) {{
+          event.preventDefault();
+          event.stopPropagation();
+          const stateKey = expandButton.getAttribute("data-state-key") || "";
+          if (!stateKey) return;
+          if (expandedPantoloGroups.has(stateKey)) expandedPantoloGroups.delete(stateKey);
+          else expandedPantoloGroups.add(stateKey);
+          renderAll();
+          return;
+        }}
         const row = event.target.closest("[data-mfg-row]");
         if (!(row instanceof HTMLElement)) return;
         const rowId = row.getAttribute("data-row-id") || "";
@@ -3082,8 +3616,21 @@ def render_manufacturing_page(
           .map((value) => String(value || "").trim())
           .filter(Boolean);
         if (!rowId) return;
-        const currentState = selectionState[stateKey] || "";
+        const currentState = row.getAttribute("data-pantolo-state") || selectionState[stateKey] || "";
         if (currentState === "done") {{
+          return;
+        }}
+        if (row.hasAttribute("data-pantolo-unit")) {{
+          const parentRowId = row.getAttribute("data-pantolo-parent-row-id") || "";
+          if (currentState === "red") {{
+            openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds, pantoloUnitParentRowId: parentRowId }});
+            return;
+          }}
+          applyPantoloUnitState(parentRowId, rowId, targetProductionNumber, nextRowState(currentState));
+          return;
+        }}
+        if (row.hasAttribute("data-pantolo-group") && currentState === "mixed") {{
+          openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds, allowRed: true }});
           return;
         }}
         if (currentState === "red") {{
@@ -3112,11 +3659,21 @@ def render_manufacturing_page(
           const currentChoice = pendingRedChoice;
           closeRedChoiceModal();
           if (!currentChoice) return;
+          const targetState = action === "green" ? "green" : (action === "red" ? "red" : "clear");
+          if (currentChoice.pantoloUnitParentRowId) {{
+            applyPantoloUnitState(
+              currentChoice.pantoloUnitParentRowId,
+              currentChoice.rowId,
+              currentChoice.targetProductionNumber,
+              targetState,
+            );
+            return;
+          }}
           applyRowState(
             currentChoice.stateKey,
             currentChoice.rowId,
             currentChoice.targetProductionNumber,
-            action === "green" ? "green" : "clear",
+            targetState,
             currentChoice.sourceRowIds || [],
           );
           return;
@@ -3140,15 +3697,12 @@ def render_manufacturing_page(
 
       reportReadyButtonNode.addEventListener("click", async () => {{
         const document = currentDocument();
-        const canReportReady =
-          String(document?.key || "") === "korpusz_osszekeszites" &&
-          currentSubcategoryKey === "green" &&
-          Boolean(reportReadyRoute);
+        const canReportReady = canReportReadyForCurrentView(document);
         if (!canReportReady || reportReadyButtonNode.disabled) return;
         const isConfirmed = await requestConfirmModal();
         if (!isConfirmed) return;
 
-        const visibleRows = buildGroupsForView(document)
+        const visibleRows = filterGroupsBySearch(buildGroupsForView(document), document)
           .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
           .filter((row) => isReadyGreenState(rowStateValue(row)));
         if (!visibleRows.length) {{
@@ -3161,6 +3715,7 @@ def render_manufacturing_page(
           const match = joined.toUpperCase().match(/\\bCON\\D*?(\\d{{6,}})\\b/);
           return match ? `CON${{match[1]}}` : "";
         }};
+        const documentKey = String(document?.key || "").trim();
         const categoryKey = String(currentViewKey || "").trim();
         const entries = visibleRows
           .map((row) => {{
@@ -3171,7 +3726,7 @@ def render_manufacturing_page(
               ? row.sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)
               : [];
             if (!rowId || !stateKey || !code) return null;
-            return {{ row_id: rowId, state_key: stateKey, code, category_key: categoryKey, source_row_ids: sourceRowIds }};
+            return {{ row_id: rowId, state_key: stateKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};
           }})
           .filter(Boolean);
         if (!entries.length) {{
@@ -3188,6 +3743,7 @@ def render_manufacturing_page(
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({{
               production_number: productionNumber,
+              document_key: documentKey,
               category_key: categoryKey,
               entries,
             }}),

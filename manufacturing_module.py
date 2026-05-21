@@ -171,21 +171,6 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
     return None
 
 
-def _find_etikett_egyeb_szerelveny_path(folder: Path) -> Path | None:
-    if not folder.exists():
-        return None
-    candidate = folder / "Etikett_egyeb_szerelveny.pdf"
-    if candidate.exists():
-        return candidate
-    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if not path.is_file() or path.suffix.lower() != ".pdf":
-            continue
-        folded_name = _fold_hu(path.name)
-        if "etikett" in folded_name and "szerelveny" in folded_name:
-            return path
-    return None
-
-
 def _find_cnc_path(folder: Path) -> Path | None:
     candidate = folder / "CNC.pdf"
     if candidate.exists():
@@ -407,6 +392,31 @@ def _looks_like_code_fragment(token: str) -> bool:
     return "_" in normalized or any(character.isalpha() for character in normalized)
 
 
+def _normalized_code_fragment(token: str) -> str:
+    normalized = unicodedata.normalize("NFKD", _clean_text(token))
+    return "".join(character for character in normalized if not unicodedata.combining(character))
+
+
+def _looks_like_alkatresz_code_start(token: str) -> bool:
+    normalized = _normalized_code_fragment(token)
+    if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
+        return False
+    return "_" in normalized or any(character.isdigit() for character in normalized)
+
+
+def _looks_like_alkatresz_code_continuation(token: str) -> bool:
+    raw_token = _clean_text(token)
+    normalized = _normalized_code_fragment(raw_token)
+    if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
+        return False
+    if "_" in normalized or any(character.isdigit() for character in normalized):
+        return True
+    if "-" in normalized:
+        return False
+    letters = [character for character in raw_token if character.isalpha()]
+    return 0 < len(normalized) <= 4 and any(character.isupper() for character in letters)
+
+
 def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number: int) -> list[ManufacturingRow]:
     rows: list[ManufacturingRow] = []
     section_key = _slugify(section_label)
@@ -540,7 +550,7 @@ def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[Manufactu
     row_index = 0
 
     start_index = 0
-    while start_index < len(tokens) and not _looks_like_code_fragment(tokens[start_index]):
+    while start_index < len(tokens) and not _looks_like_alkatresz_code_start(tokens[start_index]):
         start_index += 1
     working_tokens = tokens[start_index:]
 
@@ -579,7 +589,11 @@ def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[Manufactu
 
         code_parts: list[str] = []
         name_start_index = 0
-        while name_start_index < dimension_index and _looks_like_code_fragment(segment[name_start_index]):
+        if not _looks_like_alkatresz_code_start(segment[name_start_index]):
+            continue
+        code_parts.append(segment[name_start_index])
+        name_start_index += 1
+        while name_start_index < dimension_index and _looks_like_alkatresz_code_continuation(segment[name_start_index]):
             code_parts.append(segment[name_start_index])
             name_start_index += 1
         if not code_parts:
@@ -1392,10 +1406,24 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
                         return True
                 return False
 
-            for probe in candidate_indices:
-                if marks_row_boundary(probe):
+            def has_pantolo_tail_fields_before_quantity(probe: int) -> bool:
+                tail_tokens = [
+                    _fold_hu(_clean_text(item[0]))
+                    for item in stream[tail_start:probe]
+                    if _clean_text(item[0]) and not is_header_line(item[0])
+                ]
+                if not tail_tokens:
+                    return False
+                opening_tokens = {"bal", "balos", "jobb", "jobbos", "felnyilo", "nincs"}
+                return any(token in opening_tokens for token in tail_tokens)
+
+            boundary_candidates = [probe for probe in candidate_indices if marks_row_boundary(probe)]
+            for probe in boundary_candidates:
+                if has_pantolo_tail_fields_before_quantity(probe):
                     quantity_index = probe
                     break
+            if quantity_index == -1 and boundary_candidates:
+                quantity_index = boundary_candidates[0]
             if quantity_index == -1:
                 small_candidates = [probe for probe in candidate_indices if abs(int(_clean_text(stream[probe][0]) or "0")) <= 50]
                 quantity_index = small_candidates[0] if small_candidates else candidate_indices[0]
@@ -1706,15 +1734,6 @@ def load_production_bundle(production_number: str) -> dict:
             front_doc = None
         if front_doc is not None:
             documents.append(asdict(front_doc))
-    etikett_path = _find_etikett_egyeb_szerelveny_path(folder)
-    if etikett_path is not None:
-        try:
-            etikett_doc = parse_front_etikett(etikett_path)
-        except Exception:
-            etikett_doc = None
-        if etikett_doc is not None and etikett_doc.row_count:
-            documents.append(asdict(etikett_doc))
-
     cnc_path = _find_cnc_path(folder)
     if cnc_path is not None:
         try:
