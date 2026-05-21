@@ -2340,6 +2340,30 @@ def render_manufacturing_page(
         }}
         return ordered;
       }};
+      const cncOverviewOnlySectionsForDocument = (document) => {{
+        if (String(document?.key || "") !== "cnc_furas") return [];
+        return specialViewsForDocument(document)
+          .filter((view) => Boolean(view?.overviewOnly))
+          .flatMap((view) => Array.isArray(view?.sections) ? view.sections : [])
+          .filter((section) => Array.isArray(section?.rows) && section.rows.length);
+      }};
+      const appendCncOverviewOnlySections = (document, sections, stateFilter = "") => {{
+        const baseSections = Array.isArray(sections) ? sections : [];
+        const existingKeys = new Set(baseSections.map((section) => String(section?.key || "")));
+        const extraSections = cncOverviewOnlySectionsForDocument(document)
+          .filter((section) => !existingKeys.has(String(section?.key || "")))
+          .map((section) => {{
+            if (!stateFilter) return section;
+            return {{
+              ...section,
+              rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
+                stateFilter === "plain" ? !rowStateValue(row) : (stateFilter === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === stateFilter)
+              ),
+            }};
+          }})
+          .filter((section) => Array.isArray(section.rows) && section.rows.length);
+        return [...baseSections, ...extraSections];
+      }};
 
       const buildGroupsForView = (document) => {{
         if (!document) return [];
@@ -2378,6 +2402,7 @@ def render_manufacturing_page(
               return sizeLabel === currentSubcategoryKey;
             }});
           }}
+          specialSections = appendCncOverviewOnlySections(document, specialSections);
           if (!specialViewUsesRedFilter(currentSpecialView)) {{
             return specialSections;
           }}
@@ -2390,14 +2415,14 @@ def render_manufacturing_page(
         }}
         const overviewSections = overviewSectionsForDocument(document);
         const sections = documentUsesSingleColumnOverview(document) && String(document?.key || "") === "cnc_furas"
-          ? overviewSections
+          ? appendCncOverviewOnlySections(document, overviewSections)
           : orderedSectionsForTabs(overviewSections);
         if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           if (currentViewKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
           }}
           if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
-            return sections
+            return appendCncOverviewOnlySections(document, sections, currentViewKey)
               .map((section) => ({{
                 ...section,
                 rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
@@ -2507,7 +2532,7 @@ def render_manufacturing_page(
         }}
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         const overviewSections = overviewSectionsForDocument(document, true);
-        const stateOverviewSections = overviewSectionsForDocument(document, false);
+        const stateOverviewSections = overviewSections;
         const sections = (currentSpecialView && !specialViewUsesRedFilter(currentSpecialView) && Array.isArray(currentSpecialView.sections))
           ? currentSpecialView.sections
           : overviewSections;
@@ -2517,16 +2542,19 @@ def render_manufacturing_page(
           {{ key: "plain", label: "Simák", count: countRowsInSections(stateOverviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
           {{ key: "green", label: "Zöldek", count: countRowsInSections(stateOverviewSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
           {{ key: "red", label: "Pirosak", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
-          ...documentSpecialViews.filter((view) => !Boolean(view?.hideTab)).map((view) => ({{
-            key: String(view?.key || ""),
-            label: String(view?.label || ""),
-            count: specialViewUsesRedFilter(view)
-              ? countRowsInSections(view?.sections, (row) => rowStateValue(row) === "red")
-              : totalQuantityForSections(view?.sections),
-            stateClass: specialViewUsesRedFilter(view)
-              ? ""
-              : tabStateClassForRows(Array.isArray(view?.sections) ? view.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : []),
-          }})),
+          ...documentSpecialViews.filter((view) => !Boolean(view?.hideTab)).map((view) => {{
+            const viewSections = Array.isArray(view?.sections) ? view.sections : [];
+            return {{
+              key: String(view?.key || ""),
+              label: String(view?.label || ""),
+              count: specialViewUsesRedFilter(view)
+                ? countRowsInSections(viewSections, (row) => rowStateValue(row) === "red")
+                : totalQuantityForSections(viewSections),
+              stateClass: specialViewUsesRedFilter(view)
+                ? ""
+                : tabStateClassForRows(viewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])),
+            }};
+          }}),
         ];
         if (documentUsesSingleColumnOverview(document)) {{
           sectionTabsNode.innerHTML = specialTabs.map((item) => `
