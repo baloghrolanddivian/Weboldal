@@ -545,6 +545,39 @@ def render_manufacturing_page(
       gap: 10px;
       overflow: hidden;
     }}
+    .mfg-search-row {{
+      width: min(50vw, 620px);
+      max-width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      border-radius: 16px;
+      background: #f8fafc;
+      overflow: hidden;
+    }}
+    .mfg-search-row[hidden] {{
+      display: none;
+    }}
+    .mfg-search-input {{
+      flex: 1 1 auto;
+      min-width: 160px;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--mfg-line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--mfg-text);
+      font-size: 0.86rem;
+      font-weight: 700;
+      outline: none;
+    }}
+    .mfg-search-input:focus {{
+      border-color: #111827;
+      box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+    }}
     .mfg-status {{
       font-size: 0.76rem;
       padding: 0 4px;
@@ -844,6 +877,9 @@ def render_manufacturing_page(
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
     }}
+    .mfg-content.is-overview:not(.is-split):not(.is-single-column-overview) .mfg-section-card {{
+      grid-column: 1 / -1;
+    }}
     .mfg-content.is-single-column-overview {{
       display: block;
       min-width: 0;
@@ -1081,11 +1117,15 @@ def render_manufacturing_page(
       align-self: start;
       max-height: calc(100vh - 244px);
       max-height: calc(100dvh - 244px);
+      max-height: min(68vh, calc(100vh - 244px));
+      max-height: min(68dvh, calc(100dvh - 244px));
       grid-template-rows: auto auto auto;
     }}
     .mfg-content.is-split .mfg-row-list {{
       max-height: calc(100vh - 338px);
       max-height: calc(100dvh - 338px);
+      max-height: min(58vh, calc(100vh - 338px));
+      max-height: min(58dvh, calc(100dvh - 338px));
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
@@ -1096,6 +1136,7 @@ def render_manufacturing_page(
     }}
     .mfg-row {{
       width: 100%;
+      min-height: 50px;
       padding: 7px 10px;
       border-radius: 0;
       border: 0;
@@ -1750,7 +1791,8 @@ def render_manufacturing_page(
         padding-left: 10px;
       }}
       .mfg-content.is-split .mfg-row {{
-        padding: 6px 8px;
+        min-height: 52px;
+        padding: 7px 8px;
         gap: 4px;
       }}
       .mfg-content.is-split .mfg-row-title {{
@@ -1758,7 +1800,7 @@ def render_manufacturing_page(
       }}
       .mfg-content.is-split .mfg-row-meta span {{
         font-size: 0.76rem;
-        min-height: 24px;
+        min-height: 26px;
       }}
       .mfg-content.is-split .mfg-row-meta span.is-size {{
         font-size: 0.72rem;
@@ -1769,7 +1811,7 @@ def render_manufacturing_page(
         line-height: 1.08;
       }}
       .mfg-content.is-split .mfg-row-qty {{
-        min-height: 24px;
+        min-height: 26px;
         padding: 0 6px;
         font-size: 0.76rem;
       }}
@@ -1800,6 +1842,9 @@ def render_manufacturing_page(
       <div class="mfg-tab-row" id="mfg-doc-tabs" style="display:none"></div>
       <div class="mfg-section-tab-row" id="mfg-section-tabs"></div>
       <div class="mfg-subsection-tab-row" id="mfg-subsection-tabs" style="display:none"></div>
+      <div class="mfg-search-row" id="mfg-search-row" hidden>
+        <input class="mfg-search-input" id="mfg-search-input" type="search" autocomplete="off" spellcheck="false" placeholder="Kereses..." />
+      </div>
       <div class="mfg-status-row">
         <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
         <div class="mfg-status-actions">
@@ -1843,13 +1888,15 @@ def render_manufacturing_page(
       const docTabsNode = document.getElementById("mfg-doc-tabs");
       const sectionTabsNode = document.getElementById("mfg-section-tabs");
       const subsectionTabsNode = document.getElementById("mfg-subsection-tabs");
+      const searchRowNode = document.getElementById("mfg-search-row");
+      const searchInputNode = document.getElementById("mfg-search-input");
       const contentNode = document.getElementById("mfg-content");
       const statusNode = document.getElementById("mfg-status");
       const reportReadyButtonNode = document.getElementById("mfg-report-ready");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
       const choiceModalNode = document.getElementById("mfg-choice-modal");
       const confirmModalNode = document.getElementById("mfg-confirm-modal");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !contentNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
 
       let payload = {{}};
       try {{
@@ -1878,6 +1925,7 @@ def render_manufacturing_page(
       const partialSaveTimers = new Map();
       let pendingRedChoice = null;
       let pendingConfirmResolve = null;
+      let activeSearchText = "";
 
       const syncUrlForDocument = () => {{
         try {{
@@ -1903,6 +1951,7 @@ def render_manufacturing_page(
       const documentAllowsSplit = (document) => document?.allowSplit !== false;
       const documentUsesSingleColumnOverview = (document) => document?.singleColumnOverview === true;
       const documentHidesBarcode = (document) => document?.hideBarcodeColumn === true;
+      const documentUsesSearch = (document) => Boolean(document);
       const groupColumnLayout = (group) => {{
         const directLayout = String(group?.columnLayout || "").trim();
         if (directLayout) return directLayout;
@@ -1954,6 +2003,13 @@ def render_manufacturing_page(
       const rowStateValue = (row) => selectionState[rowStateKey(row)] || "";
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
+      const canReportReadyForCurrentView = (document) => {{
+        const documentKey = String(document?.key || "");
+        if (!reportReadyRoute) return false;
+        if (documentKey === "korpusz_osszekeszites") return currentSubcategoryKey === "green";
+        if (documentKey === "front_osszekeszites") return currentViewKey === "green";
+        return false;
+      }};
       const countStateInDocument = (document, wanted) => flattenRows(document)
         .filter((row) => rowStateValue(row) === wanted)
         .reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
@@ -2034,6 +2090,52 @@ def render_manufacturing_page(
         statusNode.textContent = message;
         statusNode.classList.remove("is-error", "is-success");
         if (tone) statusNode.classList.add(tone);
+      }};
+      const normalizeSearchText = (value) =>
+        String(value ?? "")
+          .toLocaleLowerCase("hu-HU")
+          .normalize("NFD")
+          .replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/\\s+/g, " ")
+          .trim();
+      const activeSearchTerms = () => normalizeSearchText(activeSearchText).split(" ").filter(Boolean);
+      const collectSearchParts = (value, parts = []) => {{
+        if (value == null) return parts;
+        if (Array.isArray(value)) {{
+          value.forEach((item) => collectSearchParts(item, parts));
+          return parts;
+        }}
+        if (typeof value === "object") {{
+          Object.values(value).forEach((item) => collectSearchParts(item, parts));
+          return parts;
+        }}
+        parts.push(String(value));
+        return parts;
+      }};
+      const rowMatchesSearch = (row, group, terms) => {{
+        if (!terms.length) return true;
+        const searchable = normalizeSearchText(collectSearchParts(row, [group?.label || "", group?.key || ""]).join(" "));
+        return terms.every((term) => searchable.includes(term));
+      }};
+      const filterGroupsBySearch = (groups, document) => {{
+        const terms = activeSearchTerms();
+        if (!documentUsesSearch(document) || !terms.length) return groups;
+        return (Array.isArray(groups) ? groups : [])
+          .map((group) => ({{
+            ...group,
+            rows: (Array.isArray(group?.rows) ? group.rows : []).filter((row) => rowMatchesSearch(row, group, terms)),
+          }}))
+          .filter((group) => Array.isArray(group.rows) && group.rows.length);
+      }};
+      const updateSearchControls = (activeDocument) => {{
+        const enabled = documentUsesSearch(activeDocument);
+        searchRowNode.hidden = !enabled;
+        if (!enabled) {{
+          activeSearchText = "";
+          searchInputNode.value = "";
+        }} else if (window.document.activeElement !== searchInputNode) {{
+          searchInputNode.value = activeSearchText;
+        }}
       }};
       const nextRowState = (currentState) => {{
         if (currentState === "green") return "red";
@@ -2286,7 +2388,10 @@ def render_manufacturing_page(
             }}))
             .filter((section) => section.rows.length);
         }}
-        const sections = orderedSectionsForTabs(overviewSectionsForDocument(document, currentViewKey === "all"));
+        const overviewSections = overviewSectionsForDocument(document);
+        const sections = documentUsesSingleColumnOverview(document) && String(document?.key || "") === "cnc_furas"
+          ? overviewSections
+          : orderedSectionsForTabs(overviewSections);
         if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           if (currentViewKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
@@ -2483,7 +2588,10 @@ def render_manufacturing_page(
         contentNode.classList.toggle("is-single-column-overview", useSingleColumnOverview);
         contentNode.classList.toggle("is-split", isSplitMode);
         if (!groups.length) {{
-          const emptyLabel = currentSpecialView
+          const hasActiveSearch = documentUsesSearch(document) && activeSearchTerms().length > 0;
+          const emptyLabel = hasActiveSearch
+            ? "A keresesre nincs talalat."
+            : currentSpecialView
             ? `${{currentSpecialView.label}} nézetben nincs megjeleníthető sor.`
             : currentViewKey === "green"
               ? "Még nincs zöldre jelölt sor."
@@ -2725,9 +2833,6 @@ def render_manufacturing_page(
                                   ? ""
                                   : `
                                       <div class="mfg-row-barcode-wrap">
-                                        <div class="mfg-row-barcode">
-                                          <svg class="mfg-row-barcode-svg" data-barcode-value="${{escapeHtml(row.code || row.row_id)}}"></svg>
-                                        </div>
                                         <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
                                       </div>
                                     `
@@ -2827,13 +2932,12 @@ def render_manufacturing_page(
         }}
         renderDocTabs();
         renderSectionTabs(document);
-        const canReportReady =
-          String(document?.key || "") === "korpusz_osszekeszites" &&
-          currentSubcategoryKey === "green" &&
-          Boolean(reportReadyRoute);
+        updateSearchControls(document);
+        const visibleGroups = filterGroupsBySearch(buildGroupsForView(document), document);
+        const canReportReady = canReportReadyForCurrentView(document);
         reportReadyButtonNode.style.display = canReportReady ? "inline-flex" : "none";
         if (canReportReady) {{
-          const greenRows = buildGroupsForView(document)
+          const greenRows = visibleGroups
             .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
             .filter((row) => isReadyGreenState(rowStateValue(row)));
           reportReadyButtonNode.disabled = greenRows.length === 0;
@@ -2848,7 +2952,7 @@ def render_manufacturing_page(
           const mode = button.getAttribute("data-layout-mode") || "single";
           button.classList.toggle("is-active", mode === layoutMode);
         }});
-        renderRows(buildGroupsForView(document));
+        renderRows(visibleGroups);
         normalizePantoloHeaders();
         renderBarcodes();
         requestAnimationFrame(() => restoreScrollState(scrollState));
@@ -3030,6 +3134,18 @@ def render_manufacturing_page(
         renderAll();
       }});
 
+      searchInputNode.addEventListener("keydown", (event) => {{
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        activeSearchText = searchInputNode.value || "";
+        renderAll();
+      }});
+
+      searchInputNode.addEventListener("input", () => {{
+        activeSearchText = searchInputNode.value || "";
+        renderAll();
+      }});
+
       layoutToggleNode.addEventListener("click", (event) => {{
         const button = event.target.closest("[data-layout-mode]");
         if (!(button instanceof HTMLElement)) return;
@@ -3140,15 +3256,12 @@ def render_manufacturing_page(
 
       reportReadyButtonNode.addEventListener("click", async () => {{
         const document = currentDocument();
-        const canReportReady =
-          String(document?.key || "") === "korpusz_osszekeszites" &&
-          currentSubcategoryKey === "green" &&
-          Boolean(reportReadyRoute);
+        const canReportReady = canReportReadyForCurrentView(document);
         if (!canReportReady || reportReadyButtonNode.disabled) return;
         const isConfirmed = await requestConfirmModal();
         if (!isConfirmed) return;
 
-        const visibleRows = buildGroupsForView(document)
+        const visibleRows = filterGroupsBySearch(buildGroupsForView(document), document)
           .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
           .filter((row) => isReadyGreenState(rowStateValue(row)));
         if (!visibleRows.length) {{
@@ -3161,6 +3274,7 @@ def render_manufacturing_page(
           const match = joined.toUpperCase().match(/\\bCON\\D*?(\\d{{6,}})\\b/);
           return match ? `CON${{match[1]}}` : "";
         }};
+        const documentKey = String(document?.key || "").trim();
         const categoryKey = String(currentViewKey || "").trim();
         const entries = visibleRows
           .map((row) => {{
@@ -3171,7 +3285,7 @@ def render_manufacturing_page(
               ? row.sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)
               : [];
             if (!rowId || !stateKey || !code) return null;
-            return {{ row_id: rowId, state_key: stateKey, code, category_key: categoryKey, source_row_ids: sourceRowIds }};
+            return {{ row_id: rowId, state_key: stateKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};
           }})
           .filter(Boolean);
         if (!entries.length) {{
@@ -3188,6 +3302,7 @@ def render_manufacturing_page(
             headers: {{ "Content-Type": "application/json" }},
             body: JSON.stringify({{
               production_number: productionNumber,
+              document_key: documentKey,
               category_key: categoryKey,
               entries,
             }}),

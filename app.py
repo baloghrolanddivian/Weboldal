@@ -241,6 +241,8 @@ SHOPFLOOR_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_CHECKPOINT_ID", "103"))
 SHOPFLOOR_TAB_ID = int(os.getenv("SHOPFLOOR_TAB_ID", "178"))
 SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID", "104"))
 SHOPFLOOR_ASSEMBLY_TAB_ID = int(os.getenv("SHOPFLOOR_ASSEMBLY_TAB_ID", "181"))
+SHOPFLOOR_FRONT_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_FRONT_CHECKPOINT_ID", "107"))
+SHOPFLOOR_FRONT_TAB_ID = int(os.getenv("SHOPFLOOR_FRONT_TAB_ID", "182"))
 SHOPFLOOR_PROCESS_PAYLOAD = {
     "allowAnonymousInventory": False,
     "cdsmId": 4,
@@ -1427,7 +1429,21 @@ def _shopfloor_extract_validate_data(response_body: str) -> object | None:
     return payload
 
 
-def _shopfloor_report_con_ready(con_code: str, *, use_assembly_validate: bool = False) -> tuple[int, str, str]:
+def _shopfloor_ready_endpoint_config(ready_endpoint: str, use_assembly_validate: bool) -> tuple[int, int, bool]:
+    endpoint_key = str(ready_endpoint or "").strip().lower()
+    if use_assembly_validate or endpoint_key == "assembly":
+        return SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID, SHOPFLOOR_ASSEMBLY_TAB_ID, True
+    if endpoint_key == "front":
+        return SHOPFLOOR_FRONT_CHECKPOINT_ID, SHOPFLOOR_FRONT_TAB_ID, True
+    return SHOPFLOOR_CHECKPOINT_ID, SHOPFLOOR_TAB_ID, False
+
+
+def _shopfloor_report_con_ready(
+    con_code: str,
+    *,
+    use_assembly_validate: bool = False,
+    ready_endpoint: str = "default",
+) -> tuple[int, str, str]:
     con_text = str(con_code or "").strip().upper()
     match = re.fullmatch(r"CON(\d{1,12})", con_text)
     if not match:
@@ -1436,8 +1452,7 @@ def _shopfloor_report_con_ready(con_code: str, *, use_assembly_validate: bool = 
 
     auth_header = _shopfloor_auth_header()
     connection_id = _shopfloor_negotiate_connection_id(auth_header)
-    checkpoint_id = SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID if use_assembly_validate else SHOPFLOOR_CHECKPOINT_ID
-    tab_id = SHOPFLOOR_ASSEMBLY_TAB_ID if use_assembly_validate else SHOPFLOOR_TAB_ID
+    checkpoint_id, tab_id, requires_validate = _shopfloor_ready_endpoint_config(ready_endpoint, use_assembly_validate)
     quoted_connection_id = urllib.parse.quote(connection_id, safe="")
     request_body = _shopfloor_process_payload(con_id)
     headers = {"Authorization": auth_header, "Content-Type": "application/json"}
@@ -1464,7 +1479,7 @@ def _shopfloor_report_con_ready(con_code: str, *, use_assembly_validate: bool = 
             body = exc.read().decode("utf-8", errors="ignore")
             return int(exc.code or 0), body
 
-    if use_assembly_validate:
+    if requires_validate:
         validate_status_code, validate_response_body = submit("validatescan", request_body)
         if not 200 <= int(validate_status_code) < 300:
             return validate_status_code, validate_response_body, "validatescan"
@@ -1485,6 +1500,14 @@ def _extract_con_code(value: object) -> str:
 
 def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
     return str(category_key or "").strip() == "korpusz-osszekeszito"
+
+
+def _manufacturing_ready_endpoint_key(document_key: object, category_key: object) -> str:
+    if str(document_key or "").strip() == "front_osszekeszites":
+        return "front"
+    if _manufacturing_uses_assembly_ready_endpoint(category_key):
+        return "assembly"
+    return "default"
 
 
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
@@ -4738,6 +4761,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             or "ef60" in combined
         )
 
+    def upper_felnyilo_type_sort_value(row: dict) -> str:
+        combined = upper_combined_text(row)
+        side_type = folded(row.get("side_type"))
+        hardware_type = folded(row.get("hardware_type"))
+        values = (side_type, hardware_type, combined)
+        if any("ef60" in value for value in values):
+            return "ef60"
+        if any("f2a" in value or "f_2a" in value for value in values):
+            return "f2a"
+        if any("felnyilo" in value for value in values):
+            return "felnyilo"
+        if any("ffm" in value for value in values):
+            return "ffm"
+        return side_type or hardware_type or combined
+
     def is_upper_zille(row: dict) -> bool:
         combined = upper_combined_text(row)
         return "zille" in combined or "fuf" in combined or "fzn" in combined
@@ -4828,11 +4866,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             rows.sort(
                 key=lambda row: (
                     clean_text(row.get("color")),
-                    0 if "felnyilo" in upper_combined_text(row) else 1,
-                    0 if "f2a" in upper_combined_text(row) or "f_2a" in upper_combined_text(row) else 1,
-                    0 if "ffm" in upper_combined_text(row) else 1,
-                    0 if "ef60" in upper_combined_text(row) else 1,
+                    upper_felnyilo_type_sort_value(row),
                     size_parts(row.get("size")),
+                    clean_text(row.get("hardware_type")),
+                    clean_text(row.get("side_type")),
+                    clean_text(row.get("name")),
                 )
             )
         elif mode == "rack1-other":
@@ -5075,11 +5113,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
 
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
-    add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
     add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
     add_upper_section("1-es raklap · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
-    add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
     add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("2-es raklap · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("2-es raklap · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
@@ -5088,11 +5126,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     upper_sections = []
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
-    add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
     add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
     add_upper_section("1-es raklap · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
-    add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
     add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("2-es raklap · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("2-es raklap · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
@@ -17338,6 +17376,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
             category_key = str(payload.get("category_key", "")).strip()
+            document_key = str(payload.get("document_key", "")).strip()
             raw_entries = payload.get("entries")
             if not production_number:
                 self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártási szám."})
@@ -17354,6 +17393,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 state_key = str(item.get("state_key", "")).strip()
                 code = _extract_con_code(item.get("code", ""))
                 entry_category_key = str(item.get("category_key") or category_key).strip()
+                entry_document_key = str(item.get("document_key") or document_key).strip()
                 source_row_ids = (
                     [str(value).strip() for value in item.get("source_row_ids", []) if str(value).strip()]
                     if isinstance(item.get("source_row_ids"), list)
@@ -17367,6 +17407,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         "state_key": state_key,
                         "code": code,
                         "category_key": entry_category_key,
+                        "document_key": entry_document_key,
                         "source_row_ids": source_row_ids,
                     }
                 )
@@ -17378,20 +17419,20 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 {
                     (
                         str(entry.get("code", "")).strip().upper(),
-                        _manufacturing_uses_assembly_ready_endpoint(entry.get("category_key", "")),
+                        _manufacturing_ready_endpoint_key(entry.get("document_key", ""), entry.get("category_key", "")),
                     )
                     for entry in entries
                     if entry.get("code")
                 }
             )
             failures: list[dict[str, str | int]] = []
-            success_targets: set[tuple[str, bool]] = set()
-            for code, use_assembly_validate in scan_targets:
-                fallback_endpoint = "validatescan+processscan" if use_assembly_validate else "processscan"
+            success_targets: set[tuple[str, str]] = set()
+            for code, ready_endpoint in scan_targets:
+                fallback_endpoint = "validatescan+processscan" if ready_endpoint in {"assembly", "front"} else "processscan"
                 try:
                     status_code, response_body, endpoint_name = _shopfloor_report_con_ready(
                         code,
-                        use_assembly_validate=use_assembly_validate,
+                        ready_endpoint=ready_endpoint,
                     )
                 except Exception as exc:
                     failures.append(
@@ -17404,7 +17445,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     )
                     continue
                 if 200 <= int(status_code) < 300:
-                    success_targets.add((code, use_assembly_validate))
+                    success_targets.add((code, ready_endpoint))
                 else:
                     failures.append(
                         {
@@ -17420,7 +17461,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             try:
                 for entry in entries:
                     entry_code = str(entry.get("code", "")).strip().upper()
-                    entry_use_assembly_validate = _manufacturing_uses_assembly_ready_endpoint(entry.get("category_key", ""))
+                    entry_ready_endpoint = _manufacturing_ready_endpoint_key(entry.get("document_key", ""), entry.get("category_key", ""))
                     target_ids = [
                         str(entry.get("row_id", "")).strip(),
                         *[str(value).strip() for value in entry.get("source_row_ids", []) if str(value).strip()],
@@ -17429,7 +17470,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     for target_id in target_ids:
                         if target_id and target_id not in unique_target_ids:
                             unique_target_ids.append(target_id)
-                    if (entry_code, entry_use_assembly_validate) not in success_targets:
+                    if (entry_code, entry_ready_endpoint) not in success_targets:
                         skipped_row_ids.extend(unique_target_ids)
                         continue
                     for target_id in unique_target_ids:
@@ -17463,7 +17504,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "attempted_count": attempted_count,
                     "success_count": success_count,
                     "failed_count": failed_count,
-                    "reported_codes": sorted({code for code, _use_assembly_validate in success_targets}),
+                    "reported_codes": sorted({code for code, _ready_endpoint in success_targets}),
                     "failed": failures,
                     "done_row_ids": unique_done_ids,
                     "skipped_row_ids": unique_skipped_ids,
