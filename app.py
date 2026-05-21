@@ -5089,6 +5089,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if upper_row_id(row) not in rack1_box3_ids and upper_row_id(row) not in rack2_box3_ids
     ]
     rack1_box3_rows = [row for row in rack1_box3_rows if upper_row_id(row) not in rack2_box3_ids]
+    rack1_fenek_rows = [row for row in rack1_box3_rows if "fenek" in folded(row.get("name"))]
+    rack1_fenek_ids = {upper_row_id(row) for row in rack1_fenek_rows}
+    rack1_box3_rows = [row for row in rack1_box3_rows if upper_row_id(row) not in rack1_fenek_ids]
     rack1_box3_ids = {upper_row_id(row) for row in rack1_box3_rows}
     upper_assigned_ids = {
         str(row.get("row_id", ""))
@@ -5096,6 +5099,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             rack1_box1_rows,
             rack1_box2_rows,
             rack1_box360_rows,
+            rack1_fenek_rows,
             rack1_box3_rows,
             rack2_box1_rows,
             rack2_box2_rows,
@@ -5115,6 +5119,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
     add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
     add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
+    add_upper_section("1-es raklap · Fenekek", rack1_fenek_rows, "rack1-fenek", "rack1-other")
     add_upper_section("1-es raklap · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
     add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
@@ -5128,6 +5133,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
     add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
     add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
+    add_upper_section("1-es raklap · Fenekek", rack1_fenek_rows, "rack1-fenek", "rack1-other")
     add_upper_section("1-es raklap · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
     add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
