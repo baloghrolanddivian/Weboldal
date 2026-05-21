@@ -1443,6 +1443,42 @@ def render_manufacturing_page(
       display: inline-flex;
       width: fit-content;
     }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-mark {{
+      min-height: 28px;
+      padding: 0 9px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      color: #ffffff;
+      font-weight: 900;
+      justify-content: center;
+      width: fit-content;
+      max-width: 100%;
+      white-space: normal;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-dark-green {{
+      background: #065f46;
+      border-color: rgba(4, 120, 87, 0.34);
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-lime {{
+      background: #84cc16;
+      border-color: rgba(77, 124, 15, 0.34);
+      color: #1f3708;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-yellow {{
+      background: #facc15;
+      border-color: rgba(161, 98, 7, 0.3);
+      color: #3f2d05;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-orange {{
+      background: #f97316;
+      border-color: rgba(194, 65, 12, 0.32);
+      color: #ffffff;
+    }}
+    .mfg-row.is-pantolo .mfg-row-meta span.is-pantolo-pink {{
+      background: #ec4899;
+      border-color: rgba(190, 24, 93, 0.3);
+      color: #ffffff;
+    }}
     .mfg-row-subtitle {{
       font-size: 0.7rem;
       line-height: 1.12;
@@ -2799,6 +2835,52 @@ def render_manufacturing_page(
             const fiokeloDrawerTypeMarkup = fiokeloDrawerTypeValue === "HE"
               ? `<span class="is-pill-black">${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`
               : `<span>${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`;
+            const pantoloNormalizeMarkText = (value) =>
+              String(value || "")
+                .trim()
+                .toLocaleLowerCase("hu-HU")
+                .normalize("NFD")
+                .replace(/[\\u0300-\\u036f]/g, "")
+                .replace(/\\s+/g, " ");
+            const pantoloCellClass = (baseClass, tone) =>
+              [baseClass, tone ? "is-pantolo-mark" : "", tone ? `is-pantolo-${{tone}}` : ""]
+                .filter(Boolean)
+                .join(" ");
+            const pantoloHandleDrillText = pantoloNormalizeMarkText(row.handleDrill);
+            const pantoloOpeningText = pantoloNormalizeMarkText(row.openingDir);
+            const pantoloDoorText = pantoloNormalizeMarkText(row.doorType);
+            const pantoloPantText = pantoloNormalizeMarkText(row.pantType);
+            const pantoloDoorIsCorner = pantoloDoorText.includes("sarok") || pantoloDoorText === "fsl";
+            const pantoloDoorIsKam = pantoloDoorText.includes("kam.");
+            const pantoloPantIsSpecial =
+              pantoloPantText.includes("3d") ||
+              pantoloPantText.includes("hutos") ||
+              pantoloPantText.includes("hettich");
+            let pantoloPantMark = "";
+            let pantoloHandleDrillMark = "";
+            let pantoloOpeningMark = "";
+            let pantoloDoorMark = "";
+            if (pantoloHandleDrillText === "nincs") {{
+              pantoloHandleDrillMark = "dark-green";
+            }}
+            if (pantoloOpeningText === "nincs") {{
+              pantoloOpeningMark = "dark-green";
+              pantoloDoorMark = "dark-green";
+            }} else if (pantoloOpeningText === "felnyilo") {{
+              pantoloOpeningMark = "lime";
+              pantoloDoorMark = "lime";
+            }}
+            if (pantoloDoorIsCorner) {{
+              pantoloPantMark = "yellow";
+              pantoloOpeningMark = "yellow";
+              pantoloDoorMark = "yellow";
+            }}
+            if (pantoloDoorIsKam) {{
+              pantoloDoorMark = "orange";
+            }}
+            if (pantoloPantIsSpecial) {{
+              pantoloPantMark = "pink";
+            }}
             return `
               <button class="mfg-row${{rowClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(Array.isArray(row.sourceRowIds) ? row.sourceRowIds.join(",") : "")}}">
                 ${{
@@ -2843,16 +2925,16 @@ def render_manufacturing_page(
                           `
                         : columnLayout === "pantolo"
                           ? `
-                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.color23 || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.pantType || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.handleDrill || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.handleType || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.openingDir || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(row.doorType || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span>${{escapeHtml(String(row.meValue || row.quantity || 0))}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-color", "")}}">${{escapeHtml(row.color || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(row.color23 || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloPantMark)}}">${{escapeHtml(row.pantType || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(row.modelLabel || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-size", "")}}">${{escapeHtml(row.size || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloHandleDrillMark)}}">${{escapeHtml(row.handleDrill || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(row.handleType || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloOpeningMark)}}">${{escapeHtml(row.openingDir || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloDoorMark)}}">${{escapeHtml(row.doorType || "-")}}</span></div>
+                              <div class="mfg-row-meta"><span class="is-pill-black">${{escapeHtml(String(row.meValue || row.quantity || 0))}}</span></div>
                               ${{partialMarkup}}
                             `
                         : columnLayout === "front-standard"

@@ -1406,10 +1406,24 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
                         return True
                 return False
 
-            for probe in candidate_indices:
-                if marks_row_boundary(probe):
+            def has_pantolo_tail_fields_before_quantity(probe: int) -> bool:
+                tail_tokens = [
+                    _fold_hu(_clean_text(item[0]))
+                    for item in stream[tail_start:probe]
+                    if _clean_text(item[0]) and not is_header_line(item[0])
+                ]
+                if not tail_tokens:
+                    return False
+                opening_tokens = {"bal", "balos", "jobb", "jobbos", "felnyilo", "nincs"}
+                return any(token in opening_tokens for token in tail_tokens)
+
+            boundary_candidates = [probe for probe in candidate_indices if marks_row_boundary(probe)]
+            for probe in boundary_candidates:
+                if has_pantolo_tail_fields_before_quantity(probe):
                     quantity_index = probe
                     break
+            if quantity_index == -1 and boundary_candidates:
+                quantity_index = boundary_candidates[0]
             if quantity_index == -1:
                 small_candidates = [probe for probe in candidate_indices if abs(int(_clean_text(stream[probe][0]) or "0")) <= 50]
                 quantity_index = small_candidates[0] if small_candidates else candidate_indices[0]
