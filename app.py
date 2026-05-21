@@ -4728,7 +4728,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     add_lower_section("Normáls alsó · 724 x 505 x 18", box1_rows, "box1")
     add_lower_section("Boxosok", box2_rows, "box2")
-    add_lower_section("Kinga/Anna", box3_rows, "box3", hide_side_type=True)
+    add_lower_section("Kinga/Anna", box3_rows, "box3")
     add_lower_section("FVZ", box_fvz_rows, "box-fvz")
     add_lower_section("Alsó Végzáró", box_avz_rows, "box-avz")
     add_lower_section("Egyebek", box4_rows, "box4")
