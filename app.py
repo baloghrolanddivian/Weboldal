@@ -342,7 +342,7 @@ MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_DISK_CACHE_DIR = MANUFACTURING_RUNTIME_DIR / "bundle-cache"
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-05-20-cnc-xml-default-v62"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-05-21-front-without-etikett-v63"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -1339,7 +1339,6 @@ MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
     "alkatresz_kesz": "Alkatrész kész",
     "front_osszekeszito": "Front összekészítő",
-    "front_etikett": "Etikett frontok",
     "cnc": "CNC",
     "fiokelo_furas": "Fiókelő fúrás",
     "pantolo": "Pántoló",
@@ -1551,7 +1550,7 @@ def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tup
 
 
 def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
-    raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito", "front_etikett"))
+    raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito",))
 
     def folded(value: object) -> str:
         text = str(value or "").strip().lower()
@@ -1725,8 +1724,6 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
     grouped_sections: dict[str, dict] = {}
     for section in raw_sections:
-        section_key_text = str(section.get("key", "")).strip().lower()
-        row_source = "etikett" if section_key_text.startswith("front_etikett::") else "front"
         for raw_row in section.get("rows", []):
             if not isinstance(raw_row, dict):
                 continue
@@ -1753,7 +1750,6 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
             row["columnLayout"] = "front-standard"
-            row["frontSource"] = row_source
             grouped_sections[section_slug]["rows"].append(row)
 
     material_order = {"Fóliás": 0, "Bútorlapos": 1}
@@ -5366,20 +5362,6 @@ def _manufacturing_view_bundle(
     front_folias_sections = [dict(section) for section in front_sections if "· Fóliás" in str(section.get("label", ""))]
     front_butorlapos_sections = [dict(section) for section in front_sections if "· Bútorlapos" in str(section.get("label", ""))]
 
-    def _filter_front_sections_by_source(sections: list[dict], source: str) -> list[dict]:
-        filtered_sections: list[dict] = []
-        for section in sections:
-            if not isinstance(section, dict):
-                continue
-            rows = [row for row in section.get("rows", []) if isinstance(row, dict) and str(row.get("frontSource", "")).strip().lower() == source]
-            if not rows:
-                continue
-            cloned = dict(section)
-            cloned["rows"] = rows
-            filtered_sections.append(cloned)
-        return filtered_sections
-
-    front_etikett_sections = _filter_front_sections_by_source(front_sections, "etikett")
     documents.append(
         {
             "key": "front_osszekeszites",
@@ -5400,12 +5382,6 @@ def _manufacturing_view_bundle(
                     "label": "Bútorlapos",
                     "count": sum(len(section.get("rows", [])) for section in front_butorlapos_sections),
                     "sections": front_butorlapos_sections,
-                },
-                {
-                    "key": "front-etikett",
-                    "label": "Etikett frontok",
-                    "count": sum(len(section.get("rows", [])) for section in front_etikett_sections),
-                    "sections": front_etikett_sections,
                 },
             ],
             "allowSplit": False,

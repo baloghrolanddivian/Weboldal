@@ -171,21 +171,6 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
     return None
 
 
-def _find_etikett_egyeb_szerelveny_path(folder: Path) -> Path | None:
-    if not folder.exists():
-        return None
-    candidate = folder / "Etikett_egyeb_szerelveny.pdf"
-    if candidate.exists():
-        return candidate
-    for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if not path.is_file() or path.suffix.lower() != ".pdf":
-            continue
-        folded_name = _fold_hu(path.name)
-        if "etikett" in folded_name and "szerelveny" in folded_name:
-            return path
-    return None
-
-
 def _find_cnc_path(folder: Path) -> Path | None:
     candidate = folder / "CNC.pdf"
     if candidate.exists():
@@ -1735,15 +1720,6 @@ def load_production_bundle(production_number: str) -> dict:
             front_doc = None
         if front_doc is not None:
             documents.append(asdict(front_doc))
-    etikett_path = _find_etikett_egyeb_szerelveny_path(folder)
-    if etikett_path is not None:
-        try:
-            etikett_doc = parse_front_etikett(etikett_path)
-        except Exception:
-            etikett_doc = None
-        if etikett_doc is not None and etikett_doc.row_count:
-            documents.append(asdict(etikett_doc))
-
     cnc_path = _find_cnc_path(folder)
     if cnc_path is not None:
         try:
