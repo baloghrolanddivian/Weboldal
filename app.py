@@ -4459,6 +4459,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             or "ef60" in combined
         )
 
+    def upper_felnyilo_type_sort_value(row: dict) -> str:
+        combined = upper_combined_text(row)
+        side_type = folded(row.get("side_type"))
+        hardware_type = folded(row.get("hardware_type"))
+        values = (side_type, hardware_type, combined)
+        if any("ef60" in value for value in values):
+            return "ef60"
+        if any("f2a" in value or "f_2a" in value for value in values):
+            return "f2a"
+        if any("felnyilo" in value for value in values):
+            return "felnyilo"
+        if any("ffm" in value for value in values):
+            return "ffm"
+        return side_type or hardware_type or combined
+
     def is_upper_zille(row: dict) -> bool:
         combined = upper_combined_text(row)
         return "zille" in combined or "fuf" in combined or "fzn" in combined
@@ -4550,11 +4565,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             rows.sort(
                 key=lambda row: (
                     clean_text(row.get("color")),
-                    0 if "felnyilo" in upper_combined_text(row) else 1,
-                    0 if "f2a" in upper_combined_text(row) or "f_2a" in upper_combined_text(row) else 1,
-                    0 if "ffm" in upper_combined_text(row) else 1,
-                    0 if "ef60" in upper_combined_text(row) else 1,
+                    upper_felnyilo_type_sort_value(row),
                     size_parts(row.get("size")),
+                    clean_text(row.get("hardware_type")),
+                    clean_text(row.get("side_type")),
+                    clean_text(row.get("name")),
                 )
             )
         elif mode == "rack1-other":
@@ -4796,11 +4811,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
 
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
-    add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
     add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
     add_upper_section("1-es raklap · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
-    add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
     add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("2-es raklap · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("2-es raklap · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
@@ -4809,11 +4824,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     upper_sections = []
     add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
-    add_upper_section("1-es raklap · Felnyíló / F2A / FFM / EF60", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
     add_upper_section("1-es raklap · 360-as elemek", rack1_box360_rows, "rack1-box360", "default")
     add_upper_section("1-es raklap · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
     add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
-    add_upper_section("2-es raklap · Felnyíló / F2A / FFM / EF60", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
     add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("2-es raklap · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("2-es raklap · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")

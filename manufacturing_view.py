@@ -2372,7 +2372,10 @@ def render_manufacturing_page(
             }}))
             .filter((section) => section.rows.length);
         }}
-        const sections = orderedSectionsForTabs(overviewSectionsForDocument(document));
+        const overviewSections = overviewSectionsForDocument(document);
+        const sections = documentUsesSingleColumnOverview(document) && String(document?.key || "") === "cnc_furas"
+          ? overviewSections
+          : orderedSectionsForTabs(overviewSections);
         if (documentUsesSingleColumnOverview(document) && (currentViewKey === "all" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain")) {{
           if (currentViewKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
