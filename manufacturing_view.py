@@ -1103,11 +1103,15 @@ def render_manufacturing_page(
       align-self: start;
       max-height: calc(100vh - 244px);
       max-height: calc(100dvh - 244px);
+      max-height: min(68vh, calc(100vh - 244px));
+      max-height: min(68dvh, calc(100dvh - 244px));
       grid-template-rows: auto auto auto;
     }}
     .mfg-content.is-split .mfg-row-list {{
       max-height: calc(100vh - 338px);
       max-height: calc(100dvh - 338px);
+      max-height: min(58vh, calc(100vh - 338px));
+      max-height: min(58dvh, calc(100dvh - 338px));
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
