@@ -1520,6 +1520,11 @@ def _extract_con_code(value: object) -> str:
     return f"CON{match.group(1)}" if match else ""
 
 
+def _manufacturing_is_virtual_unit_row_id(value: object) -> bool:
+    text = str(value or "")
+    return "__child_unit_" in text or "__pantolo_unit_" in text
+
+
 def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
     return str(category_key or "").strip() == "korpusz-osszekeszito"
 
@@ -18530,11 +18535,15 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 entry_category_key = str(item.get("category_key") or category_key).strip()
                 entry_document_key = str(item.get("document_key") or document_key).strip()
                 source_row_ids = (
-                    [str(value).strip() for value in item.get("source_row_ids", []) if str(value).strip()]
+                    [
+                        str(value).strip()
+                        for value in item.get("source_row_ids", [])
+                        if str(value).strip() and not _manufacturing_is_virtual_unit_row_id(value)
+                    ]
                     if isinstance(item.get("source_row_ids"), list)
                     else []
                 )
-                if not row_id or not state_key or not code:
+                if not row_id or _manufacturing_is_virtual_unit_row_id(row_id) or not state_key or not code:
                     continue
                 entries.append(
                     {
@@ -18599,7 +18608,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     entry_ready_endpoint = _manufacturing_ready_endpoint_key(entry.get("document_key", ""), entry.get("category_key", ""))
                     target_ids = [
                         str(entry.get("row_id", "")).strip(),
-                        *[str(value).strip() for value in entry.get("source_row_ids", []) if str(value).strip()],
+                        *[
+                            str(value).strip()
+                            for value in entry.get("source_row_ids", [])
+                            if str(value).strip() and not _manufacturing_is_virtual_unit_row_id(value)
+                        ],
                     ]
                     unique_target_ids: list[str] = []
                     for target_id in target_ids:
