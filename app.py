@@ -2586,7 +2586,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     return sections, row_count
 
 
-def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str, str]:
+def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str]:
     raw_sections, _ = _manufacturing_document_sections(bundle, production_number, ("cnc", "fiokelo_furas"))
     using_xml_cnc_source = False
 
@@ -2763,157 +2763,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if not str(section.get("key", "")).startswith("cnc::")
         ] + xml_cnc_sections
         using_xml_cnc_source = True
-
-    def fiokelo_xml_source_sections() -> tuple[list[dict], bool]:
-        if _manufacturing_normalize_number(production_number) != "13821":
-            return [], False
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return [], False
-        folder = Path(folder_text)
-        xml_path = folder / "Fiokelo_furas.xml"
-        if not xml_path.is_file():
-            try:
-                xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "fiokelo_furas.xml"), xml_path)
-            except OSError:
-                return [], False
-        if not xml_path.is_file():
-            return [], False
-
-        try:
-            import xml.etree.ElementTree as ET
-
-            root = ET.parse(xml_path).getroot()
-        except Exception:
-            return [], True
-
-        def local_name(tag: object) -> str:
-            return str(tag or "").rsplit("}", 1)[-1].strip()
-
-        def folded_ascii(value: object) -> str:
-            text = unicodedata.normalize("NFKD", clean_text(value))
-            text = "".join(char for char in text if not unicodedata.combining(char))
-            return re.sub(r"\s+", " ", text).strip().lower()
-
-        def tag_key(tag: object) -> str:
-            return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
-
-        def whole_number(value: object) -> str:
-            text = clean_text(value).replace(",", ".")
-            if not text:
-                return ""
-            try:
-                return str(int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP)))
-            except (InvalidOperation, ValueError):
-                match = re.search(r"-?\d+(?:\.\d+)?", text)
-                if not match:
-                    return ""
-                try:
-                    return str(int(Decimal(match.group(0)).to_integral_value(rounding=ROUND_HALF_UP)))
-                except Exception:
-                    return ""
-
-        def quantity_value(value: object) -> int:
-            number_text = whole_number(value)
-            if not number_text:
-                return 1
-            try:
-                return max(1, int(number_text))
-            except ValueError:
-                return 1
-
-        def con_fields(con_element: object) -> dict[str, str]:
-            fields: dict[str, str] = {}
-            for child in list(con_element):
-                key = tag_key(getattr(child, "tag", ""))
-                if key and key not in fields:
-                    fields[key] = clean_text(getattr(child, "text", ""))
-            return fields
-
-        def field_value(fields: dict[str, str], *names: str) -> str:
-            for name in names:
-                value = fields.get(tag_key(name), "")
-                if value:
-                    return value
-            return ""
-
-        def normalized_optional(value: object) -> str:
-            text = clean_text(value)
-            return "" if re.sub(r"[^a-z0-9]+", "", folded_ascii(text)) == "nincs" else text
-
-        section_rows: dict[str, list[dict]] = {}
-        row_index = 0
-        for con_element in root.iter():
-            if tag_key(getattr(con_element, "tag", "")) != "con":
-                continue
-            fields = con_fields(con_element)
-            front_type = field_value(fields, "FrontTip", "Front Tip") or "Egyéb"
-            section_label = front_type if re.fullmatch(r"[12]-es", folded(front_type)) else front_type
-            model = field_value(fields, "Modell") or "Ismeretlen modell"
-            color = field_value(fields, "Szin", "Szín")
-            length = whole_number(field_value(fields, "Hossz"))
-            width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
-            thickness = whole_number(field_value(fields, "Vastag"))
-            size_parts_for_label = [part for part in (length, width, thickness) if part]
-            size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
-            netfront_color_raw = field_value(fields, "Netfront_szin", "Netfront szin", "Netfrontos szín")
-            netfront_color = normalized_optional(netfront_color_raw)
-            drill_label = field_value(fields, "Fog_furattal", "Fog furattal") or "-"
-            drawer_type = field_value(fields, "Fioktipus", "Fióktípus") or "-"
-            quantity = quantity_value(field_value(fields, "conQuantity"))
-            detail = clean_text(" - ".join(part for part in (f"{model} {netfront_color}".strip(), drill_label, drawer_type) if part and part != "-"))
-            row_index += 1
-            row_id = hashlib.sha1(
-                f"fiokelo-xml|{production_number}|{row_index}|{section_label}|{model}|{color}|{size_label}|{netfront_color}|{drill_label}|{drawer_type}|{quantity}".encode("utf-8")
-            ).hexdigest()[:16]
-            section_rows.setdefault(section_label, []).append(
-                {
-                    "row_id": row_id,
-                    "state_key": _manufacturing_state_key(production_number, row_id),
-                    "production_number": _manufacturing_normalize_number(production_number),
-                    "name": "Fiókelő",
-                    "source_name": "Fiókelő",
-                    "size": size_label,
-                    "color": color,
-                    "edge": "-",
-                    "quantity": quantity,
-                    "detail": detail,
-                    "code": f"FIOKXML-{row_index:04d}",
-                    "doc_key": "fiokelo_furas",
-                    "section_key": _manufacturing_local_slug(section_label),
-                    "section_label": section_label,
-                    "page_number": 1,
-                    "modelLabel": model,
-                    "netfrontColor": netfront_color,
-                    "netfrontExplicitNone": not bool(netfront_color) and bool(netfront_color_raw),
-                    "drillLabel": drill_label,
-                    "drawerType": drawer_type,
-                }
-            )
-
-        sections: list[dict] = []
-        for section_label, rows in section_rows.items():
-            if not rows:
-                continue
-            sections.append(
-                {
-                    "key": f"fiokelo_furas::{_manufacturing_local_slug(section_label)}",
-                    "label": section_label,
-                    "rows": rows,
-                }
-            )
-        return sections, True
-
-    xml_fiokelo_sections, xml_fiokelo_available = fiokelo_xml_source_sections()
-    if xml_fiokelo_available:
-        raw_sections = [
-            section
-            for section in raw_sections
-            if not str(section.get("key", "")).startswith("fiokelo_furas::")
-        ] + xml_fiokelo_sections
-
     cnc_source_type = "XML" if using_xml_cnc_source else "PDF"
-    fiokelo_source_type = "XML" if xml_fiokelo_available else "PDF"
 
     def size_parts(size_label: object) -> tuple[int, ...]:
         parts = [int(part.strip()) for part in re.split(r"[xX]", str(size_label or "")) if part.strip().isdigit()]
@@ -3805,15 +3655,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 color = clean_text(raw_row.get("color"))
                 edge = clean_text(raw_row.get("edge")) or "-"
                 detail = clean_text(raw_row.get("detail"))
-                if any(key in raw_row for key in ("modelLabel", "netfrontColor", "drillLabel", "drawerType")):
-                    model_label = clean_text(raw_row.get("modelLabel")) or "Ismeretlen modell"
-                    netfront_color = clean_text(raw_row.get("netfrontColor"))
-                    drill_label = clean_text(raw_row.get("drillLabel")) or "-"
-                    drawer_type = clean_text(raw_row.get("drawerType")) or "-"
-                    netfront_explicit_none = bool(raw_row.get("netfrontExplicitNone"))
-                else:
-                    model_label, netfront_color, drill_label, drawer_type = parse_fiokelo_detail(detail)
-                    netfront_explicit_none = False
+                model_label, netfront_color, drill_label, drawer_type = parse_fiokelo_detail(detail)
 
                 # PDF extraction sometimes shifts model into color/netfront fields (e.g. "Kira Fehér").
                 # Recover model + color before rendering so model column never shows technical placeholders.
@@ -3853,7 +3695,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "drawerType": drawer_type,
                         "modelTone": model_tone,
                         "quantity": int(raw_row.get("quantity", 0) or 0),
-                        "netfrontExplicitNone": netfront_explicit_none,
                     }
                 )
 
@@ -3880,9 +3721,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             folded_color = folded(color)
             is_nettfront_front = ("folias" in folded_color) or bool(re.search(r"\bmf\b", folded_color))
 
-            if bool(row.get("netfrontExplicitNone")):
-                netfront_color = "-"
-            elif is_nettfront_front and (not netfront_color or netfront_color == "-"):
+            if is_nettfront_front and (not netfront_color or netfront_color == "-"):
                 netfront_color = (
                     explicit_model_color_map.get((model_key, color_key))
                     or explicit_color_map.get(color_key)
@@ -5421,7 +5260,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "hideTab": True,
             }
         )
-    return main_sections, row_count, special_views, cnc_source_type, fiokelo_source_type
+    return main_sections, row_count, special_views, cnc_source_type
 
 
 def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
@@ -5583,13 +5422,13 @@ def _manufacturing_view_bundle(
         }
     )
 
-    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, fiokelo_source_type = _manufacturing_cnc_sections(raw_bundle, current_number)
+    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type = _manufacturing_cnc_sections(raw_bundle, current_number)
     documents.append(
         {
             "key": "cnc_furas",
             "label": "CNC fúrás",
             "sourceType": cnc_source_type,
-            "sourceLabel": f"Beolvasva: {cnc_source_type}, {fiokelo_source_type}",
+            "sourceLabel": f"Beolvasva: {cnc_source_type}",
             "file_name": "",
             "sections": cnc_sections,
             "row_count": cnc_row_count,
