@@ -3041,7 +3041,7 @@ def render_manufacturing_page(
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
-            const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Kihúzható</span>` : "";
+            const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Alsó Kihúzható</span>` : "";
             const traitBadgeMarkup = row.frontTrait === "Blende" ? `<span class="mfg-row-badge is-curved">Blende</span>` : "";
             const curvedBadgeMarkup = row.isCurved ? `<span class="mfg-row-badge is-curved">Íves</span>` : "";
             const modelToneClass = row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : "";
