@@ -1864,6 +1864,9 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                 return "Fóliás"
             return "Bútorlapos"
 
+        def is_pullout_door_type(value: object) -> bool:
+            return folded_ascii(value) == "also kihuzhato"
+
         rows: list[dict] = []
         row_index = 0
         for con_element in root.iter():
@@ -1881,6 +1884,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             quantity = quantity_value(field_value(fields, "conQuantity"))
             barcode = field_value(fields, "Barcode") or f"FRONTXML-{row_index + 1:04d}"
             type_label = category_label(fields, name, model, color)
+            door_type = field_value(fields, "AJTO_TIP", "Ajto Tip", "Ajtó Tip")
             row_index += 1
             row_id = hashlib.sha1(
                 f"front-xml|{production_number}|{row_index}|{barcode}|{name}|{model}|{color}|{size_label}|{type_label}|{quantity}".encode("utf-8")
@@ -1906,6 +1910,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     "frontMaterial": material_label(color),
                     "frontPair8165Group": True,
                     "frontModel": model,
+                    "frontPullOut": is_pullout_door_type(door_type),
                 }
             )
 
@@ -1951,7 +1956,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             row["isCurved"] = is_curved_front_row(raw_row)
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
-            row["isPullOut"] = is_pullout_front_row(raw_row)
+            row["isPullOut"] = bool(raw_row.get("frontPullOut")) if "frontPullOut" in raw_row else is_pullout_front_row(raw_row)
             row["columnLayout"] = "front-standard"
             grouped_sections[section_slug]["rows"].append(row)
 
