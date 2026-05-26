@@ -934,17 +934,33 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard {{
       grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-with-expander,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-with-expander {{
+      grid-template-columns: 0.92fr 0.74fr 0.68fr 0.8fr 0.36fr 1.86fr 0.46fr;
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-no-barcode,
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode {{
       grid-template-columns: 1fr 0.8fr 0.74fr 0.88fr 0.44fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode.is-with-expander {{
+      grid-template-columns: 0.96fr 0.76fr 0.7fr 0.82fr 0.4fr 0.46fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-with-partial,
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-with-partial {{
       grid-template-columns: 0.92fr 0.72fr 0.68fr 0.8fr 0.3fr 0.16fr 2.02fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-with-expander.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.88fr 0.68fr 0.64fr 0.76fr 0.28fr 0.16fr 1.86fr 0.44fr;
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-no-barcode.is-with-partial,
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode.is-with-partial {{
       grid-template-columns: 0.98fr 0.78fr 0.72fr 0.86fr 0.34fr 0.18fr;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander.is-with-partial,
+    .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.94fr 0.74fr 0.68fr 0.8fr 0.32fr 0.18fr 0.44fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4),
@@ -1110,14 +1126,26 @@ def render_manufacturing_page(
     .mfg-table-head.is-front-standard {{
       grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
     }}
+    .mfg-table-head.is-front-standard.is-with-expander {{
+      grid-template-columns: 0.92fr 0.74fr 0.68fr 0.8fr 0.36fr 1.86fr 0.46fr;
+    }}
     .mfg-table-head.is-front-standard.is-no-barcode {{
       grid-template-columns: 1fr 0.8fr 0.74fr 0.88fr 0.44fr;
+    }}
+    .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander {{
+      grid-template-columns: 0.96fr 0.76fr 0.7fr 0.82fr 0.4fr 0.46fr;
     }}
     .mfg-table-head.is-front-standard.is-with-partial {{
       grid-template-columns: 0.92fr 0.72fr 0.68fr 0.8fr 0.3fr 0.16fr 2.02fr;
     }}
+    .mfg-table-head.is-front-standard.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.88fr 0.68fr 0.64fr 0.76fr 0.28fr 0.16fr 1.86fr 0.44fr;
+    }}
     .mfg-table-head.is-front-standard.is-no-barcode.is-with-partial {{
       grid-template-columns: 1fr 0.82fr 0.76fr 0.88fr 0.36fr 0.34fr;
+    }}
+    .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.94fr 0.74fr 0.68fr 0.8fr 0.32fr 0.3fr 0.44fr;
     }}
     .mfg-section-title {{
       font-size: 0.82rem;
@@ -1227,14 +1255,26 @@ def render_manufacturing_page(
     .mfg-row.is-front-standard {{
       grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
     }}
+    .mfg-row.is-front-standard.is-with-expander {{
+      grid-template-columns: 0.92fr 0.74fr 0.68fr 0.8fr 0.36fr 1.86fr 0.46fr;
+    }}
     .mfg-row.is-front-standard.is-no-barcode {{
       grid-template-columns: 1fr 0.8fr 0.74fr 0.88fr 0.44fr;
+    }}
+    .mfg-row.is-front-standard.is-no-barcode.is-with-expander {{
+      grid-template-columns: 0.96fr 0.76fr 0.7fr 0.82fr 0.4fr 0.46fr;
     }}
     .mfg-row.is-front-standard.is-with-partial {{
       grid-template-columns: 0.92fr 0.72fr 0.68fr 0.8fr 0.3fr 0.16fr 2.02fr;
     }}
+    .mfg-row.is-front-standard.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.88fr 0.68fr 0.64fr 0.76fr 0.28fr 0.16fr 1.86fr 0.44fr;
+    }}
     .mfg-row.is-front-standard.is-no-barcode.is-with-partial {{
       grid-template-columns: 1fr 0.82fr 0.76fr 0.88fr 0.36fr 0.34fr;
+    }}
+    .mfg-row.is-front-standard.is-no-barcode.is-with-expander.is-with-partial {{
+      grid-template-columns: 0.94fr 0.74fr 0.68fr 0.8fr 0.32fr 0.3fr 0.44fr;
     }}
     .mfg-table-head.is-front-standard > *,
     .mfg-row.is-front-standard > * {{
@@ -1902,17 +1942,33 @@ def render_manufacturing_page(
       .mfg-row.is-front-standard {{
         grid-template-columns: 0.92fr 0.78fr 0.68fr 0.82fr 0.44fr 1.48fr;
       }}
+      .mfg-table-head.is-front-standard.is-with-expander,
+      .mfg-row.is-front-standard.is-with-expander {{
+        grid-template-columns: 0.88fr 0.72fr 0.64fr 0.78fr 0.4fr 1.34fr 0.42fr;
+      }}
       .mfg-table-head.is-front-standard.is-no-barcode,
       .mfg-row.is-front-standard.is-no-barcode {{
         grid-template-columns: 0.96fr 0.78fr 0.7fr 0.84fr 0.42fr;
+      }}
+      .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander,
+      .mfg-row.is-front-standard.is-no-barcode.is-with-expander {{
+        grid-template-columns: 0.92fr 0.72fr 0.66fr 0.8fr 0.38fr 0.42fr;
       }}
       .mfg-table-head.is-front-standard.is-with-partial,
       .mfg-row.is-front-standard.is-with-partial {{
         grid-template-columns: 0.86fr 0.72fr 0.64fr 0.78fr 0.34fr 0.3fr 1.4fr;
       }}
+      .mfg-table-head.is-front-standard.is-with-expander.is-with-partial,
+      .mfg-row.is-front-standard.is-with-expander.is-with-partial {{
+        grid-template-columns: 0.82fr 0.68fr 0.6fr 0.72fr 0.32fr 0.28fr 1.24fr 0.38fr;
+      }}
       .mfg-table-head.is-front-standard.is-no-barcode.is-with-partial,
       .mfg-row.is-front-standard.is-no-barcode.is-with-partial {{
         grid-template-columns: 0.94fr 0.72fr 0.68fr 0.82fr 0.34fr 0.3fr;
+      }}
+      .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander.is-with-partial,
+      .mfg-row.is-front-standard.is-no-barcode.is-with-expander.is-with-partial {{
+        grid-template-columns: 0.9fr 0.68fr 0.64fr 0.76fr 0.32fr 0.28fr 0.38fr;
       }}
     }}
     @media (orientation: portrait) {{
@@ -2142,11 +2198,18 @@ def render_manufacturing_page(
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
       const pantoloQuantity = (row) => Math.max(1, Number(row?.meValue || row?.quantity || 0) || 1);
-      const isPantoloRow = (row) => String(row?.columnLayout || "").trim() === "pantolo";
+      const groupedQuantityLayouts = new Set(["pantolo", "front-standard"]);
+      const documentUsesGroupedQuantityRows = (document) => ["pantolas", "front_osszekeszites"].includes(String(document?.key || ""));
+      const rowUsesGroupedQuantity = (row) => groupedQuantityLayouts.has(String(row?.columnLayout || "").trim());
+      const isPantoloRow = (row) => rowUsesGroupedQuantity(row);
       const isPantoloGroupedRow = (row) => isPantoloRow(row) && !row?.isPantoloUnit && pantoloQuantity(row) > 1;
-      const pantoloUnitRowId = (row, index) => `${{String(row?.row_id || "")}}__pantolo_unit_${{index + 1}}`;
+      const childUnitRowId = (row, index) => `${{String(row?.row_id || "")}}__child_unit_${{index + 1}}`;
+      const isChildUnitRowId = (value) => {{
+        const text = String(value || "");
+        return text.includes("__child_unit_") || text.includes("__pantolo_unit_");
+      }};
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
-      const pantoloUnitStateKey = (row, index) => stateKeyForRowId(rowProductionNumber(row), pantoloUnitRowId(row, index));
+      const childUnitStateKey = (row, index) => stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index));
       const findRowById = (rowId) => {{
         const targetId = String(rowId || "");
         for (const document of documents) {{
@@ -2160,19 +2223,19 @@ def render_manufacturing_page(
       const pantoloHasExplicitUnitState = (row) => {{
         if (!isPantoloGroupedRow(row)) return false;
         for (let index = 0; index < pantoloQuantity(row); index += 1) {{
-          if (Object.prototype.hasOwnProperty.call(selectionState, pantoloUnitStateKey(row, index))) return true;
+          if (Object.prototype.hasOwnProperty.call(selectionState, childUnitStateKey(row, index))) return true;
         }}
         return false;
       }};
-      const pantoloUnitState = (row, index) => {{
-        const unitKey = pantoloUnitStateKey(row, index);
+      const childUnitState = (row, index) => {{
+        const unitKey = childUnitStateKey(row, index);
         if (Object.prototype.hasOwnProperty.call(selectionState, unitKey)) return selectionState[unitKey] || "";
         const parentState = selectionState[rowStateKey(row)] || "";
         return pantoloHasExplicitUnitState(row) ? "" : parentState;
       }};
       const pantoloGroupState = (row) => {{
         if (!isPantoloGroupedRow(row)) return selectionState[rowStateKey(row)] || "";
-        const states = Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => pantoloUnitState(row, index));
+        const states = Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitState(row, index));
         if (states.every((state) => !state)) return "";
         if (states.every((state) => state === "red")) return "red";
         if (states.every((state) => state === "done")) return "done";
@@ -2191,7 +2254,7 @@ def render_manufacturing_page(
         if (isPantoloGroupedRow(row)) {{
           let count = 0;
           for (let index = 0; index < pantoloQuantity(row); index += 1) {{
-            if (isGreenLikeState(pantoloUnitState(row, index))) count += 1;
+            if (isGreenLikeState(childUnitState(row, index))) count += 1;
           }}
           return count;
         }}
@@ -2728,7 +2791,7 @@ def render_manufacturing_page(
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         const overviewSections = overviewSectionsForDocument(document, true);
         const stateOverviewSections = overviewSections;
-        const isPantoloDocumentForTabs = String(document?.key || "") === "pantolas";
+        const usesGroupedMixedView = documentUsesGroupedQuantityRows(document);
         const sections = (currentSpecialView && !specialViewUsesRedFilter(currentSpecialView) && Array.isArray(currentSpecialView.sections))
           ? currentSpecialView.sections
           : overviewSections;
@@ -2738,7 +2801,7 @@ def render_manufacturing_page(
           {{ key: "plain", label: "Simák", count: countRowsInSections(stateOverviewSections, (row) => !rowStateValue(row)), stateClass: "" }},
           {{ key: "green", label: "Zöldek", count: countRowsInSections(stateOverviewSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
           {{ key: "red", label: "Pirosak", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
-          ...(isPantoloDocumentForTabs ? [{{ key: "mixed", label: "Vegyes", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "mixed"), stateClass: "" }}] : []),
+          ...(usesGroupedMixedView ? [{{ key: "mixed", label: "Vegyes", count: countRowsInSections(stateOverviewSections, (row) => rowStateValue(row) === "mixed"), stateClass: "" }}] : []),
           ...documentSpecialViews.filter((view) => !Boolean(view?.hideTab)).map((view) => {{
             const viewSections = Array.isArray(view?.sections) ? view.sections : [];
             return {{
@@ -2823,7 +2886,7 @@ def render_manufacturing_page(
               : currentViewKey === "red"
                 ? "Még nincs pirosra jelölt sor."
                 : currentViewKey === "mixed"
-                  ? "Még nincs vegyes állapotú pántoló csoport."
+                  ? "Még nincs vegyes állapotú csoport."
                   : currentViewKey === "plain"
                     ? "Minden sor kapott már kijelölést."
                     : String(document?.placeholderMessage || "Ehhez a nézethez nincs megjeleníthető sor.");
@@ -2848,7 +2911,7 @@ def render_manufacturing_page(
             currentSubcategoryKey === "red" ||
             specialViewUsesRedFilter(currentSpecialView);
           const effectiveHideBarcode = hideBarcode || showPartialColumn;
-          const showPantoloExpanderColumn = columnLayout === "pantolo";
+          const showPantoloExpanderColumn = documentUsesGroupedQuantityRows(document) && rowUsesGroupedQuantity({{ columnLayout }});
           const tableHeadClass = columnLayout === "cnc-lower"
             ? " is-cnc-lower"
             : columnLayout === "cnc-upper"
@@ -2952,6 +3015,7 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "quantity", "Menny.")}}
                   ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                   ${{effectiveHideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
+                  ${{showPantoloExpanderColumn ? "<span></span>" : ""}}
                 </div>
               `
             : `
@@ -2977,7 +3041,7 @@ def render_manufacturing_page(
             const detailText = row.detail || "";
             const subtitleMarkup = row.hideSubtitle ? "" : (detailText ? `<div class="mfg-row-subtitle">${{escapeHtml(detailText)}}</div>` : "");
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
-            const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Kihúzható</span>` : "";
+            const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Alsó Kihúzható</span>` : "";
             const traitBadgeMarkup = row.frontTrait === "Blende" ? `<span class="mfg-row-badge is-curved">Blende</span>` : "";
             const curvedBadgeMarkup = row.isCurved ? `<span class="mfg-row-badge is-curved">Íves</span>` : "";
             const modelToneClass = row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : "";
@@ -3041,7 +3105,7 @@ def render_manufacturing_page(
             const pantoloIsGroup = isPantoloGroupedRow(row);
             const pantoloGroupExpanded = pantoloIsGroup && expandedPantoloGroups.has(rowStateKey(row));
             const pantoloGroupSourceRowIds = pantoloIsGroup
-              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => pantoloUnitRowId(row, index))
+              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitRowId(row, index))
               : [];
             const sourceRowIdsForRow = pantoloIsGroup
               ? Array.from(new Set([...(Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []), ...pantoloGroupSourceRowIds]))
@@ -3063,11 +3127,36 @@ def render_manufacturing_page(
               ${{rowPartialMarkup}}
               ${{showPantoloExpanderColumn ? `<div class="mfg-pantolo-expand-cell">${{expandMarkup}}</div>` : ""}}
             `;
+            const frontCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") => `
+              <div class="mfg-row-main">
+                <div class="mfg-row-title">${{escapeHtml(displayRow.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
+                ${{subtitleMarkup}}
+              </div>
+              <div class="mfg-row-meta is-model"><span>${{escapeHtml(displayRow.modelLabel || "-")}}</span></div>
+              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(displayRow.size || "Méret nélkül")}}</span></div>
+              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(displayRow.color || "Szín nélkül")}}</span></div>
+              <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(quantityText)}} db</div></div>
+              ${{rowPartialMarkup}}
+              ${{
+                effectiveHideBarcode
+                  ? ""
+                  : `
+                      <div class="mfg-row-barcode-wrap">
+                        <div class="mfg-row-code">${{escapeHtml(displayRow.code || "Kód nélkül")}}</div>
+                      </div>
+                    `
+              }}
+              ${{showPantoloExpanderColumn ? `<div class="mfg-pantolo-expand-cell">${{expandMarkup}}</div>` : ""}}
+            `;
+            const groupedQuantityCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") =>
+              columnLayout === "front-standard"
+                ? frontCellsMarkup(displayRow, quantityText, expandMarkup, rowPartialMarkup)
+                : pantoloCellsMarkup(displayRow, quantityText, expandMarkup, rowPartialMarkup);
             const pantoloChildRowsMarkup = pantoloGroupExpanded
               ? Array.from({{ length: pantoloQuantity(row) }}, (_item, unitIndex) => {{
-                  const unitRowId = pantoloUnitRowId(row, unitIndex);
-                  const unitStateKey = pantoloUnitStateKey(row, unitIndex);
-                  const unitState = pantoloUnitState(row, unitIndex);
+                  const unitRowId = childUnitRowId(row, unitIndex);
+                  const unitStateKey = childUnitStateKey(row, unitIndex);
+                  const unitState = childUnitState(row, unitIndex);
                   const unitRow = {{
                     ...row,
                     row_id: unitRowId,
@@ -3081,7 +3170,7 @@ def render_manufacturing_page(
                   const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
                   return `
                     <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-source-row-ids="">
-                      ${{pantoloCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
+                      ${{groupedQuantityCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
                     </button>
                   `;
                 }}).join("")
@@ -3134,24 +3223,7 @@ def render_manufacturing_page(
                             `
                         : columnLayout === "front-standard"
                           ? `
-                              <div class="mfg-row-main">
-                                <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
-                                ${{subtitleMarkup}}
-                              </div>
-                              <div class="mfg-row-meta is-model"><span>${{escapeHtml(row.modelLabel || "-")}}</span></div>
-                              <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
-                              <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
-                              <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
-                              ${{partialMarkup}}
-                              ${{
-                                effectiveHideBarcode
-                                  ? ""
-                                  : `
-                                      <div class="mfg-row-barcode-wrap">
-                                        <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
-                                      </div>
-                                    `
-                              }}
+                              ${{frontCellsMarkup(row, showPantoloExpanderColumn ? pantoloQuantityText(row) : String(row.quantity || 0), pantoloExpandMarkup, partialMarkup)}}
                             `
                           : `
                               <div class="mfg-row-main">
@@ -3372,10 +3444,10 @@ def render_manufacturing_page(
         const nextUnitStates = [];
 
         for (let index = 0; index < total; index += 1) {{
-          const childRowId = pantoloUnitRowId(parentRow, index);
-          const childKey = pantoloUnitStateKey(parentRow, index);
+          const childRowId = childUnitRowId(parentRow, index);
+          const childKey = childUnitStateKey(parentRow, index);
           trackedKeys.push(childKey);
-          let childState = pantoloUnitState(parentRow, index);
+          let childState = childUnitState(parentRow, index);
           if (childRowId === unitRowId) {{
             childState = targetState === "clear" ? "" : targetState;
           }}
@@ -3393,7 +3465,7 @@ def render_manufacturing_page(
 
         const previousStateMap = new Map(trackedKeys.map((key) => [key, selectionState[key] || ""]));
         for (let index = 0; index < total; index += 1) {{
-          const childKey = pantoloUnitStateKey(parentRow, index);
+          const childKey = childUnitStateKey(parentRow, index);
           const childState = nextUnitStates[index] || "";
           if (childState) selectionState[childKey] = childState;
           else delete selectionState[childKey];
@@ -3416,7 +3488,7 @@ def render_manufacturing_page(
         const titleNode = choiceModalNode.querySelector(".mfg-choice-title");
         const copyNode = choiceModalNode.querySelector(".mfg-choice-copy");
         const redButton = choiceModalNode.querySelector('[data-choice-action="red"]');
-        if (titleNode) titleNode.textContent = payload?.allowRed ? "Vegyes pántoló csoport" : "Piros tétel áthelyezése";
+        if (titleNode) titleNode.textContent = payload?.allowRed ? "Vegyes csoport" : "Piros tétel áthelyezése";
         if (copyNode) copyNode.textContent = payload?.allowRed ? "Milyen állapotot kapjon az egész csoport?" : "Hova kerüljön a kijelölt piros tétel?";
         if (redButton instanceof HTMLElement) redButton.hidden = !payload?.allowRed;
         choiceModalNode.hidden = false;
@@ -3718,12 +3790,13 @@ def render_manufacturing_page(
         const documentKey = String(document?.key || "").trim();
         const categoryKey = String(currentViewKey || "").trim();
         const entries = visibleRows
+          .filter((row) => !row?.isPantoloUnit && !isChildUnitRowId(row?.row_id))
           .map((row) => {{
             const rowId = String(row?.row_id || "").trim();
             const stateKey = String(rowStateKey(row) || "").trim();
             const code = extractConCode(row);
             const sourceRowIds = Array.isArray(row?.sourceRowIds)
-              ? row.sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)
+              ? row.sourceRowIds.map((value) => String(value || "").trim()).filter((value) => value && !isChildUnitRowId(value))
               : [];
             if (!rowId || !stateKey || !code) return null;
             return {{ row_id: rowId, state_key: stateKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};

@@ -1520,6 +1520,11 @@ def _extract_con_code(value: object) -> str:
     return f"CON{match.group(1)}" if match else ""
 
 
+def _manufacturing_is_virtual_unit_row_id(value: object) -> bool:
+    text = str(value or "")
+    return "__child_unit_" in text or "__pantolo_unit_" in text
+
+
 def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
     return str(category_key or "").strip() == "korpusz-osszekeszito"
 
@@ -1706,8 +1711,16 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         )
         return "uveges" in folded(combined) or "uveg" in folded(combined)
 
+    def normalized_front_column_text(value: object) -> str:
+        text = folded(clean_text(value))
+        text = re.sub(r"\bkihuzhat\s+o\b", "kihuzhato", text)
+        return re.sub(r"\s+", " ", text).strip()
+
     def is_pullout_front_row(row: dict) -> bool:
-        return "kihuzhato" in folded(clean_text(row.get("name")))
+        detail_text = clean_text(row.get("detail"))
+        if "·" in detail_text:
+            detail_text = clean_text(detail_text.split("·", 1)[1])
+        return bool(re.search(r"\balso\s+kihuzhato\b", normalized_front_column_text(detail_text)))
 
     def front_trait_label(row: dict, type_label: str) -> str:
         combined = " ".join(
@@ -1775,7 +1788,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             row["isCurved"] = is_curved_front_row(raw_row)
             row["hideSubtitle"] = True
             row["isGlass"] = is_glass_row(row, type_label)
-            row["isPullOut"] = is_pullout_front_row(row)
+            row["isPullOut"] = is_pullout_front_row(raw_row)
             row["columnLayout"] = "front-standard"
             grouped_sections[section_slug]["rows"].append(row)
 
@@ -18530,11 +18543,15 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 entry_category_key = str(item.get("category_key") or category_key).strip()
                 entry_document_key = str(item.get("document_key") or document_key).strip()
                 source_row_ids = (
-                    [str(value).strip() for value in item.get("source_row_ids", []) if str(value).strip()]
+                    [
+                        str(value).strip()
+                        for value in item.get("source_row_ids", [])
+                        if str(value).strip() and not _manufacturing_is_virtual_unit_row_id(value)
+                    ]
                     if isinstance(item.get("source_row_ids"), list)
                     else []
                 )
-                if not row_id or not state_key or not code:
+                if not row_id or _manufacturing_is_virtual_unit_row_id(row_id) or not state_key or not code:
                     continue
                 entries.append(
                     {
@@ -18599,7 +18616,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     entry_ready_endpoint = _manufacturing_ready_endpoint_key(entry.get("document_key", ""), entry.get("category_key", ""))
                     target_ids = [
                         str(entry.get("row_id", "")).strip(),
-                        *[str(value).strip() for value in entry.get("source_row_ids", []) if str(value).strip()],
+                        *[
+                            str(value).strip()
+                            for value in entry.get("source_row_ids", [])
+                            if str(value).strip() and not _manufacturing_is_virtual_unit_row_id(value)
+                        ],
                     ]
                     unique_target_ids: list[str] = []
                     for target_id in target_ids:
