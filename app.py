@@ -1389,9 +1389,9 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
     con_code = _manufacturing_row_con_code(row)
     if normalized_number and con_code:
         if document_key == "front_osszekeszito":
-            return f"front_osszekeszito::{normalized_number}::{con_code}"
+            return f"front_osszekeszito::{normalized_number}::{con_code}::0"
         if document_key == "osszekeszito":
-            return f"korpusz_osszekeszito::{normalized_number}::{con_code}"
+            return f"korpusz_osszekeszito::{normalized_number}::{con_code}::0"
     return row_id
 
 
@@ -1417,6 +1417,9 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
         clean_key = str(row_id or "").strip()
         if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::")):
             result[clean_key] = clean_state
+            parts = clean_key.split("::")
+            if len(parts) == 3:
+                result[f"{clean_key}::0"] = clean_state
         else:
             result[_manufacturing_state_key(normalized_number, clean_key)] = clean_state
     return result
@@ -1437,6 +1440,7 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
                     continue
                 candidate_keys = [
                     str(row.get("state_storage_key", "") or "").strip(),
+                    re.sub(r"::0$", "", str(row.get("state_storage_key", "") or "").strip()),
                     str(row.get("row_id", "") or "").strip(),
                 ]
                 for candidate_key in candidate_keys:
@@ -5366,7 +5370,8 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
                 if not isinstance(row, dict):
                     continue
                 storage_key = _manufacturing_row_state_storage_key(production_number, row)
-                if str(row.get("row_id", "")).strip() not in red_state_keys and storage_key not in red_state_keys:
+                legacy_storage_key = re.sub(r"::0$", "", storage_key)
+                if str(row.get("row_id", "")).strip() not in red_state_keys and storage_key not in red_state_keys and legacy_storage_key not in red_state_keys:
                     continue
                 suffix_parts = [f"Gyártás {production_number}"]
                 if section_label:

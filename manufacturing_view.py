@@ -2210,7 +2210,19 @@ def render_manufacturing_page(
         return text.includes("__child_unit_") || text.includes("__pantolo_unit_");
       }};
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
-      const childUnitStateKey = (row, index) => stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index));
+      const childUnitStorageKey = (row, index) => {{
+        const parentStorageKey = rowStorageKey(row);
+        if (/^(front_osszekeszito|korpusz_osszekeszito)::/.test(parentStorageKey)) {{
+          return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
+        }}
+        return childUnitRowId(row, index);
+      }};
+      const childUnitStateKey = (row, index) => {{
+        const storageKey = childUnitStorageKey(row, index);
+        return /^(front_osszekeszito|korpusz_osszekeszito)::/.test(storageKey)
+          ? storageKey
+          : stateKeyForRowId(rowProductionNumber(row), storageKey);
+      }};
       const findRowById = (rowId) => {{
         const targetId = String(rowId || "");
         for (const document of documents) {{
@@ -2225,12 +2237,15 @@ def render_manufacturing_page(
         if (!isPantoloGroupedRow(row)) return false;
         for (let index = 0; index < pantoloQuantity(row); index += 1) {{
           if (Object.prototype.hasOwnProperty.call(selectionState, childUnitStateKey(row, index))) return true;
+          if (Object.prototype.hasOwnProperty.call(selectionState, stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index)))) return true;
         }}
         return false;
       }};
       const childUnitState = (row, index) => {{
         const unitKey = childUnitStateKey(row, index);
         if (Object.prototype.hasOwnProperty.call(selectionState, unitKey)) return selectionState[unitKey] || "";
+        const legacyUnitKey = stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index));
+        if (Object.prototype.hasOwnProperty.call(selectionState, legacyUnitKey)) return selectionState[legacyUnitKey] || "";
         const parentState = selectionState[rowStateKey(row)] || "";
         return pantoloHasExplicitUnitState(row) ? "" : parentState;
       }};
@@ -3106,7 +3121,7 @@ def render_manufacturing_page(
             const pantoloIsGroup = isPantoloGroupedRow(row);
             const pantoloGroupExpanded = pantoloIsGroup && expandedPantoloGroups.has(rowStateKey(row));
             const pantoloGroupSourceRowIds = pantoloIsGroup
-              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitRowId(row, index))
+              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitStorageKey(row, index))
               : [];
             const sourceRowIdsForRow = pantoloIsGroup
               ? Array.from(new Set([...(Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []), ...pantoloGroupSourceRowIds]))
@@ -3157,12 +3172,13 @@ def render_manufacturing_page(
               ? Array.from({{ length: pantoloQuantity(row) }}, (_item, unitIndex) => {{
                   const unitRowId = childUnitRowId(row, unitIndex);
                   const unitStateKey = childUnitStateKey(row, unitIndex);
+                  const unitStorageKey = childUnitStorageKey(row, unitIndex);
                   const unitState = childUnitState(row, unitIndex);
                   const unitRow = {{
                     ...row,
                     row_id: unitRowId,
                     state_key: unitStateKey,
-                    state_storage_key: unitRowId,
+                    state_storage_key: unitStorageKey,
                     quantity: 1,
                     meValue: 1,
                     isPantoloUnit: true,
@@ -3386,7 +3402,7 @@ def render_manufacturing_page(
           ...sourceRowIds
             .map((sourceRowId) => String(sourceRowId || "").trim())
             .filter(Boolean)
-            .map((sourceRowId) => `${{targetProductionNumber}}::${{sourceRowId}}`),
+            .map((sourceRowId) => /^(front_osszekeszito|korpusz_osszekeszito)::/.test(sourceRowId) ? sourceRowId : `${{targetProductionNumber}}::${{sourceRowId}}`),
         ]));
         const previousStateMap = new Map(allStateKeys.map((key) => [key, selectionState[key] || ""]));
         for (const key of allStateKeys) {{
@@ -3402,6 +3418,7 @@ def render_manufacturing_page(
         try {{
           for (const update of updates) {{
             const rowId = String(update.rowId || "").trim();
+            const storageKey = String(update.storageKey || rowId).trim();
             if (!rowId) continue;
             const response = await fetch(stateRoute, {{
               method: "POST",
@@ -3410,6 +3427,8 @@ def render_manufacturing_page(
                 production_number: targetProductionNumber,
                 row_id: rowId,
                 row_ids: [rowId],
+                state_key: storageKey || rowId,
+                state_keys: [storageKey || rowId],
                 state: update.state || "clear",
               }}),
             }});
@@ -3451,6 +3470,7 @@ def render_manufacturing_page(
         for (let index = 0; index < total; index += 1) {{
           const childRowId = childUnitRowId(parentRow, index);
           const childKey = childUnitStateKey(parentRow, index);
+          const childStorageKey = childUnitStorageKey(parentRow, index);
           trackedKeys.push(childKey);
           let childState = childUnitState(parentRow, index);
           if (childRowId === unitRowId) {{
@@ -3459,13 +3479,13 @@ def render_manufacturing_page(
           nextUnitStates.push(childState);
           const explicitPrevious = selectionState[childKey] || "";
           if (childState !== explicitPrevious) {{
-            updatesByRowId.set(childRowId, {{ rowId: childRowId, state: childState }});
+            updatesByRowId.set(childRowId, {{ rowId: childRowId, storageKey: childStorageKey, state: childState }});
           }}
         }}
 
         const nextParentState = normalizedPantoloParentStateFromUnitStates(nextUnitStates);
         if (nextParentState !== parentPreviousState) {{
-          updatesByRowId.set(parentRowId, {{ rowId: parentRowId, state: nextParentState }});
+          updatesByRowId.set(parentRowId, {{ rowId: parentRowId, storageKey: rowStorageKey(parentRow), state: nextParentState }});
         }}
 
         const previousStateMap = new Map(trackedKeys.map((key) => [key, selectionState[key] || ""]));
