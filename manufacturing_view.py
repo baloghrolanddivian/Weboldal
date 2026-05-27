@@ -2194,6 +2194,7 @@ def render_manufacturing_page(
       }};
       const specialViewUsesRedFilter = (view) => ["current-production-red", "all-productions-red"].includes(String(view?.key || ""));
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
+      const rowStorageKey = (row) => String(row?.state_storage_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
@@ -2209,7 +2210,19 @@ def render_manufacturing_page(
         return text.includes("__child_unit_") || text.includes("__pantolo_unit_");
       }};
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
-      const childUnitStateKey = (row, index) => stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index));
+      const childUnitStorageKey = (row, index) => {{
+        const parentStorageKey = rowStorageKey(row);
+        if (/^(front_osszekeszito|korpusz_osszekeszito)::/.test(parentStorageKey)) {{
+          return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
+        }}
+        return childUnitRowId(row, index);
+      }};
+      const childUnitStateKey = (row, index) => {{
+        const storageKey = childUnitStorageKey(row, index);
+        return /^(front_osszekeszito|korpusz_osszekeszito)::/.test(storageKey)
+          ? storageKey
+          : stateKeyForRowId(rowProductionNumber(row), storageKey);
+      }};
       const findRowById = (rowId) => {{
         const targetId = String(rowId || "");
         for (const document of documents) {{
@@ -2224,12 +2237,15 @@ def render_manufacturing_page(
         if (!isPantoloGroupedRow(row)) return false;
         for (let index = 0; index < pantoloQuantity(row); index += 1) {{
           if (Object.prototype.hasOwnProperty.call(selectionState, childUnitStateKey(row, index))) return true;
+          if (Object.prototype.hasOwnProperty.call(selectionState, stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index)))) return true;
         }}
         return false;
       }};
       const childUnitState = (row, index) => {{
         const unitKey = childUnitStateKey(row, index);
         if (Object.prototype.hasOwnProperty.call(selectionState, unitKey)) return selectionState[unitKey] || "";
+        const legacyUnitKey = stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index));
+        if (Object.prototype.hasOwnProperty.call(selectionState, legacyUnitKey)) return selectionState[legacyUnitKey] || "";
         const parentState = selectionState[rowStateKey(row)] || "";
         return pantoloHasExplicitUnitState(row) ? "" : parentState;
       }};
@@ -3105,7 +3121,7 @@ def render_manufacturing_page(
             const pantoloIsGroup = isPantoloGroupedRow(row);
             const pantoloGroupExpanded = pantoloIsGroup && expandedPantoloGroups.has(rowStateKey(row));
             const pantoloGroupSourceRowIds = pantoloIsGroup
-              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitRowId(row, index))
+              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitStorageKey(row, index))
               : [];
             const sourceRowIdsForRow = pantoloIsGroup
               ? Array.from(new Set([...(Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []), ...pantoloGroupSourceRowIds]))
@@ -3156,11 +3172,13 @@ def render_manufacturing_page(
               ? Array.from({{ length: pantoloQuantity(row) }}, (_item, unitIndex) => {{
                   const unitRowId = childUnitRowId(row, unitIndex);
                   const unitStateKey = childUnitStateKey(row, unitIndex);
+                  const unitStorageKey = childUnitStorageKey(row, unitIndex);
                   const unitState = childUnitState(row, unitIndex);
                   const unitRow = {{
                     ...row,
                     row_id: unitRowId,
                     state_key: unitStateKey,
+                    state_storage_key: unitStorageKey,
                     quantity: 1,
                     meValue: 1,
                     isPantoloUnit: true,
@@ -3169,14 +3187,14 @@ def render_manufacturing_page(
                   const unitPartialMarkup = showPartialColumn ? `<div class="mfg-row-partial-empty"></div>` : "";
                   const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
                   return `
-                    <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-source-row-ids="">
+                    <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-state-storage-key="${{escapeHtml(rowStorageKey(unitRow))}}" data-source-row-ids="">
                       ${{groupedQuantityCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
                     </button>
                   `;
                 }}).join("")
               : "";
             return `
-              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
+              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-state-storage-key="${{escapeHtml(rowStorageKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
@@ -3346,9 +3364,10 @@ def render_manufacturing_page(
         requestAnimationFrame(() => restoreScrollState(scrollState));
       }};
 
-      const persistRowState = async (rowId, targetProductionNumber, stateKey, nextState, previousStateMap, sourceRowIds = []) => {{
+      const persistRowState = async (rowId, targetProductionNumber, stateKey, storageKey, nextState, previousStateMap, sourceRowIds = []) => {{
         try {{
           const uniqueRowIds = Array.from(new Set([rowId, ...sourceRowIds].map((value) => String(value || "").trim()).filter(Boolean)));
+          const uniqueStateKeys = Array.from(new Set([storageKey || rowId, ...sourceRowIds].map((value) => String(value || "").trim()).filter(Boolean)));
           const response = await fetch(stateRoute, {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
@@ -3356,6 +3375,8 @@ def render_manufacturing_page(
               production_number: targetProductionNumber,
               row_id: rowId,
               row_ids: uniqueRowIds,
+              state_key: storageKey || rowId,
+              state_keys: uniqueStateKeys,
               state: nextState || "clear",
             }}),
           }});
@@ -3374,14 +3395,14 @@ def render_manufacturing_page(
         }}
       }};
 
-      const applyRowState = (stateKey, rowId, targetProductionNumber, targetState, sourceRowIds = []) => {{
+      const applyRowState = (stateKey, storageKey, rowId, targetProductionNumber, targetState, sourceRowIds = []) => {{
         const scrollState = captureScrollState();
         const allStateKeys = Array.from(new Set([
           stateKey,
           ...sourceRowIds
             .map((sourceRowId) => String(sourceRowId || "").trim())
             .filter(Boolean)
-            .map((sourceRowId) => `${{targetProductionNumber}}::${{sourceRowId}}`),
+            .map((sourceRowId) => /^(front_osszekeszito|korpusz_osszekeszito)::/.test(sourceRowId) ? sourceRowId : `${{targetProductionNumber}}::${{sourceRowId}}`),
         ]));
         const previousStateMap = new Map(allStateKeys.map((key) => [key, selectionState[key] || ""]));
         for (const key of allStateKeys) {{
@@ -3390,13 +3411,14 @@ def render_manufacturing_page(
         }}
         renderAll(scrollState);
         setStatus("Mentés...");
-        void persistRowState(rowId, targetProductionNumber, stateKey, targetState, previousStateMap, sourceRowIds);
+        void persistRowState(rowId, targetProductionNumber, stateKey, storageKey, targetState, previousStateMap, sourceRowIds);
       }};
 
       const persistStateUpdates = async (targetProductionNumber, updates, previousStateMap) => {{
         try {{
           for (const update of updates) {{
             const rowId = String(update.rowId || "").trim();
+            const storageKey = String(update.storageKey || rowId).trim();
             if (!rowId) continue;
             const response = await fetch(stateRoute, {{
               method: "POST",
@@ -3405,6 +3427,8 @@ def render_manufacturing_page(
                 production_number: targetProductionNumber,
                 row_id: rowId,
                 row_ids: [rowId],
+                state_key: storageKey || rowId,
+                state_keys: [storageKey || rowId],
                 state: update.state || "clear",
               }}),
             }});
@@ -3446,6 +3470,7 @@ def render_manufacturing_page(
         for (let index = 0; index < total; index += 1) {{
           const childRowId = childUnitRowId(parentRow, index);
           const childKey = childUnitStateKey(parentRow, index);
+          const childStorageKey = childUnitStorageKey(parentRow, index);
           trackedKeys.push(childKey);
           let childState = childUnitState(parentRow, index);
           if (childRowId === unitRowId) {{
@@ -3454,13 +3479,13 @@ def render_manufacturing_page(
           nextUnitStates.push(childState);
           const explicitPrevious = selectionState[childKey] || "";
           if (childState !== explicitPrevious) {{
-            updatesByRowId.set(childRowId, {{ rowId: childRowId, state: childState }});
+            updatesByRowId.set(childRowId, {{ rowId: childRowId, storageKey: childStorageKey, state: childState }});
           }}
         }}
 
         const nextParentState = normalizedPantoloParentStateFromUnitStates(nextUnitStates);
         if (nextParentState !== parentPreviousState) {{
-          updatesByRowId.set(parentRowId, {{ rowId: parentRowId, state: nextParentState }});
+          updatesByRowId.set(parentRowId, {{ rowId: parentRowId, storageKey: rowStorageKey(parentRow), state: nextParentState }});
         }}
 
         const previousStateMap = new Map(trackedKeys.map((key) => [key, selectionState[key] || ""]));
@@ -3683,6 +3708,7 @@ def render_manufacturing_page(
         const rowId = row.getAttribute("data-row-id") || "";
         const targetProductionNumber = row.getAttribute("data-row-production") || productionNumber;
         const stateKey = row.getAttribute("data-state-key") || rowId;
+        const storageKey = row.getAttribute("data-state-storage-key") || rowId;
         const sourceRowIds = (row.getAttribute("data-source-row-ids") || "")
           .split(",")
           .map((value) => String(value || "").trim())
@@ -3695,21 +3721,21 @@ def render_manufacturing_page(
         if (row.hasAttribute("data-pantolo-unit")) {{
           const parentRowId = row.getAttribute("data-pantolo-parent-row-id") || "";
           if (currentState === "red") {{
-            openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds, pantoloUnitParentRowId: parentRowId }});
+            openRedChoiceModal({{ stateKey, storageKey, rowId, targetProductionNumber, sourceRowIds, pantoloUnitParentRowId: parentRowId }});
             return;
           }}
           applyPantoloUnitState(parentRowId, rowId, targetProductionNumber, nextRowState(currentState));
           return;
         }}
         if (row.hasAttribute("data-pantolo-group") && currentState === "mixed") {{
-          openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds, allowRed: true }});
+          openRedChoiceModal({{ stateKey, storageKey, rowId, targetProductionNumber, sourceRowIds, allowRed: true }});
           return;
         }}
         if (currentState === "red") {{
-          openRedChoiceModal({{ stateKey, rowId, targetProductionNumber, sourceRowIds }});
+          openRedChoiceModal({{ stateKey, storageKey, rowId, targetProductionNumber, sourceRowIds }});
           return;
         }}
-        applyRowState(stateKey, rowId, targetProductionNumber, nextRowState(currentState), sourceRowIds);
+        applyRowState(stateKey, storageKey, rowId, targetProductionNumber, nextRowState(currentState), sourceRowIds);
       }});
 
       contentNode.addEventListener("input", (event) => {{
@@ -3743,6 +3769,7 @@ def render_manufacturing_page(
           }}
           applyRowState(
             currentChoice.stateKey,
+            currentChoice.storageKey,
             currentChoice.rowId,
             currentChoice.targetProductionNumber,
             targetState,
@@ -3794,12 +3821,13 @@ def render_manufacturing_page(
           .map((row) => {{
             const rowId = String(row?.row_id || "").trim();
             const stateKey = String(rowStateKey(row) || "").trim();
+            const stateStorageKey = String(rowStorageKey(row) || rowId).trim();
             const code = extractConCode(row);
             const sourceRowIds = Array.isArray(row?.sourceRowIds)
               ? row.sourceRowIds.map((value) => String(value || "").trim()).filter((value) => value && !isChildUnitRowId(value))
               : [];
             if (!rowId || !stateKey || !code) return null;
-            return {{ row_id: rowId, state_key: stateKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};
+            return {{ row_id: rowId, state_key: stateKey, state_storage_key: stateStorageKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};
           }})
           .filter(Boolean);
         if (!entries.length) {{
@@ -3830,6 +3858,15 @@ def render_manufacturing_page(
               ? result.done_row_ids.map((value) => String(value || "").trim()).filter(Boolean)
               : []
           );
+          const doneStateKeys = new Set(
+            Array.isArray(result.done_state_keys)
+              ? result.done_state_keys.map((value) => String(value || "").trim()).filter(Boolean)
+              : []
+          );
+          for (const stateKey of doneStateKeys) {{
+            const entry = entries.find((item) => String(item.state_storage_key || "") === stateKey);
+            selectionState[String(entry?.state_key || stateKey)] = "done";
+          }}
           for (const rowId of doneRowIds) {{
             selectionState[`${{productionNumber}}::${{rowId}}`] = "done";
           }}

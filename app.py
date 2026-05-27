@@ -1373,6 +1373,34 @@ def _manufacturing_state_key(production_number: str, row_id: str) -> str:
     return f"{normalized_number}::{str(row_id or '').strip()}"
 
 
+def _manufacturing_row_con_code(row: dict) -> str:
+    # XML switch note: when XML parsing becomes the source for these rows,
+    # prefer the explicit Barcode tag instead of the PDF-derived code field:
+    # return _extract_con_code(row.get("Barcode") or row.get("barcode") or row.get("code", ""))
+    text = str(row.get("code", "") or "").strip().upper()
+    match = re.search(r"\bCON\D*?(\d{6,})\b", text)
+    return f"CON{match.group(1)}" if match else ""
+
+
+def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> str:
+    normalized_number = _manufacturing_normalize_number(production_number)
+    row_id = str(row.get("row_id", "") or "").strip()
+    document_key = str(row.get("doc_key", "") or "").strip()
+    con_code = _manufacturing_row_con_code(row)
+    if normalized_number and con_code:
+        if document_key == "front_osszekeszito":
+            return f"front_osszekeszito::{normalized_number}::{con_code}::0"
+        if document_key in {"osszekeszito", "alkatresz_kesz"}:
+            return f"korpusz_osszekeszito::{normalized_number}::{con_code}::0"
+    return row_id
+
+
+def _manufacturing_row_state_view_key(production_number: str, row: dict) -> str:
+    storage_key = _manufacturing_row_state_storage_key(production_number, row)
+    row_id = str(row.get("row_id", "") or "").strip()
+    return storage_key if "::" in storage_key else _manufacturing_state_key(production_number, row_id)
+
+
 def _manufacturing_normalize_operation(value: object) -> str:
     normalized = str(value or "").strip().lower()
     allowed_keys = {key for key, _label in MANUFACTURING_OPERATION_DEFINITIONS}
@@ -1386,8 +1414,40 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
         clean_state = str(state or "").strip().lower()
         if clean_state not in {"green", "red", "done"}:
             continue
-        result[_manufacturing_state_key(normalized_number, row_id)] = clean_state
+        clean_key = str(row_id or "").strip()
+        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::")):
+            result[clean_key] = clean_state
+            parts = clean_key.split("::")
+            if len(parts) == 3:
+                result[f"{clean_key}::0"] = clean_state
+        else:
+            result[_manufacturing_state_key(normalized_number, clean_key)] = clean_state
     return result
+
+
+def _manufacturing_apply_row_state_aliases(documents: list[dict], production_number: str, raw_state: dict[str, str], selection_state: dict[str, str]) -> None:
+    for document in documents:
+        if not isinstance(document, dict):
+            continue
+        for section in document.get("sections", []):
+            if not isinstance(section, dict):
+                continue
+            for row in section.get("rows", []):
+                if not isinstance(row, dict):
+                    continue
+                state_key = str(row.get("state_key", "") or "").strip()
+                if not state_key:
+                    continue
+                candidate_keys = [
+                    str(row.get("state_storage_key", "") or "").strip(),
+                    re.sub(r"::0$", "", str(row.get("state_storage_key", "") or "").strip()),
+                    str(row.get("row_id", "") or "").strip(),
+                ]
+                for candidate_key in candidate_keys:
+                    clean_state = str(raw_state.get(candidate_key, "") or "").strip().lower()
+                    if clean_state in {"green", "red", "done"}:
+                        selection_state[state_key] = clean_state
+                        break
 
 
 def _manufacturing_row_with_context(row: dict, production_number: str, detail_suffix: str = "") -> dict:
@@ -1396,7 +1456,8 @@ def _manufacturing_row_with_context(row: dict, production_number: str, detail_su
     if detail_suffix:
         row_payload["detail"] = f"{detail_text} · {detail_suffix}" if detail_text else detail_suffix
     row_payload["production_number"] = _manufacturing_normalize_number(production_number)
-    row_payload["state_key"] = _manufacturing_state_key(production_number, str(row_payload.get("row_id", "")))
+    row_payload["state_storage_key"] = _manufacturing_row_state_storage_key(production_number, row_payload)
+    row_payload["state_key"] = _manufacturing_row_state_view_key(production_number, row_payload)
     return row_payload
 
 
@@ -4077,6 +4138,71 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             aggregated_rows.append(item)
         return aggregated_rows
 
+    def aggregate_kinga_anna_fiokos_rows(rows: list[dict]) -> list[dict]:
+        mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
+        grouped: dict[tuple[str, str, str, str, str, str], dict] = {}
+        output_rows: list[dict] = []
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            side_type_norm = normalize_side_type(row.get("side_type"))
+            if side_type_norm not in mergeable_side_types:
+                output_rows.append(row)
+                continue
+
+            group_key = (
+                clean_text(row.get("name")),
+                clean_text(row.get("size")),
+                clean_text(row.get("color")),
+                clean_text(row.get("edge")) or "-",
+                clean_text(row.get("drawer_drill")),
+                clean_text(row.get("hardware_type")),
+            )
+            existing = grouped.get(group_key)
+            source_row_ids = [
+                source_row_id
+                for source_row_id in (
+                    str(source_id).strip()
+                    for source_id in (row.get("sourceRowIds") or [row.get("row_id", "")])
+                )
+                if source_row_id
+            ]
+            if existing is None:
+                merged_id = hashlib.sha1(
+                    f"cnc-lower-kinga-anna|{production_number}|{'|'.join(group_key)}".encode("utf-8")
+                ).hexdigest()[:16]
+                merged_row = dict(row)
+                merged_row.update(
+                    {
+                        "row_id": merged_id,
+                        "state_key": _manufacturing_state_key(production_number, merged_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "quantity": int(row.get("quantity", 0) or 0),
+                        "sourceRowIds": source_row_ids,
+                        "_sideTypes": {clean_text(row.get("side_type"))},
+                    }
+                )
+                grouped[group_key] = merged_row
+                output_rows.append(merged_row)
+                continue
+
+            existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+            existing_side_types = existing.setdefault("_sideTypes", set())
+            if isinstance(existing_side_types, set):
+                existing_side_types.add(clean_text(row.get("side_type")))
+            existing_source_row_ids = list(existing.get("sourceRowIds", []))
+            for source_row_id in source_row_ids:
+                if source_row_id not in existing_source_row_ids:
+                    existing_source_row_ids.append(source_row_id)
+            existing["sourceRowIds"] = existing_source_row_ids
+
+        for row in output_rows:
+            side_types = row.pop("_sideTypes", None)
+            if isinstance(side_types, set):
+                row["side_type"] = "AF/AAF fiókos"
+        return output_rows
+
     def is_boxos_side_type(row: dict) -> bool:
         return normalize_side_type(row.get("side_type")) in {"aaf fiokos ajtos", "af 1+2 fiokos"}
 
@@ -4783,6 +4909,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     box3_ids = {str(row.get("row_id", "")) for row in box3_rows}
     box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
     box3_rows = [dict(row) for row in box3_display_rows if isinstance(row, dict)]
+    box3_rows = aggregate_kinga_anna_fiokos_rows(box3_rows)
     box_fvz_source_rows = [
         row for row in lower_rows
         if is_fvz_row(row)
@@ -5461,8 +5588,8 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
     selection_state: dict[str, str] = {}
     for production_number in _manufacturing_red_state_numbers(MANUFACTURING_RUNTIME_DIR):
         raw_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, production_number)
-        red_row_ids = {str(row_id).strip() for row_id, state in raw_state.items() if state == "red"}
-        if not red_row_ids:
+        red_state_keys = {str(row_id).strip() for row_id, state in raw_state.items() if state == "red"}
+        if not red_state_keys:
             continue
         selection_state.update(_manufacturing_selection_state_payload(production_number, raw_state))
         try:
@@ -5476,7 +5603,9 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
             for row in section.get("rows", []):
                 if not isinstance(row, dict):
                     continue
-                if str(row.get("row_id", "")).strip() not in red_row_ids:
+                storage_key = _manufacturing_row_state_storage_key(production_number, row)
+                legacy_storage_key = re.sub(r"::0$", "", storage_key)
+                if str(row.get("row_id", "")).strip() not in red_state_keys and storage_key not in red_state_keys and legacy_storage_key not in red_state_keys:
                     continue
                 suffix_parts = [f"Gyártás {production_number}"]
                 if section_label:
@@ -5656,6 +5785,8 @@ def _manufacturing_view_bundle(
         if operation_key in existing_keys:
             continue
         documents.append(_manufacturing_placeholder_document(operation_key, operation_label))
+
+    _manufacturing_apply_row_state_aliases(documents, current_number, current_selection_state, selection_state_payload)
 
     return (
         {
@@ -14058,7 +14189,13 @@ def render_manufacturing_module(
         try:
             required_state_keys = _manufacturing_operation_state_keys(normalized_number, operation_filter)
             saved_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, normalized_number)
-            view_state = _manufacturing_selection_state_payload(normalized_number, saved_state)
+            raw_bundle = _load_manufacturing_bundle_cached(normalized_number)
+            _view_bundle, view_state = _manufacturing_view_bundle(
+                raw_bundle,
+                normalized_number,
+                saved_state,
+                include_all_red_view=False,
+            )
         except Exception:
             return False
         if not required_state_keys:
@@ -18598,6 +18735,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if isinstance(payload.get("row_ids"), list)
                 else []
             )
+            state_key = str(payload.get("state_key", "")).strip()
+            extra_state_keys = (
+                [str(item).strip() for item in payload.get("state_keys", []) if str(item).strip()]
+                if isinstance(payload.get("state_keys"), list)
+                else []
+            )
             state = str(payload.get("state", "")).strip().lower()
 
             if not production_number:
@@ -18615,11 +18758,17 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 for candidate_row_id in [row_id, *extra_row_ids]:
                     if candidate_row_id and candidate_row_id not in target_row_ids:
                         target_row_ids.append(candidate_row_id)
+                target_state_keys: list[str] = []
+                for candidate_state_key in [state_key, *extra_state_keys]:
+                    if candidate_state_key and candidate_state_key not in target_state_keys:
+                        target_state_keys.append(candidate_state_key)
+                if not target_state_keys:
+                    target_state_keys = target_row_ids
                 current_saved_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, production_number)
                 locked_done_row_ids = [
-                    target_row_id
-                    for target_row_id in target_row_ids
-                    if str(current_saved_state.get(target_row_id, "")).strip().lower() == "done"
+                    target_key
+                    for target_key in [*target_state_keys, *target_row_ids]
+                    if str(current_saved_state.get(target_key, "")).strip().lower() == "done"
                 ]
                 if locked_done_row_ids:
                     self.respond_json(
@@ -18632,8 +18781,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     )
                     return
                 current_state: dict[str, str] = {}
-                for target_row_id in target_row_ids:
-                    current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_row_id, state)
+                for target_state_key in target_state_keys:
+                    current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_state_key, state)
+                for legacy_row_id in target_row_ids:
+                    if legacy_row_id not in target_state_keys:
+                        current_state = save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, legacy_row_id, "clear")
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
                 return
@@ -18644,8 +18796,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "production_number": production_number,
                     "row_id": row_id,
-                    "state": current_state.get(row_id, ""),
+                    "state_key": target_state_keys[0] if target_state_keys else "",
+                    "state": current_state.get(target_state_keys[0], "") if target_state_keys else "",
                     "row_ids": target_row_ids,
+                    "state_keys": target_state_keys,
                 },
             )
             return
@@ -18721,6 +18875,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     continue
                 row_id = str(item.get("row_id", "")).strip()
                 state_key = str(item.get("state_key", "")).strip()
+                state_storage_key = str(item.get("state_storage_key", "") or state_key).strip()
                 code = _extract_con_code(item.get("code", ""))
                 entry_category_key = str(item.get("category_key") or category_key).strip()
                 entry_document_key = str(item.get("document_key") or document_key).strip()
@@ -18739,6 +18894,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     {
                         "row_id": row_id,
                         "state_key": state_key,
+                        "state_storage_key": state_storage_key,
                         "code": code,
                         "category_key": entry_category_key,
                         "document_key": entry_document_key,
@@ -18791,7 +18947,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     )
 
             done_row_ids: list[str] = []
+            done_state_keys: list[str] = []
             skipped_row_ids: list[str] = []
+            skipped_state_keys: list[str] = []
             try:
                 for entry in entries:
                     entry_code = str(entry.get("code", "")).strip().upper()
@@ -18808,18 +18966,30 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     for target_id in target_ids:
                         if target_id and target_id not in unique_target_ids:
                             unique_target_ids.append(target_id)
+                    target_state_keys = [
+                        str(entry.get("state_storage_key", "") or entry.get("state_key", "") or entry.get("row_id", "")).strip()
+                    ]
                     if (entry_code, entry_ready_endpoint) not in success_targets:
                         skipped_row_ids.extend(unique_target_ids)
+                        skipped_state_keys.extend([key for key in target_state_keys if key])
                         continue
-                    for target_id in unique_target_ids:
+                    for target_id in target_state_keys:
+                        if not target_id:
+                            continue
                         save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_id, "done")
+                        done_state_keys.append(target_id)
+                    for target_id in unique_target_ids:
+                        if target_id not in target_state_keys:
+                            save_selection_state(MANUFACTURING_RUNTIME_DIR, production_number, target_id, "clear")
                         done_row_ids.append(target_id)
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A kész állapot mentése nem sikerült: {exc}"})
                 return
 
             unique_done_ids = sorted(set(done_row_ids))
+            unique_done_state_keys = sorted(set(done_state_keys))
             unique_skipped_ids = sorted(set(skipped_row_ids))
+            unique_skipped_state_keys = sorted(set(skipped_state_keys))
             attempted_count = len(scan_targets)
             success_count = len(success_targets)
             failed_count = max(0, attempted_count - success_count)
@@ -18845,7 +19015,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "reported_codes": sorted({code for code, _ready_endpoint in success_targets}),
                     "failed": failures,
                     "done_row_ids": unique_done_ids,
+                    "done_state_keys": unique_done_state_keys,
                     "skipped_row_ids": unique_skipped_ids,
+                    "skipped_state_keys": unique_skipped_state_keys,
                 },
             )
             return
