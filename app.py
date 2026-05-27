@@ -1390,7 +1390,7 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
     if normalized_number and con_code:
         if document_key == "front_osszekeszito":
             return f"front_osszekeszito::{normalized_number}::{con_code}::0"
-        if document_key == "osszekeszito":
+        if document_key in {"osszekeszito", "alkatresz_kesz"}:
             return f"korpusz_osszekeszito::{normalized_number}::{con_code}::0"
     return row_id
 
