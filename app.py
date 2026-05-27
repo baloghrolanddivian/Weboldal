@@ -3970,6 +3970,71 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             aggregated_rows.append(item)
         return aggregated_rows
 
+    def aggregate_kinga_anna_fiokos_rows(rows: list[dict]) -> list[dict]:
+        mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
+        grouped: dict[tuple[str, str, str, str, str, str], dict] = {}
+        output_rows: list[dict] = []
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            side_type_norm = normalize_side_type(row.get("side_type"))
+            if side_type_norm not in mergeable_side_types:
+                output_rows.append(row)
+                continue
+
+            group_key = (
+                clean_text(row.get("name")),
+                clean_text(row.get("size")),
+                clean_text(row.get("color")),
+                clean_text(row.get("edge")) or "-",
+                clean_text(row.get("drawer_drill")),
+                clean_text(row.get("hardware_type")),
+            )
+            existing = grouped.get(group_key)
+            source_row_ids = [
+                source_row_id
+                for source_row_id in (
+                    str(source_id).strip()
+                    for source_id in (row.get("sourceRowIds") or [row.get("row_id", "")])
+                )
+                if source_row_id
+            ]
+            if existing is None:
+                merged_id = hashlib.sha1(
+                    f"cnc-lower-kinga-anna|{production_number}|{'|'.join(group_key)}".encode("utf-8")
+                ).hexdigest()[:16]
+                merged_row = dict(row)
+                merged_row.update(
+                    {
+                        "row_id": merged_id,
+                        "state_key": _manufacturing_state_key(production_number, merged_id),
+                        "production_number": _manufacturing_normalize_number(production_number),
+                        "quantity": int(row.get("quantity", 0) or 0),
+                        "sourceRowIds": source_row_ids,
+                        "_sideTypes": {clean_text(row.get("side_type"))},
+                    }
+                )
+                grouped[group_key] = merged_row
+                output_rows.append(merged_row)
+                continue
+
+            existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+            existing_side_types = existing.setdefault("_sideTypes", set())
+            if isinstance(existing_side_types, set):
+                existing_side_types.add(clean_text(row.get("side_type")))
+            existing_source_row_ids = list(existing.get("sourceRowIds", []))
+            for source_row_id in source_row_ids:
+                if source_row_id not in existing_source_row_ids:
+                    existing_source_row_ids.append(source_row_id)
+            existing["sourceRowIds"] = existing_source_row_ids
+
+        for row in output_rows:
+            side_types = row.pop("_sideTypes", None)
+            if isinstance(side_types, set):
+                row["side_type"] = "AF/AAF fiókos"
+        return output_rows
+
     def is_boxos_side_type(row: dict) -> bool:
         return normalize_side_type(row.get("side_type")) in {"aaf fiokos ajtos", "af 1+2 fiokos"}
 
@@ -4676,6 +4741,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     box3_ids = {str(row.get("row_id", "")) for row in box3_rows}
     box3_display_rows = build_raw_kinga_anna_box_rows() or box3_rows
     box3_rows = [dict(row) for row in box3_display_rows if isinstance(row, dict)]
+    box3_rows = aggregate_kinga_anna_fiokos_rows(box3_rows)
     box_fvz_source_rows = [
         row for row in lower_rows
         if is_fvz_row(row)
