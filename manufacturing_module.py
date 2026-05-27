@@ -119,7 +119,10 @@ def _pdf_lines(path: Path) -> list[list[str]]:
     reader = PdfReader(str(path))
     pages: list[list[str]] = []
     for page in reader.pages:
-        raw_text = page.extract_text() or ""
+        try:
+            raw_text = page.extract_text() or ""
+        except Exception:
+            raw_text = ""
         lines = [_clean_text(line) for line in raw_text.splitlines()]
         lines = [line for line in lines if line]
         pages.append(lines)
@@ -132,7 +135,10 @@ def _pdf_first_page_lines(path: Path) -> list[str]:
     reader = PdfReader(str(path))
     if not reader.pages:
         return []
-    raw_text = reader.pages[0].extract_text() or ""
+    try:
+        raw_text = reader.pages[0].extract_text() or ""
+    except Exception:
+        raw_text = ""
     lines = [_clean_text(line) for line in raw_text.splitlines()]
     return [line for line in lines if line]
 

@@ -1183,6 +1183,18 @@ def _read_manufacturing_disk_cache(production_number: str, signature: tuple[tupl
     return bundle if isinstance(bundle, dict) else None
 
 
+def _read_manufacturing_stale_disk_cache(production_number: str) -> dict | None:
+    cache_path = _manufacturing_disk_cache_path(production_number)
+    if not cache_path.exists():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    bundle = payload.get("bundle")
+    return bundle if isinstance(bundle, dict) else None
+
+
 def _write_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...], bundle: dict) -> None:
     try:
         MANUFACTURING_BUNDLE_DISK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -1263,7 +1275,20 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
             }
         return dict(disk_cached_bundle)
 
-    bundle = load_production_bundle(normalized)
+    try:
+        bundle = load_production_bundle(normalized)
+    except Exception:
+        stale_bundle = _read_manufacturing_stale_disk_cache(normalized)
+        if not stale_bundle:
+            raise
+        with MANUFACTURING_BUNDLE_CACHE_LOCK:
+            MANUFACTURING_BUNDLE_CACHE[normalized] = {
+                "created_at": now,
+                "parser_version": MANUFACTURING_BUNDLE_SCHEMA_VERSION,
+                "signature": signature,
+                "bundle": stale_bundle,
+            }
+        return dict(stale_bundle)
     with MANUFACTURING_BUNDLE_CACHE_LOCK:
         MANUFACTURING_BUNDLE_CACHE[normalized] = {
             "created_at": now,
@@ -1373,13 +1398,32 @@ def _manufacturing_state_key(production_number: str, row_id: str) -> str:
     return f"{normalized_number}::{str(row_id or '').strip()}"
 
 
-def _manufacturing_row_con_code(row: dict) -> str:
-    # XML switch note: when XML parsing becomes the source for these rows,
-    # prefer the explicit Barcode tag instead of the PDF-derived code field:
-    # return _extract_con_code(row.get("Barcode") or row.get("barcode") or row.get("code", ""))
-    text = str(row.get("code", "") or "").strip().upper()
+def _manufacturing_normalize_con_code(value: object) -> str:
+    text = str(value or "").strip().upper()
     match = re.search(r"\bCON\D*?(\d{6,})\b", text)
+    if match:
+        return f"CON{match.group(1)}"
+    match = re.search(r"\b(\d{6,})\b", text)
     return f"CON{match.group(1)}" if match else ""
+
+
+def _manufacturing_row_con_code(row: dict) -> str:
+    return _manufacturing_normalize_con_code(row.get("Barcode") or row.get("barcode") or row.get("code", ""))
+
+
+def _manufacturing_xml_state_fields(production_number: str, operation_key: str, barcode: object, child_id: object = 0) -> dict:
+    con_code = _manufacturing_normalize_con_code(barcode)
+    fields = {
+        "xmlSource": True,
+        "xmlOperation": str(operation_key or "").strip(),
+        "xmlChildId": str(child_id if child_id is not None else 0).strip() or "0",
+    }
+    normalized_number = _manufacturing_normalize_number(production_number)
+    if normalized_number and fields["xmlOperation"] and con_code:
+        state_key = f"{fields['xmlOperation']}::{normalized_number}::{con_code}::{fields['xmlChildId']}"
+        fields["state_storage_key"] = state_key
+        fields["state_key"] = state_key
+    return fields
 
 
 def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> str:
@@ -1388,6 +1432,11 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
     document_key = str(row.get("doc_key", "") or "").strip()
     con_code = _manufacturing_row_con_code(row)
     if normalized_number and con_code:
+        if bool(row.get("xmlSource")):
+            operation_key = str(row.get("xmlOperation", "") or "").strip()
+            child_id = str(row.get("xmlChildId", "0") or "0").strip()
+            if operation_key:
+                return f"{operation_key}::{normalized_number}::{con_code}::{child_id}"
         if document_key == "front_osszekeszito":
             return f"front_osszekeszito::{normalized_number}::{con_code}::0"
         if document_key in {"osszekeszito", "alkatresz_kesz"}:
@@ -1415,7 +1464,7 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
         if clean_state not in {"green", "red", "done"}:
             continue
         clean_key = str(row_id or "").strip()
-        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::")):
+        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::")):
             result[clean_key] = clean_state
             parts = clean_key.split("::")
             if len(parts) == 3:
@@ -1635,7 +1684,499 @@ def _manufacturing_document_sections(bundle: dict, production_number: str, allow
 
 
 def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
-    return _manufacturing_document_sections(bundle, production_number, ("osszekeszito", "alkatresz_kesz"), include_source_prefix=False)
+    xml_sections, xml_count, xml_available = _manufacturing_osszekeszito_xml_sections(bundle, production_number)
+    alkatresz_xml_sections, alkatresz_xml_count, alkatresz_xml_available = _manufacturing_alkatresz_kesz_xml_sections(bundle, production_number)
+    if xml_available:
+        osszekeszito_sections, osszekeszito_count = xml_sections, xml_count
+    else:
+        osszekeszito_sections, osszekeszito_count = _manufacturing_document_sections(
+            bundle,
+            production_number,
+            ("osszekeszito",),
+            include_source_prefix=False,
+        )
+    if alkatresz_xml_available:
+        alkatresz_sections, alkatresz_count = alkatresz_xml_sections, alkatresz_xml_count
+    else:
+        alkatresz_sections, alkatresz_count = _manufacturing_document_sections(
+            bundle,
+            production_number,
+            ("alkatresz_kesz",),
+            include_source_prefix=False,
+        )
+    return osszekeszito_sections + alkatresz_sections, osszekeszito_count + alkatresz_count
+
+
+def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, bool]:
+    folder_text = str(bundle.get("folder", "") or "").strip()
+    if not folder_text:
+        return [], 0, False
+    folder = Path(folder_text)
+    xml_path = folder / "Osszekeszito.xml"
+    if not xml_path.is_file():
+        try:
+            xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "osszekeszito.xml"), xml_path)
+        except OSError:
+            return [], 0, False
+    if not xml_path.is_file():
+        return [], 0, False
+
+    try:
+        import xml.etree.ElementTree as ET
+
+        root = ET.parse(xml_path).getroot()
+    except Exception:
+        return [], 0, True
+
+    def clean_text(value: object) -> str:
+        return (
+            str(value or "")
+            .strip()
+            .replace("Ăµ", "Ĺ‘")
+            .replace("Ă•", "Ĺ")
+            .replace("Ă»", "Ĺ±")
+            .replace("Ă›", "Ĺ°")
+        )
+
+    def local_name(tag: object) -> str:
+        return str(tag or "").rsplit("}", 1)[-1].strip()
+
+    def folded_ascii(value: object) -> str:
+        text = unicodedata.normalize("NFKD", clean_text(value))
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        return re.sub(r"\s+", " ", text).strip().lower()
+
+    def tag_key(tag: object) -> str:
+        return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
+
+    def whole_number(value: object) -> str:
+        text = clean_text(value).replace(",", ".")
+        if not text:
+            return ""
+        try:
+            return str(int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP)))
+        except (InvalidOperation, ValueError):
+            match = re.search(r"-?\d+(?:\.\d+)?", text)
+            if not match:
+                return ""
+            try:
+                return str(int(Decimal(match.group(0)).to_integral_value(rounding=ROUND_HALF_UP)))
+            except Exception:
+                return ""
+
+    def quantity_value(value: object) -> int:
+        number_text = whole_number(value)
+        if not number_text:
+            return 1
+        try:
+            return max(1, int(number_text))
+        except ValueError:
+            return 1
+
+    def con_fields(con_element: object) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        for child in list(con_element):
+            key = tag_key(getattr(child, "tag", ""))
+            if key and key not in fields:
+                fields[key] = clean_text(getattr(child, "text", ""))
+        return fields
+
+    def field_value(fields: dict[str, str], *names: str) -> str:
+        for name in names:
+            value = fields.get(tag_key(name), "")
+            if value:
+                return value
+        return ""
+
+    def edge_value(value: object) -> str:
+        text = clean_text(value)
+        if re.sub(r"[^a-z0-9]+", "", folded_ascii(text)).upper() == "K":
+            return "-"
+        return text or "-"
+
+    def section_label(fields: dict[str, str]) -> str:
+        korp_tip = field_value(fields, "KorpTipPer")
+        if not korp_tip:
+            return "Összes"
+        description = field_value(fields, "icg2Description")
+        return " - ".join(part for part in (korp_tip, description) if part) or "Összes"
+
+    def is_all_section_label(label: object) -> bool:
+        return folded_ascii(label) == "osszes"
+
+    def pair_info_for_section_label(label: str) -> tuple[str, str] | None:
+        text = clean_text(label)
+        if text.startswith("1-es "):
+            return ("1", text[5:])
+        if text.startswith("2-es "):
+            return ("2", text[5:])
+        return None
+
+    def pair_sections_in_display_order(sections: list[dict]) -> list[dict]:
+        by_label = {clean_text(section.get("label")): section for section in sections}
+        used: set[str] = set()
+        ordered: list[dict] = []
+        for section in sections:
+            section_key = str(section.get("key", ""))
+            if section_key in used:
+                continue
+            pair_info = pair_info_for_section_label(str(section.get("label", "")))
+            if pair_info and pair_info[0] == "2":
+                first_pair = by_label.get(f"1-es {pair_info[1]}")
+                if first_pair and str(first_pair.get("key", "")) not in used:
+                    continue
+            used.add(section_key)
+            ordered.append(section)
+            if pair_info and pair_info[0] == "1":
+                second_pair = by_label.get(f"2-es {pair_info[1]}")
+                if second_pair and str(second_pair.get("key", "")) not in used:
+                    used.add(str(second_pair.get("key", "")))
+                    ordered.append(second_pair)
+        for section in sections:
+            section_key = str(section.get("key", ""))
+            if section_key not in used:
+                used.add(section_key)
+                ordered.append(section)
+        return ordered
+
+    section_rows: dict[str, list[dict]] = {}
+    row_index = 0
+    for con_element in root.iter():
+        if tag_key(getattr(con_element, "tag", "")) != "con":
+            continue
+        fields = con_fields(con_element)
+        label = section_label(fields)
+        name = field_value(fields, "Leiras", "Leírás") or "Tétel"
+        length = whole_number(field_value(fields, "Hossz"))
+        width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
+        thickness = whole_number(field_value(fields, "Vastag"))
+        size_parts_for_label = [part for part in (length, width, thickness) if part]
+        size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
+        color = field_value(fields, "Szin", "Szín")
+        edge = edge_value(field_value(fields, "Elzartip", "Elzártip", "Élzártip"))
+        quantity = quantity_value(field_value(fields, "conQuantity"))
+        barcode = field_value(fields, "Barcode") or f"OSSZXML-{row_index + 1:04d}"
+        row_index += 1
+        row_id = hashlib.sha1(
+            f"osszekeszito-xml|{production_number}|{row_index}|{barcode}|{label}|{name}|{size_label}|{color}|{edge}|{quantity}".encode("utf-8")
+        ).hexdigest()[:16]
+        section_rows.setdefault(label, []).append(
+            {
+                "row_id": row_id,
+                "state_key": _manufacturing_state_key(production_number, row_id),
+                "production_number": _manufacturing_normalize_number(production_number),
+                "name": name,
+                "source_name": name,
+                "detail": "",
+                "size": size_label,
+                "color": color,
+                "edge": edge,
+                "quantity": quantity,
+                "code": barcode,
+                "doc_key": "osszekeszito",
+                "section_key": _manufacturing_local_slug(label),
+                "section_label": label,
+                "page_number": 1,
+                **_manufacturing_xml_state_fields(production_number, "korpusz_osszekeszito", barcode),
+            }
+        )
+
+    sections = [
+        {
+            "key": f"osszekeszito::{_manufacturing_local_slug(label)}",
+            "label": label,
+            "rows": rows,
+        }
+        for label, rows in section_rows.items()
+        if rows
+    ]
+    sections = pair_sections_in_display_order(
+        sorted(
+            sections,
+            key=lambda section: (
+                0 if is_all_section_label(section.get("label")) else 1,
+                pair_info_for_section_label(str(section.get("label", ""))) or ("9", str(section.get("label", "")).lower()),
+            ),
+        )
+    )
+    return sections, sum(len(section.get("rows", [])) for section in sections), True
+
+
+def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, bool]:
+    folder_text = str(bundle.get("folder", "") or "").strip()
+    if not folder_text:
+        return [], 0, False
+    folder = Path(folder_text)
+    xml_path = folder / "Alkatresz_kesz.xml"
+    if not xml_path.is_file():
+        try:
+            xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "alkatresz_kesz.xml"), xml_path)
+        except OSError:
+            return [], 0, False
+    if not xml_path.is_file():
+        return [], 0, False
+
+    try:
+        import xml.etree.ElementTree as ET
+
+        root = ET.parse(xml_path).getroot()
+    except Exception:
+        return [], 0, True
+
+    def clean_text(value: object) -> str:
+        return (
+            str(value or "")
+            .strip()
+            .replace("Ăµ", "Ĺ‘")
+            .replace("Ă•", "Ĺ")
+            .replace("Ă»", "Ĺ±")
+            .replace("Ă›", "Ĺ°")
+        )
+
+    def local_name(tag: object) -> str:
+        return str(tag or "").rsplit("}", 1)[-1].strip()
+
+    def folded_ascii(value: object) -> str:
+        text = unicodedata.normalize("NFKD", clean_text(value))
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        return re.sub(r"\s+", " ", text).strip().lower()
+
+    def tag_key(tag: object) -> str:
+        return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
+
+    def whole_number(value: object) -> str:
+        text = clean_text(value).replace(",", ".")
+        if not text:
+            return ""
+        try:
+            return str(int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP)))
+        except (InvalidOperation, ValueError):
+            match = re.search(r"-?\d+(?:\.\d+)?", text)
+            if not match:
+                return ""
+            try:
+                return str(int(Decimal(match.group(0)).to_integral_value(rounding=ROUND_HALF_UP)))
+            except Exception:
+                return ""
+
+    def quantity_value(value: object) -> int:
+        number_text = whole_number(value)
+        if not number_text:
+            return 1
+        try:
+            return max(1, int(number_text))
+        except ValueError:
+            return 1
+
+    def con_fields(con_element: object) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        for child in list(con_element):
+            key = tag_key(getattr(child, "tag", ""))
+            if key and key not in fields:
+                fields[key] = clean_text(getattr(child, "text", ""))
+        return fields
+
+    def field_value(fields: dict[str, str], *names: str) -> str:
+        for name in names:
+            value = fields.get(tag_key(name), "")
+            if value:
+                return value
+        return ""
+
+    section_rows: dict[str, list[dict]] = {}
+    row_index = 0
+    for con_element in root.iter():
+        if tag_key(getattr(con_element, "tag", "")) != "con":
+            continue
+        fields = con_fields(con_element)
+        name = field_value(fields, "Leiras", "Leírás") or "Tétel"
+        length = whole_number(field_value(fields, "Hossz"))
+        width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
+        thickness = whole_number(field_value(fields, "Vastag"))
+        size_parts_for_label = [part for part in (length, width, thickness) if part]
+        size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
+        color = field_value(fields, "Szin", "Szín")
+        edge = field_value(fields, "Elzaras", "Elzárás") or "-"
+        item_number = field_value(fields, "itmItemNumber")
+        barcode = field_value(fields, "Barcode") or f"ALKXML-{row_index + 1:04d}"
+        quantity = quantity_value(field_value(fields, "conQuantity"))
+        row_index += 1
+        row_id = hashlib.sha1(
+            f"alkatresz-xml|{production_number}|{row_index}|{barcode}|{name}|{size_label}|{color}|{edge}|{item_number}|{quantity}".encode("utf-8")
+        ).hexdigest()[:16]
+        section_rows.setdefault(name, []).append(
+            {
+                "row_id": row_id,
+                "state_key": _manufacturing_state_key(production_number, row_id),
+                "production_number": _manufacturing_normalize_number(production_number),
+                "name": name,
+                "source_name": name,
+                "detail": item_number,
+                "size": size_label,
+                "color": color,
+                "edge": edge,
+                "quantity": quantity,
+                "code": barcode,
+                "doc_key": "alkatresz_kesz",
+                "section_key": _manufacturing_local_slug(name),
+                "section_label": name,
+                "page_number": 1,
+                **_manufacturing_xml_state_fields(production_number, "korpusz_osszekeszito", barcode),
+            }
+        )
+
+    sections = [
+        {
+            "key": f"alkatresz_kesz::{_manufacturing_local_slug(label)}",
+            "label": label,
+            "rows": rows,
+        }
+        for label, rows in section_rows.items()
+        if rows
+    ]
+    sections.sort(key=lambda section: str(section.get("label", "")).lower())
+    return sections, sum(len(section.get("rows", [])) for section in sections), True
+
+
+def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, bool]:
+    folder_text = str(bundle.get("folder", "") or "").strip()
+    if not folder_text:
+        return [], 0, False
+    folder = Path(folder_text)
+    xml_path = folder / "Pantolo.xml"
+    if not xml_path.is_file():
+        try:
+            xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "pantolo.xml"), xml_path)
+        except OSError:
+            return [], 0, False
+    if not xml_path.is_file():
+        return [], 0, False
+
+    try:
+        import xml.etree.ElementTree as ET
+
+        root = ET.parse(xml_path).getroot()
+    except Exception:
+        return [], 0, True
+
+    def clean_text(value: object) -> str:
+        return (
+            str(value or "")
+            .strip()
+            .replace("Ăµ", "Ĺ‘")
+            .replace("Ă•", "Ĺ")
+            .replace("Ă»", "Ĺ±")
+            .replace("Ă›", "Ĺ°")
+        )
+
+    def local_name(tag: object) -> str:
+        return str(tag or "").rsplit("}", 1)[-1].strip()
+
+    def folded_ascii(value: object) -> str:
+        text = unicodedata.normalize("NFKD", clean_text(value))
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        return re.sub(r"\s+", " ", text).strip().lower()
+
+    def tag_key(tag: object) -> str:
+        return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
+
+    def whole_number(value: object) -> str:
+        text = clean_text(value).replace(",", ".")
+        if not text:
+            return ""
+        try:
+            return str(int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP)))
+        except (InvalidOperation, ValueError):
+            match = re.search(r"-?\d+(?:\.\d+)?", text)
+            if not match:
+                return ""
+            try:
+                return str(int(Decimal(match.group(0)).to_integral_value(rounding=ROUND_HALF_UP)))
+            except Exception:
+                return ""
+
+    def quantity_value(value: object) -> int:
+        number_text = whole_number(value)
+        if not number_text:
+            return 1
+        try:
+            return max(1, int(number_text))
+        except ValueError:
+            return 1
+
+    def con_fields(con_element: object) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        for child in list(con_element):
+            key = tag_key(getattr(child, "tag", ""))
+            if key and key not in fields:
+                fields[key] = clean_text(getattr(child, "text", ""))
+        return fields
+
+    def field_value(fields: dict[str, str], *names: str) -> str:
+        for name in names:
+            value = fields.get(tag_key(name), "")
+            if value:
+                return value
+        return ""
+
+    rows: list[dict] = []
+    row_index = 0
+    for con_element in root.iter():
+        if tag_key(getattr(con_element, "tag", "")) != "con":
+            continue
+        fields = con_fields(con_element)
+        front_type = field_value(fields, "KorpTipPer") or "-"
+        color = field_value(fields, "Szin", "Szín")
+        model = field_value(fields, "Modell") or "-"
+        length = whole_number(field_value(fields, "Hossz"))
+        width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
+        size_parts_for_label = [part for part in (length, width) if part]
+        size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 2 else ""
+        pant_type = field_value(fields, "PantTip") or "Nincs"
+        handle_drill = field_value(fields, "FOG_FURAT", "Fog Furat") or "-"
+        handle_type = field_value(fields, "FOG_TIP", "Fog Tip") or "-"
+        opening = field_value(fields, "Nyitas", "Nyitás") or "-"
+        door_type = field_value(fields, "AJTO_TIP", "Ajto Tip", "Ajtó Tip") or "-"
+        quantity = quantity_value(field_value(fields, "conQuality", "conQuantity"))
+        barcode = field_value(fields, "Barcode") or f"PANTXML-{row_index + 1:04d}"
+        detail_tail = " ".join(part for part in (handle_drill, handle_type, opening, door_type) if part and part != "-").strip()
+        detail = f"Front típus: {front_type} · {pant_type}"
+        if detail_tail:
+            detail = f"{detail} · {detail_tail}"
+        row_index += 1
+        row_id = hashlib.sha1(
+            f"pantolo-xml|{production_number}|{row_index}|{barcode}|{front_type}|{color}|{model}|{size_label}|{pant_type}|{handle_drill}|{handle_type}|{opening}|{door_type}|{quantity}".encode("utf-8")
+        ).hexdigest()[:16]
+        rows.append(
+            {
+                "row_id": row_id,
+                "state_key": _manufacturing_state_key(production_number, row_id),
+                "production_number": _manufacturing_normalize_number(production_number),
+                "name": model,
+                "source_name": model,
+                "detail": detail,
+                "size": size_label,
+                "color": color,
+                "edge": "-",
+                "quantity": quantity,
+                "code": barcode,
+                "doc_key": "pantolo",
+                "section_key": "pantolo",
+                "section_label": "Pántoló",
+                "page_number": 1,
+                **_manufacturing_xml_state_fields(production_number, "pantolo", barcode),
+            }
+        )
+
+    if not rows:
+        return [], 0, True
+    return [
+        {
+            "key": "pantolo::xml",
+            "label": "Pántoló",
+            "rows": rows,
+        }
+    ], len(rows), True
 
 
 def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
@@ -1826,8 +2367,6 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return bool(compact_size and re.search(re.escape(compact_size) + r"[JB]", compact_code))
 
     def front_xml_source_sections() -> tuple[list[dict], int, bool]:
-        if _manufacturing_normalize_number(production_number) != "13821":
-            return [], row_count, False
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return [], row_count, False
@@ -1972,6 +2511,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     "frontPair8165Group": True,
                     "frontModel": model,
                     "frontPullOut": is_pullout_door_type(door_type),
+                    **_manufacturing_xml_state_fields(production_number, "front_osszekeszito", barcode),
                 }
             )
 
@@ -2054,12 +2594,14 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
 
 def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
-    raw_sections, _ = _manufacturing_document_sections(
-        bundle,
-        production_number,
-        ("pantolo",),
-        include_source_prefix=False,
-    )
+    raw_sections, _, xml_pantolo_available = _manufacturing_pantolo_xml_sections(bundle, production_number)
+    if not xml_pantolo_available:
+        raw_sections, _ = _manufacturing_document_sections(
+            bundle,
+            production_number,
+            ("pantolo",),
+            include_source_prefix=False,
+        )
 
     def clean_text(value: object) -> str:
         return str(value or "").strip()
@@ -2226,7 +2768,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
 
     def parse_front_type(detail_text: object) -> tuple[str, list[str]]:
         detail = clean_text(detail_text)
-        parts = [clean_text(part) for part in detail.split("·") if clean_text(part)]
+        parts = [clean_text(part) for part in re.split(r"\s*(?:Â·|·)\s*", detail) if clean_text(part)]
         front_type = ""
         if parts and folded(parts[0]).startswith("front tipus:"):
             front_type = clean_text(parts[0].split(":", 1)[1] if ":" in parts[0] else parts[0].replace("Front tipus", ""))
@@ -5657,12 +6199,18 @@ def _manufacturing_view_bundle(
     selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
 
     korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
-    korpusz_osszekeszito_sections, korpusz_osszekeszito_count = _manufacturing_document_sections(
-        raw_bundle, current_number, ("osszekeszito",), include_source_prefix=False
-    )
-    korpusz_alkatresz_sections, korpusz_alkatresz_count = _manufacturing_document_sections(
-        raw_bundle, current_number, ("alkatresz_kesz",), include_source_prefix=False
-    )
+    korpusz_osszekeszito_sections, korpusz_osszekeszito_count, korpusz_osszekeszito_xml_available = _manufacturing_osszekeszito_xml_sections(raw_bundle, current_number)
+    if not korpusz_osszekeszito_xml_available:
+        korpusz_osszekeszito_sections, korpusz_osszekeszito_count = _manufacturing_document_sections(
+            raw_bundle, current_number, ("osszekeszito",), include_source_prefix=False
+        )
+    korpusz_osszekeszito_source_type = "XML" if korpusz_osszekeszito_xml_available else "PDF"
+    korpusz_alkatresz_sections, korpusz_alkatresz_count, korpusz_alkatresz_xml_available = _manufacturing_alkatresz_kesz_xml_sections(raw_bundle, current_number)
+    if not korpusz_alkatresz_xml_available:
+        korpusz_alkatresz_sections, korpusz_alkatresz_count = _manufacturing_document_sections(
+            raw_bundle, current_number, ("alkatresz_kesz",), include_source_prefix=False
+        )
+    korpusz_alkatresz_source_type = "XML" if korpusz_alkatresz_xml_available else "PDF"
     if include_all_red_view:
         all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
         selection_state_payload.update(all_red_selection_state)
@@ -5678,6 +6226,8 @@ def _manufacturing_view_bundle(
         {
             "key": "korpusz_osszekeszites",
             "label": "Korpusz összekészítés",
+            "sourceType": korpusz_osszekeszito_source_type,
+            "sourceLabel": f"Beolvasva: {korpusz_osszekeszito_source_type}, {korpusz_alkatresz_source_type}",
             "file_name": "",
             "sections": korpusz_sections,
             "row_count": korpusz_row_count,
@@ -5703,17 +6253,16 @@ def _manufacturing_view_bundle(
 
     front_sections, front_row_count = _manufacturing_front_sections(raw_bundle, current_number)
     front_source_type = "PDF"
-    if _manufacturing_normalize_number(current_number) == "13821":
-        front_folder = Path(str(raw_bundle.get("folder", "") or "").strip())
-        front_xml_path = front_folder / "Front_osszekeszito.xml"
-        if front_xml_path.is_file():
-            front_source_type = "XML"
-        else:
-            try:
-                if any(path.is_file() and path.name.lower() == "front_osszekeszito.xml" for path in front_folder.iterdir()):
-                    front_source_type = "XML"
-            except OSError:
-                pass
+    front_folder = Path(str(raw_bundle.get("folder", "") or "").strip())
+    front_xml_path = front_folder / "Front_osszekeszito.xml"
+    if front_xml_path.is_file():
+        front_source_type = "XML"
+    else:
+        try:
+            if any(path.is_file() and path.name.lower() == "front_osszekeszito.xml" for path in front_folder.iterdir()):
+                front_source_type = "XML"
+        except OSError:
+            pass
     front_folias_sections = [dict(section) for section in front_sections if "· Fóliás" in str(section.get("label", ""))]
     front_butorlapos_sections = [dict(section) for section in front_sections if "· Bútorlapos" in str(section.get("label", ""))]
 
@@ -5765,10 +6314,14 @@ def _manufacturing_view_bundle(
     )
 
     pantolo_sections, pantolo_row_count = _manufacturing_pantolo_sections(raw_bundle, current_number)
+    _, _, pantolo_xml_available = _manufacturing_pantolo_xml_sections(raw_bundle, current_number)
+    pantolo_source_type = "XML" if pantolo_xml_available else "PDF"
     documents.append(
         {
             "key": "pantolas",
             "label": "Pántolás",
+            "sourceType": pantolo_source_type,
+            "sourceLabel": f"Beolvasva: {pantolo_source_type}",
             "file_name": "",
             "sections": pantolo_sections,
             "row_count": pantolo_row_count,

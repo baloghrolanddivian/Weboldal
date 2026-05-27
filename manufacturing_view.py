@@ -2212,14 +2212,14 @@ def render_manufacturing_page(
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
       const childUnitStorageKey = (row, index) => {{
         const parentStorageKey = rowStorageKey(row);
-        if (/^(front_osszekeszito|korpusz_osszekeszito)::/.test(parentStorageKey)) {{
+        if (/^(front_osszekeszito|korpusz_osszekeszito|pantolo)::/.test(parentStorageKey)) {{
           return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
         }}
         return childUnitRowId(row, index);
       }};
       const childUnitStateKey = (row, index) => {{
         const storageKey = childUnitStorageKey(row, index);
-        return /^(front_osszekeszito|korpusz_osszekeszito)::/.test(storageKey)
+        return /^(front_osszekeszito|korpusz_osszekeszito|pantolo)::/.test(storageKey)
           ? storageKey
           : stateKeyForRowId(rowProductionNumber(row), storageKey);
       }};
@@ -3402,7 +3402,7 @@ def render_manufacturing_page(
           ...sourceRowIds
             .map((sourceRowId) => String(sourceRowId || "").trim())
             .filter(Boolean)
-            .map((sourceRowId) => /^(front_osszekeszito|korpusz_osszekeszito)::/.test(sourceRowId) ? sourceRowId : `${{targetProductionNumber}}::${{sourceRowId}}`),
+            .map((sourceRowId) => /^(front_osszekeszito|korpusz_osszekeszito|pantolo)::/.test(sourceRowId) ? sourceRowId : `${{targetProductionNumber}}::${{sourceRowId}}`),
         ]));
         const previousStateMap = new Map(allStateKeys.map((key) => [key, selectionState[key] || ""]));
         for (const key of allStateKeys) {{
