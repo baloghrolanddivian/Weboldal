@@ -1131,6 +1131,8 @@ def render_manufacturing_page(
       max-width: 100%;
       white-space: nowrap;
       overflow: hidden;
+      font-size: 1.02rem;
+      font-weight: 900;
     }}
     .mfg-pantolo-category-main {{
       min-width: 0;
@@ -1146,7 +1148,7 @@ def render_manufacturing_page(
       background: #ffe4f1;
       border: 1px solid #f5a6ca;
       color: #9d174d;
-      font-size: 0.76rem;
+      font-size: 0.94rem;
       font-weight: 900;
       overflow: hidden;
       text-overflow: ellipsis;
