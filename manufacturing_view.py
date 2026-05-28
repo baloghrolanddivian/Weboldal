@@ -178,6 +178,32 @@ def render_manufacturing_page(
       gap: 0;
       align-content: start;
     }}
+    body.has-mfg-scroll-rail .mfg-page {{
+      padding-right: 64px;
+    }}
+    .mfg-scroll-rail {{
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      width: 56px;
+      display: none;
+      touch-action: pan-y;
+      background:
+        linear-gradient(90deg, rgba(243, 245, 247, 0), rgba(243, 245, 247, 0.96) 34%),
+        repeating-linear-gradient(
+          180deg,
+          rgba(17, 24, 39, 0.16) 0,
+          rgba(17, 24, 39, 0.16) 12px,
+          rgba(255, 255, 255, 0.7) 12px,
+          rgba(255, 255, 255, 0.7) 24px
+        );
+      border-left: 1px solid rgba(17, 24, 39, 0.12);
+    }}
+    body.has-mfg-scroll-rail .mfg-scroll-rail {{
+      display: block;
+    }}
     .mfg-toolbar,
     .mfg-board,
     .mfg-notice {{
@@ -1887,6 +1913,12 @@ def render_manufacturing_page(
       font-size: 1.08rem;
     }}
     @media (max-width: 1080px) {{
+      body.has-mfg-scroll-rail .mfg-page {{
+        padding-right: 56px;
+      }}
+      .mfg-scroll-rail {{
+        width: 48px;
+      }}
       .mfg-content.is-overview {{
         grid-template-columns: minmax(0, 1fr);
       }}
@@ -2049,6 +2081,7 @@ def render_manufacturing_page(
         </div>
       </div>
       <div class="mfg-content" id="mfg-content"></div>
+      <div class="mfg-scroll-rail" id="mfg-scroll-rail" aria-hidden="true"></div>
     </section>
     <div class="mfg-choice-modal" id="mfg-choice-modal" hidden>
       <div class="mfg-choice-card" role="dialog" aria-modal="true" aria-labelledby="mfg-choice-title">
@@ -2085,12 +2118,13 @@ def render_manufacturing_page(
       const searchRowNode = document.getElementById("mfg-search-row");
       const searchInputNode = document.getElementById("mfg-search-input");
       const contentNode = document.getElementById("mfg-content");
+      const scrollRailNode = document.getElementById("mfg-scroll-rail");
       const statusNode = document.getElementById("mfg-status");
       const reportReadyButtonNode = document.getElementById("mfg-report-ready");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
       const choiceModalNode = document.getElementById("mfg-choice-modal");
       const confirmModalNode = document.getElementById("mfg-confirm-modal");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
 
       let payload = {{}};
       try {{
@@ -3363,6 +3397,12 @@ def render_manufacturing_page(
         renderSectionTabs(document);
         updateSearchControls(document);
         const visibleGroups = filterGroupsBySearch(buildGroupsForView(document), document);
+        const isKorpuszPairedDetailView =
+          String(document?.key || "") === "korpusz_osszekeszites" &&
+          String(currentViewKey || "") === "korpusz-osszekeszito" &&
+          layoutMode === "double" &&
+          !["all", "plain", "green", "red", "mixed"].includes(String(currentSubcategoryKey || ""));
+        window.document.body.classList.toggle("has-mfg-scroll-rail", Boolean(document) && !isKorpuszPairedDetailView);
         const canReportReady = canReportReadyForCurrentView(document);
         reportReadyButtonNode.style.display = canReportReady ? "inline-flex" : "none";
         if (canReportReady) {{
