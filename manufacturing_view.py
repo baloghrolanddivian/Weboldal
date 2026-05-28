@@ -554,7 +554,7 @@ def render_manufacturing_page(
       display: block;
       border-top-left-radius: 0;
       border-top-right-radius: 0;
-      overflow: hidden;
+      overflow: visible;
     }}
     .mfg-board > * + * {{
       margin-top: 8px;
@@ -919,6 +919,9 @@ def render_manufacturing_page(
       overflow: hidden;
       margin-bottom: 8px;
     }}
+    .mfg-content.is-single-column-overview .mfg-section-card.is-pantolo {{
+      overflow: visible;
+    }}
     .mfg-content.is-single-column-overview .mfg-row-list {{
       display: block;
     }}
@@ -1006,25 +1009,31 @@ def render_manufacturing_page(
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo,
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo {{
-      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
+      grid-template-columns: 0.72fr 0.8fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-expander,
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-expander {{
-      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
+      grid-template-columns: 0.72fr 0.8fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-partial,
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-partial {{
-      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+      grid-template-columns: 0.7fr 0.76fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo.is-with-expander.is-with-partial,
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo.is-with-expander.is-with-partial {{
-      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
+      grid-template-columns: 0.7fr 0.76fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
     }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo > * {{
       display: inline-flex;
     }}
     .mfg-content.is-single-column-overview .mfg-row.is-pantolo > * {{
       display: grid;
+    }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo > :nth-child(1),
+    .mfg-content.is-single-column-overview .mfg-table-head.is-pantolo > :nth-child(4),
+    .mfg-table-head.is-pantolo > :nth-child(1),
+    .mfg-table-head.is-pantolo > :nth-child(4) {{
+      display: none !important;
     }}
     .mfg-content.is-split {{
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1104,10 +1113,43 @@ def render_manufacturing_page(
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 8;
+    }}
+    .mfg-section-card.is-pantolo {{
+      overflow: visible;
     }}
     .mfg-section-card.is-pantolo .mfg-section-title {{
       grid-column: 2;
       text-align: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+    }}
+    .mfg-pantolo-category-main {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .mfg-pantolo-category-pill {{
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 240px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #ffe4f1;
+      border: 1px solid #f5a6ca;
+      color: #9d174d;
+      font-size: 0.76rem;
+      font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }}
     .mfg-section-card.is-pantolo .mfg-section-count {{
       grid-column: 3;
@@ -1138,16 +1180,16 @@ def render_manufacturing_page(
       grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
     }}
     .mfg-table-head.is-pantolo {{
-      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
+      grid-template-columns: 0.72fr 0.8fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
     }}
     .mfg-table-head.is-pantolo.is-with-expander {{
-      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
+      grid-template-columns: 0.72fr 0.8fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
     }}
     .mfg-table-head.is-pantolo.is-with-partial {{
-      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+      grid-template-columns: 0.7fr 0.76fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
     }}
     .mfg-table-head.is-pantolo.is-with-expander.is-with-partial {{
-      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
+      grid-template-columns: 0.7fr 0.76fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
     }}
     .mfg-table-head.is-front-standard {{
       grid-template-columns: 0.96fr 0.78fr 0.72fr 0.84fr 0.38fr 2.02fr;
@@ -1248,16 +1290,16 @@ def render_manufacturing_page(
       grid-template-columns: 0.76fr 0.92fr 0.86fr 1.02fr 0.56fr 0.58fr 0.42fr 0.34fr;
     }}
     .mfg-row.is-pantolo {{
-      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
+      grid-template-columns: 0.72fr 0.8fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.36fr;
     }}
     .mfg-row.is-pantolo.is-with-expander {{
-      grid-template-columns: 1fr 0.72fr 0.8fr 0.72fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
+      grid-template-columns: 0.72fr 0.8fr 0.82fr 0.7fr 1.04fr 0.72fr 0.66fr 0.46fr 0.46fr;
     }}
     .mfg-row.is-pantolo.is-with-partial {{
-      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
+      grid-template-columns: 0.7fr 0.76fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.34fr 0.32fr;
     }}
     .mfg-row.is-pantolo.is-with-expander.is-with-partial {{
-      grid-template-columns: 0.98fr 0.7fr 0.76fr 0.7fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
+      grid-template-columns: 0.7fr 0.76fr 0.8fr 0.66fr 0.98fr 0.68fr 0.62fr 0.42fr 0.32fr 0.44fr;
     }}
     .mfg-row.is-cnc-fiokelo .mfg-row-meta {{
       padding-top: 2px;
@@ -1952,19 +1994,19 @@ def render_manufacturing_page(
       }}
       .mfg-table-head.is-pantolo,
       .mfg-row.is-pantolo {{
-        grid-template-columns: 0.9fr 0.64fr 0.72fr 0.66fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.34fr;
+        grid-template-columns: 0.64fr 0.72fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.34fr;
       }}
       .mfg-table-head.is-pantolo.is-with-expander,
       .mfg-row.is-pantolo.is-with-expander {{
-        grid-template-columns: 0.9fr 0.64fr 0.72fr 0.66fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.42fr 0.42fr;
+        grid-template-columns: 0.64fr 0.72fr 0.76fr 0.62fr 0.9fr 0.64fr 0.58fr 0.42fr 0.42fr;
       }}
       .mfg-table-head.is-pantolo.is-with-partial,
       .mfg-row.is-pantolo.is-with-partial {{
-        grid-template-columns: 0.88fr 0.62fr 0.7fr 0.62fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.32fr 0.28fr;
+        grid-template-columns: 0.62fr 0.7fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.32fr 0.28fr;
       }}
       .mfg-table-head.is-pantolo.is-with-expander.is-with-partial,
       .mfg-row.is-pantolo.is-with-expander.is-with-partial {{
-        grid-template-columns: 0.88fr 0.62fr 0.7fr 0.62fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.38fr 0.28fr 0.38fr;
+        grid-template-columns: 0.62fr 0.7fr 0.72fr 0.58fr 0.84fr 0.6fr 0.54fr 0.38fr 0.28fr 0.38fr;
       }}
       .mfg-table-head,
       .mfg-row {{
@@ -2186,6 +2228,18 @@ def render_manufacturing_page(
         if (directLayout) return directLayout;
         const firstRowLayout = String((Array.isArray(group?.rows) && group.rows.length ? group.rows[0]?.columnLayout : "") || "").trim();
         return firstRowLayout;
+      }};
+      const pantoloCategoryLabelMarkup = (label) => {{
+        const parts = String(label || "").split("|").map((part) => part.trim()).filter(Boolean);
+        if (parts.length < 3) return `<span class="mfg-pantolo-category-main">${{escapeHtml(label || "")}}</span>`;
+        const frontType = parts[0];
+        const color = parts[1];
+        const model = parts.slice(2).join(" | ");
+        return `
+          <span class="mfg-pantolo-category-main">${{escapeHtml(frontType)}}</span>
+          <span class="mfg-pantolo-category-pill">${{escapeHtml(color)}}</span>
+          <span class="mfg-pantolo-category-pill">${{escapeHtml(model)}}</span>
+        `;
       }};
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
@@ -2985,6 +3039,7 @@ def render_manufacturing_page(
             specialViewUsesRedFilter(currentSpecialView);
           const effectiveHideBarcode = hideBarcode || showPartialColumn;
           const showPantoloExpanderColumn = documentUsesGroupedQuantityRows(document) && rowUsesGroupedQuantity({{ columnLayout }});
+          const isPantoloLayout = columnLayout === "pantolo";
           const tableHeadClass = columnLayout === "cnc-lower"
             ? " is-cnc-lower"
             : columnLayout === "cnc-upper"
@@ -3013,10 +3068,11 @@ def render_manufacturing_page(
                 ? " is-no-barcode"
                 : "";
           const totalQuantity = (Array.isArray(group.rows) ? group.rows : []).reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
+          const sectionTitleMarkup = isPantoloLayout ? pantoloCategoryLabelMarkup(group.label) : escapeHtml(group.label);
           const headMarkup = showSectionHeader
             ? `
               <div class="mfg-section-head">
-                <div class="mfg-section-title">${{escapeHtml(group.label)}}</div>
+                <div class="mfg-section-title">${{sectionTitleMarkup}}</div>
                 <div class="mfg-section-count">${{totalQuantity}} db</div>
               </div>
             `
@@ -3144,7 +3200,7 @@ def render_manufacturing_page(
             const pantoloOpeningText = pantoloNormalizeMarkText(row.openingDir);
             const pantoloDoorText = pantoloNormalizeMarkText(row.doorType);
             const pantoloPantText = pantoloNormalizeMarkText(row.pantType);
-            const pantoloDoorIsCorner = pantoloDoorText.includes("sarok") || pantoloDoorText === "fsl";
+            const pantoloDoorIsCorner = pantoloDoorText.includes("sarok") || pantoloDoorText.includes("sar.") || pantoloDoorText === "fsl";
             const pantoloDoorIsKam = pantoloDoorText.includes("kam.");
             const pantoloPantIsSpecial =
               pantoloPantText.includes("3d") ||
@@ -3187,10 +3243,8 @@ def render_manufacturing_page(
               ? `<span class="mfg-pantolo-expand" role="button" tabindex="0" data-pantolo-expand data-state-key="${{escapeHtml(rowStateKey(row))}}" aria-label="${{pantoloGroupExpanded ? "BezĂˇrĂˇs" : "KinyitĂˇs"}}">${{pantoloGroupExpanded ? "\\u25B2" : "\\u25BC"}}</span>`
               : `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`;
             const pantoloCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") => `
-              <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-color", "")}}">${{escapeHtml(displayRow.color || "-")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.color23 || "-")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloPantMark)}}">${{escapeHtml(displayRow.pantType || "-")}}</span></div>
-              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.modelLabel || "-")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-size", "")}}">${{escapeHtml(displayRow.size || "-")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloHandleDrillMark)}}">${{escapeHtml(displayRow.handleDrill || "-")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.handleType || "-")}}</span></div>
