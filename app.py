@@ -1319,6 +1319,18 @@ def _manufacturing_collect_document_state_keys(document: dict) -> tuple[str, ...
         for row in section.get("rows", []):
             if not isinstance(row, dict):
                 continue
+            row_production_number = _manufacturing_normalize_number(row.get("production_number", ""))
+            source_row_ids = [
+                source_id if "::" in source_id or not row_production_number else _manufacturing_state_key(row_production_number, source_id)
+                for source_id in [
+                    str(source_id).strip()
+                    for source_id in row.get("sourceRowIds", [])
+                    if str(source_id).strip()
+                ]
+            ] if isinstance(row.get("sourceRowIds"), list) else []
+            if source_row_ids:
+                row_state_keys.extend(source_row_ids)
+                continue
             row_state_key = str(row.get("state_key", "")).strip() or str(row.get("row_id", "")).strip()
             if row_state_key:
                 row_state_keys.append(row_state_key)
@@ -1464,7 +1476,7 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
         if clean_state not in {"green", "red", "done"}:
             continue
         clean_key = str(row_id or "").strip()
-        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::")):
+        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::", "cnc::")):
             result[clean_key] = clean_state
             parts = clean_key.split("::")
             if len(parts) == 3:
@@ -3498,6 +3510,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             cnc_detail = "" if re.sub(r"[^a-z0-9]+", "", folded_ascii(cnc_tag_value)).upper() == "N" else cnc_tag_value
             drawer_drill = drawer_drill_value(field_value(fields, "FIOKSIN_FURAS", "Fióksín Fúrás"))
             quantity = quantity_value(field_value(fields, "conQuantity"))
+            barcode = field_value(fields, "Barcode") or f"CNCXML-{row_index + 1:04d}"
             detail = clean_text(" ".join(part for part in (drawer_drill if is_lower_xml_section else "", side_type, edge, cnc_detail, hardware_type) if part and part != "-"))
             row_index += 1
             row_id = hashlib.sha1(
@@ -3518,11 +3531,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "edge": edge,
                     "quantity": quantity,
                     "detail": detail,
-                    "code": f"CNCXML-{row_index:04d}",
+                    "code": barcode,
                     "doc_key": "cnc",
                     "section_key": _manufacturing_local_slug(section_label),
                     "section_label": section_label,
                     "page_number": 1,
+                    **_manufacturing_xml_state_fields(production_number, "cnc", barcode),
                 }
             )
 
@@ -4034,7 +4048,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     merged_id = hashlib.sha1(
                         f"cnc-lower|{production_number}|{name}|{size}|{color}|{drawer_drill}|{side_type}|{edge}|{hardware_type}".encode("utf-8")
                     ).hexdigest()[:16]
-                    source_row_id = str(raw_row.get("row_id", "")).strip()
+                    source_row_id = str(raw_row.get("state_storage_key") or raw_row.get("row_id", "")).strip()
+                    row_state_fields = {"state_storage_key": source_row_id, "state_key": source_row_id} if "::" in source_row_id else {}
                     merged[merge_key] = {
                         "row_id": merged_id,
                         "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -4052,13 +4067,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "columnLayout": "cnc-lower",
                         "isMuted": is_non_nutos_text(name) or is_non_nutos_text(source_name),
                         "sourceRowIds": [source_row_id] if source_row_id else [],
+                        **row_state_fields,
                     }
                 else:
                     existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
                     if source_name:
                         existing["source_name"] = f"{existing.get('source_name', '')} · {source_name}".strip(" ·")
                     existing["isMuted"] = bool(existing.get("isMuted")) or is_non_nutos_text(name) or is_non_nutos_text(source_name)
-                    source_row_id = str(raw_row.get("row_id", "")).strip()
+                    source_row_id = str(raw_row.get("state_storage_key") or raw_row.get("row_id", "")).strip()
                     if source_row_id:
                         source_row_ids = list(existing.get("sourceRowIds", []))
                         if source_row_id not in source_row_ids:
@@ -4164,11 +4180,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             existing = merged.get(merge_key)
             source_row_id = ""
             if raw_row is not None:
-                source_row_id = str(raw_row.get("row_id", "")).strip()
+                source_row_id = str(raw_row.get("state_storage_key") or raw_row.get("row_id", "")).strip()
             if existing is None:
                 merged_id = hashlib.sha1(
                     f"cnc-upper|{production_number}|{source_group}|{name}|{size}|{color}|{hardware_type}|{side_type}|{edge}".encode("utf-8")
                 ).hexdigest()
+                row_state_fields = {"state_storage_key": source_row_id, "state_key": source_row_id} if "::" in source_row_id else {}
                 merged[merge_key] = {
                     "row_id": merged_id,
                     "state_key": _manufacturing_state_key(production_number, merged_id),
@@ -4185,6 +4202,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "detail": clean_text(parsed_row.get("detail")),
                     "columnLayout": "cnc-upper",
                     "sourceRowIds": [source_row_id] if source_row_id else [],
+                    **row_state_fields,
                 }
             else:
                 existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
@@ -19320,7 +19338,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 current_saved_state = load_selection_state(MANUFACTURING_RUNTIME_DIR, production_number)
                 locked_done_row_ids = [
                     target_key
-                    for target_key in [*target_state_keys, *target_row_ids]
+                    for target_key in target_state_keys
                     if str(current_saved_state.get(target_key, "")).strip().lower() == "done"
                 ]
                 if locked_done_row_ids:
@@ -19519,7 +19537,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     for target_id in target_ids:
                         if target_id and target_id not in unique_target_ids:
                             unique_target_ids.append(target_id)
-                    target_state_keys = [
+                    source_state_keys = [
+                        str(value).strip()
+                        for value in entry.get("source_row_ids", [])
+                        if str(value).strip() and not _manufacturing_is_virtual_unit_row_id(value)
+                    ]
+                    target_state_keys = source_state_keys or [
                         str(entry.get("state_storage_key", "") or entry.get("state_key", "") or entry.get("row_id", "")).strip()
                     ]
                     if (entry_code, entry_ready_endpoint) not in success_targets:
