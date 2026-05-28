@@ -2210,16 +2210,22 @@ def render_manufacturing_page(
         return text.includes("__child_unit_") || text.includes("__pantolo_unit_");
       }};
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
+      const xmlOperationStateKeyPattern = /^(front_osszekeszito|korpusz_osszekeszito|pantolo|cnc)::/;
+      const normalizeSelectionKey = (targetProductionNumber, value) => {{
+        const text = String(value || "").trim();
+        if (!text) return "";
+        return xmlOperationStateKeyPattern.test(text) ? text : stateKeyForRowId(targetProductionNumber, text);
+      }};
       const childUnitStorageKey = (row, index) => {{
         const parentStorageKey = rowStorageKey(row);
-        if (/^(front_osszekeszito|korpusz_osszekeszito)::/.test(parentStorageKey)) {{
+        if (xmlOperationStateKeyPattern.test(parentStorageKey)) {{
           return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
         }}
         return childUnitRowId(row, index);
       }};
       const childUnitStateKey = (row, index) => {{
         const storageKey = childUnitStorageKey(row, index);
-        return /^(front_osszekeszito|korpusz_osszekeszito)::/.test(storageKey)
+        return xmlOperationStateKeyPattern.test(storageKey)
           ? storageKey
           : stateKeyForRowId(rowProductionNumber(row), storageKey);
       }};
@@ -2258,12 +2264,29 @@ def render_manufacturing_page(
         if (states.every((state) => isGreenLikeState(state))) return "green";
         return "mixed";
       }};
+      const rowSourceStateKeys = (row) => Array.from(new Set(
+        (Array.isArray(row?.sourceRowIds) ? row.sourceRowIds : [])
+          .map((value) => normalizeSelectionKey(rowProductionNumber(row), value))
+          .filter(Boolean)
+      ));
+      const sourceBlockState = (row) => {{
+        const keys = rowSourceStateKeys(row);
+        if (!keys.length) return "";
+        const states = keys.map((key) => selectionState[key] || "").filter(Boolean);
+        if (!states.length) return "";
+        if (states.every((state) => state === states[0])) return states[0];
+        if (states.every((state) => isGreenLikeState(state))) return "green";
+        return "mixed";
+      }};
       const rowStateValue = (row) => {{
         if (isPantoloGroupedRow(row)) return pantoloGroupState(row);
         if (row?.isPantoloUnit) {{
           const explicitState = selectionState[rowStateKey(row)] || "";
           return explicitState || String(row?.inheritedState || "");
         }}
+        const blockState = sourceBlockState(row);
+        if (blockState) return blockState;
+        if (rowSourceStateKeys(row).length) return "";
         return selectionState[rowStateKey(row)] || "";
       }};
       const pantoloGreenedCount = (row) => {{
@@ -3366,8 +3389,12 @@ def render_manufacturing_page(
 
       const persistRowState = async (rowId, targetProductionNumber, stateKey, storageKey, nextState, previousStateMap, sourceRowIds = []) => {{
         try {{
-          const uniqueRowIds = Array.from(new Set([rowId, ...sourceRowIds].map((value) => String(value || "").trim()).filter(Boolean)));
-          const uniqueStateKeys = Array.from(new Set([storageKey || rowId, ...sourceRowIds].map((value) => String(value || "").trim()).filter(Boolean)));
+          const cleanSourceRowIds = Array.from(new Set(sourceRowIds.map((value) => String(value || "").trim()).filter(Boolean)));
+          const uniqueRowIds = Array.from(new Set([rowId, storageKey, ...cleanSourceRowIds].map((value) => String(value || "").trim()).filter(Boolean)));
+          const uniqueStateKeys = cleanSourceRowIds.length
+            ? cleanSourceRowIds
+            : Array.from(new Set([storageKey || rowId].map((value) => String(value || "").trim()).filter(Boolean)));
+          const primarySaveKey = uniqueStateKeys[0] || storageKey || rowId;
           const response = await fetch(stateRoute, {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
@@ -3375,7 +3402,7 @@ def render_manufacturing_page(
               production_number: targetProductionNumber,
               row_id: rowId,
               row_ids: uniqueRowIds,
-              state_key: storageKey || rowId,
+              state_key: primarySaveKey,
               state_keys: uniqueStateKeys,
               state: nextState || "clear",
             }}),
@@ -3397,18 +3424,18 @@ def render_manufacturing_page(
 
       const applyRowState = (stateKey, storageKey, rowId, targetProductionNumber, targetState, sourceRowIds = []) => {{
         const scrollState = captureScrollState();
-        const allStateKeys = Array.from(new Set([
-          stateKey,
-          ...sourceRowIds
-            .map((sourceRowId) => String(sourceRowId || "").trim())
-            .filter(Boolean)
-            .map((sourceRowId) => /^(front_osszekeszito|korpusz_osszekeszito)::/.test(sourceRowId) ? sourceRowId : `${{targetProductionNumber}}::${{sourceRowId}}`),
-        ]));
+        const sourceStateKeys = Array.from(new Set(sourceRowIds.map((sourceRowId) => normalizeSelectionKey(targetProductionNumber, sourceRowId)).filter(Boolean)));
+        const primaryStateKeys = sourceStateKeys.length ? sourceStateKeys : [stateKey].map((value) => String(value || "").trim()).filter(Boolean);
+        const clearOnlyKeys = sourceStateKeys.length
+          ? [stateKey, storageKey].map((value) => String(value || "").trim()).filter((value) => value && !primaryStateKeys.includes(value))
+          : [];
+        const allStateKeys = Array.from(new Set([...primaryStateKeys, ...clearOnlyKeys]));
         const previousStateMap = new Map(allStateKeys.map((key) => [key, selectionState[key] || ""]));
-        for (const key of allStateKeys) {{
+        for (const key of primaryStateKeys) {{
           if (targetState === "clear") delete selectionState[key];
           else selectionState[key] = targetState;
         }}
+        for (const key of clearOnlyKeys) delete selectionState[key];
         renderAll(scrollState);
         setStatus("Mentés...");
         void persistRowState(rowId, targetProductionNumber, stateKey, storageKey, targetState, previousStateMap, sourceRowIds);
