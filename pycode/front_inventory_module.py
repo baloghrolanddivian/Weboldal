@@ -17,10 +17,11 @@ except Exception:  # pragma: no cover
 
 
 FRONT_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
-SERIAL_SIZES_DATA_PATH = Path(__file__).resolve().parent / "data" / "front-inventory-serial-sizes.json"
-NETTFRONT_TRANSLATIONS_DATA_PATH = Path(__file__).resolve().parent / "data" / "nettfront-translations.json"
-FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = Path(__file__).resolve().parent / "runtime" / "front-leltar" / "insight-minta.xlsx"
-FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = Path(__file__).resolve().parent / "data" / "nettfront-alkatreszek.xlsx"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SERIAL_SIZES_DATA_PATH = REPO_ROOT / "data" / "front-inventory-serial-sizes.json"
+NETTFRONT_TRANSLATIONS_DATA_PATH = REPO_ROOT / "data" / "nettfront-translations.json"
+FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = REPO_ROOT / "runtime" / "front-leltar" / "insight-minta.xlsx"
+FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = REPO_ROOT / "data" / "nettfront-alkatreszek.xlsx"
 
 
 def file_name_allowed(file_name: str) -> bool:

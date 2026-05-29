@@ -30,6 +30,10 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+PYCODE_DIR = Path(__file__).resolve().parent / "pycode"
+if str(PYCODE_DIR) not in sys.path:
+    sys.path.insert(0, str(PYCODE_DIR))
+
 try:
     import winreg
 except Exception:  # pragma: no cover - Windows-only optional import

@@ -9,11 +9,12 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DOWNLOADS_DIR = Path.home() / "Downloads"
 OUTPUT_ROOT = REPO_ROOT / "runtime" / "front-leltar" / "ahs-riport"
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+PYCODE_DIR = REPO_ROOT / "pycode"
+if str(PYCODE_DIR) not in sys.path:
+    sys.path.insert(0, str(PYCODE_DIR))
 
 def _normalize_header(value: object) -> str:
     return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())

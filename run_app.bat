@@ -1,3 +1,3 @@
 @echo off
-cd /d "C:\Users\baloghr\Documents\GitHub\Weboldal"
+cd /d "%~dp0"
 python app.py
