@@ -43,6 +43,7 @@ SUGGESTION_HEADERS = [
 
 @dataclass
 class NettfrontOrderRow:
+    """Represent NettfrontOrderRow data used by the NettFront workflows."""
     row_id: str
     part_number: str
     description: str
@@ -61,6 +62,7 @@ class NettfrontOrderRow:
 
 @dataclass
 class NettfrontOrderBuildResult:
+    """Represent NettfrontOrderBuildResult data used by the NettFront workflows."""
     rows: list[NettfrontOrderRow]
     merged_variant_count: int
     filtered_stock_count: int
@@ -71,6 +73,7 @@ class NettfrontOrderBuildResult:
 
 
 def norm(value) -> str:
+    """Handle norm logic for the NettFront workflows."""
     if value is None:
         return ""
     text = "".join(c for c in ud.normalize("NFD", str(value)) if ud.category(c) != "Mn")
@@ -78,6 +81,7 @@ def norm(value) -> str:
 
 
 def _safe_number(value) -> float:
+    """Handle safe number logic for the NettFront workflows."""
     if value in (None, ""):
         return 0.0
     if isinstance(value, (int, float)):
@@ -99,6 +103,7 @@ def _safe_number(value) -> float:
 
 
 def _display_number(value):
+    """Handle display number logic for the NettFront workflows."""
     if value in (None, ""):
         return ""
     if isinstance(value, float) and value.is_integer():
@@ -107,10 +112,12 @@ def _display_number(value):
 
 
 def _workbook_from_bytes(payload: bytes):
+    """Handle workbook from bytes logic for the NettFront workflows."""
     return ox.load_workbook(io.BytesIO(payload), data_only=True)
 
 
 def load_avg_by_part_from_bytes(payload: bytes) -> dict[str, int]:
+    """Load avg by part from bytes data."""
     wb = _workbook_from_bytes(payload)
     ws = wb.active
     headers = list(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))
@@ -171,6 +178,7 @@ def load_avg_by_part_from_bytes(payload: bytes) -> dict[str, int]:
 
 
 def load_avg_by_part(avg_bytes: bytes | None, default_avg_path: Path | None = None) -> dict[str, int]:
+    """Load avg by part data."""
     if avg_bytes:
         return load_avg_by_part_from_bytes(avg_bytes)
     if default_avg_path and default_avg_path.exists():
@@ -179,6 +187,7 @@ def load_avg_by_part(avg_bytes: bytes | None, default_avg_path: Path | None = No
 
 
 def _load_stock_headers_and_rows(stock_bytes: bytes) -> tuple[list, list[tuple]]:
+    """Load stock headers and rows data."""
     wb = _workbook_from_bytes(stock_bytes)
     ws = wb.active
     headers = list(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))
@@ -187,6 +196,7 @@ def _load_stock_headers_and_rows(stock_bytes: bytes) -> tuple[list, list[tuple]]
 
 
 def is_super_matt(*values) -> bool:
+    """Return whether super matt is true."""
     for value in values:
         if value is None:
             continue
@@ -200,17 +210,20 @@ def is_super_matt(*values) -> bool:
 
 
 def is_allowed_legacy_matt_exception(desc) -> bool:
+    """Return whether allowed legacy matt exception is true."""
     desc_norm = norm(desc)
     return "antonia" in desc_norm and ("kasmir" in desc_norm or "provance" in desc_norm)
 
 
 def is_custom_y_item(part=None, desc=None) -> bool:
+    """Return whether custom y item is true."""
     part_text = "" if part is None else str(part).strip().upper()
     desc_text = "" if desc is None else str(desc).strip().lower()
     return part_text.startswith("NFAY_") or desc_text.startswith("egyedi f.")
 
 
 def is_legacy_matt_to_exclude(desc, part=None) -> bool:
+    """Return whether legacy matt to exclude is true."""
     if desc in (None, ""):
         return False
     if is_custom_y_item(part, desc):
@@ -225,6 +238,7 @@ def is_legacy_matt_to_exclude(desc, part=None) -> bool:
 
 
 def collect_replaced_ant_variant_parts(parts) -> set[str]:
+    """Handle collect replaced ant variant parts logic for the NettFront workflows."""
     families: dict[tuple[str, str, str, str, str], set[str]] = {}
     for part in parts:
         part_str = str(part)
@@ -247,6 +261,7 @@ def collect_replaced_ant_variant_parts(parts) -> set[str]:
 
 
 def calculate_order_qty(current: float, capacity: float, desc=None) -> int:
+    """Handle calculate order qty logic for the NettFront workflows."""
     desc_text = "" if desc is None else str(desc).strip().lower()
     if desc_text.startswith("egyedi f.") and current < 0:
         return int(math.ceil(-current))
@@ -258,6 +273,7 @@ def calculate_order_qty(current: float, capacity: float, desc=None) -> int:
 
 
 def _merge_ant_variant_rows(headers: list, rows: list[tuple]) -> tuple[list[tuple], int]:
+    """Handle merge ant variant rows logic for the NettFront workflows."""
     norm_headers = {norm(name): idx for idx, name in enumerate(headers)}
     idx_part = norm_headers.get("alkatrszam", 0)
     sum_indices = [2, 3, 4, 5, 6]
@@ -301,6 +317,7 @@ def _merge_ant_variant_rows(headers: list, rows: list[tuple]) -> tuple[list[tupl
 
 
 def _build_row_id(part_number: str, description: str, index: int) -> str:
+    """Build row id data."""
     seed = f"{index}:{part_number}:{description}"
     return re.sub(r"[^a-z0-9]+", "-", norm(seed)).strip("-") or f"row-{index}"
 
@@ -313,6 +330,7 @@ def _row_to_suggestion(
     *,
     is_super_matt_row: bool = False,
 ) -> NettfrontOrderRow:
+    """Handle row to suggestion logic for the NettFront workflows."""
     norm_headers = {norm(name): idx for idx, name in enumerate(headers)}
     idx_part = norm_headers.get("alkatrszam", 0)
     idx_desc = norm_headers.get("alkatrleiras", 1)
@@ -348,6 +366,7 @@ def _row_to_suggestion(
 
 
 def rows_to_suggestion_workbook(rows: list[NettfrontOrderRow]) -> bytes:
+    """Handle rows to suggestion workbook logic for the NettFront workflows."""
     wb = ox.Workbook()
     ws = wb.active
     ws.title = "rendeles"
@@ -381,6 +400,7 @@ def rows_to_suggestion_workbook(rows: list[NettfrontOrderRow]) -> bytes:
 
 
 def rows_to_approved_workbook(rows: list[NettfrontOrderRow], title: str) -> bytes:
+    """Handle rows to approved workbook logic for the NettFront workflows."""
     wb = ox.Workbook()
     ws = wb.active
     ws.title = "jovahagyott_rendeles"
@@ -412,6 +432,7 @@ def rows_to_approved_workbook(rows: list[NettfrontOrderRow], title: str) -> byte
 
 
 def calc_total_m2_from_rows(rows: list[NettfrontOrderRow]) -> float:
+    """Handle calc total m2 from rows logic for the NettFront workflows."""
     total = 0.0
     for row in rows:
         qty = _safe_number(row.order_qty)
@@ -427,6 +448,7 @@ def build_order_suggestions(
     *,
     default_avg_path: Path | None = None,
 ) -> NettfrontOrderBuildResult:
+    """Build NettFront order suggestion rows from stock and average-usage inputs."""
     headers, stock_rows = _load_stock_headers_and_rows(stock_bytes)
     stock_rows, merged_variant_count = _merge_ant_variant_rows(headers, stock_rows)
     avg_by_part = load_avg_by_part(avg_bytes, default_avg_path)

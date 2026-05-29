@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover
 
 
 FRONT_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
 SERIAL_SIZES_DATA_PATH = REPO_ROOT / "data" / "front-inventory-serial-sizes.json"
 NETTFRONT_TRANSLATIONS_DATA_PATH = REPO_ROOT / "data" / "nettfront-translations.json"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = REPO_ROOT / "runtime" / "front-leltar" / "insight-minta.xlsx"

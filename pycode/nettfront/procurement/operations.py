@@ -19,6 +19,7 @@ from .pages import render_nettfront_procurement_form, render_nettfront_procureme
 
 
 def process_procurement_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, bytes]:
+    """Validate procurement uploads and build the procurement result page."""
     invoice_file = files.get("invoice_pdf")
     parts_file = files.get("parts_file")
 
@@ -69,6 +70,7 @@ def process_procurement_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int
 
 
 def rebuild_procurement_parts(job_id: str, files: dict[str, tuple[str, bytes]]) -> tuple[int, bytes] | None:
+    """Handle rebuild procurement parts logic for the NettFront workflows."""
     job_dir, metadata = read_procurement_job(job_id)
     if job_dir is None or metadata is None:
         return None
@@ -113,6 +115,7 @@ def rebuild_procurement_parts(job_id: str, files: dict[str, tuple[str, bytes]]) 
 
 
 def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:
+    """Launch procurement job processing."""
     job_dir, metadata = read_procurement_job(job_id)
     if job_dir is None or metadata is None:
         return None
@@ -135,6 +138,7 @@ def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:
 
 
 def stop_procurement_job(job_id: str) -> tuple[int, bytes] | None:
+    """Stop procurement job processing."""
     job_dir, metadata = read_procurement_job(job_id)
     if job_dir is None or metadata is None:
         return None

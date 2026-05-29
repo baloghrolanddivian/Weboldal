@@ -1,3 +1,9 @@
+"""Matt front inventory value calculation engine.
+
+This module reads fixed price and daily stock files, groups Matt front inventory
+by model and color, and builds the threshold alert workbook.
+"""
+
 from __future__ import annotations
 
 import csv

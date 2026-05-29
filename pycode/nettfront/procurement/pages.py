@@ -19,6 +19,7 @@ from .routes import (
 
 
 def render_nettfront_procurement_form(message: str = "") -> bytes:
+    """Render the procurement upload form."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
@@ -203,6 +204,7 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
 
 
 def _read_procurement_preview_rows(job_id: str, limit: int | None = None) -> tuple[list[list[str]], int]:
+    """Read procurement preview rows data."""
     job_dir, _ = read_procurement_job(job_id)
     if job_dir is None:
         return [], 0
@@ -227,6 +229,7 @@ def _read_procurement_preview_rows(job_id: str, limit: int | None = None) -> tup
 
 
 def render_nettfront_procurement_result(job_id: str, metadata: dict, message: str = "", success: bool = False) -> bytes:
+    """Render a completed procurement job page."""
     notice_html = ""
     if message:
         lowered_message = message.casefold()

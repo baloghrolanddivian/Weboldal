@@ -18,18 +18,22 @@ POWERSHELL_SCRIPT_FILE = "nettfront-import.ps1"
 
 
 def _helper_pid_path(job_dir: Path) -> Path:
+    """Handle helper pid path logic for the NettFront workflows."""
     return job_dir / HELPER_PID_FILE
 
 
 def _helper_ahk_path(job_dir: Path) -> Path:
+    """Handle helper ahk path logic for the NettFront workflows."""
     return job_dir / AHK_SCRIPT_FILE
 
 
 def _helper_powershell_path(job_dir: Path) -> Path:
+    """Handle helper powershell path logic for the NettFront workflows."""
     return job_dir / POWERSHELL_SCRIPT_FILE
 
 
 def _clear_helper_state(job_dir: Path) -> None:
+    """Handle clear helper state logic for the NettFront workflows."""
     try:
         _helper_pid_path(job_dir).unlink()
     except FileNotFoundError:
@@ -37,6 +41,7 @@ def _clear_helper_state(job_dir: Path) -> None:
 
 
 def _read_helper_pid(job_dir: Path) -> int | None:
+    """Read helper pid data."""
     pid_path = _helper_pid_path(job_dir)
     if not pid_path.exists():
         return None
@@ -47,10 +52,12 @@ def _read_helper_pid(job_dir: Path) -> int | None:
 
 
 def _write_helper_pid(job_dir: Path, pid: int) -> None:
+    """Write helper pid data."""
     _helper_pid_path(job_dir).write_text(str(pid), encoding="utf-8")
 
 
 def _is_process_running(pid: int | None) -> bool:
+    """Return whether process running is true."""
     if not pid or pid <= 0:
         return False
 
@@ -78,6 +85,7 @@ def _is_process_running(pid: int | None) -> bool:
 
 
 def get_procurement_helper_state(job_dir: Path | None) -> dict[str, object]:
+    """Return procurement helper state data."""
     if job_dir is None:
         return {"running": False, "pid": None}
 
@@ -90,6 +98,7 @@ def get_procurement_helper_state(job_dir: Path | None) -> dict[str, object]:
 
 
 def stop_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
+    """Stop procurement helper processing."""
     state = get_procurement_helper_state(job_dir)
     pid = state.get("pid")
     if not state.get("running") or not isinstance(pid, int):
@@ -110,6 +119,7 @@ def stop_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
 
 
 def _find_autohotkey_executable() -> Path | None:
+    """Handle find autohotkey executable logic for the NettFront workflows."""
     candidates = [
         shutil.which("AutoHotkey64.exe"),
         shutil.which("AutoHotkey32.exe"),
@@ -134,6 +144,7 @@ def _find_autohotkey_executable() -> Path | None:
 
 
 def _build_runtime_ahk_script(csv_path: Path) -> str:
+    """Build runtime ahk script data."""
     csv_literal = str(csv_path).replace("\\", "\\\\")
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
@@ -218,6 +229,7 @@ Esc::
 
 
 def _build_runtime_powershell_script(csv_path: Path) -> str:
+    """Build runtime powershell script data."""
     csv_literal = str(csv_path).replace("'", "''")
     return f"""$ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
@@ -327,6 +339,7 @@ foreach ($row in $rows) {{
 
 
 def launch_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
+    """Launch procurement helper processing."""
     job_dir.mkdir(parents=True, exist_ok=True)
     csv_path = job_dir / "rendeles_sima.csv"
     if not csv_path.exists():

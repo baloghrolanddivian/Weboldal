@@ -17,6 +17,7 @@ from .config import compare_runtime_dir
 
 
 def write_compare_job(artifacts) -> tuple[str, dict]:
+    """Write compare job data."""
     job_id = uuid.uuid4().hex[:12]
     job_dir = compare_runtime_dir() / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -43,10 +44,12 @@ def write_compare_job(artifacts) -> tuple[str, dict]:
 
 
 def read_compare_job(job_id: str) -> tuple[Path | None, dict | None]:
+    """Read compare job data."""
     return read_job(compare_runtime_dir(), job_id)
 
 
 def compare_download_payload(job_id: str, artifact: str) -> tuple[bytes, str, str] | None:
+    """Handle compare download payload logic for the NettFront workflows."""
     _job_dir, metadata = read_compare_job(job_id)
     if metadata is None:
         return None

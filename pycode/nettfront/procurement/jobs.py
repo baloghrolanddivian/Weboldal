@@ -17,10 +17,12 @@ from .config import procurement_runtime_dir
 
 
 def read_procurement_job(job_id: str) -> tuple[Path | None, dict | None]:
+    """Read procurement job data."""
     return read_job(procurement_runtime_dir(), job_id)
 
 
 def procurement_download_payload(job_id: str, artifact: str) -> tuple[bytes, str, str] | None:
+    """Handle procurement download payload logic for the NettFront workflows."""
     _job_dir, metadata = read_procurement_job(job_id)
     if metadata is None:
         return None
@@ -37,6 +39,7 @@ def procurement_download_payload(job_id: str, artifact: str) -> tuple[bytes, str
     return download_payload(procurement_runtime_dir(), job_id, artifact, artifact_map)
 
 def persist_procurement_job(job_dir: Path, metadata: dict, artifacts, uploaded_parts_name: str = "", uploaded_parts_bytes: bytes | None = None) -> dict:
+    """Handle persist procurement job logic for the NettFront workflows."""
     (job_dir / "invoice-output.csv").write_bytes(artifacts.invoice_csv)
     (job_dir / "rendeles_sima.csv").write_bytes(artifacts.procurement_csv)
 
@@ -69,6 +72,7 @@ def write_procurement_job(
     uploaded_parts_name: str = "",
     uploaded_parts_bytes: bytes | None = None,
 ) -> tuple[str, dict]:
+    """Write procurement job data."""
     job_id = uuid.uuid4().hex[:12]
     job_dir = procurement_runtime_dir() / job_id
     job_dir.mkdir(parents=True, exist_ok=True)

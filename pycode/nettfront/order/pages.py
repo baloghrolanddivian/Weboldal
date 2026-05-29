@@ -26,6 +26,7 @@ from .routes import (
 
 
 def render_nettfront_order_form(message: str = "", success: bool = False) -> bytes:
+    """Render the order suggestion upload form."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""
@@ -461,6 +462,7 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
 
 
 def render_nettfront_order_result(job_id: str, metadata: dict, message: str = "", success: bool = False) -> bytes:
+    """Render a completed order suggestion job page."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""

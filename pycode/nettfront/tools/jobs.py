@@ -12,10 +12,12 @@ from pathlib import Path
 
 
 def is_valid_job_id(job_id: str) -> bool:
+    """Return whether a job identifier is safe to use as a runtime folder name."""
     return bool(re.fullmatch(r"[a-f0-9]{10,32}", job_id))
 
 
 def read_job(runtime_dir: Path, job_id: str) -> tuple[Path | None, dict | None]:
+    """Read a persisted job metadata file from a runtime folder."""
     if not is_valid_job_id(job_id):
         return None, None
 
@@ -36,6 +38,7 @@ def download_payload(
     artifact: str,
     artifact_map: dict[str, tuple[str, str, str]],
 ) -> tuple[bytes, str, str] | None:
+    """Return bytes, content type, and filename for a stored job artifact."""
     job_dir, _metadata = read_job(runtime_dir, job_id)
     if job_dir is None:
         return None

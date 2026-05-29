@@ -9,7 +9,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 DOWNLOADS_DIR = Path.home() / "Downloads"
 OUTPUT_ROOT = REPO_ROOT / "runtime" / "front-leltar" / "ahs-riport"
 PYCODE_DIR = REPO_ROOT / "pycode"

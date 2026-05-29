@@ -1,3 +1,5 @@
+"""HTML page rendering for the manufacturing papers workflow."""
+
 from __future__ import annotations
 
 import html
@@ -164,6 +166,7 @@ def render_manufacturing_page(
       background: var(--mfg-bg);
       color: var(--mfg-text);
       font-family: "Manrope", sans-serif;
+      overflow-x: hidden;
     }}
     body {{
       -webkit-font-smoothing: antialiased;
@@ -172,11 +175,14 @@ def render_manufacturing_page(
     a {{ color: inherit; text-decoration: none; }}
     button, input {{ font: inherit; }}
     .mfg-page {{
+      width: 100%;
+      max-width: 100vw;
       min-height: 100vh;
       padding: 8px 8px 16px;
       display: grid;
       gap: 0;
       align-content: start;
+      overflow-x: clip;
     }}
     body.has-mfg-scroll-rail .mfg-page {{
       padding-right: 64px;
@@ -207,8 +213,9 @@ def render_manufacturing_page(
     .mfg-toolbar,
     .mfg-board,
     .mfg-notice {{
-      width: min(1280px, 100%);
+      width: min(1280px, calc(100vw - 16px));
       margin: 0 auto;
+      justify-self: center;
     }}
     .mfg-toolbar {{
       padding: 8px 10px;
@@ -285,8 +292,9 @@ def render_manufacturing_page(
     }}
     .mfg-operation-panel,
     .mfg-operation-header {{
-      width: min(1280px, 100%);
+      width: min(1280px, calc(100vw - 16px));
       margin: 0 auto;
+      justify-self: center;
       border-radius: var(--mfg-radius-xl);
       border: 1px solid rgba(18, 20, 23, 0.08);
       background: var(--mfg-panel);

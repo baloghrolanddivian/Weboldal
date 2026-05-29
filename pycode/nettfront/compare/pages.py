@@ -11,6 +11,7 @@ NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
 
 
 def render_nettfront_compare_form(message: str = "") -> bytes:
+    """Render the comparison upload form."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
@@ -80,6 +81,7 @@ def render_nettfront_compare_form(message: str = "") -> bytes:
 
 
 def render_nettfront_compare_result(job_id: str, metadata: dict, message: str = "") -> bytes:
+    """Render a completed comparison job page."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'

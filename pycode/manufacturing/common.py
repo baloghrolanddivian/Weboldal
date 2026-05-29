@@ -1,3 +1,5 @@
+"""Common manufacturing PDF parsers, production discovery, and row state persistence."""
+
 from __future__ import annotations
 
 import hashlib
