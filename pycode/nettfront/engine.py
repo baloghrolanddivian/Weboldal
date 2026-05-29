@@ -1,3 +1,9 @@
+"""Core NettFront invoice and procurement processing engine.
+
+This module contains the shared parsing, translation, CSV, Excel, and bundle
+generation routines used by the NettFront workflows.
+"""
+
 from __future__ import annotations
 
 import csv

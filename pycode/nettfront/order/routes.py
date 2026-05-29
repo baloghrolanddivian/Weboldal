@@ -1,3 +1,5 @@
+"""Route constants for the NettFront order suggestion workflow."""
+
 from __future__ import annotations
 
 NETTFRONT_ORDER_ROUTE = "/apps/nettfront-rendeles"

@@ -1,3 +1,9 @@
+"""Shared NettFront job storage helpers.
+
+The functions in this module validate job identifiers, read persisted job
+metadata, and serve generated artifacts from per-workflow runtime folders.
+"""
+
 from __future__ import annotations
 
 import json

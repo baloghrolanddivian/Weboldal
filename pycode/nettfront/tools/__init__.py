@@ -1,2 +1,3 @@
-from __future__ import annotations
+"""Shared helper tools for NettFront workflow packages."""
 
+from __future__ import annotations

@@ -1,3 +1,5 @@
+"""Public API for the NettFront order suggestion workflow."""
+
 from __future__ import annotations
 
 from .config import configure_nettfront_order, default_avg_path, order_runtime_dir

@@ -1,3 +1,5 @@
+"""Public API for the NettFront invoice comparison workflow."""
+
 from __future__ import annotations
 
 from .config import compare_runtime_dir, configure_nettfront_compare

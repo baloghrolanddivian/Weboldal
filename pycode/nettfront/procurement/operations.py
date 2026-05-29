@@ -1,3 +1,9 @@
+"""Request-level operations for the NettFront procurement workflow.
+
+This module validates uploads, invokes procurement package generation, rebuilds
+parts mappings, and controls the procurement import helper process.
+"""
+
 from __future__ import annotations
 
 from nettfront.engine import (

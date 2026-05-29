@@ -1,3 +1,9 @@
+"""Order suggestion engine for NettFront stock and average-usage data.
+
+This module parses inventory inputs, normalizes part numbers, and calculates
+suggested order quantities before the route layer persists the result.
+"""
+
 from __future__ import annotations
 
 import io

@@ -1,3 +1,5 @@
+"""HTML page rendering for the NettFront procurement workflow."""
+
 from __future__ import annotations
 
 import csv

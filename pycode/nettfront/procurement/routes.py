@@ -1,3 +1,5 @@
+"""Route constants for the NettFront procurement workflow."""
+
 from __future__ import annotations
 
 NETTFRONT_PROCUREMENT_ROUTE = "/apps/nettfront-beszerzes"

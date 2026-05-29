@@ -1,3 +1,9 @@
+"""Job persistence helpers for NettFront comparison runs.
+
+This module writes comparison artifacts and metadata, reads completed jobs,
+and maps downloadable artifact names to stored files.
+"""
+
 from __future__ import annotations
 
 import json

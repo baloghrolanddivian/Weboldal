@@ -1,3 +1,9 @@
+"""Automation helper process management for procurement imports.
+
+This module launches, monitors, and stops the AutoHotkey-based helper used to
+feed generated procurement CSV data into the NettFront client workflow.
+"""
+
 from __future__ import annotations
 
 import os

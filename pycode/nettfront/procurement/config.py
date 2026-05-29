@@ -1,3 +1,5 @@
+"""Runtime configuration for the NettFront procurement workflow."""
+
 from __future__ import annotations
 
 from pathlib import Path

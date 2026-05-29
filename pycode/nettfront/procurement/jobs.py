@@ -1,3 +1,9 @@
+"""Job persistence and artifact mapping for procurement runs.
+
+The functions here store generated procurement bundles, update metadata, and
+serve downloadable CSV, ZIP, and report artifacts.
+"""
+
 from __future__ import annotations
 
 import json

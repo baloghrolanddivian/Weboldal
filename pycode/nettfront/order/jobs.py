@@ -1,3 +1,9 @@
+"""Job persistence and artifact generation for NettFront order runs.
+
+This module stores order suggestion rows, produces downloadable CSV and Excel
+outputs, and keeps approval state in runtime metadata.
+"""
+
 from __future__ import annotations
 
 import csv

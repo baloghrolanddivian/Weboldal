@@ -1,3 +1,9 @@
+"""Runtime configuration for the NettFront comparison workflow.
+
+The application injects runtime paths and renderer callbacks here during
+startup so the workflow modules stay decoupled from the main server module.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

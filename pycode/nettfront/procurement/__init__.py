@@ -1,3 +1,5 @@
+"""Public API for the NettFront procurement workflow."""
+
 from __future__ import annotations
 
 from .config import configure_nettfront_procurement, procurement_runtime_dir

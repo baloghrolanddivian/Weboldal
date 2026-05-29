@@ -1,3 +1,9 @@
+"""Request-level operations for the NettFront order workflow.
+
+The functions in this module validate stock uploads, build order suggestions,
+persist approvals, and control the shared NettFront import helper process.
+"""
+
 from __future__ import annotations
 
 from .config import default_avg_path

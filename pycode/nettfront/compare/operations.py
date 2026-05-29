@@ -1,3 +1,9 @@
+"""Request-level operations for the NettFront comparison workflow.
+
+The functions here validate uploaded files, invoke the comparison engine, and
+return HTTP-style status/body pairs for the route dispatcher.
+"""
+
 from __future__ import annotations
 
 from nettfront.engine import build_compare_artifacts

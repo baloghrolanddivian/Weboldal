@@ -1,3 +1,9 @@
+"""Compatibility wrapper for NettFront order import helper controls.
+
+The order workflow uses the same helper process as procurement, so this module
+re-exports the shared process-management API from the procurement package.
+"""
+
 from __future__ import annotations
 
 from nettfront.procurement.import_helper import (

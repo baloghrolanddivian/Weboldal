@@ -1,3 +1,5 @@
+"""Route constants for the NettFront comparison workflow."""
+
 from __future__ import annotations
 
 NETTFRONT_COMPARE_ROUTE = "/apps/nettfront-ellenorzes"
