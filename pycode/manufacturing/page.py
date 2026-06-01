@@ -3045,10 +3045,14 @@ def render_manufacturing_page(
           const hideBarcode = documentHidesBarcode(document);
           const hideSideTypeColumn = Boolean(group?.hideSideTypeColumn);
           const columnLayout = groupColumnLayout(group);
+          const groupHasRedRows = (Array.isArray(group.rows) ? group.rows : []).some((row) => rowStateValue(row) === "red");
+          const isCncDocument = String(document?.key || "") === "cnc_furas";
           const showPartialColumn =
+            isCncDocument ||
             currentViewKey === "red" ||
             currentSubcategoryKey === "red" ||
-            specialViewUsesRedFilter(currentSpecialView);
+            specialViewUsesRedFilter(currentSpecialView) ||
+            groupHasRedRows;
           const effectiveHideBarcode = hideBarcode || showPartialColumn;
           const showPantoloExpanderColumn = documentUsesGroupedQuantityRows(document) && rowUsesGroupedQuantity({{ columnLayout }});
           const isPantoloLayout = columnLayout === "pantolo";
@@ -3528,6 +3532,25 @@ def render_manufacturing_page(
         }}
       }};
 
+      const clearPartialQuantities = (targetProductionNumber, keys) => {{
+        const cleanKeys = Array.from(new Set(
+          (Array.isArray(keys) ? keys : [])
+            .map((value) => String(value || "").trim())
+            .filter(Boolean)
+        ));
+        for (const key of cleanKeys) {{
+          if (!Object.prototype.hasOwnProperty.call(partialQuantityState, key)) continue;
+          const previousValue = String(partialQuantityState[key] || "");
+          delete partialQuantityState[key];
+          const existingTimer = partialSaveTimers.get(key);
+          if (existingTimer) {{
+            clearTimeout(existingTimer);
+            partialSaveTimers.delete(key);
+          }}
+          void persistPartialQuantity(targetProductionNumber, key, "", previousValue);
+        }}
+      }};
+
       const applyRowState = (stateKey, storageKey, rowId, targetProductionNumber, targetState, sourceRowIds = []) => {{
         const scrollState = captureScrollState();
         const sourceStateKeys = Array.from(new Set(sourceRowIds.map((sourceRowId) => normalizeSelectionKey(targetProductionNumber, sourceRowId)).filter(Boolean)));
@@ -3542,6 +3565,9 @@ def render_manufacturing_page(
           else selectionState[key] = targetState;
         }}
         for (const key of clearOnlyKeys) delete selectionState[key];
+        if (targetState === "green") {{
+          clearPartialQuantities(targetProductionNumber, [rowId, stateKey, storageKey, ...allStateKeys]);
+        }}
         renderAll(scrollState);
         setStatus("Mentés...");
         void persistRowState(rowId, targetProductionNumber, stateKey, storageKey, targetState, previousStateMap, sourceRowIds);
@@ -3622,14 +3648,20 @@ def render_manufacturing_page(
         }}
 
         const previousStateMap = new Map(trackedKeys.map((key) => [key, selectionState[key] || ""]));
+        const partialKeysToClear = [];
         for (let index = 0; index < total; index += 1) {{
+          const childRowId = childUnitRowId(parentRow, index);
           const childKey = childUnitStateKey(parentRow, index);
+          const childStorageKey = childUnitStorageKey(parentRow, index);
           const childState = nextUnitStates[index] || "";
           if (childState) selectionState[childKey] = childState;
           else delete selectionState[childKey];
+          if (childState === "green") partialKeysToClear.push(childRowId, childStorageKey, childKey);
         }}
         if (nextParentState) selectionState[parentKey] = nextParentState;
         else delete selectionState[parentKey];
+        if (nextParentState === "green") partialKeysToClear.push(parentRowId, rowStorageKey(parentRow), parentKey);
+        clearPartialQuantities(targetProductionNumber, partialKeysToClear);
 
         renderAll(scrollState);
         setStatus("Mentés...");
