@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+from decimal import Decimal, InvalidOperation
 
 from .page import APP_ROUTE, COMMON_SCRIPT_TAG
 from .reading import (
@@ -113,6 +114,54 @@ def _is_kastamonu_credit_profile(invoice_profile: str) -> bool:
     return _clean_spaces(invoice_profile).lower() == "kastamonu_credit"
 
 
+def _parse_money_value(value: str) -> Decimal | None:
+    """Parse a displayed invoice money value without assuming one supplier format."""
+    cleaned = _clean_spaces(value).replace(" ", "")
+    if not cleaned or not re.fullmatch(r"-?[0-9.,]+", cleaned):
+        return None
+
+    if "," in cleaned:
+        normalized = cleaned.replace(".", "").replace(",", ".")
+    elif cleaned.count(".") == 1 and len(cleaned.rsplit(".", 1)[1]) == 2:
+        normalized = cleaned
+    else:
+        normalized = cleaned.replace(".", "")
+
+    try:
+        return Decimal(normalized)
+    except InvalidOperation:
+        return None
+
+
+def _format_money_sum(value: Decimal, sample_value: str) -> str:
+    """Format a summed money value using the item row's apparent number style."""
+    rounded = value.quantize(Decimal("0.01"))
+    sample = _clean_spaces(sample_value)
+    if "," in sample:
+        return f"{rounded:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{rounded:.2f}"
+
+
+def _sum_item_net_values(items: list[InvoiceItem]) -> str:
+    """Return the sum of displayed item net values."""
+    total = Decimal("0")
+    sample_value = ""
+    has_value = False
+    for item in items:
+        net_value = _clean_spaces(item.net_value)
+        if not net_value:
+            continue
+        parsed = _parse_money_value(net_value)
+        if parsed is None:
+            return ""
+        total += parsed
+        sample_value = sample_value or net_value
+        has_value = True
+    if not has_value:
+        return ""
+    return _format_money_sum(total, sample_value)
+
+
 def _detect_product_type(description: str, article_code: str = "", invoice_profile: str = "") -> str:
     """Provide detect product type behavior."""
     normalized_description = _fix_hungarian_mojibake(_clean_spaces(description)).upper()
@@ -215,7 +264,7 @@ def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> st
 
 def _render_invoice_total_row(data: InvoiceData) -> str:
     """Render render invoice total row output."""
-    total_value = _item_value_or_default(data.total_gross or data.total_net)
+    total_value = _item_value_or_default(_sum_item_net_values(data.items))
     if _is_kastamonu_credit_profile(data.invoice_profile):
         colspan = "7"
     elif _fix_hungarian_mojibake(_clean_spaces(data.invoice_profile)).lower() == "gamet":
@@ -224,7 +273,7 @@ def _render_invoice_total_row(data: InvoiceData) -> str:
         colspan = "9"
     return (
         "<tr class='total-row'>"
-        f"<td colspan='{colspan}'><strong>Végösszeg</strong></td>"
+        f"<td colspan='{colspan}'><strong>Tételek összege</strong></td>"
         f"<td class='right'><strong>{html.escape(total_value)}</strong></td>"
         "</tr>"
     )
@@ -258,6 +307,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         "generic": "Általános sablon",
         "": "Általános sablon",
     }.get(data.invoice_profile, "Általános sablon")
+    credit_note_title = '<div class="credit-note-title">Jóváíró</div>' if _is_kastamonu_credit_profile(data.invoice_profile) else ""
 
     info_field_rows = [
         ("Számlaszám", data.invoice_number),
@@ -516,6 +566,14 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       font-size: 1.14rem;
       letter-spacing: .12px;
       color: var(--ink-deep);
+    }}
+    .credit-note-title {{
+      margin: 0 0 .22rem;
+      color: var(--ink-deep);
+      font-size: 1.36rem;
+      font-weight: 900;
+      line-height: 1.05;
+      text-transform: uppercase;
     }}
     .head-copy p {{
       margin: .3rem 0 0;
@@ -778,6 +836,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         overflow: visible;
       }}
       .eyebrow,
+      .credit-note-title,
       .panel,
       .meta div,
       th,
@@ -813,6 +872,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     <header class="head">
       <div class="head-copy">
         <div class="eyebrow">Divian-HUB kimenet</div>
+        {credit_note_title}
         <h1>Külföldi számla magyar fordítása</h1>
         <p>Automatikusan generált, nyomtatható kivonat egységes vállalati megjelenéssel.</p>
       </div>
