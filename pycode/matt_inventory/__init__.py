@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+MATT_INVENTORY_ACCESS_USER_IDS = frozenset()
+
 from .config import configure_matt_inventory
 from .engine import (
     MattInventoryReport,
@@ -19,6 +21,7 @@ from .routes import MATT_INVENTORY_DOWNLOAD_ROUTE, MATT_INVENTORY_PROCESS_ROUTE,
 
 __all__ = [
     "MATT_INVENTORY_DOWNLOAD_ROUTE",
+    "MATT_INVENTORY_ACCESS_USER_IDS",
     "MATT_INVENTORY_PROCESS_ROUTE",
     "MATT_INVENTORY_ROUTE",
     "MattInventoryReport",

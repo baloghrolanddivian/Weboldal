@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+INVOICE_TRANSLATOR_ACCESS_USER_IDS = frozenset({"manufacturer"})
+
 from .generating import build_invoice_response, create_printable_html
 from .page import APP_ROUTE, GENERATE_ROUTE, render_form
 from .reading import (
@@ -19,6 +21,7 @@ from .reading import (
 __all__ = [
     "APP_ROUTE",
     "GENERATE_ROUTE",
+    "INVOICE_TRANSLATOR_ACCESS_USER_IDS",
     "InvoiceChunk",
     "InvoiceData",
     "InvoiceItem",

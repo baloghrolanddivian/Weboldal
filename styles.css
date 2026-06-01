@@ -196,6 +196,57 @@ select {
   color: var(--text);
 }
 
+.login-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.login-user strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.login-notice {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.login-form input {
+  width: 132px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  outline: none;
+}
+
+.login-form input:focus {
+  border-color: rgba(67, 222, 207, 0.64);
+  box-shadow: 0 0 0 3px rgba(67, 222, 207, 0.1);
+}
+
+.login-form button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.login-form button:hover,
+.login-form button:focus-visible {
+  border-color: rgba(67, 222, 207, 0.52);
+}
+
 .nav-cta,
 .button {
   display: inline-flex;
@@ -646,6 +697,12 @@ select {
     width: 100%;
     justify-content: center;
     flex-wrap: wrap;
+  }
+
+  .login-form {
+    order: 4;
+    width: 100%;
+    justify-content: center;
   }
 
   .home-shell {

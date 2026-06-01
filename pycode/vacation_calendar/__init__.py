@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+VACATION_CALENDAR_ACCESS_USER_IDS = frozenset()
+
 from .config import (
     VACATION_CALENDAR_DEPARTMENT_DELETE_ROUTE,
     VACATION_CALENDAR_DEPARTMENT_SAVE_ROUTE,
@@ -31,6 +33,7 @@ __all__ = [
     "VACATION_CALENDAR_LEAVE_DELETE_ROUTE",
     "VACATION_CALENDAR_LEAVE_SAVE_ROUTE",
     "VACATION_CALENDAR_ROUTE",
+    "VACATION_CALENDAR_ACCESS_USER_IDS",
     "configure_vacation_calendar",
     "handle_vacation_department_delete",
     "handle_vacation_department_save",

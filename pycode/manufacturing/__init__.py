@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+MANUFACTURING_ACCESS_USER_IDS = frozenset({"manufacturer"})
+
 from .common import (
     _pdf_lines,
     available_production_entries,
@@ -45,6 +47,7 @@ __all__ = [
     "MANUFACTURING_REPORT_READY_ROUTE",
     "MANUFACTURING_ROUTE",
     "MANUFACTURING_STATE_ROUTE",
+    "MANUFACTURING_ACCESS_USER_IDS",
     "_load_manufacturing_bundle_cached",
     "_manufacturing_is_virtual_unit_row_id",
     "_manufacturing_normalize_number",

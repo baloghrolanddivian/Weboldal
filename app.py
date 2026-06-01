@@ -29,6 +29,7 @@ except Exception:  # pragma: no cover - Windows-only optional import
     winreg = None
 
 from manufacturing import (
+    MANUFACTURING_ACCESS_USER_IDS,
     MANUFACTURING_OPERATION_DEFINITIONS,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_PRIME_SYNC_ON_START,
@@ -54,6 +55,7 @@ from manufacturing import (
     save_selection_state,
 )
 from matt_inventory import (
+    MATT_INVENTORY_ACCESS_USER_IDS,
     MATT_INVENTORY_DOWNLOAD_ROUTE,
     MATT_INVENTORY_PROCESS_ROUTE,
     MATT_INVENTORY_ROUTE,
@@ -64,6 +66,7 @@ from matt_inventory import (
 )
 from leltar.group_pages import render_inventory_group_page
 from leltar.routes import (
+    ADMIN_INVENTORY_ACCESS_USER_IDS,
     ADMIN_FRONT_INVENTORY_ROUTE,
     ADMIN_INVENTORY_GROUP_ROUTE,
     ADMIN_MATERIAL_INVENTORY_ROUTE,
@@ -92,6 +95,7 @@ from leltar.routes import (
     MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE,
     MATERIAL_INVENTORY_WORKER_ROUTE,
     PRODUCTION_INVENTORY_GROUP_ROUTE,
+    PRODUCTION_INVENTORY_ACCESS_USER_IDS,
     SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_INSIGHT_DOWNLOAD_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE,
@@ -141,6 +145,7 @@ from leltar.types.material import (
     write_runtime_upload as write_material_inventory_runtime_upload,
 )
 from nettfront.procurement import (
+    NETTFRONT_PROCUREMENT_ACCESS_USER_IDS,
     NETTFRONT_PROCUREMENT_DOWNLOAD_PREFIX,
     NETTFRONT_PROCUREMENT_LAUNCH_PREFIX,
     NETTFRONT_PROCUREMENT_PARTS_PREFIX,
@@ -156,6 +161,7 @@ from nettfront.procurement import (
     stop_procurement_job,
 )
 from nettfront.compare import (
+    NETTFRONT_COMPARE_ACCESS_USER_IDS,
     NETTFRONT_COMPARE_DOWNLOAD_PREFIX,
     NETTFRONT_COMPARE_PROCESS_ROUTE,
     NETTFRONT_COMPARE_ROUTE,
@@ -165,6 +171,7 @@ from nettfront.compare import (
     render_nettfront_compare_form,
 )
 from nettfront.order import (
+    NETTFRONT_ORDER_ACCESS_USER_IDS,
     NETTFRONT_ORDER_APPROVE_PREFIX,
     NETTFRONT_ORDER_DOWNLOAD_PREFIX,
     NETTFRONT_ORDER_LAUNCH_PREFIX,
@@ -182,12 +189,14 @@ from nettfront.order import (
 from invoice_translator import (
     APP_ROUTE,
     GENERATE_ROUTE,
+    INVOICE_TRANSLATOR_ACCESS_USER_IDS,
     MissingInvoiceDataError,
     build_invoice_response,
     extract_invoice_upload,
     render_form,
 )
 from vacation_calendar import (
+    VACATION_CALENDAR_ACCESS_USER_IDS,
     VACATION_CALENDAR_DEPARTMENT_DELETE_ROUTE,
     VACATION_CALENDAR_DEPARTMENT_SAVE_ROUTE,
     VACATION_CALENDAR_EMPLOYEE_DELETE_ROUTE,
@@ -216,6 +225,15 @@ from tools.inventory_sort import inventory_sort_key as _unified_inventory_sort_k
 from tools.inventory_sort import normalize_inventory_sort as _unified_inventory_normalize_sort
 from tools.json_store import read_json_object as _matt_inventory_read_meta
 from tools.json_store import write_json_object as _matt_inventory_write_meta
+from tools.login import (
+    MAX_PASSWORD_LENGTH,
+    AuthUser,
+    authenticate_password,
+    ensure_login_database,
+    make_login_cookie,
+    make_logout_cookie,
+    user_from_cookie,
+)
 from tools.shopfloor import extract_con_code as _extract_con_code
 from tools.shopfloor import report_con_ready as _shopfloor_report_con_ready
 from tools.static_assets import load_static_asset
@@ -229,8 +247,12 @@ except Exception:  # pragma: no cover - optional dependency handling
 HOST = "0.0.0.0"
 PORT = int(os.getenv("DIVIAN_HUB_PORT", "5000"))
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+LOGIN_DB_PATH = DATA_DIR / "login.db"
 RUNTIME_DIR = BASE_DIR / "runtime"
+LOGIN_ROUTE = "/login"
 configure_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
+ensure_login_database(LOGIN_DB_PATH)
 DEV_RELOAD_ROUTE = "/__dev__/events"
 DEV_CHILD_ENV = "DIVIAN_HUB_DEV_CHILD"
 DEV_RELOAD_TOKEN_ENV = "DIVIAN_HUB_RELOAD_TOKEN"
@@ -282,6 +304,152 @@ SEMIFINISHED_FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH = SEMIFINISHED_FRONT_INVENTOR
 SEMIFINISHED_FRONT_INVENTORY_INSIGHT_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
 SEMIFINISHED_FRONT_INVENTORY_SUMMARY_WORKBOOK_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "osszesito.xlsx"
 SEMIFINISHED_FRONT_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR / "osszesito.json"
+
+
+AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
+    (APP_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
+    (GENERATE_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
+    (MANUFACTURING_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
+    (MANUFACTURING_STATE_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
+    (MANUFACTURING_PARTIAL_QTY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
+    (MANUFACTURING_REPORT_READY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
+    (PRODUCTION_INVENTORY_GROUP_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_ALERT_CLEAR_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_MISSING_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_INVENTORY_GROUP_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_SEMIFINISHED_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (NETTFRONT_ROUTE, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_ROUTE, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_PROCESS_ROUTE, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_DOWNLOAD_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_LAUNCH_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_PARTS_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_STOP_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_COMPARE_ROUTE, NETTFRONT_COMPARE_ACCESS_USER_IDS),
+    (NETTFRONT_COMPARE_PROCESS_ROUTE, NETTFRONT_COMPARE_ACCESS_USER_IDS),
+    (NETTFRONT_COMPARE_DOWNLOAD_PREFIX, NETTFRONT_COMPARE_ACCESS_USER_IDS),
+    (NETTFRONT_ORDER_ROUTE, NETTFRONT_ORDER_ACCESS_USER_IDS),
+    (NETTFRONT_ORDER_PROCESS_ROUTE, NETTFRONT_ORDER_ACCESS_USER_IDS),
+    (NETTFRONT_ORDER_DOWNLOAD_PREFIX, NETTFRONT_ORDER_ACCESS_USER_IDS),
+    (NETTFRONT_ORDER_LAUNCH_PREFIX, NETTFRONT_ORDER_ACCESS_USER_IDS),
+    (NETTFRONT_ORDER_APPROVE_PREFIX, NETTFRONT_ORDER_ACCESS_USER_IDS),
+    (NETTFRONT_ORDER_STOP_PREFIX, NETTFRONT_ORDER_ACCESS_USER_IDS),
+    (MATT_INVENTORY_ROUTE, MATT_INVENTORY_ACCESS_USER_IDS),
+    (MATT_INVENTORY_PROCESS_ROUTE, MATT_INVENTORY_ACCESS_USER_IDS),
+    (MATT_INVENTORY_DOWNLOAD_ROUTE, MATT_INVENTORY_ACCESS_USER_IDS),
+    (VACATION_CALENDAR_ROUTE, VACATION_CALENDAR_ACCESS_USER_IDS),
+)
+
+def _route_matches(path: str, route: str) -> bool:
+    """Return whether a request path belongs to a route or route prefix."""
+    return path == route or path.startswith(route.rstrip("/") + "/")
+
+
+def _can_access_path(user: AuthUser, path: str) -> bool:
+    """Return whether a user can access a server path."""
+    if user.is_admin:
+        return True
+    if not path.startswith("/apps/"):
+        return True
+    for route, allowed_user_ids in sorted(AUTH_ROUTE_RULES, key=lambda item: len(item[0]), reverse=True):
+        if _route_matches(path, route):
+            return user.user_id in allowed_user_ids
+    return False
+
+
+def _login_notice_html(raw_path: str) -> str:
+    """Return the login status notice for the home page."""
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(raw_path).query)
+    status = str(query.get("login", [""])[0] or "")
+    if status == "too_long":
+        text = f"A jelszo legfeljebb {MAX_PASSWORD_LENGTH} karakter lehet."
+    elif status == "failed":
+        text = "Hibas jelszo."
+    elif status == "ok":
+        text = "Sikeres belepes."
+    elif status == "default":
+        text = "Alap felhasznalo aktiv."
+    else:
+        return ""
+    return f'<span class="login-notice">{html.escape(text)}</span>'
+
+
+def _login_form_html(user: AuthUser, raw_path: str) -> str:
+    """Render the compact header login form."""
+    user_label = html.escape(user.display_name)
+    return f"""
+        <form class="login-form" action="{LOGIN_ROUTE}" method="post" autocomplete="off">
+          <span class="login-user">Felhasznalo: <strong>{user_label}</strong></span>
+          {_login_notice_html(raw_path)}
+          <input type="password" name="password" maxlength="{MAX_PASSWORD_LENGTH}" placeholder="Jelszo" aria-label="Jelszo" />
+          <button type="submit">Belepes</button>
+          <button type="submit" name="logout" value="1">Alap</button>
+        </form>
+"""
+
+
+def render_home_page(user: AuthUser, raw_path: str = "/") -> bytes:
+    """Render the home page with only the modules available to the user."""
+    page = (BASE_DIR / "index.html").read_text(encoding="utf-8")
+    page = _filter_home_module_cards(page, user)
+    page = page.replace("</header>", _login_form_html(user, raw_path) + "\n      </header>", 1)
+    return page.encode("utf-8")
+
+
+def _filter_home_module_cards(page: str, user: AuthUser) -> str:
+    """Remove module cards the current user cannot access."""
+    card_pattern = re.compile(r"\s*<article class=\"module-card reveal\">.*?</article>", re.DOTALL)
+    kept_any = False
+
+    def replace_card(match: re.Match[str]) -> str:
+        nonlocal kept_any
+        card = match.group(0)
+        href_match = re.search(r'href="([^"]+)"', card)
+        href = href_match.group(1) if href_match else ""
+        path = urllib.parse.urlsplit(href).path
+        if path.startswith("/apps/") and _can_access_path(user, path):
+            kept_any = True
+            return card
+        return ""
+
+    filtered = card_pattern.sub(replace_card, page)
+    if kept_any:
+        return filtered
+
+    empty_html = """
+            <article class="module-card reveal">
+              <div class="module-top">
+                <div class="module-status">Nincs eleres</div>
+                <div class="module-number">--</div>
+              </div>
+              <h3>Nincs elerheto modul</h3>
+              <p>Jelentkezz be olyan jelszoval, amelyhez modul jogosultsag tartozik.</p>
+            </article>
+"""
+    return filtered.replace('<div class="module-grid">', '<div class="module-grid">\n' + empty_html, 1)
 
 
 def _render_nettfront_layout(
@@ -5878,11 +6046,44 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 
 class InvoiceHandler(BaseHTTPRequestHandler):
     """Represent InvoiceHandler data used by this package."""
+    def current_user(self) -> AuthUser:
+        """Return the user represented by the signed client cookie."""
+        return user_from_cookie(LOGIN_DB_PATH, self.headers.get("Cookie"))
+
+    def redirect_to_home(self, status: int = 303, suffix: str = "") -> None:
+        """Redirect the browser back to the main module page."""
+        self.send_response(status)
+        self.send_header("Location", "/" + suffix)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def reject_unauthorized_module(self) -> bool:
+        """Redirect unauthorized module requests to the home page."""
+        path = _normalize_path(self.path)
+        if _can_access_path(self.current_user(), path):
+            return False
+        self.redirect_to_home()
+        return True
+
     def do_GET(self):
         """Provide do GET behavior."""
         path = _normalize_path(self.path)
         if path == DEV_RELOAD_ROUTE:
             self.respond_dev_reload_stream()
+            return
+
+        if path in {"/", "/index.html"}:
+            body = render_home_page(self.current_user(), self.path)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if self.reject_unauthorized_module():
             return
 
         if path == APP_ROUTE:
@@ -6333,6 +6534,45 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def handle_login(self):
+        """Authenticate the password field and store login state client-side."""
+        content_length = int(self.headers.get("Content-Length", "0"))
+        raw_body = self.rfile.read(content_length)
+        payload = _parse_urlencoded_body(raw_body)
+        if payload.get("logout") == "1" or not str(payload.get("password", "")).strip():
+            self.send_response(303)
+            self.send_header("Location", "/?login=default#modules")
+            self.send_header("Set-Cookie", make_logout_cookie())
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        password = str(payload.get("password", ""))
+        if len(password) > MAX_PASSWORD_LENGTH:
+            self.send_response(303)
+            self.send_header("Location", "/?login=too_long#modules")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        user = authenticate_password(LOGIN_DB_PATH, password)
+        if user is None:
+            self.send_response(303)
+            self.send_header("Location", "/?login=failed#modules")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        self.send_response(303)
+        self.send_header("Location", "/?login=ok#modules")
+        self.send_header("Set-Cookie", make_login_cookie(LOGIN_DB_PATH, user))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def respond_dev_reload_stream(self):
         """Provide respond dev reload stream behavior."""
         payload = json.dumps({"token": dev_reload_token(DEV_RELOAD_TOKEN_ENV)}).encode("utf-8")
@@ -6360,6 +6600,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Provide do POST behavior."""
         path = _normalize_path(self.path)
+        if path == LOGIN_ROUTE:
+            self.handle_login()
+            return
+
+        if self.reject_unauthorized_module():
+            return
+
         if path == MANUFACTURING_STATE_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
