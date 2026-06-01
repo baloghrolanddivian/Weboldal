@@ -184,7 +184,7 @@ def render_manufacturing_page(
       display: grid;
       gap: 0;
       align-content: start;
-      overflow-x: clip;
+      overflow-x: visible;
     }}
     body.has-mfg-scroll-rail .mfg-page {{
       padding-right: 64px;
@@ -218,6 +218,11 @@ def render_manufacturing_page(
       width: min(1280px, calc(100vw - 16px));
       margin: 0 auto;
       justify-self: center;
+    }}
+    body.has-mfg-scroll-rail .mfg-toolbar,
+    body.has-mfg-scroll-rail .mfg-board,
+    body.has-mfg-scroll-rail .mfg-notice {{
+      width: min(1280px, calc(100vw - 80px));
     }}
     .mfg-toolbar {{
       padding: 8px 10px;
@@ -301,6 +306,10 @@ def render_manufacturing_page(
       border: 1px solid rgba(18, 20, 23, 0.08);
       background: var(--mfg-panel);
       box-shadow: var(--mfg-shadow);
+    }}
+    body.has-mfg-scroll-rail .mfg-operation-panel,
+    body.has-mfg-scroll-rail .mfg-operation-header {{
+      width: min(1280px, calc(100vw - 80px));
     }}
     .mfg-operation-panel {{
       padding: 18px;
@@ -1123,9 +1132,9 @@ def render_manufacturing_page(
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      position: sticky;
-      top: 0;
+      position: relative;
       z-index: 8;
+      will-change: transform;
     }}
     .mfg-section-card.is-pantolo {{
       overflow: visible;
@@ -1970,6 +1979,13 @@ def render_manufacturing_page(
       body.has-mfg-scroll-rail .mfg-page {{
         padding-right: 56px;
       }}
+      body.has-mfg-scroll-rail .mfg-toolbar,
+      body.has-mfg-scroll-rail .mfg-board,
+      body.has-mfg-scroll-rail .mfg-notice,
+      body.has-mfg-scroll-rail .mfg-operation-panel,
+      body.has-mfg-scroll-rail .mfg-operation-header {{
+        width: min(1280px, calc(100vw - 72px));
+      }}
       .mfg-scroll-rail {{
         width: 48px;
       }}
@@ -2209,6 +2225,7 @@ def render_manufacturing_page(
       let pendingRedChoice = null;
       let pendingConfirmResolve = null;
       let activeSearchText = "";
+      let pantoloStickyFrame = 0;
 
       const syncUrlForDocument = () => {{
         try {{
@@ -3571,6 +3588,36 @@ def render_manufacturing_page(
         }});
       }};
 
+      const syncPantoloSectionHeaders = () => {{
+        pantoloStickyFrame = 0;
+        const isPantoloDocument = String(currentDocument()?.key || "") === "pantolas";
+        const sectionCards = Array.from(contentNode.querySelectorAll(".mfg-section-card.is-pantolo"));
+        for (const card of sectionCards) {{
+          const head = card.querySelector(".mfg-section-head");
+          if (!(head instanceof HTMLElement)) continue;
+          if (!isPantoloDocument) {{
+            head.style.transform = "";
+            continue;
+          }}
+          const cardRect = card.getBoundingClientRect();
+          const headHeight = head.offsetHeight || 0;
+          const stickyTop = 0;
+          const shouldStick = cardRect.top < stickyTop && cardRect.bottom > stickyTop + headHeight;
+          if (!shouldStick) {{
+            head.style.transform = "";
+            continue;
+          }}
+          const maxTranslate = Math.max(0, cardRect.height - headHeight);
+          const translateY = Math.min(Math.max(0, stickyTop - cardRect.top), maxTranslate);
+          head.style.transform = translateY ? `translateY(${{translateY}}px)` : "";
+        }}
+      }};
+
+      const schedulePantoloSectionHeaders = () => {{
+        if (pantoloStickyFrame) return;
+        pantoloStickyFrame = window.requestAnimationFrame(syncPantoloSectionHeaders);
+      }};
+
       const captureScrollState = () => {{
         const listScroll = {{}};
         Array.from(contentNode.querySelectorAll(".mfg-row-list[data-section-key]")).forEach((node) => {{
@@ -3633,7 +3680,10 @@ def render_manufacturing_page(
         renderRows(visibleGroups);
         normalizePantoloHeaders();
         renderBarcodes();
-        requestAnimationFrame(() => restoreScrollState(scrollState));
+        requestAnimationFrame(() => {{
+          restoreScrollState(scrollState);
+          syncPantoloSectionHeaders();
+        }});
       }};
 
       const persistRowState = async (rowId, targetProductionNumber, stateKey, storageKey, nextState, previousStateMap, sourceRowIds = []) => {{
@@ -4187,6 +4237,8 @@ def render_manufacturing_page(
         setStatus(pendingStatusText(), "is-error");
         void flushPendingWrites();
       }}
+      window.addEventListener("scroll", schedulePantoloSectionHeaders, {{ passive: true }});
+      window.addEventListener("resize", schedulePantoloSectionHeaders);
       renderAll();
     }})();
   </script>
