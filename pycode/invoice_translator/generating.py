@@ -11,7 +11,6 @@ from .reading import (
     InvoiceData,
     InvoiceItem,
     _clean_spaces,
-    _extract_party_vat_number,
     _fix_hungarian_mojibake,
     _format_invoice_date,
     _format_rounded_weight,
@@ -47,7 +46,7 @@ def _html_text(value: str) -> str:
     return html.escape(_value_or_default(value))
 
 
-def _html_party(lines: list[str]) -> str:
+def _html_party(lines: list[str], mark_bank_values: bool = False) -> str:
     """Provide html party behavior."""
     if not lines:
         return html.escape(NO_DATA)
@@ -56,7 +55,10 @@ def _html_party(lines: list[str]) -> str:
         cleaned = _clean_spaces(line)
         if not cleaned:
             continue
-        html_lines.append(html.escape(cleaned))
+        escaped = html.escape(cleaned)
+        if mark_bank_values and re.search(r"\b(IBAN|SWIFT)\b", cleaned, flags=re.IGNORECASE):
+            escaped = f'<span class="bank-marker">{escaped}</span>'
+        html_lines.append(escaped)
     return "<br>".join(html_lines)
 
 
@@ -257,29 +259,18 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         "": "Általános sablon",
     }.get(data.invoice_profile, "Általános sablon")
 
-    supplier_vat_number = _extract_party_vat_number(data.supplier_lines)
-    buyer_vat_number = _extract_party_vat_number(data.buyer_lines)
-    important_fields = [
-        ("Eladó VAT szám", supplier_vat_number),
-        ("Vevő VAT szám", buyer_vat_number),
-        ("Számlaszám", data.invoice_number),
-        ("Számla dátuma", invoice_date_display),
-        ("Pénznem", data.currency),
-        ("Összeg", data.total_net),
-    ]
-    important_rows = _html_table_rows(important_fields)
-
     info_field_rows = [
         ("Számlaszám", data.invoice_number),
         ("Számla dátuma", invoice_date_display),
         ("Fizetési határidő", due_date_display),
         ("Fizetési mód", data.payment_method),
-        ("Szállítólevél száma", data.delivery_note_no),
     ]
     keep_labels = {"Számlaszám", "Számla dátuma"}
+    secondary_field_rows = [
+        ("Szállítólevél száma", data.delivery_note_no),
+    ]
     if data.invoice_profile != "gamet" and not _is_kastamonu_credit_profile(data.invoice_profile):
-        info_field_rows.append(("Gépjármű azonosító", vehicle_plates))
-        keep_labels.add("Gépjármű azonosító")
+        secondary_field_rows.append(("Gépjármű azonosító", vehicle_plates))
     info_fields = _non_empty_rows(info_field_rows, keep_labels=keep_labels)
     info_rows = _html_table_rows(info_fields)
 
@@ -298,13 +289,6 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
                 ("Kedvezményes összeg", data.total_gross),
             ]
         )
-    summary_fields_raw.extend(
-        [
-            ("Nettó tömeg (kg)", rounded_net_weight),
-            ("Bruttó tömeg (kg)", rounded_gross_weight),
-            ("Származási ország", data.origin_country),
-        ]
-    )
     summary_fields = _non_empty_rows(
         summary_fields_raw,
         keep_labels=(
@@ -314,6 +298,25 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         ),
     )
     summary_rows = _html_table_rows(summary_fields)
+    secondary_field_rows.extend(
+        [
+            ("Nettó tömeg (kg)", rounded_net_weight),
+            ("Bruttó tömeg (kg)", rounded_gross_weight),
+            ("Származási ország", data.origin_country),
+        ]
+    )
+    secondary_fields = _non_empty_rows(secondary_field_rows)
+    secondary_rows = _html_table_rows(secondary_fields)
+    secondary_html = ""
+    if secondary_rows:
+        secondary_html = f"""
+    <section class="secondary-details">
+      <h3>Kiegészítő adatok</h3>
+      <table class="kv secondary-kv">
+        <tbody>{secondary_rows}</tbody>
+      </table>
+    </section>
+"""
 
     if data.items:
         item_rows = "".join(
@@ -371,31 +374,16 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
         </tr>
         """
 
-    important_box_html = f"""
-    <section class="important-box">
-      <h2>Fontos Adatok</h2>
-      <table class="important-grid">
-        <tbody>{important_rows}</tbody>
-      </table>
-    </section>
-"""
-
     parties_html = f"""
     <section class="parties">
       <article class="panel">
         <h2>Eladó</h2>
-        <p>{_html_party(data.supplier_lines)}</p>
+        <p>{_html_party(data.supplier_lines, mark_bank_values=True)}</p>
       </article>
       <article class="panel">
         <h2>Vevő</h2>
         <p>{_html_party(data.buyer_lines)}</p>
       </article>
-    </section>
-"""
-    identity_html = f"""
-    <section class="identity-grid">
-      {parties_html}
-      {important_box_html}
     </section>
 """
 
@@ -407,8 +395,8 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
   <title>Divian-HUB | Nyomtatható számlakivonat</title>
   <style>
     :root {{
-      --bg: #061018;
-      --bg-soft: #0b1a26;
+      --bg: #f3f6f7;
+      --bg-soft: #ffffff;
       --ink: #11202b;
       --ink-deep: #08131b;
       --muted: #58717c;
@@ -424,10 +412,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     body {{
       margin: 0;
       padding: 1rem 1rem 1.25rem;
-      background:
-        radial-gradient(900px 360px at 0% 0%, rgba(54, 215, 195, .18), transparent 60%),
-        radial-gradient(760px 320px at 100% 0%, rgba(199, 255, 122, .12), transparent 55%),
-        linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%);
+      background: var(--bg);
       color: var(--ink);
       font-family: "Segoe UI", Arial, sans-serif;
       line-height: 1.32;
@@ -493,19 +478,10 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       padding: 8.5mm 8.5mm 8mm;
       border: 1px solid #d6e7e8;
       border-top: 6px solid var(--accent-strong);
-      border-radius: 18px;
-      box-shadow: 0 24px 50px rgba(0, 0, 0, .28);
+      border-radius: 10px;
+      box-shadow: 0 12px 28px rgba(10, 24, 32, .13);
       position: relative;
       overflow: hidden;
-    }}
-    .sheet::before {{
-      content: "";
-      position: absolute;
-      inset: 0;
-      background:
-        linear-gradient(135deg, rgba(54, 215, 195, .08), transparent 28%),
-        linear-gradient(180deg, transparent, rgba(54, 215, 195, .03));
-      pointer-events: none;
     }}
     .head {{
       display: flex;
@@ -573,19 +549,6 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       position: relative;
       z-index: 1;
     }}
-    .identity-grid {{
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(72mm, .92fr);
-      gap: .6rem;
-      align-items: stretch;
-      margin-bottom: .62rem;
-      position: relative;
-      z-index: 1;
-    }}
-    .identity-grid .parties,
-    .identity-grid .important-box {{
-      margin-bottom: 0;
-    }}
     .meta-grid {{
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -597,42 +560,6 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     }}
     .meta-card {{
       min-width: 0;
-    }}
-    .important-box {{
-      margin: 0 0 .62rem;
-      padding: .46rem .54rem;
-      border: 1px solid #d5e5e6;
-      border-left: 4px double var(--ink-deep);
-      border-radius: 12px;
-      background: linear-gradient(180deg, #fefefe 0%, #f4fbfb 100%);
-      position: relative;
-      z-index: 1;
-    }}
-    .important-box h2 {{
-      margin: 0 0 .24rem 0;
-      font-size: .76rem;
-      color: var(--accent-strong);
-      text-transform: uppercase;
-      letter-spacing: .14em;
-    }}
-    .important-grid {{
-      margin: 0;
-      table-layout: fixed;
-      font-size: .79rem;
-    }}
-    .important-grid th,
-    .important-grid td {{
-      padding: 6px;
-      line-height: 1.28;
-    }}
-    .important-grid th {{
-      width: 44%;
-      white-space: nowrap;
-    }}
-    .important-grid td {{
-      font-size: .86rem;
-      font-weight: 800;
-      color: var(--ink-deep);
     }}
     .panel {{
       border: 1px solid #d5e5e6;
@@ -651,6 +578,15 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       margin: 0;
       white-space: normal;
       font-size: .8rem;
+    }}
+    .bank-marker {{
+      display: inline-block;
+      padding: .08rem .24rem;
+      border: 1px solid var(--accent-strong);
+      border-radius: 4px;
+      background: #f1fffb;
+      color: var(--ink-deep);
+      font-weight: 800;
     }}
     h3 {{
       margin: .58rem 0 .24rem 0;
@@ -704,6 +640,30 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     .items td:nth-child(4) {{ line-height: 1.2; }}
     .items tbody tr:nth-child(even) {{
       background: #f8fcfb;
+    }}
+    .secondary-details {{
+      margin-top: .1rem;
+      position: relative;
+      z-index: 1;
+    }}
+    .secondary-details h3 {{
+      color: var(--muted);
+      border-left-color: #9fb5bb;
+    }}
+    .secondary-kv {{
+      max-width: 122mm;
+      font-size: .66rem;
+      color: var(--muted);
+    }}
+    .secondary-kv th,
+    .secondary-kv td {{
+      padding: .13rem .2rem;
+      line-height: 1.2;
+    }}
+    .secondary-kv th {{
+      width: 34%;
+      background: #f7faf9;
+      color: var(--muted);
     }}
     .center {{ text-align: center; }}
     .right {{ text-align: right; }}
@@ -769,9 +729,6 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       .meta-grid {{
         grid-template-columns: 1fr;
       }}
-      .identity-grid {{
-        grid-template-columns: 1fr;
-      }}
       .parties {{
         grid-template-columns: 1fr;
       }}
@@ -793,46 +750,51 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     @media print {{
       html {{
         width: 100%;
-        min-height: 297mm;
+        height: auto;
+        min-height: 0;
       }}
       body {{
         width: 100%;
-        min-height: 285mm;
+        height: auto;
+        min-height: 0;
         padding: 0;
         background: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+        display: block;
+        -webkit-print-color-adjust: economy;
+        print-color-adjust: economy;
       }}
       .toolbar {{ display: none; }}
+      .meta {{ display: none; }}
       .sheet {{
-        margin: 0 auto;
-        width: 198mm;
-        max-width: 198mm;
+        margin: 0;
+        width: auto;
+        max-width: none;
         min-height: auto;
-        padding: 8.8mm 9mm 8.2mm;
-        border: 1px solid #d6e7e8;
-        border-top: 6px solid var(--accent-strong);
+        padding: 0;
+        border: 0;
         border-radius: 0;
         box-shadow: none;
         transform: none;
+        overflow: visible;
       }}
-      .identity-grid {{
-        grid-template-columns: minmax(0, 2fr) minmax(72mm, .92fr);
-        align-items: stretch;
+      .eyebrow,
+      .panel,
+      .meta div,
+      th,
+      .items tbody tr:nth-child(even),
+      .bank-marker,
+      .secondary-kv th {{
+        background: transparent;
+      }}
+      .panel,
+      .bank-marker {{
+        border-color: #777;
       }}
       .meta-grid {{
         grid-template-columns: 1fr 1fr;
       }}
-      .identity-grid .parties,
       .parties {{
         grid-template-columns: 1fr 1fr;
-      }}
-      .identity-grid .important-box,
-      .identity-grid .parties {{
-        margin-bottom: 0;
       }}
       a {{ color: inherit; text-decoration: none; }}
     }}
@@ -861,7 +823,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       </div>
     </header>
 
-{identity_html}
+{parties_html}
 
     <section class="meta-grid">
       <article class="meta-card">
@@ -885,6 +847,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       </thead>
       <tbody>{item_rows}</tbody>
     </table>
+{secondary_html}
 
     <div class="footnote">
       Ez egy automatikusan generált, nyomtatható fordítási kivonat.
