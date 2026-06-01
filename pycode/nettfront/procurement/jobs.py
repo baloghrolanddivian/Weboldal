@@ -2,7 +2,8 @@
 
 The functions here store generated procurement bundles, update metadata, and
 serve downloadable CSV, ZIP, and report artifacts.
-"""
+
+This module is included in the pydoc surface for the NettFront procurement workflow."""
 
 from __future__ import annotations
 
@@ -17,12 +18,16 @@ from .config import procurement_runtime_dir
 
 
 def read_procurement_job(job_id: str) -> tuple[Path | None, dict | None]:
-    """Read procurement job data."""
+    """Read procurement job data.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     return read_job(procurement_runtime_dir(), job_id)
 
 
 def procurement_download_payload(job_id: str, artifact: str) -> tuple[bytes, str, str] | None:
-    """Handle procurement download payload logic for the NettFront workflows."""
+    """Handle procurement download payload logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     _job_dir, metadata = read_procurement_job(job_id)
     if metadata is None:
         return None
@@ -39,7 +44,9 @@ def procurement_download_payload(job_id: str, artifact: str) -> tuple[bytes, str
     return download_payload(procurement_runtime_dir(), job_id, artifact, artifact_map)
 
 def persist_procurement_job(job_dir: Path, metadata: dict, artifacts, uploaded_parts_name: str = "", uploaded_parts_bytes: bytes | None = None) -> dict:
-    """Handle persist procurement job logic for the NettFront workflows."""
+    """Handle persist procurement job logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     (job_dir / "invoice-output.csv").write_bytes(artifacts.invoice_csv)
     (job_dir / "rendeles_sima.csv").write_bytes(artifacts.procurement_csv)
 
@@ -72,7 +79,9 @@ def write_procurement_job(
     uploaded_parts_name: str = "",
     uploaded_parts_bytes: bytes | None = None,
 ) -> tuple[str, dict]:
-    """Write procurement job data."""
+    """Write procurement job data.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     job_id = uuid.uuid4().hex[:12]
     job_dir = procurement_runtime_dir() / job_id
     job_dir.mkdir(parents=True, exist_ok=True)

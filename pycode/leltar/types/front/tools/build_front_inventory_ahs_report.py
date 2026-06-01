@@ -1,3 +1,5 @@
+"""Build front inventory ahs report helpers for the inventory package."""
+
 from __future__ import annotations
 
 import argparse
@@ -17,14 +19,17 @@ if str(PYCODE_DIR) not in sys.path:
     sys.path.insert(0, str(PYCODE_DIR))
 
 def _normalize_header(value: object) -> str:
+    """Normalize normalize header values."""
     return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
 
 
 def _normalize_part_number(value: object) -> str:
+    """Normalize normalize part number values."""
     return str(value or "").strip().upper()
 
 
 def _parse_count(value: object) -> int:
+    """Parse parse count input."""
     if value in (None, ""):
         return 0
     if isinstance(value, bool):
@@ -42,6 +47,7 @@ def _parse_count(value: object) -> int:
 
 
 def _pick_latest(pattern: str) -> Path:
+    """Provide pick latest behavior."""
     candidates = [p for p in DOWNLOADS_DIR.glob(pattern) if p.is_file() and not p.name.startswith("~$")]
     if not candidates:
         raise FileNotFoundError(f"Nincs találat erre: {pattern}")
@@ -50,6 +56,7 @@ def _pick_latest(pattern: str) -> Path:
 
 
 def _find_template_columns(sheet) -> tuple[int, int]:
+    """Provide find template columns behavior."""
     headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     normalized = [_normalize_header(value) for value in headers]
     part_index = 0
@@ -65,6 +72,7 @@ def _find_template_columns(sheet) -> tuple[int, int]:
 
 
 def _find_count_columns(sheet) -> tuple[int, int]:
+    """Provide find count columns behavior."""
     headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     normalized = [_normalize_header(value) for value in headers]
     part_index = 0
@@ -80,6 +88,7 @@ def _find_count_columns(sheet) -> tuple[int, int]:
 
 
 def _build_ahk_script(values_file_name: str) -> str:
+    """Build build ahk script data."""
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
 Persistent
@@ -133,6 +142,7 @@ Esc::
 
 
 def build_report(template_path: Path, counts_path: Path, output_dir: Path) -> dict[str, object]:
+    """Build build report data."""
     template_wb = load_workbook(template_path)
     template_ws = template_wb[template_wb.sheetnames[0]]
     count_wb = load_workbook(counts_path, read_only=True, data_only=True)
@@ -238,6 +248,7 @@ def build_report(template_path: Path, counts_path: Path, output_dir: Path) -> di
 
 
 def main() -> None:
+    """Provide main behavior."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--template", type=Path, default=None)
     parser.add_argument("--counts", type=Path, default=None)

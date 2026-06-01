@@ -1,4 +1,6 @@
-"""Route constants for the NettFront comparison workflow."""
+"""Route constants for the NettFront comparison workflow.
+
+This module is included in the pydoc surface for the NettFront comparison workflow."""
 
 from __future__ import annotations
 

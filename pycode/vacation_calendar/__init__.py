@@ -1,3 +1,5 @@
+"""Public exports for the vacation calendar application package."""
+
 from __future__ import annotations
 
 from .config import (

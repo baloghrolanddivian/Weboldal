@@ -1,4 +1,6 @@
-"""Public API for the NettFront procurement workflow."""
+"""Public API for the NettFront procurement workflow.
+
+This module is included in the pydoc surface for the NettFront procurement workflow."""
 
 from __future__ import annotations
 

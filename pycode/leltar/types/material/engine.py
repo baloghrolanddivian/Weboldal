@@ -1,3 +1,5 @@
+"""Engine helpers for the inventory package."""
+
 from __future__ import annotations
 
 import csv
@@ -24,16 +26,19 @@ MATERIAL_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
 
 
 def file_name_allowed(file_name: str) -> bool:
+    """Provide file name allowed behavior."""
     return Path(file_name or "").suffix.lower() in MATERIAL_INVENTORY_ALLOWED_EXTENSIONS
 
 
 def read_bytes_if_exists(path: Path) -> bytes | None:
+    """Read read bytes if exists data."""
     if not path.exists():
         return None
     return path.read_bytes()
 
 
 def write_runtime_upload(base_path: Path, file_name: str, payload: bytes) -> Path:
+    """Write write runtime upload data."""
     suffix = Path(file_name or "").suffix.lower() or ".bin"
     target_path = base_path.with_suffix(suffix)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -42,6 +47,7 @@ def write_runtime_upload(base_path: Path, file_name: str, payload: bytes) -> Pat
 
 
 def load_session_from_path(path: Path) -> dict | None:
+    """Load load session from path data."""
     if not path.exists():
         return None
     try:
@@ -52,11 +58,13 @@ def load_session_from_path(path: Path) -> dict | None:
 
 
 def save_session_to_path(path: Path, payload: dict) -> None:
+    """Save save session to path data."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def build_material_inventory_session(file_name: str, payload: bytes) -> dict:
+    """Build build material inventory session data."""
     source_rows = _read_material_rows(file_name, payload)
     rows: list[dict] = []
     for index, item in enumerate(source_rows, start=1):
@@ -93,14 +101,17 @@ def build_material_inventory_session(file_name: str, payload: bytes) -> dict:
 
 
 def build_semifinished_inventory_session(file_name: str, payload: bytes) -> dict:
+    """Build build semifinished inventory session data."""
     return _build_color_inventory_session(file_name, payload, "felkesz-raktar")
 
 
 def build_semifinished_front_inventory_session(file_name: str, payload: bytes) -> dict:
+    """Build build semifinished front inventory session data."""
     return _build_color_inventory_session(file_name, payload, "felkesz-front")
 
 
 def _build_color_inventory_session(file_name: str, payload: bytes, export_prefix: str) -> dict:
+    """Build build color inventory session data."""
     source_rows = _read_semifinished_rows(file_name, payload)
     rows: list[dict] = []
     for index, item in enumerate(source_rows, start=1):
@@ -137,6 +148,7 @@ def _build_color_inventory_session(file_name: str, payload: bytes, export_prefix
 
 
 def update_material_row_input(session: dict, row_id: str, raw_value: str, mode: str = "set") -> tuple[bool, str]:
+    """Provide update material row input behavior."""
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott anyagsort nem találom."
@@ -171,6 +183,7 @@ def update_material_row_input(session: dict, row_id: str, raw_value: str, mode: 
 
 
 def build_material_inventory_view_model(session: dict, selected_category: str = "") -> dict:
+    """Build build material inventory view model data."""
     rows = [row for row in session.get("rows", []) if isinstance(row, dict)]
     categories = _category_summaries(rows)
     valid_keys = {item["key"] for item in categories}
@@ -195,6 +208,7 @@ def build_material_inventory_view_model(session: dict, selected_category: str = 
 
 
 def finalize_material_inventory(session: dict, allow_missing: bool = True) -> tuple[bool, str]:
+    """Provide finalize material inventory behavior."""
     if str(session.get("phase", "")).lower() == "finalized":
         return True, "Az anyagraktár leltár már le van zárva."
     rows = [row for row in session.get("rows", []) if isinstance(row, dict)]
@@ -212,6 +226,7 @@ def finalize_material_inventory(session: dict, allow_missing: bool = True) -> tu
 
 
 def build_material_inventory_insight_workbook(session: dict) -> tuple[bytes, str, int]:
+    """Build build material inventory insight workbook data."""
     if Workbook is None:
         raise RuntimeError("Az Excel exporthoz hianyzik az openpyxl csomag.")
     workbook = Workbook()
@@ -231,6 +246,7 @@ def build_material_inventory_insight_workbook(session: dict) -> tuple[bytes, str
 
 
 def build_material_inventory_summary_workbook(session: dict) -> tuple[bytes, str, int]:
+    """Build build material inventory summary workbook data."""
     if Workbook is None:
         raise RuntimeError("Az Excel exporthoz hianyzik az openpyxl csomag.")
     workbook = Workbook()
@@ -273,6 +289,7 @@ def build_material_inventory_summary_workbook(session: dict) -> tuple[bytes, str
 
 
 def _read_material_rows(file_name: str, payload: bytes) -> list[dict]:
+    """Read read material rows data."""
     suffix = Path(file_name or "").suffix.lower()
     if suffix == ".csv":
         return _read_csv_rows(payload)
@@ -280,6 +297,7 @@ def _read_material_rows(file_name: str, payload: bytes) -> list[dict]:
 
 
 def _read_xlsx_rows(payload: bytes) -> list[dict]:
+    """Read read xlsx rows data."""
     if load_workbook is None:
         raise RuntimeError("Az XLSX olvasáshoz hiányzik az openpyxl csomag.")
     workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
@@ -301,6 +319,7 @@ def _read_xlsx_rows(payload: bytes) -> list[dict]:
 
 
 def _read_csv_rows(payload: bytes) -> list[dict]:
+    """Read read csv rows data."""
     text = payload.decode("utf-8-sig", errors="replace")
     sample = text[:2048]
     dialect = csv.Sniffer().sniff(sample, delimiters=";,	,")
@@ -321,6 +340,7 @@ def _read_csv_rows(payload: bytes) -> list[dict]:
 
 
 def _read_semifinished_rows(file_name: str, payload: bytes) -> list[dict]:
+    """Read read semifinished rows data."""
     suffix = Path(file_name or "").suffix.lower()
     if suffix == ".csv":
         return _read_semifinished_csv_rows(payload)
@@ -328,6 +348,7 @@ def _read_semifinished_rows(file_name: str, payload: bytes) -> list[dict]:
 
 
 def _read_semifinished_xlsx_rows(payload: bytes) -> list[dict]:
+    """Read read semifinished xlsx rows data."""
     if load_workbook is None:
         raise RuntimeError("Az XLSX olvasáshoz hiányzik az openpyxl csomag.")
     workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
@@ -348,6 +369,7 @@ def _read_semifinished_xlsx_rows(payload: bytes) -> list[dict]:
 
 
 def _read_semifinished_csv_rows(payload: bytes) -> list[dict]:
+    """Read read semifinished csv rows data."""
     text = payload.decode("utf-8-sig", errors="replace")
     sample = text[:2048]
     dialect = csv.Sniffer().sniff(sample, delimiters=";,	,")
@@ -367,6 +389,7 @@ def _read_semifinished_csv_rows(payload: bytes) -> list[dict]:
 
 
 def _header_map(header_row: tuple | list) -> dict[str, int]:
+    """Provide header map behavior."""
     aliases = {
         "part_number": {"alkatr.-szám", "alkatrész szám", "alkatresz szam", "alkatr-szam", "cikkszám", "cikkszam"},
         "description": {"alkatr.-leírás", "alkatrész leírás", "alkatresz leiras", "leírás", "leiras"},
@@ -420,6 +443,7 @@ def _apply_material_book_qty_fallback(header_map: dict[str, int], header_row: tu
 
 
 def _ensure_required_headers(header_map: dict[str, int]) -> None:
+    """Provide ensure required headers behavior."""
     missing = []
     for key, label in (("part_number", "Alkatr.-szám"), ("description", "Alkatr.-leírás"), ("icg_code", "ICG kód")):
         if key not in header_map:
@@ -429,6 +453,7 @@ def _ensure_required_headers(header_map: dict[str, int]) -> None:
 
 
 def _ensure_semifinished_headers(header_map: dict[str, int]) -> None:
+    """Provide ensure semifinished headers behavior."""
     missing = []
     for key, label in (("part_number", "Alkatr.-szám"), ("description", "Alkatr.-leírás")):
         if key not in header_map:
@@ -440,7 +465,9 @@ def _ensure_semifinished_headers(header_map: dict[str, int]) -> None:
 
 
 def _row_from_values(header_map: dict[str, int], values: tuple | list) -> dict:
+    """Provide row from values behavior."""
     def get_value(key: str) -> object:
+        """Provide get value behavior."""
         index = header_map.get(key)
         if index is None or index >= len(values):
             return ""
@@ -456,7 +483,9 @@ def _row_from_values(header_map: dict[str, int], values: tuple | list) -> dict:
 
 
 def _semifinished_row_from_values(header_map: dict[str, int], values: tuple | list) -> dict:
+    """Provide semifinished row from values behavior."""
     def get_value(key: str) -> object:
+        """Provide get value behavior."""
         index = header_map.get(key)
         if index is None or index >= len(values):
             return ""
@@ -472,6 +501,7 @@ def _semifinished_row_from_values(header_map: dict[str, int], values: tuple | li
 
 
 def _normalize_header(value: object) -> str:
+    """Normalize normalize header values."""
     text = _clean_text(value).lower()
     text = unicodedata.normalize("NFKD", text)
     text = "".join(char for char in text if not unicodedata.combining(char))
@@ -483,10 +513,12 @@ def _normalize_header(value: object) -> str:
 
 
 def _clean_text(value: object) -> str:
+    """Provide clean text behavior."""
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
 def _clean_number_text(value: object) -> str:
+    """Provide clean number text behavior."""
     if value is None:
         return ""
     if isinstance(value, (int, float)):
@@ -495,11 +527,13 @@ def _clean_number_text(value: object) -> str:
 
 
 def _is_excluded(value: object) -> bool:
+    """Return whether is excluded is true."""
     text = _clean_text(value).lower()
     return text not in {"", "0", "nem", "false", "no"}
 
 
 def _row_id(part_number: str, category: str, index: str) -> str:
+    """Provide row id behavior."""
     import hashlib
 
     payload = f"{part_number}|{category}|{index}"
@@ -507,12 +541,14 @@ def _row_id(part_number: str, category: str, index: str) -> str:
 
 
 def _category_key(value: object) -> str:
+    """Provide category key behavior."""
     text = _clean_text(value) or "Kategória nélkül"
     folded = _normalize_header(text)
     return re.sub(r"[^a-z0-9]+", "-", folded).strip("-") or "kategoria-nelkul"
 
 
 def _category_summaries(rows: list[dict]) -> list[dict]:
+    """Provide category summaries behavior."""
     categories: dict[str, dict] = {}
     for row in rows:
         label = _clean_text(row.get("icg_code")) or "Kategória nélkül"
@@ -527,6 +563,7 @@ def _category_summaries(rows: list[dict]) -> list[dict]:
 
 
 def _summary_by_category(rows: list[dict]) -> list[dict]:
+    """Provide summary by category behavior."""
     categories: dict[str, dict] = {}
     for row in rows:
         label = _clean_text(row.get("icg_code")) or "Kategória nélkül"
@@ -540,15 +577,18 @@ def _summary_by_category(rows: list[dict]) -> list[dict]:
 
 
 def _row_sort_key(row: dict) -> tuple:
+    """Provide row sort key behavior."""
     return (_category_sort_key(row.get("icg_code")), _clean_text(row.get("part_number")).lower())
 
 
 def _category_sort_key(value: object) -> tuple:
+    """Provide category sort key behavior."""
     text = _clean_text(value)
     return (_normalize_header(text), text)
 
 
 def _find_row(session: dict, row_id: str) -> dict | None:
+    """Provide find row behavior."""
     clean_id = _clean_text(row_id)
     for row in session.get("rows", []):
         if isinstance(row, dict) and str(row.get("row_id", "")) == clean_id:
@@ -557,10 +597,12 @@ def _find_row(session: dict, row_id: str) -> dict | None:
 
 
 def _touch_session(session: dict) -> None:
+    """Provide touch session behavior."""
     session["updated_at"] = datetime.now().isoformat(timespec="seconds")
 
 
 def _parse_non_negative_number(value: object) -> float | None:
+    """Parse parse non negative number input."""
     text = _clean_text(value)
     if not text:
         return None
@@ -575,6 +617,7 @@ def _parse_non_negative_number(value: object) -> float | None:
 
 
 def _format_quantity(value: float | int) -> str:
+    """Format format quantity values for display or export."""
     number = float(value)
     if number.is_integer():
         return str(int(number))
@@ -582,6 +625,7 @@ def _format_quantity(value: float | int) -> str:
 
 
 def _excel_quantity(row: dict) -> int | float:
+    """Provide excel quantity behavior."""
     value = _parse_non_negative_number(row.get("counted_qty") or row.get("input_qty"))
     if value is None:
         return 0
@@ -589,6 +633,7 @@ def _excel_quantity(row: dict) -> int | float:
 
 
 def _style_sheet(sheet, widths: tuple[int, ...]) -> None:
+    """Provide style sheet behavior."""
     if Font is None or PatternFill is None or Alignment is None:
         return
     header_fill = PatternFill("solid", fgColor="E8F7F1")

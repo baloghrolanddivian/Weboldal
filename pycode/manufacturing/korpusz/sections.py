@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..workflow import *
 
 def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    """Provide manufacturing korpusz sections behavior."""
     xml_sections, xml_count, xml_available = _manufacturing_osszekeszito_xml_sections(bundle, production_number)
     alkatresz_xml_sections, alkatresz_xml_count, alkatresz_xml_available = _manufacturing_alkatresz_kesz_xml_sections(bundle, production_number)
     if xml_available:
@@ -28,6 +29,7 @@ def _manufacturing_korpusz_sections(bundle: dict, production_number: str) -> tup
     return osszekeszito_sections + alkatresz_sections, osszekeszito_count + alkatresz_count
 
 def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, bool]:
+    """Provide manufacturing osszekeszito xml sections behavior."""
     folder_text = str(bundle.get("folder", "") or "").strip()
     if not folder_text:
         return [], 0, False
@@ -49,6 +51,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         return [], 0, True
 
     def clean_text(value: object) -> str:
+        """Provide clean text behavior."""
         return (
             str(value or "")
             .strip()
@@ -59,17 +62,21 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         )
 
     def local_name(tag: object) -> str:
+        """Provide local name behavior."""
         return str(tag or "").rsplit("}", 1)[-1].strip()
 
     def folded_ascii(value: object) -> str:
+        """Provide folded ascii behavior."""
         text = unicodedata.normalize("NFKD", clean_text(value))
         text = "".join(char for char in text if not unicodedata.combining(char))
         return re.sub(r"\s+", " ", text).strip().lower()
 
     def tag_key(tag: object) -> str:
+        """Provide tag key behavior."""
         return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
 
     def whole_number(value: object) -> str:
+        """Provide whole number behavior."""
         text = clean_text(value).replace(",", ".")
         if not text:
             return ""
@@ -85,6 +92,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
                 return ""
 
     def quantity_value(value: object) -> int:
+        """Provide quantity value behavior."""
         number_text = whole_number(value)
         if not number_text:
             return 1
@@ -94,6 +102,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
             return 1
 
     def con_fields(con_element: object) -> dict[str, str]:
+        """Provide con fields behavior."""
         fields: dict[str, str] = {}
         for child in list(con_element):
             key = tag_key(getattr(child, "tag", ""))
@@ -102,6 +111,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         return fields
 
     def field_value(fields: dict[str, str], *names: str) -> str:
+        """Provide field value behavior."""
         for name in names:
             value = fields.get(tag_key(name), "")
             if value:
@@ -109,12 +119,14 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         return ""
 
     def edge_value(value: object) -> str:
+        """Provide edge value behavior."""
         text = clean_text(value)
         if re.sub(r"[^a-z0-9]+", "", folded_ascii(text)).upper() == "K":
             return "-"
         return text or "-"
 
     def section_label(fields: dict[str, str]) -> str:
+        """Provide section label behavior."""
         korp_tip = field_value(fields, "KorpTipPer")
         if not korp_tip:
             return "Összes"
@@ -122,9 +134,11 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         return " - ".join(part for part in (korp_tip, description) if part) or "Összes"
 
     def is_all_section_label(label: object) -> bool:
+        """Return whether is all section label is true."""
         return folded_ascii(label) == "osszes"
 
     def pair_info_for_section_label(label: str) -> tuple[str, str] | None:
+        """Provide pair info for section label behavior."""
         text = clean_text(label)
         if text.startswith("1-es "):
             return ("1", text[5:])
@@ -133,6 +147,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         return None
 
     def pair_sections_in_display_order(sections: list[dict]) -> list[dict]:
+        """Provide pair sections in display order behavior."""
         by_label = {clean_text(section.get("label")): section for section in sections}
         used: set[str] = set()
         ordered: list[dict] = []
@@ -222,6 +237,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
     return sections, sum(len(section.get("rows", [])) for section in sections), True
 
 def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, bool]:
+    """Provide manufacturing alkatresz kesz xml sections behavior."""
     folder_text = str(bundle.get("folder", "") or "").strip()
     if not folder_text:
         return [], 0, False
@@ -243,6 +259,7 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
         return [], 0, True
 
     def clean_text(value: object) -> str:
+        """Provide clean text behavior."""
         return (
             str(value or "")
             .strip()
@@ -253,17 +270,21 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
         )
 
     def local_name(tag: object) -> str:
+        """Provide local name behavior."""
         return str(tag or "").rsplit("}", 1)[-1].strip()
 
     def folded_ascii(value: object) -> str:
+        """Provide folded ascii behavior."""
         text = unicodedata.normalize("NFKD", clean_text(value))
         text = "".join(char for char in text if not unicodedata.combining(char))
         return re.sub(r"\s+", " ", text).strip().lower()
 
     def tag_key(tag: object) -> str:
+        """Provide tag key behavior."""
         return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
 
     def whole_number(value: object) -> str:
+        """Provide whole number behavior."""
         text = clean_text(value).replace(",", ".")
         if not text:
             return ""
@@ -279,6 +300,7 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
                 return ""
 
     def quantity_value(value: object) -> int:
+        """Provide quantity value behavior."""
         number_text = whole_number(value)
         if not number_text:
             return 1
@@ -288,6 +310,7 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
             return 1
 
     def con_fields(con_element: object) -> dict[str, str]:
+        """Provide con fields behavior."""
         fields: dict[str, str] = {}
         for child in list(con_element):
             key = tag_key(getattr(child, "tag", ""))
@@ -296,6 +319,7 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
         return fields
 
     def field_value(fields: dict[str, str], *names: str) -> str:
+        """Provide field value behavior."""
         for name in names:
             value = fields.get(tag_key(name), "")
             if value:

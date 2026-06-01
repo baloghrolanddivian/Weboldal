@@ -71,14 +71,17 @@ MANUFACTURING_SOURCE_LABELS = {
 }
 
 def _manufacturing_query_params(raw_path: str) -> dict[str, str]:
+    """Provide manufacturing query params behavior."""
     parsed = urllib.parse.urlparse(raw_path)
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     return {key: values[-1].strip() for key, values in query.items() if values}
 
 def _manufacturing_normalize_number(value: object) -> str:
+    """Provide manufacturing normalize number behavior."""
     return re.sub(r"[^0-9]", "", str(value or ""))
 
 def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) -> str:
+    """Provide manufacturing signature key behavior."""
     payload = json.dumps(
         {"schema": MANUFACTURING_BUNDLE_SCHEMA_VERSION, "signature": list(signature)},
         ensure_ascii=False,
@@ -87,9 +90,11 @@ def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) ->
     return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()
 
 def _manufacturing_disk_cache_path(production_number: str) -> Path:
+    """Provide manufacturing disk cache path behavior."""
     return bundle_disk_cache_dir() / f"{production_number}.json"
 
 def _read_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...]) -> dict | None:
+    """Read read manufacturing disk cache data."""
     cache_path = _manufacturing_disk_cache_path(production_number)
     if not cache_path.exists():
         return None
@@ -103,6 +108,7 @@ def _read_manufacturing_disk_cache(production_number: str, signature: tuple[tupl
     return bundle if isinstance(bundle, dict) else None
 
 def _read_manufacturing_stale_disk_cache(production_number: str) -> dict | None:
+    """Read read manufacturing stale disk cache data."""
     cache_path = _manufacturing_disk_cache_path(production_number)
     if not cache_path.exists():
         return None
@@ -114,6 +120,7 @@ def _read_manufacturing_stale_disk_cache(production_number: str) -> dict | None:
     return bundle if isinstance(bundle, dict) else None
 
 def _write_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...], bundle: dict) -> None:
+    """Write write manufacturing disk cache data."""
     try:
         bundle_disk_cache_dir().mkdir(parents=True, exist_ok=True)
         cache_path = _manufacturing_disk_cache_path(production_number)
@@ -126,6 +133,7 @@ def _write_manufacturing_disk_cache(production_number: str, signature: tuple[tup
         return
 
 def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[tuple[str, int, int], ...]]:
+    """Provide manufacturing bundle signature behavior."""
     normalized = _manufacturing_normalize_number(production_number)
     if not normalized:
         return "", tuple()
@@ -155,6 +163,7 @@ def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[
     return normalized, signature
 
 def _load_manufacturing_bundle_cached(production_number: str) -> dict:
+    """Load load manufacturing bundle cached data."""
     normalized = _manufacturing_normalize_number(production_number)
     if not normalized:
         raise FileNotFoundError("Adj meg egy érvényes gyártási számot.")
@@ -216,6 +225,7 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
     return dict(bundle)
 
 def _manufacturing_collect_document_state_keys(document: dict) -> tuple[str, ...]:
+    """Provide manufacturing collect document state keys behavior."""
     sections_for_completion: list[dict] = []
     if bool(document.get("singleColumnOverview")):
         for special_view in document.get("specialViews", []):
@@ -252,6 +262,7 @@ def _manufacturing_collect_document_state_keys(document: dict) -> tuple[str, ...
     return tuple(sorted(set(row_state_keys)))
 
 def _manufacturing_operation_state_keys(production_number: str, operation_key: str) -> tuple[str, ...]:
+    """Provide manufacturing operation state keys behavior."""
     normalized_number = _manufacturing_normalize_number(production_number)
     normalized_operation = _manufacturing_normalize_operation(operation_key)
     if not normalized_number or not normalized_operation:
@@ -297,10 +308,12 @@ def _manufacturing_operation_state_keys(production_number: str, operation_key: s
     return state_keys
 
 def _manufacturing_state_key(production_number: str, row_id: str) -> str:
+    """Provide manufacturing state key behavior."""
     normalized_number = _manufacturing_normalize_number(production_number)
     return f"{normalized_number}::{str(row_id or '').strip()}"
 
 def _manufacturing_normalize_con_code(value: object) -> str:
+    """Provide manufacturing normalize con code behavior."""
     text = str(value or "").strip().upper()
     match = re.search(r"\bCON\D*?(\d{6,})\b", text)
     if match:
@@ -309,9 +322,11 @@ def _manufacturing_normalize_con_code(value: object) -> str:
     return f"CON{match.group(1)}" if match else ""
 
 def _manufacturing_row_con_code(row: dict) -> str:
+    """Provide manufacturing row con code behavior."""
     return _manufacturing_normalize_con_code(row.get("Barcode") or row.get("barcode") or row.get("code", ""))
 
 def _manufacturing_xml_state_fields(production_number: str, operation_key: str, barcode: object, child_id: object = 0) -> dict:
+    """Provide manufacturing xml state fields behavior."""
     con_code = _manufacturing_normalize_con_code(barcode)
     fields = {
         "xmlSource": True,
@@ -326,6 +341,7 @@ def _manufacturing_xml_state_fields(production_number: str, operation_key: str, 
     return fields
 
 def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> str:
+    """Provide manufacturing row state storage key behavior."""
     normalized_number = _manufacturing_normalize_number(production_number)
     row_id = str(row.get("row_id", "") or "").strip()
     document_key = str(row.get("doc_key", "") or "").strip()
@@ -343,16 +359,19 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
     return row_id
 
 def _manufacturing_row_state_view_key(production_number: str, row: dict) -> str:
+    """Provide manufacturing row state view key behavior."""
     storage_key = _manufacturing_row_state_storage_key(production_number, row)
     row_id = str(row.get("row_id", "") or "").strip()
     return storage_key if "::" in storage_key else _manufacturing_state_key(production_number, row_id)
 
 def _manufacturing_normalize_operation(value: object) -> str:
+    """Provide manufacturing normalize operation behavior."""
     normalized = str(value or "").strip().lower()
     allowed_keys = {key for key, _label in MANUFACTURING_OPERATION_DEFINITIONS}
     return normalized if normalized in allowed_keys else ""
 
 def _manufacturing_selection_state_payload(production_number: str, raw_state: dict[str, str]) -> dict[str, str]:
+    """Provide manufacturing selection state payload behavior."""
     normalized_number = _manufacturing_normalize_number(production_number)
     result: dict[str, str] = {}
     for row_id, state in raw_state.items():
@@ -370,6 +389,7 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
     return result
 
 def _manufacturing_apply_row_state_aliases(documents: list[dict], production_number: str, raw_state: dict[str, str], selection_state: dict[str, str]) -> None:
+    """Provide manufacturing apply row state aliases behavior."""
     for document in documents:
         if not isinstance(document, dict):
             continue
@@ -394,6 +414,7 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
                         break
 
 def _manufacturing_row_with_context(row: dict, production_number: str, detail_suffix: str = "") -> dict:
+    """Provide manufacturing row with context behavior."""
     row_payload = dict(row)
     detail_text = str(row_payload.get("detail", "")).strip()
     if detail_suffix:
@@ -404,18 +425,22 @@ def _manufacturing_row_with_context(row: dict, production_number: str, detail_su
     return row_payload
 
 def _manufacturing_local_slug(value: str) -> str:
+    """Provide manufacturing local slug behavior."""
     cleaned = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower())
     cleaned = cleaned.strip("-")
     return cleaned or "szakasz"
 
 def _manufacturing_is_virtual_unit_row_id(value: object) -> bool:
+    """Provide manufacturing is virtual unit row id behavior."""
     text = str(value or "")
     return "__child_unit_" in text or "__pantolo_unit_" in text
 
 def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
+    """Provide manufacturing uses assembly ready endpoint behavior."""
     return str(category_key or "").strip() == "korpusz-osszekeszito"
 
 def _manufacturing_ready_endpoint_key(document_key: object, category_key: object) -> str:
+    """Provide manufacturing ready endpoint key behavior."""
     if str(document_key or "").strip() == "front_osszekeszites":
         return "front"
     if _manufacturing_uses_assembly_ready_endpoint(category_key):
@@ -423,6 +448,7 @@ def _manufacturing_ready_endpoint_key(document_key: object, category_key: object
     return "default"
 
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
+    """Provide manufacturing document sections behavior."""
     sections: list[dict] = []
     row_count = 0
     for document in bundle.get("documents", []):
@@ -458,6 +484,7 @@ def _manufacturing_document_sections(bundle: dict, production_number: str, allow
     return sections, row_count
 
 def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
+    """Provide manufacturing red state numbers behavior."""
     numbers: list[str] = []
     for path in sorted(runtime_root.glob("*/state.json"), key=lambda item: item.parent.name, reverse=True):
         number = _manufacturing_normalize_number(path.parent.name)
@@ -469,6 +496,7 @@ def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
     return numbers
 
 def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict[str, str]]:
+    """Provide manufacturing all red special view behavior."""
     from .cnc.sections import _manufacturing_cnc_sections
     from .front.sections import _manufacturing_front_sections
     from .korpusz.sections import _manufacturing_korpusz_sections
@@ -523,6 +551,7 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
     )
 
 def _manufacturing_placeholder_document(key: str, label: str) -> dict:
+    """Provide manufacturing placeholder document behavior."""
     return {
         "key": key,
         "label": label,
@@ -540,6 +569,7 @@ def _manufacturing_view_bundle(
     *,
     include_all_red_view: bool = True,
 ) -> tuple[dict, dict[str, str]]:
+    """Provide manufacturing view bundle behavior."""
     from .cnc.sections import _manufacturing_cnc_sections
     from .front.sections import _manufacturing_front_sections
     from .korpusz.sections import (
@@ -711,6 +741,7 @@ def render_manufacturing_module(
     message: str = "",
     success: bool = False,
 ) -> bytes:
+    """Render render manufacturing module output."""
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
     lightweight_operation_picker = not bool(selected_operation)
@@ -744,6 +775,7 @@ def render_manufacturing_module(
         success = False
 
     def is_complete_production(entry_number: str, operation_key: str) -> bool:
+        """Return whether is complete production is true."""
         operation_filter = _manufacturing_normalize_operation(operation_key)
         if not operation_filter:
             return False
@@ -826,6 +858,7 @@ def render_manufacturing_module(
     )
 
 def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, limit: int = 10) -> None:
+    """Provide prime manufacturing cache worker behavior."""
     try:
         entries = available_production_entries(limit=12, ready_only=True)
         numbers = [
@@ -856,6 +889,7 @@ def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, lim
         pass
 
 def _prime_manufacturing_cache_async() -> None:
+    """Provide prime manufacturing cache async behavior."""
     threading.Thread(
         target=_prime_manufacturing_cache_worker,
         kwargs={"include_all_red_view": True, "limit": 10},

@@ -1,3 +1,5 @@
+"""HTTP route handlers for vacation calendar page requests."""
+
 from __future__ import annotations
 
 from .forms import _vacation_form_value, _vacation_form_values, _vacation_parse_form, _vacation_parse_int, _vacation_query_params
@@ -13,6 +15,7 @@ from .page import render_vacation_calendar
 
 
 def render_vacation_calendar_request(raw_path: str) -> tuple[int, bytes]:
+    """Render the calendar page from a GET request path and query string."""
     query = _vacation_query_params(raw_path)
     body = render_vacation_calendar(
         month_value=query.get("month", ""),
@@ -24,6 +27,7 @@ def render_vacation_calendar_request(raw_path: str) -> tuple[int, bytes]:
 
 
 def handle_vacation_department_save(raw_body: bytes) -> tuple[int, bytes]:
+    """Handle department create/update POST requests and render the result page."""
     form_data = _vacation_parse_form(raw_body)
     success, message = _vacation_save_department(form_data)
     body = render_vacation_calendar(
@@ -43,6 +47,7 @@ def handle_vacation_department_save(raw_body: bytes) -> tuple[int, bytes]:
 
 
 def handle_vacation_department_delete(raw_body: bytes) -> tuple[int, bytes]:
+    """Handle department delete POST requests and render the result page."""
     form_data = _vacation_parse_form(raw_body)
     success, message = _vacation_delete_department(form_data)
     body = render_vacation_calendar(
@@ -54,6 +59,7 @@ def handle_vacation_department_delete(raw_body: bytes) -> tuple[int, bytes]:
 
 
 def handle_vacation_employee_save(raw_body: bytes) -> tuple[int, bytes]:
+    """Handle employee create/update POST requests and render the result page."""
     form_data = _vacation_parse_form(raw_body)
     success, message = _vacation_save_employee(form_data)
     body = render_vacation_calendar(
@@ -78,6 +84,7 @@ def handle_vacation_employee_save(raw_body: bytes) -> tuple[int, bytes]:
 
 
 def handle_vacation_employee_delete(raw_body: bytes) -> tuple[int, bytes]:
+    """Handle employee delete POST requests and render the result page."""
     form_data = _vacation_parse_form(raw_body)
     success, message = _vacation_delete_employee(form_data)
     body = render_vacation_calendar(
@@ -89,6 +96,7 @@ def handle_vacation_employee_delete(raw_body: bytes) -> tuple[int, bytes]:
 
 
 def handle_vacation_leave_save(raw_body: bytes) -> tuple[int, bytes]:
+    """Handle leave create/update POST requests and render the result page."""
     form_data = _vacation_parse_form(raw_body)
     success, message = _vacation_save_leave(form_data)
     body = render_vacation_calendar(
@@ -110,6 +118,7 @@ def handle_vacation_leave_save(raw_body: bytes) -> tuple[int, bytes]:
 
 
 def handle_vacation_leave_delete(raw_body: bytes) -> tuple[int, bytes]:
+    """Handle leave delete POST requests and render the result page."""
     form_data = _vacation_parse_form(raw_body)
     success, message = _vacation_delete_leave(form_data)
     body = render_vacation_calendar(

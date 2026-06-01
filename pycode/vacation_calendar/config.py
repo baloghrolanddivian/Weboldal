@@ -1,3 +1,5 @@
+"""Runtime configuration and route constants for the vacation calendar."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,20 +19,24 @@ _layout_renderer: Callable[..., bytes] | None = None
 
 
 def configure_vacation_calendar(runtime_dir: Path, layout_renderer: Callable[..., bytes]) -> None:
+    """Configure the calendar runtime directory and outer layout renderer."""
     global _runtime_dir, _layout_renderer
     _runtime_dir = runtime_dir
     _layout_renderer = layout_renderer
 
 
 def vacation_runtime_dir() -> Path:
+    """Return the configured vacation calendar runtime directory."""
     return _runtime_dir
 
 
 def vacation_calendar_db() -> Path:
+    """Return the SQLite database path for the vacation calendar."""
     return _runtime_dir / "calendar.db"
 
 
 def render_layout(**kwargs: object) -> bytes:
+    """Render a page through the configured application layout callback."""
     if _layout_renderer is None:
         raise RuntimeError("Vacation calendar layout renderer is not configured.")
     return _layout_renderer(**kwargs)

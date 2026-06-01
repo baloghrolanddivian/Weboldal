@@ -1,3 +1,5 @@
+"""Reading helpers for the invoice translator package."""
+
 from __future__ import annotations
 
 import io
@@ -20,6 +22,7 @@ SAVED_SELLER_VAT_NUMBERS = {
 
 
 def extract_invoice_upload(files: dict[str, tuple[str, bytes]]) -> tuple[str | None, bytes | None]:
+    """Extract extract invoice upload data."""
     invoice_file = files.get("invoice_file")
     if invoice_file is None:
         return None, None
@@ -38,6 +41,7 @@ ITEM_PATTERN_SIMPLE = re.compile(
 
 @dataclass
 class InvoiceItem:
+    """Represent InvoiceItem data used by this package."""
     row_no: str = ""
     article_code: str = ""
     description: str = ""
@@ -52,6 +56,7 @@ class InvoiceItem:
 
 @dataclass
 class InvoiceData:
+    """Represent InvoiceData data used by this package."""
     invoice_profile: str = ""
     supplier_name: str = ""
     invoice_number: str = ""
@@ -85,6 +90,7 @@ class InvoiceData:
 
 @dataclass
 class InvoiceChunk:
+    """Represent InvoiceChunk data used by this package."""
     invoice_hint: str
     text: str
     page_from: int
@@ -92,18 +98,22 @@ class InvoiceChunk:
 
 
 class MissingInvoiceDataError(ValueError):
+    """Represent MissingInvoiceDataError data used by this package."""
     pass
 
 
 def _clean_spaces(value: str) -> str:
+    """Provide clean spaces behavior."""
     return re.sub(r"\s+", " ", value).strip()
 
 
 def _value_or_default(value: str) -> str:
+    """Provide value or default behavior."""
     return _clean_spaces(value) if value else NO_DATA
 
 
 def _parse_invoice_date(value: str) -> datetime | None:
+    """Parse parse invoice date input."""
     clean_value = _clean_spaces(value)
     if not clean_value:
         return None
@@ -127,6 +137,7 @@ def _parse_invoice_date(value: str) -> datetime | None:
 
 
 def _format_invoice_date(value: str) -> str:
+    """Format format invoice date values for display or export."""
     parsed = _parse_invoice_date(value)
     if parsed is None:
         return _clean_spaces(value)
@@ -134,19 +145,23 @@ def _format_invoice_date(value: str) -> str:
 
 
 def _item_value_or_default(value: str, placeholder: str = NO_DATA) -> str:
+    """Provide item value or default behavior."""
     cleaned = _clean_spaces(value)
     return cleaned if cleaned else placeholder
 
 
 def _is_number_token(value: str) -> bool:
+    """Return whether is number token is true."""
     return bool(re.fullmatch(r"[0-9][0-9.,]*", value))
 
 
 def _is_integer_token(value: str) -> bool:
+    """Return whether is integer token is true."""
     return bool(re.fullmatch(r"\d+", value))
 
 
 def _parse_eu_number(value: str) -> float | None:
+    """Parse parse eu number input."""
     cleaned = value.strip().replace(" ", "")
     if not cleaned:
         return None
@@ -160,11 +175,13 @@ def _parse_eu_number(value: str) -> float | None:
 
 
 def _format_eu_number(value: float, decimals: int = 2) -> str:
+    """Format format eu number values for display or export."""
     formatted = f"{value:,.{decimals}f}"
     return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
 def _format_rounded_weight(raw_value: str) -> str:
+    """Format format rounded weight values for display or export."""
     cleaned = _clean_spaces(raw_value)
     if not cleaned:
         return ""
@@ -177,6 +194,7 @@ def _format_rounded_weight(raw_value: str) -> str:
 
 
 def _normalize_kronospan_weight(raw_value: str) -> str:
+    """Normalize normalize kronospan weight values."""
     value = _parse_eu_number(raw_value)
     if value is None:
         return raw_value
@@ -188,10 +206,12 @@ def _normalize_kronospan_weight(raw_value: str) -> str:
 
 
 def _fix_hungarian_mojibake(value: str) -> str:
+    """Provide fix hungarian mojibake behavior."""
     return value.translate(str.maketrans({"õ": "ő", "û": "ű", "Õ": "Ő", "Û": "Ű"}))
 
 
 def _find_index(lines: list[str], pattern: str, start: int = 0) -> int:
+    """Provide find index behavior."""
     for idx in range(start, len(lines)):
         if re.search(pattern, lines[idx], re.IGNORECASE):
             return idx
@@ -199,6 +219,7 @@ def _find_index(lines: list[str], pattern: str, start: int = 0) -> int:
 
 
 def _extract_block(lines: list[str], start_pattern: str, end_patterns: list[str]) -> list[str]:
+    """Extract extract block data."""
     start_idx = _find_index(lines, start_pattern)
     if start_idx == -1:
         return []
@@ -214,6 +235,7 @@ def _extract_block(lines: list[str], start_pattern: str, end_patterns: list[str]
 
 
 def _match_first(text: str, patterns: list[str], flags: int = re.IGNORECASE | re.MULTILINE) -> str:
+    """Provide match first behavior."""
     for pattern in patterns:
         match = re.search(pattern, text, flags)
         if match:
@@ -222,6 +244,7 @@ def _match_first(text: str, patterns: list[str], flags: int = re.IGNORECASE | re
 
 
 def _saved_seller_vat_number(profile: str, supplier_name: str = "") -> str:
+    """Save saved seller vat number data."""
     normalized_profile = _clean_spaces(profile).lower()
     if normalized_profile in SAVED_SELLER_VAT_NUMBERS:
         return SAVED_SELLER_VAT_NUMBERS[normalized_profile]
@@ -234,6 +257,7 @@ def _saved_seller_vat_number(profile: str, supplier_name: str = "") -> str:
 
 
 def _party_has_vat_number(lines: list[str]) -> bool:
+    """Provide party has vat number behavior."""
     joined = "\n".join(_clean_spaces(line) for line in lines if _clean_spaces(line))
     return bool(
         re.search(
@@ -245,6 +269,7 @@ def _party_has_vat_number(lines: list[str]) -> bool:
 
 
 def _extract_party_vat_number(lines: list[str]) -> str:
+    """Extract extract party vat number data."""
     vat_label_pattern = r"\b(?:VAT\s*(?:ID\s*)?(?:NO\.?|NUMBER)|TAX\s*NO\.?|AD[ÓO]SZ[ÁA]M)\b"
     for idx, line in enumerate(lines):
         cleaned = _clean_spaces(line)
@@ -268,6 +293,7 @@ def _extract_party_vat_number(lines: list[str]) -> str:
 
 
 def _require_party_vat_numbers(data: InvoiceData) -> None:
+    """Provide require party vat numbers behavior."""
     missing: list[str] = []
     if not _party_has_vat_number(data.supplier_lines):
         missing.append("eladó VAT Number")
@@ -278,12 +304,14 @@ def _require_party_vat_numbers(data: InvoiceData) -> None:
 
 
 def _pdf_unescape(value: str) -> str:
+    """Provide pdf unescape behavior."""
     value = value.replace(r"\n", " ").replace(r"\r", " ").replace(r"\t", " ")
     value = value.replace(r"\(", "(").replace(r"\)", ")").replace(r"\\", "\\")
     return value
 
 
 def _looks_like_human_text(text: str) -> bool:
+    """Return whether a value looks like looks like human text."""
     if len(text.strip()) < 40:
         return False
     indicator_hits = sum(token in text for token in (" endobj", " stream", " xref", "/Type", "FlateDecode"))
@@ -294,6 +322,7 @@ def _looks_like_human_text(text: str) -> bool:
 
 
 def _fallback_extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Provide fallback extract text from pdf behavior."""
     raw_text = pdf_bytes.decode("latin1", errors="ignore")
     chunks: list[str] = []
 
@@ -329,6 +358,7 @@ def _fallback_extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 
 def _extract_text_pages_from_pdf(pdf_bytes: bytes) -> list[str]:
+    """Extract extract text pages from pdf data."""
     if PdfReader is None:
         return []
     try:
@@ -441,6 +471,7 @@ def _extract_text_pages_from_pdf(pdf_bytes: bytes) -> list[str]:
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract extract text from pdf data."""
     page_text = _extract_text_pages_from_pdf(pdf_bytes)
     if page_text:
         joined = "\n".join(chunk for chunk in page_text if chunk).strip()
@@ -451,6 +482,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 
 def _extract_invoice_number_hint(text: str) -> str:
+    """Extract extract invoice number hint data."""
     lines = [_clean_spaces(line) for line in text.splitlines() if _clean_spaces(line)]
     normalized = "\n".join(lines)
 
@@ -475,6 +507,7 @@ def _extract_invoice_number_hint(text: str) -> str:
 
 
 def split_pdf_by_invoice(pdf_bytes: bytes) -> list[InvoiceChunk]:
+    """Provide split pdf by invoice behavior."""
     page_texts = _extract_text_pages_from_pdf(pdf_bytes)
     if not page_texts:
         text = extract_text_from_pdf(pdf_bytes)
@@ -519,6 +552,7 @@ def split_pdf_by_invoice(pdf_bytes: bytes) -> list[InvoiceChunk]:
 
 
 def _parse_items(lines: list[str]) -> list[InvoiceItem]:
+    """Parse parse items input."""
     items: list[InvoiceItem] = []
     for line in lines:
         tokens = line.split()
@@ -606,6 +640,7 @@ def _parse_items(lines: list[str]) -> list[InvoiceItem]:
 
 
 def _detect_invoice_profile(lines: list[str], text: str) -> str:
+    """Provide detect invoice profile behavior."""
     upper_text = text.upper()
     if "KASTAMONU" in upper_text:
         if "CREDIT NOTE" in upper_text:
@@ -631,10 +666,12 @@ def _detect_invoice_profile(lines: list[str], text: str) -> str:
 
 
 def _is_signed_number_token(value: str) -> bool:
+    """Return whether is signed number token is true."""
     return bool(re.fullmatch(r"-?[0-9][0-9.,]*", value))
 
 
 def _extract_decimal_from_token(token: str) -> str:
+    """Extract extract decimal from token data."""
     match = re.search(r"-?\d{1,3}(?:\.\d{3})*,\d{2}", token)
     if match:
         return match.group(0)
@@ -645,6 +682,7 @@ def _extract_decimal_from_token(token: str) -> str:
 
 
 def _infer_unit_from_line(line: str) -> str:
+    """Provide infer unit from line behavior."""
     upper = line.upper()
     if "LFM" in upper:
         return "lfm"
@@ -656,6 +694,7 @@ def _infer_unit_from_line(line: str) -> str:
 
 
 def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> list[InvoiceItem]:
+    """Parse parse kronospan items input."""
     items: list[InvoiceItem] = []
     i = 0
 
@@ -784,6 +823,7 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
 
 
 def _parse_kastamonu_or_generic_invoice_data(lines: list[str]) -> InvoiceData:
+    """Parse parse kastamonu or generic invoice data input."""
     normalized_text = "\n".join(lines)
     profile = "kastamonu" if "KASTAMONU" in normalized_text.upper() else "generic"
     data = InvoiceData(invoice_profile=profile)
@@ -882,6 +922,7 @@ def _parse_kastamonu_or_generic_invoice_data(lines: list[str]) -> InvoiceData:
 
 
 def _parse_kastamonu_credit_note_items(lines: list[str]) -> list[InvoiceItem]:
+    """Parse parse kastamonu credit note items input."""
     items: list[InvoiceItem] = []
     for line in lines:
         tokens = line.split()
@@ -922,6 +963,7 @@ def _parse_kastamonu_credit_note_items(lines: list[str]) -> list[InvoiceItem]:
 
 
 def _parse_kastamonu_credit_note_data(lines: list[str], text: str) -> InvoiceData:
+    """Parse parse kastamonu credit note data input."""
     normalized_text = "\n".join(lines)
     data = InvoiceData(invoice_profile="kastamonu_credit")
 
@@ -984,6 +1026,7 @@ def _parse_kastamonu_credit_note_data(lines: list[str], text: str) -> InvoiceDat
 
 
 def _parse_gamet_items(lines: list[str]) -> list[InvoiceItem]:
+    """Parse parse gamet items input."""
     items: list[InvoiceItem] = []
     i = 0
     while i < len(lines):
@@ -1050,6 +1093,7 @@ def _parse_gamet_items(lines: list[str]) -> list[InvoiceItem]:
 
 
 def _parse_gamet_invoice_data(lines: list[str], text: str) -> InvoiceData:
+    """Parse parse gamet invoice data input."""
     normalized_text = "\n".join(lines)
     data = InvoiceData(invoice_profile="gamet", supplier_name="GAMET Sp. z o.o.")
 
@@ -1082,6 +1126,7 @@ def _parse_gamet_invoice_data(lines: list[str], text: str) -> InvoiceData:
 
 
 def _parse_kronospan_invoice_data(lines: list[str], text: str) -> InvoiceData:
+    """Parse parse kronospan invoice data input."""
     normalized_text = "\n".join(lines)
     data = InvoiceData(invoice_profile="kronospan", supplier_name="KRONOSPAN, s.r.o.")
 
@@ -1228,6 +1273,7 @@ def _parse_kronospan_invoice_data(lines: list[str], text: str) -> InvoiceData:
 
 
 def _parse_divian_items(lines: list[str], total_net_fallback: str = "") -> list[InvoiceItem]:
+    """Parse parse divian items input."""
     items: list[InvoiceItem] = []
     i = 0
     while i < len(lines):
@@ -1345,6 +1391,7 @@ def _parse_divian_items(lines: list[str], total_net_fallback: str = "") -> list[
 
 
 def _parse_divian_invoice_data(lines: list[str], text: str) -> InvoiceData:
+    """Parse parse divian invoice data input."""
     normalized_text = "\n".join(lines)
     data = InvoiceData(invoice_profile="divian")
 
@@ -1496,6 +1543,7 @@ def _parse_divian_invoice_data(lines: list[str], text: str) -> InvoiceData:
 
 
 def parse_invoice_data(text: str) -> InvoiceData:
+    """Parse parse invoice data input."""
     lines = [_clean_spaces(raw) for raw in text.splitlines() if _clean_spaces(raw)]
     profile = _detect_invoice_profile(lines, text)
     if profile == "kastamonu_credit":
@@ -1510,6 +1558,7 @@ def parse_invoice_data(text: str) -> InvoiceData:
 
 
 def parse_fields(text: str) -> dict[str, str]:
+    """Parse parse fields input."""
     data = parse_invoice_data(text)
     return {
         "invoice_number": data.invoice_number,

@@ -29,11 +29,13 @@ def run_dev_supervisor(
     """Run a child server process and restart it when watched files change."""
 
     def should_watch_path(path: Path) -> bool:
+        """Provide should watch path behavior."""
         if any(part in ignored_dirs for part in path.parts):
             return False
         return path.suffix.lower() in watched_extensions or path.name in watched_files
 
     def build_watch_snapshot() -> dict[str, tuple[int, int]]:
+        """Build build watch snapshot data."""
         snapshot: dict[str, tuple[int, int]] = {}
         for file_path in base_dir.rglob("*"):
             if not file_path.is_file():
@@ -46,6 +48,7 @@ def run_dev_supervisor(
         return snapshot
 
     def spawn_child(reload_token: str) -> subprocess.Popen:
+        """Provide spawn child behavior."""
         env = os.environ.copy()
         env[child_env] = "1"
         env[reload_token_env] = reload_token

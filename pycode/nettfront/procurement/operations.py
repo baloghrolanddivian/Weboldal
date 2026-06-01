@@ -2,7 +2,8 @@
 
 This module validates uploads, invokes procurement package generation, rebuilds
 parts mappings, and controls the procurement import helper process.
-"""
+
+This module is included in the pydoc surface for the NettFront procurement workflow."""
 
 from __future__ import annotations
 
@@ -19,7 +20,9 @@ from .pages import render_nettfront_procurement_form, render_nettfront_procureme
 
 
 def process_procurement_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, bytes]:
-    """Validate procurement uploads and build the procurement result page."""
+    """Validate procurement uploads and build the procurement result page.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     invoice_file = files.get("invoice_pdf")
     parts_file = files.get("parts_file")
 
@@ -70,7 +73,9 @@ def process_procurement_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int
 
 
 def rebuild_procurement_parts(job_id: str, files: dict[str, tuple[str, bytes]]) -> tuple[int, bytes] | None:
-    """Handle rebuild procurement parts logic for the NettFront workflows."""
+    """Handle rebuild procurement parts logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     job_dir, metadata = read_procurement_job(job_id)
     if job_dir is None or metadata is None:
         return None
@@ -115,7 +120,9 @@ def rebuild_procurement_parts(job_id: str, files: dict[str, tuple[str, bytes]]) 
 
 
 def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:
-    """Launch procurement job processing."""
+    """Launch procurement job processing.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     job_dir, metadata = read_procurement_job(job_id)
     if job_dir is None or metadata is None:
         return None
@@ -138,7 +145,9 @@ def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:
 
 
 def stop_procurement_job(job_id: str) -> tuple[int, bytes] | None:
-    """Stop procurement job processing."""
+    """Stop procurement job processing.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     job_dir, metadata = read_procurement_job(job_id)
     if job_dir is None or metadata is None:
         return None

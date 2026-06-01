@@ -1,4 +1,6 @@
-"""Public API for the NettFront invoice comparison workflow."""
+"""Public API for the NettFront invoice comparison workflow.
+
+This module is included in the pydoc surface for the NettFront comparison workflow."""
 
 from __future__ import annotations
 

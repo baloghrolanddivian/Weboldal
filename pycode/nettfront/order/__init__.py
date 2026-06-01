@@ -1,4 +1,6 @@
-"""Public API for the NettFront order suggestion workflow."""
+"""Public API for the NettFront order suggestion workflow.
+
+This module is included in the pydoc surface for the NettFront order suggestion workflow."""
 
 from __future__ import annotations
 

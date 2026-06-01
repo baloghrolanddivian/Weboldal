@@ -1,3 +1,5 @@
+"""Validation and write operations for vacation calendar entities."""
+
 from __future__ import annotations
 
 import re
@@ -15,6 +17,7 @@ from .repository import (
 
 
 def _clean_spaces(value: object) -> str:
+    """Collapse repeated whitespace and strip surrounding spaces."""
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 def _vacation_overlaps_existing_leave(
@@ -24,6 +27,7 @@ def _vacation_overlaps_existing_leave(
     end_day: date,
     exclude_leave_id: int | None = None,
 ) -> bool:
+    """Return whether an employee already has leave overlapping the date range."""
     query = """
         SELECT 1
         FROM vacation_entries
@@ -45,6 +49,7 @@ def _vacation_validate_department_limits(
     end_day: date,
     exclude_leave_id: int | None = None,
 ) -> tuple[bool, str]:
+    """Validate that a leave range does not exceed department absence limits."""
     employee = _vacation_fetch_employee(connection, employee_id)
     if employee is None:
         return False, "A kiválasztott kolléga nem található."
@@ -77,6 +82,7 @@ def _vacation_validate_department_limits(
     return True, ""
 
 def _vacation_save_department(form_data: dict[str, list[str]]) -> tuple[bool, str]:
+    """Create or update a department from submitted form data."""
     department_id = _vacation_parse_int(_vacation_form_value(form_data, "department_id"))
     name = _clean_spaces(_vacation_form_value(form_data, "name"))
     max_absent = _vacation_parse_int(_vacation_form_value(form_data, "max_absent"), default=1)
@@ -115,6 +121,7 @@ def _vacation_save_department(form_data: dict[str, list[str]]) -> tuple[bool, st
         return False, "Ilyen nevű részleg már létezik."
 
 def _vacation_delete_department(form_data: dict[str, list[str]]) -> tuple[bool, str]:
+    """Delete a department when it is not assigned to any employee."""
     department_id = _vacation_parse_int(_vacation_form_value(form_data, "department_id"))
     if department_id is None:
         return False, "A törlendő részleg nem azonosítható."
@@ -135,6 +142,7 @@ def _vacation_delete_department(form_data: dict[str, list[str]]) -> tuple[bool, 
     return True, f"Törölve: {department['name']}"
 
 def _vacation_save_employee(form_data: dict[str, list[str]]) -> tuple[bool, str]:
+    """Create or update an employee and their department assignments."""
     employee_id = _vacation_parse_int(_vacation_form_value(form_data, "employee_id"))
     name = _clean_spaces(_vacation_form_value(form_data, "name"))
     department_ids = sorted(
@@ -202,6 +210,7 @@ def _vacation_save_employee(form_data: dict[str, list[str]]) -> tuple[bool, str]
         return False, "Ilyen nevű kolléga már létezik."
 
 def _vacation_delete_employee(form_data: dict[str, list[str]]) -> tuple[bool, str]:
+    """Delete an employee and cascading leave/department assignments."""
     employee_id = _vacation_parse_int(_vacation_form_value(form_data, "employee_id"))
     if employee_id is None:
         return False, "A törlendő kolléga nem azonosítható."
@@ -214,6 +223,7 @@ def _vacation_delete_employee(form_data: dict[str, list[str]]) -> tuple[bool, st
     return True, f"Törölve: {employee['name']}"
 
 def _vacation_save_leave(form_data: dict[str, list[str]]) -> tuple[bool, str]:
+    """Create or update a leave entry after overlap and limit validation."""
     leave_id = _vacation_parse_int(_vacation_form_value(form_data, "leave_id"))
     employee_id = _vacation_parse_int(_vacation_form_value(form_data, "employee_id"))
     start_day = _vacation_parse_date(_vacation_form_value(form_data, "start_date"))
@@ -271,6 +281,7 @@ def _vacation_save_leave(form_data: dict[str, list[str]]) -> tuple[bool, str]:
         return True, f"Felvéve: {employee['name']} szabadsága"
 
 def _vacation_delete_leave(form_data: dict[str, list[str]]) -> tuple[bool, str]:
+    """Delete a leave entry by submitted leave id."""
     leave_id = _vacation_parse_int(_vacation_form_value(form_data, "leave_id"))
     if leave_id is None:
         return False, "A törlendő szabadság nem azonosítható."

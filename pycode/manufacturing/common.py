@@ -28,6 +28,7 @@ MANUFACTURING_ENTRIES_CACHE_TTL_SECONDS = 30.0
 
 @dataclass(frozen=True)
 class ManufacturingRow:
+    """Represent ManufacturingRow data used by this package."""
     row_id: str
     name: str
     detail: str
@@ -44,6 +45,7 @@ class ManufacturingRow:
 
 @dataclass(frozen=True)
 class ManufacturingSection:
+    """Represent ManufacturingSection data used by this package."""
     key: str
     label: str
     rows: tuple[ManufacturingRow, ...]
@@ -51,6 +53,7 @@ class ManufacturingSection:
 
 @dataclass(frozen=True)
 class ManufacturingDocument:
+    """Represent ManufacturingDocument data used by this package."""
     key: str
     label: str
     file_name: str
@@ -59,21 +62,25 @@ class ManufacturingDocument:
 
 
 def _clean_text(value: str) -> str:
+    """Provide clean text behavior."""
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
 def _slugify(value: str) -> str:
+    """Provide slugify behavior."""
     cleaned = _clean_text(value).lower()
     cleaned = re.sub(r"[^a-z0-9]+", "-", cleaned).strip("-")
     return cleaned or "szakasz"
 
 
 def _row_hash(*parts: str) -> str:
+    """Provide row hash behavior."""
     payload = "||".join(_clean_text(part) for part in parts)
     return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
 
 
 def _pair_info_for_section_label(label: str) -> tuple[str, str] | None:
+    """Provide pair info for section label behavior."""
     text = _clean_text(label)
     if text.startswith("1-es "):
         return ("1", text[5:])
@@ -83,6 +90,7 @@ def _pair_info_for_section_label(label: str) -> tuple[str, str] | None:
 
 
 def _pair_sections_in_display_order(sections: list[ManufacturingSection]) -> list[ManufacturingSection]:
+    """Provide pair sections in display order behavior."""
     if not sections:
         return []
     by_label = {_clean_text(section.label): section for section in sections}
@@ -115,6 +123,7 @@ def _pair_sections_in_display_order(sections: list[ManufacturingSection]) -> lis
 
 
 def _pdf_lines(path: Path) -> list[list[str]]:
+    """Provide pdf lines behavior."""
     if PdfReader is None:
         raise RuntimeError("A gyártási PDF-ek olvasásához a pypdf csomag szükséges.")
 
@@ -132,6 +141,7 @@ def _pdf_lines(path: Path) -> list[list[str]]:
 
 
 def _pdf_first_page_lines(path: Path) -> list[str]:
+    """Provide pdf first page lines behavior."""
     if PdfReader is None:
         raise RuntimeError("A gyártási PDF-ek olvasásához a pypdf csomag szükséges.")
     reader = PdfReader(str(path))
@@ -146,6 +156,7 @@ def _pdf_first_page_lines(path: Path) -> list[str]:
 
 
 def _find_osszekeszito_path(folder: Path) -> Path | None:
+    """Provide find osszekeszito path behavior."""
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
@@ -158,6 +169,7 @@ def _find_osszekeszito_path(folder: Path) -> Path | None:
 
 
 def _find_alkatresz_kesz_path(folder: Path) -> Path | None:
+    """Provide find alkatresz kesz path behavior."""
     candidate = folder / "Alkatresz_kesz.pdf"
     if candidate.exists():
         return candidate
@@ -168,6 +180,7 @@ def _find_alkatresz_kesz_path(folder: Path) -> Path | None:
 
 
 def _find_front_osszekeszito_path(folder: Path) -> Path | None:
+    """Provide find front osszekeszito path behavior."""
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
@@ -180,6 +193,7 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
 
 
 def _find_cnc_path(folder: Path) -> Path | None:
+    """Provide find cnc path behavior."""
     candidate = folder / "CNC.pdf"
     if candidate.exists():
         return candidate
@@ -192,6 +206,7 @@ def _find_cnc_path(folder: Path) -> Path | None:
 
 
 def _find_fiokelo_furas_path(folder: Path) -> Path | None:
+    """Provide find fiokelo furas path behavior."""
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
@@ -204,6 +219,7 @@ def _find_fiokelo_furas_path(folder: Path) -> Path | None:
 
 
 def _find_pantolo_path(folder: Path) -> Path | None:
+    """Provide find pantolo path behavior."""
     if not folder.exists():
         return None
     candidate = folder / "Pantolo.pdf"
@@ -218,10 +234,12 @@ def _find_pantolo_path(folder: Path) -> Path | None:
 
 
 def has_required_manufacturing_pdfs(folder: Path) -> bool:
+    """Return whether has required manufacturing pdfs exists."""
     return _find_osszekeszito_path(folder) is not None and _find_alkatresz_kesz_path(folder) is not None
 
 
 def _entries_cache_signature() -> tuple[tuple[str, int], ...]:
+    """Provide entries cache signature behavior."""
     if not MANUFACTURING_ROOT.exists():
         return tuple()
     entries: list[tuple[str, int]] = []
@@ -238,6 +256,7 @@ def _entries_cache_signature() -> tuple[tuple[str, int], ...]:
 
 
 def _production_pdf_signature(folder: Path) -> tuple[tuple[str, int, int], ...]:
+    """Provide production pdf signature behavior."""
     signatures: list[tuple[str, int, int]] = []
     for path in (_find_osszekeszito_path(folder), _find_alkatresz_kesz_path(folder), _find_front_osszekeszito_path(folder)):
         if path is None:
@@ -251,6 +270,7 @@ def _production_pdf_signature(folder: Path) -> tuple[tuple[str, int, int], ...]:
 
 
 def _production_date_label_cached(folder: Path) -> str:
+    """Provide production date label cached behavior."""
     signature = _production_pdf_signature(folder)
     with MANUFACTURING_ENTRIES_CACHE_LOCK:
         cached = MANUFACTURING_DATE_LABEL_CACHE.get(str(folder))
@@ -263,6 +283,7 @@ def _production_date_label_cached(folder: Path) -> str:
 
 
 def available_production_entries(limit: int = 60, ready_only: bool = False) -> list[dict[str, str]]:
+    """Provide available production entries behavior."""
     cache_key = (int(limit), bool(ready_only))
     with MANUFACTURING_ENTRIES_CACHE_LOCK:
         cached = MANUFACTURING_ENTRIES_CACHE.get(cache_key)
@@ -303,6 +324,7 @@ def available_production_entries(limit: int = 60, ready_only: bool = False) -> l
 
 
 def _extract_production_date_label(lines: list[str]) -> str:
+    """Extract extract production date label data."""
     for index, line in enumerate(lines):
         if "Termelési rendelés dátuma" not in line:
             continue
@@ -321,6 +343,7 @@ def _extract_production_date_label(lines: list[str]) -> str:
 
 
 def _production_date_label(folder: Path) -> str:
+    """Provide production date label behavior."""
     for candidate in (_find_osszekeszito_path(folder), _find_alkatresz_kesz_path(folder)):
         if candidate is None:
             continue
@@ -333,19 +356,23 @@ def _production_date_label(folder: Path) -> str:
             return date_label
     return ""
 def available_production_numbers(limit: int = 60, ready_only: bool = False) -> list[str]:
+    """Provide available production numbers behavior."""
     return [str(item.get("number", "")) for item in available_production_entries(limit=limit, ready_only=ready_only) if str(item.get("number", "")).isdigit()]
 
 
 def latest_production_number() -> str:
+    """Provide latest production number behavior."""
     numbers = available_production_numbers(limit=1, ready_only=True)
     return numbers[0] if numbers else ""
 
 
 def production_folder(production_number: str) -> Path:
+    """Provide production folder behavior."""
     return MANUFACTURING_ROOT / production_number.strip()
 
 
 def _footer_index(lines: list[str]) -> int:
+    """Provide footer index behavior."""
     for index, line in enumerate(lines):
         if re.fullmatch(r"Oldal \d+/\d+", _clean_text(line)):
             return index
@@ -353,6 +380,7 @@ def _footer_index(lines: list[str]) -> int:
 
 
 def _looks_like_dimension_start(tokens: list[str], index: int) -> bool:
+    """Return whether a value looks like looks like dimension start."""
     if index + 4 >= len(tokens):
         return False
     return (
@@ -365,21 +393,25 @@ def _looks_like_dimension_start(tokens: list[str], index: int) -> bool:
 
 
 def _consume_dimension(tokens: list[str], index: int) -> tuple[str, int]:
+    """Provide consume dimension behavior."""
     if not _looks_like_dimension_start(tokens, index):
         return "", index
     return f"{tokens[index]} x {tokens[index + 2]} x {tokens[index + 4]}", index + 5
 
 
 def _looks_like_edge(token: str) -> bool:
+    """Return whether a value looks like looks like edge."""
     return re.fullmatch(r"(?:N|\d+[HR](?:\d+[HR])*|[A-Z]{2,4})", token) is not None
 
 
 def _is_final_code(token: str) -> bool:
+    """Return whether is final code is true."""
     clean = _clean_text(token).upper()
     return re.fullmatch(r"(?:CON)?\d{6,}", clean) is not None
 
 
 def _normalize_final_code(token: str) -> str:
+    """Normalize normalize final code values."""
     clean = _clean_text(token).upper()
     match = re.fullmatch(r"(?:CON)?(\d{6,})", clean)
     if not match:
@@ -388,6 +420,7 @@ def _normalize_final_code(token: str) -> str:
 
 
 def _looks_like_code_fragment(token: str) -> bool:
+    """Return whether a value looks like looks like code fragment."""
     raw_token = _clean_text(token)
     if not raw_token:
         return False
@@ -401,11 +434,13 @@ def _looks_like_code_fragment(token: str) -> bool:
 
 
 def _normalized_code_fragment(token: str) -> str:
+    """Normalize normalized code fragment values."""
     normalized = unicodedata.normalize("NFKD", _clean_text(token))
     return "".join(character for character in normalized if not unicodedata.combining(character))
 
 
 def _looks_like_alkatresz_code_start(token: str) -> bool:
+    """Return whether a value looks like looks like alkatresz code start."""
     normalized = _normalized_code_fragment(token)
     if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
         return False
@@ -413,6 +448,7 @@ def _looks_like_alkatresz_code_start(token: str) -> bool:
 
 
 def _looks_like_alkatresz_code_continuation(token: str) -> bool:
+    """Return whether a value looks like looks like alkatresz code continuation."""
     raw_token = _clean_text(token)
     normalized = _normalized_code_fragment(raw_token)
     if not re.fullmatch(r"[\w/-]+", normalized, flags=re.UNICODE):
@@ -426,6 +462,7 @@ def _looks_like_alkatresz_code_continuation(token: str) -> bool:
 
 
 def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number: int) -> list[ManufacturingRow]:
+    """Parse parse osszekeszito rows input."""
     rows: list[ManufacturingRow] = []
     section_key = _slugify(section_label)
     index = 0
@@ -502,6 +539,7 @@ def _parse_osszekeszito_rows(tokens: list[str], section_label: str, page_number:
 
 
 def parse_osszekeszito(path: Path) -> ManufacturingDocument:
+    """Parse parse osszekeszito input."""
     pages = _pdf_lines(path)
     sections: list[ManufacturingSection] = []
     current_label = "Összes"
@@ -554,6 +592,7 @@ def parse_osszekeszito(path: Path) -> ManufacturingDocument:
 
 
 def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[ManufacturingRow]:
+    """Parse parse alkatresz rows input."""
     rows: list[ManufacturingRow] = []
     row_index = 0
 
@@ -640,6 +679,7 @@ def _parse_alkatresz_rows(tokens: list[str], page_number: int) -> list[Manufactu
 
 
 def parse_alkatresz_kesz(path: Path) -> ManufacturingDocument:
+    """Parse parse alkatresz kesz input."""
     pages = _pdf_lines(path)
     section_map: dict[str, list[ManufacturingRow]] = {}
 
@@ -679,6 +719,7 @@ def parse_alkatresz_kesz(path: Path) -> ManufacturingDocument:
 
 
 def _looks_like_front_color(value: str) -> bool:
+    """Return whether a value looks like looks like front color."""
     folded = _clean_text(value).lower()
     return any(
         marker in folded
@@ -708,6 +749,7 @@ def _looks_like_front_color(value: str) -> bool:
 
 
 def _parse_front_section_meta(side: str, meta_lines: list[str]) -> tuple[str, str, str]:
+    """Parse parse front section meta input."""
     cleaned_meta = [_clean_text(line) for line in meta_lines if _clean_text(line) and _clean_text(line) not in {"-", ":"}]
     descriptor = ""
     color = ""
@@ -729,6 +771,7 @@ def _parse_front_section_meta(side: str, meta_lines: list[str]) -> tuple[str, st
 
 
 def _front_row_segments(lines: list[str]) -> list[list[str]]:
+    """Provide front row segments behavior."""
     segments: list[list[str]] = []
     current: list[str] = []
     for line in lines:
@@ -750,6 +793,7 @@ def _parse_front_rows(
     section_color: str,
     page_number: int,
 ) -> list[ManufacturingRow]:
+    """Parse parse front rows input."""
     rows: list[ManufacturingRow] = []
     section_key = _slugify(section_label)
     row_index = 0
@@ -834,6 +878,7 @@ def _parse_front_rows(
 
 
 def parse_front_osszekeszito(path: Path) -> ManufacturingDocument:
+    """Parse parse front osszekeszito input."""
     pages = _pdf_lines(path)
     section_map: dict[str, list[ManufacturingRow]] = {}
 
@@ -929,6 +974,7 @@ def parse_front_osszekeszito(path: Path) -> ManufacturingDocument:
 
 
 def _fold_hu(value: str) -> str:
+    """Provide fold hu behavior."""
     text = _clean_text(value).lower()
     replacements = {
         "á": "a",
@@ -960,15 +1006,18 @@ def _fold_hu(value: str) -> str:
 
 
 def _looks_like_cnc_section_header(line: str) -> bool:
+    """Return whether a value looks like looks like cnc section header."""
     folded = _fold_hu(line)
     return bool(re.fullmatch(r"[12]-es\s+als.*", folded) or re.fullmatch(r"[12]-es\s+fels.*", folded))
 
 
 def _looks_like_fiokelo_header(line: str) -> bool:
+    """Return whether a value looks like looks like fiokelo header."""
     return _fold_hu(line) == "front tipus:"
 
 
 def _looks_like_fiokelo_row_start(tokens: list[str], index: int) -> bool:
+    """Return whether a value looks like looks like fiokelo row start."""
     token = _fold_hu(_clean_text(tokens[index] if index < len(tokens) else ""))
     if not token:
         return False
@@ -980,6 +1029,7 @@ def _looks_like_fiokelo_row_start(tokens: list[str], index: int) -> bool:
 
 
 def _looks_like_potential_row_start(tokens: list[str], index: int, max_name_tokens: int) -> bool:
+    """Return whether a value looks like looks like potential row start."""
     token = _clean_text(tokens[index] if index < len(tokens) else "")
     if not token or token in {":", "-"} or token.lower() == "x":
         return False
@@ -1008,6 +1058,7 @@ def _looks_like_potential_row_start(tokens: list[str], index: int, max_name_toke
 
 
 def _next_segment_start(tokens: list[str], start_index: int, max_name_tokens: int) -> int:
+    """Provide next segment start behavior."""
     for index in range(start_index, len(tokens)):
         token = _clean_text(tokens[index])
         if token.startswith("Oldal ") or _looks_like_cnc_section_header(token) or _looks_like_fiokelo_header(token):
@@ -1018,6 +1069,7 @@ def _next_segment_start(tokens: list[str], start_index: int, max_name_tokens: in
 
 
 def _split_cnc_color_and_detail(tokens: list[str]) -> tuple[str, str]:
+    """Provide split cnc color and detail behavior."""
     if not tokens:
         return "", ""
     marker_tokens = {
@@ -1066,6 +1118,7 @@ def _split_cnc_color_and_detail(tokens: list[str]) -> tuple[str, str]:
 
 
 def _parse_cnc_row_segment(segment: list[str], section_label: str, page_number: int, row_index: int) -> ManufacturingRow | None:
+    """Parse parse cnc row segment input."""
     dimension_index = -1
     for index in range(len(segment)):
         if _looks_like_dimension_start(segment, index):
@@ -1121,6 +1174,7 @@ def _parse_cnc_row_segment(segment: list[str], section_label: str, page_number: 
 
 
 def parse_cnc(path: Path) -> ManufacturingDocument:
+    """Parse parse cnc input."""
     pages = _pdf_lines(path)
     section_map: dict[str, list[ManufacturingRow]] = {}
     current_label = ""
@@ -1185,6 +1239,7 @@ def parse_cnc(path: Path) -> ManufacturingDocument:
 
 
 def _fiokelo_model_index(tokens: list[str]) -> int:
+    """Provide fiokelo model index behavior."""
     known_models = {"anna", "antonia", "laura", "kinga", "zille", "doroti", "petra", "ibiza", "etna"}
     for index, token in enumerate(tokens):
         if _fold_hu(token) in known_models:
@@ -1193,6 +1248,7 @@ def _fiokelo_model_index(tokens: list[str]) -> int:
 
 
 def _parse_fiokelo_row_segment(segment: list[str], section_label: str, page_number: int, row_index: int) -> ManufacturingRow | None:
+    """Parse parse fiokelo row segment input."""
     dimension_index = -1
     for index in range(len(segment)):
         if _looks_like_dimension_start(segment, index):
@@ -1248,6 +1304,7 @@ def _parse_fiokelo_row_segment(segment: list[str], section_label: str, page_numb
 
 
 def parse_fiokelo_furas(path: Path) -> ManufacturingDocument:
+    """Parse parse fiokelo furas input."""
     pages = _pdf_lines(path)
     section_map: dict[str, list[ManufacturingRow]] = {}
     current_label = ""
@@ -1322,6 +1379,7 @@ def parse_fiokelo_furas(path: Path) -> ManufacturingDocument:
 
 
 def parse_pantolo(path: Path) -> ManufacturingDocument:
+    """Parse parse pantolo input."""
     pages = _pdf_lines(path)
     rows: list[ManufacturingRow] = []
     row_index = 0
@@ -1350,9 +1408,11 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
     }
 
     def is_header_line(value: str) -> bool:
+        """Return whether is header line is true."""
         return _fold_hu(_clean_text(value)) in header_tokens
 
     def looks_like_pantolo_size(tokens: list[str], start_index: int) -> bool:
+        """Return whether a value looks like looks like pantolo size."""
         if start_index + 2 >= len(tokens):
             return False
         return (
@@ -1404,6 +1464,7 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
         quantity_index = -1
         if candidate_indices:
             def marks_row_boundary(probe: int) -> bool:
+                """Provide marks row boundary behavior."""
                 look_start = probe + 1
                 look_end = min(len(stream), probe + 14)
                 for look in range(look_start, look_end):
@@ -1415,6 +1476,7 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
                 return False
 
             def has_pantolo_tail_fields_before_quantity(probe: int) -> bool:
+                """Return whether has pantolo tail fields before quantity exists."""
                 tail_tokens = [
                     _fold_hu(_clean_text(item[0]))
                     for item in stream[tail_start:probe]
@@ -1527,6 +1589,7 @@ def parse_pantolo(path: Path) -> ManufacturingDocument:
 
 
 def _etikett_known_field_names() -> set[str]:
+    """Provide etikett known field names behavior."""
     labels = (
         "Megrendelés száma",
         "Leírás",
@@ -1552,6 +1615,7 @@ def _etikett_known_field_names() -> set[str]:
 
 
 def _etikett_field_value(lines: list[str], field_candidates: tuple[str, ...], known_fields: set[str]) -> str:
+    """Provide etikett field value behavior."""
     folded_candidates = {_fold_hu(item) for item in field_candidates}
     folded_lines = [_fold_hu(line) for line in lines]
     for index, raw_line in enumerate(lines):
@@ -1602,6 +1666,7 @@ def _etikett_field_value(lines: list[str], field_candidates: tuple[str, ...], kn
 
 
 def _etikett_to_mm(value: str) -> int:
+    """Provide etikett to mm behavior."""
     text = _clean_text(value).replace(",", ".")
     match = re.search(r"-?\d+(?:\.\d+)?", text)
     if not match:
@@ -1613,6 +1678,7 @@ def _etikett_to_mm(value: str) -> int:
 
 
 def _parse_etikett_front_size(lines: list[str], known_fields: set[str]) -> str:
+    """Parse parse etikett front size input."""
     length_value = _etikett_field_value(lines, ("Hosszúság", "Hosszúság cm"), known_fields)
     width_value = _etikett_field_value(lines, ("Szélesség", "Szélesség cm"), known_fields)
     if length_value and width_value:
@@ -1634,6 +1700,7 @@ def _parse_etikett_front_size(lines: list[str], known_fields: set[str]) -> str:
 
 
 def _etikett_product_name(lines: list[str], known_fields: set[str]) -> str:
+    """Provide etikett product name behavior."""
     for index in range(1, min(len(lines), 24)):
         if _clean_text(lines[index]) != ":":
             continue
@@ -1650,6 +1717,7 @@ def _etikett_product_name(lines: list[str], known_fields: set[str]) -> str:
 
 
 def _etikett_quantity(lines: list[str]) -> int:
+    """Provide etikett quantity behavior."""
     for index in range(min(len(lines), 30) - 2):
         if _clean_text(lines[index]) != ":":
             continue
@@ -1661,6 +1729,7 @@ def _etikett_quantity(lines: list[str]) -> int:
 
 
 def _etikett_front_page(lines: list[str], known_fields: set[str]) -> bool:
+    """Provide etikett front page behavior."""
     joined = "\n".join(lines)
     folded_joined = _fold_hu(joined)
     if any(marker in folded_joined for marker in ("front szine", "front meret", "ajto tipus")):
@@ -1672,6 +1741,7 @@ def _etikett_front_page(lines: list[str], known_fields: set[str]) -> bool:
 
 
 def parse_front_etikett(path: Path) -> ManufacturingDocument:
+    """Parse parse front etikett input."""
     pages = _pdf_lines(path)
     known_fields = _etikett_known_field_names()
     section_label = "Etikett frontok"
@@ -1722,6 +1792,7 @@ def parse_front_etikett(path: Path) -> ManufacturingDocument:
 
 
 def load_production_bundle(production_number: str) -> dict:
+    """Load load production bundle data."""
     folder = production_folder(production_number)
     if not folder.exists():
         raise FileNotFoundError(f"A gyártási mappa nem található: {folder}")
@@ -1777,12 +1848,14 @@ def load_production_bundle(production_number: str) -> dict:
 
 
 def selection_state_path(runtime_root: Path, production_number: str) -> Path:
+    """Provide selection state path behavior."""
     target_dir = runtime_root / production_number
     target_dir.mkdir(parents=True, exist_ok=True)
     return target_dir / "state.json"
 
 
 def load_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
+    """Load load selection state data."""
     path = selection_state_path(runtime_root, production_number)
     if not path.exists():
         return {}
@@ -1796,6 +1869,7 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
 
 
 def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
+    """Save save selection state data."""
     current = load_selection_state(runtime_root, production_number)
     normalized_state = str(state or "").strip().lower()
     if normalized_state in {"", "none", "clear"}:
@@ -1808,12 +1882,14 @@ def save_selection_state(runtime_root: Path, production_number: str, row_id: str
 
 
 def partial_quantity_state_path(runtime_root: Path, production_number: str) -> Path:
+    """Provide partial quantity state path behavior."""
     target_dir = runtime_root / production_number
     target_dir.mkdir(parents=True, exist_ok=True)
     return target_dir / "partial-qty.json"
 
 
 def load_partial_quantity_state(runtime_root: Path, production_number: str) -> dict[str, str]:
+    """Load load partial quantity state data."""
     path = partial_quantity_state_path(runtime_root, production_number)
     if not path.exists():
         return {}
@@ -1832,6 +1908,7 @@ def load_partial_quantity_state(runtime_root: Path, production_number: str) -> d
 
 
 def save_partial_quantity_state(runtime_root: Path, production_number: str, key: str, value: str) -> dict[str, str]:
+    """Save save partial quantity state data."""
     current = load_partial_quantity_state(runtime_root, production_number)
     normalized_key = str(key or "").strip()
     normalized_value = str(value or "").strip()

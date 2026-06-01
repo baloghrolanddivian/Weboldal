@@ -1,3 +1,5 @@
+"""Page helpers for the invoice translator package."""
+
 from __future__ import annotations
 
 import html
@@ -9,6 +11,7 @@ COMMON_SCRIPT_TAG = '<script src="/script.js"></script>'
 
 
 def render_form(message: str = "") -> bytes:
+    """Render render form output."""
     msg_html = f'<div class="alert">{html.escape(message)}</div>' if message else ""
     page = f"""<!doctype html>
 <html lang="hu">

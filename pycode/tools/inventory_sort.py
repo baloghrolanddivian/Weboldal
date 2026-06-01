@@ -30,6 +30,7 @@ def clean_sort_text(value: object) -> str:
 
 
 def _inventory_decimal(value: object) -> Decimal:
+    """Provide inventory decimal behavior."""
     clean_value = str(value or "").strip().replace(",", ".")
     if not clean_value:
         return Decimal("0")

@@ -1,3 +1,5 @@
+"""HTML rendering for the vacation calendar page."""
+
 from __future__ import annotations
 
 import html
@@ -38,6 +40,7 @@ from .repository import (
 )
 
 def _vacation_route(month_value: str, **params: object) -> str:
+    """Build a calendar route URL with optional query parameters."""
     query: dict[str, str] = {}
     if month_value:
         query["month"] = month_value
@@ -51,6 +54,7 @@ def _vacation_route(month_value: str, **params: object) -> str:
     return f"{VACATION_CALENDAR_ROUTE}?{suffix}" if suffix else VACATION_CALENDAR_ROUTE
 
 def _vacation_render_calendar_cell(cell: dict) -> str:
+    """Render one calendar day cell."""
     classes = ["vacation-day"]
     if not cell["is_current_month"]:
         classes.append("is-other-month")
@@ -90,6 +94,7 @@ def _vacation_render_calendar_cell(cell: dict) -> str:
     """
 
 def _vacation_render_leave_item(leave_entry: dict, month_value: str) -> str:
+    """Render one leave entry in the leave list."""
     start_day = _vacation_parse_date(leave_entry["start_date"])
     end_day = _vacation_parse_date(leave_entry["end_date"])
     if start_day and end_day:
@@ -109,6 +114,7 @@ def _vacation_render_leave_item(leave_entry: dict, month_value: str) -> str:
     """
 
 def _vacation_render_employee_item(employee: dict, month_value: str) -> str:
+    """Render one employee management list item."""
     badges = "".join(
         f'<span class="vacation-mini-badge">{html.escape(name)}</span>'
         for name in employee["department_names"]
@@ -133,6 +139,7 @@ def _vacation_render_employee_item(employee: dict, month_value: str) -> str:
     """
 
 def _vacation_render_department_item(department: dict, month_value: str) -> str:
+    """Render one department management list item."""
     edit_href = _vacation_route(month_value, edit_department=department["id"]) + "#department-form"
     return f"""
       <li class="vacation-item">
@@ -163,6 +170,7 @@ def render_vacation_calendar(
     employee_draft: dict | None = None,
     leave_draft: dict | None = None,
 ) -> bytes:
+    """Render the complete vacation calendar management page."""
     notice_html = ""
     if message:
         notice_class = "notice-banner success" if success else "notice-banner"

@@ -1,3 +1,5 @@
+"""Calendar grid construction for the vacation calendar module."""
+
 from __future__ import annotations
 
 import calendar as month_calendar
@@ -6,6 +8,7 @@ from datetime import date, timedelta
 from .dates import _vacation_month_bounds, _vacation_parse_date
 
 def _vacation_build_calendar(month_start: date, leaves: list[dict]) -> tuple[list[list[dict]], int]:
+    """Build week/cell data for the requested month and count limited days."""
     month_end = _vacation_month_bounds(month_start)[1]
     day_map: dict[date, list[dict]] = {}
     limit_day_count = 0

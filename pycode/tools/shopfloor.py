@@ -74,12 +74,14 @@ def report_con_ready(
     context = ssl._create_unverified_context()
 
     def endpoint_url(endpoint_name: str) -> str:
+        """Provide endpoint url behavior."""
         return (
             f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{checkpoint_id}"
             f"/tabs/{tab_id}/{endpoint_name}/{con_text}?connectionId={quoted_connection_id}"
         )
 
     def submit(endpoint_name: str, data: bytes) -> tuple[int, str]:
+        """Provide submit behavior."""
         req = urllib.request.Request(endpoint_url(endpoint_name), method="POST", data=data, headers=headers)
         try:
             with urllib.request.urlopen(req, context=context, timeout=20) as response:
@@ -103,12 +105,14 @@ def report_con_ready(
 
 
 def _shopfloor_auth_header() -> str:
+    """Provide shopfloor auth header behavior."""
     auth_raw = f"{SHOPFLOOR_USERNAME}:{SHOPFLOOR_PASSWORD}"
     auth_b64 = base64.b64encode(auth_raw.encode("utf-8", errors="ignore")).decode("ascii", errors="ignore")
     return f"Basic {auth_b64}"
 
 
 def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
+    """Provide shopfloor negotiate connection id behavior."""
     encoded_auth = urllib.parse.quote(auth_header, safe="")
     negotiate_url = f"{SHOPFLOOR_BASE_URL}/api/hubs/mainhub/negotiate?authorize={encoded_auth}&negotiateVersion=1"
     req = urllib.request.Request(negotiate_url, method="POST")
@@ -122,6 +126,7 @@ def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
 
 
 def _shopfloor_process_payload(con_id: int, validate_data: object | None = None) -> bytes:
+    """Provide shopfloor process payload behavior."""
     payload = dict(SHOPFLOOR_PROCESS_PAYLOAD)
     payload["conId"] = con_id
     if validate_data is not None:
@@ -130,6 +135,7 @@ def _shopfloor_process_payload(con_id: int, validate_data: object | None = None)
 
 
 def _shopfloor_extract_validate_data(response_body: str) -> object | None:
+    """Provide shopfloor extract validate data behavior."""
     try:
         payload = json.loads(response_body or "null")
     except json.JSONDecodeError:
@@ -145,6 +151,7 @@ def _shopfloor_extract_validate_data(response_body: str) -> object | None:
 
 
 def _shopfloor_ready_endpoint_config(ready_endpoint: str, use_assembly_validate: bool) -> tuple[int, int, bool]:
+    """Provide shopfloor ready endpoint config behavior."""
     endpoint_key = str(ready_endpoint or "").strip().lower()
     if use_assembly_validate or endpoint_key == "assembly":
         return SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID, SHOPFLOOR_ASSEMBLY_TAB_ID, True

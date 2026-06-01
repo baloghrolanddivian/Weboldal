@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..workflow import *
 
 def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, bool]:
+    """Provide manufacturing pantolo xml sections behavior."""
     folder_text = str(bundle.get("folder", "") or "").strip()
     if not folder_text:
         return [], 0, False
@@ -26,6 +27,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
         return [], 0, True
 
     def clean_text(value: object) -> str:
+        """Provide clean text behavior."""
         return (
             str(value or "")
             .strip()
@@ -36,17 +38,21 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
         )
 
     def local_name(tag: object) -> str:
+        """Provide local name behavior."""
         return str(tag or "").rsplit("}", 1)[-1].strip()
 
     def folded_ascii(value: object) -> str:
+        """Provide folded ascii behavior."""
         text = unicodedata.normalize("NFKD", clean_text(value))
         text = "".join(char for char in text if not unicodedata.combining(char))
         return re.sub(r"\s+", " ", text).strip().lower()
 
     def tag_key(tag: object) -> str:
+        """Provide tag key behavior."""
         return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
 
     def whole_number(value: object) -> str:
+        """Provide whole number behavior."""
         text = clean_text(value).replace(",", ".")
         if not text:
             return ""
@@ -62,6 +68,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
                 return ""
 
     def quantity_value(value: object) -> int:
+        """Provide quantity value behavior."""
         number_text = whole_number(value)
         if not number_text:
             return 1
@@ -71,6 +78,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
             return 1
 
     def con_fields(con_element: object) -> dict[str, str]:
+        """Provide con fields behavior."""
         fields: dict[str, str] = {}
         for child in list(con_element):
             key = tag_key(getattr(child, "tag", ""))
@@ -79,6 +87,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
         return fields
 
     def field_value(fields: dict[str, str], *names: str) -> str:
+        """Provide field value behavior."""
         for name in names:
             value = fields.get(tag_key(name), "")
             if value:
@@ -145,6 +154,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
     ], len(rows), True
 
 def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    """Provide manufacturing pantolo sections behavior."""
     raw_sections, _, xml_pantolo_available = _manufacturing_pantolo_xml_sections(bundle, production_number)
     if not xml_pantolo_available:
         raw_sections, _ = _manufacturing_document_sections(
@@ -155,9 +165,11 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         )
 
     def clean_text(value: object) -> str:
+        """Provide clean text behavior."""
         return str(value or "").strip()
 
     def folded(value: object) -> str:
+        """Provide folded behavior."""
         text = clean_text(value).lower()
         for source, target in (
             ("á", "a"),
@@ -197,12 +209,15 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     }
 
     def normalize_token(token: object) -> str:
+        """Normalize normalize token values."""
         return folded(str(token or "").strip().strip(".,;:|/_-()[]{}"))
 
     def is_nincs_token(token: object) -> bool:
+        """Return whether is nincs token is true."""
         return normalize_token(token) == "nincs"
 
     def normalize_nincs_text(value: object) -> str:
+        """Normalize normalize nincs text values."""
         text = clean_text(value)
         if not text:
             return ""
@@ -217,12 +232,14 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return text
 
     def strip_leading_nincs(value: object) -> str:
+        """Provide strip leading nincs behavior."""
         text = normalize_nincs_text(value)
         while text and normalize_token(text.split(" ", 1)[0]) == "nincs" and " " in text:
             text = clean_text(text.split(" ", 1)[1])
         return text or "Nincs"
 
     def normalize_pant_label(value: object) -> str:
+        """Normalize normalize pant label values."""
         label = clean_text(value)
         if not label:
             return "Nincs"
@@ -246,6 +263,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return label
 
     def canonical_pantolo_color(value: object) -> tuple[str, bool]:
+        """Provide canonical pantolo color behavior."""
         raw = re.sub(r"\s+", " ", clean_text(value)).strip()
         if not raw:
             return "-", False
@@ -263,6 +281,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return final_text, had_hutos
 
     def strip_model_prefix_from_color(color_value: object, model_value: object) -> str:
+        """Provide strip model prefix from color behavior."""
         color_text = clean_text(color_value)
         model_text = clean_text(model_value)
         if not color_text or not model_text:
@@ -285,6 +304,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return color_text
 
     def is_generic_pantolo_color(value: object) -> bool:
+        """Return whether is generic pantolo color is true."""
         color = folded(clean_text(value))
         if not color or color == "-":
             return True
@@ -303,6 +323,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return False
 
     def normalize_handle_type(drill_value: object, handle_value: object) -> str:
+        """Normalize normalize handle type values."""
         handle = normalize_nincs_text(handle_value)
         if not handle:
             return "-"
@@ -318,6 +339,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return " ".join(parts).strip() or "Nincs"
 
     def parse_front_type(detail_text: object) -> tuple[str, list[str]]:
+        """Parse parse front type input."""
         detail = clean_text(detail_text)
         parts = [clean_text(part) for part in re.split(r"\s*(?:Â·|·)\s*", detail) if clean_text(part)]
         front_type = ""
@@ -329,6 +351,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     drill_tokens = {"furva", "fúrva", "nincs"}
 
     def parse_tail_fields(parts: list[str]) -> tuple[str, str, str, str]:
+        """Parse parse tail fields input."""
         if not parts:
             return "-", "-", "-", "-"
         tail_tokens: list[str] = []
@@ -525,6 +548,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
     all_pantolo_rows = [row for section in sections for row in section.get("rows", []) if isinstance(row, dict)]
 
     def apply_hutos_suffix(base_color: str, has_hutos: bool) -> str:
+        """Provide apply hutos suffix behavior."""
         color_text = clean_text(base_color) or "-"
         if color_text == "-" or not has_hutos:
             return color_text
@@ -533,6 +557,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return f"{color_text} Hűtős"
 
     def is_bad_pantolo_section_color(row: dict) -> bool:
+        """Return whether is bad pantolo section color is true."""
         color_text = clean_text(row.get("name"))
         if is_generic_pantolo_color(color_text):
             return True
@@ -540,6 +565,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return clean_text(stripped) != color_text
 
     def resolve_nearest_section_color(index: int) -> str:
+        """Provide resolve nearest section color behavior."""
         current = all_pantolo_rows[index]
         front_type = clean_text(current.get("frontType")) or "-"
         model_label = clean_text(current.get("modelLabel")) or "-"
@@ -617,6 +643,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         row["color"] = clean_text(row.get("name")) or "-"
 
     def canonical_pantolo_door(value: object) -> str:
+        """Provide canonical pantolo door behavior."""
         text = folded(clean_text(value))
         compact = re.sub(r"[^a-z0-9]+", "", text)
         if "sar" in text and "fel" in text:
@@ -628,6 +655,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         return compact or "-"
 
     def infer_pant_from_global_context(target_row: dict) -> str | None:
+        """Provide infer pant from global context behavior."""
         if bool(target_row.get("_pantolo_explicit_nincs")):
             return None
         current_pant = folded(clean_text(target_row.get("pantType")))
@@ -673,6 +701,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             return None
 
         def collect_counts(match_opening: bool) -> dict[str, int]:
+            """Provide collect counts behavior."""
             counts: dict[str, int] = {}
             for candidate in all_pantolo_rows:
                 if candidate is target_row:
@@ -692,6 +721,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             return counts
 
         def pick_if_dominant(counts: dict[str, int], min_advantage: int) -> str | None:
+            """Provide pick if dominant behavior."""
             if not counts:
                 return None
             ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
@@ -726,6 +756,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             continue
 
         def infer_pant_type(target_row: dict) -> str | None:
+            """Provide infer pant type behavior."""
             if not pant_rows_non_nincs:
                 return None
             scored: list[tuple[tuple[int, int, int, int, int], str]] = []
@@ -762,6 +793,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             return inferred
 
         def dominant_section_pant() -> str | None:
+            """Provide dominant section pant behavior."""
             counts: dict[str, int] = {}
             for row in pant_rows_non_nincs:
                 pant = clean_text(row.get("pantType"))
@@ -781,6 +813,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         dominant_pant = dominant_section_pant()
 
         def can_use_dominant_for_missing(target_row: dict) -> bool:
+            """Provide can use dominant for missing behavior."""
             opening = folded(clean_text(target_row.get("openingDir")))
             door_key = canonical_pantolo_door(target_row.get("doorType"))
             if opening in {"felnyilo", "nincs", "-"}:
@@ -792,6 +825,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
 
         def infer_pant_type_strict_first_row(target_row: dict, row_index: int) -> str | None:
             # Csak az első sorra: 3-lépcsős kontroll, hogy ne maradjon hibás "Nincs".
+            """Provide infer pant type strict first row behavior."""
             if row_index != 0:
                 return None
             if not pant_rows_non_nincs:
@@ -804,9 +838,11 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 return None
 
             def row_pant(candidate: dict) -> str:
+                """Provide row pant behavior."""
                 return clean_text(candidate.get("pantType"))
 
             def non_nincs(candidate: dict) -> bool:
+                """Provide non nincs behavior."""
                 pant = row_pant(candidate)
                 return bool(pant and folded(pant) not in {"nincs", "-"})
 

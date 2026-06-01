@@ -1,3 +1,5 @@
+"""SQLite persistence helpers for the vacation calendar."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -7,6 +9,7 @@ from .config import vacation_calendar_db, vacation_runtime_dir
 from .dates import _vacation_date_value
 
 def _vacation_db_connection() -> sqlite3.Connection:
+    """Open the calendar database, ensure schema exists, and enable foreign keys."""
     vacation_runtime_dir().mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(vacation_calendar_db())
     connection.row_factory = sqlite3.Row
@@ -51,6 +54,7 @@ def _vacation_db_connection() -> sqlite3.Connection:
     return connection
 
 def _vacation_fetch_departments(connection: sqlite3.Connection) -> list[dict]:
+    """Fetch departments with employee counts for list rendering."""
     rows = connection.execute(
         """
         SELECT
@@ -75,6 +79,7 @@ def _vacation_fetch_departments(connection: sqlite3.Connection) -> list[dict]:
     ]
 
 def _vacation_fetch_department(connection: sqlite3.Connection, department_id: int) -> dict | None:
+    """Fetch one department by id."""
     row = connection.execute(
         """
         SELECT id, name, max_absent
@@ -88,6 +93,7 @@ def _vacation_fetch_department(connection: sqlite3.Connection, department_id: in
     return {"id": int(row["id"]), "name": str(row["name"]), "max_absent": int(row["max_absent"])}
 
 def _vacation_employee_department_map(connection: sqlite3.Connection) -> dict[int, list[dict]]:
+    """Build an employee-id to department-list mapping."""
     rows = connection.execute(
         """
         SELECT
@@ -112,6 +118,7 @@ def _vacation_employee_department_map(connection: sqlite3.Connection) -> dict[in
     return mapping
 
 def _vacation_fetch_employees(connection: sqlite3.Connection) -> list[dict]:
+    """Fetch employees with departments and vacation counts."""
     department_map = _vacation_employee_department_map(connection)
     rows = connection.execute(
         """
@@ -141,6 +148,7 @@ def _vacation_fetch_employees(connection: sqlite3.Connection) -> list[dict]:
     return employees
 
 def _vacation_fetch_employee(connection: sqlite3.Connection, employee_id: int) -> dict | None:
+    """Fetch one employee with department assignments."""
     row = connection.execute(
         """
         SELECT id, name
@@ -175,6 +183,7 @@ def _vacation_fetch_employee(connection: sqlite3.Connection, employee_id: int) -
     }
 
 def _vacation_fetch_leave(connection: sqlite3.Connection, leave_id: int) -> dict | None:
+    """Fetch one leave entry with employee and department details."""
     row = connection.execute(
         """
         SELECT
@@ -205,6 +214,7 @@ def _vacation_fetch_leave(connection: sqlite3.Connection, leave_id: int) -> dict
     }
 
 def _vacation_fetch_leaves_in_range(connection: sqlite3.Connection, start_day: date, end_day: date) -> list[dict]:
+    """Fetch leave entries intersecting the requested date range."""
     employee_map = {item["id"]: item for item in _vacation_fetch_employees(connection)}
     rows = connection.execute(
         """

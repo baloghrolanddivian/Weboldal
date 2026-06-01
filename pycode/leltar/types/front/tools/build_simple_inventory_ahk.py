@@ -1,3 +1,5 @@
+"""Build simple inventory ahk helpers for the inventory package."""
+
 from __future__ import annotations
 
 import argparse
@@ -14,10 +16,12 @@ OUTPUT_ROOT = REPO_ROOT / "runtime" / "front-leltar" / "ahs-riport"
 
 
 def _normalize_header(value: object) -> str:
+    """Normalize normalize header values."""
     return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
 
 
 def _parse_quantity(value: object) -> str:
+    """Parse parse quantity input."""
     if value in (None, ""):
         return ""
     if isinstance(value, bool):
@@ -35,6 +39,7 @@ def _parse_quantity(value: object) -> str:
 
 
 def _find_columns(sheet) -> tuple[int, int]:
+    """Provide find columns behavior."""
     headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     normalized = [_normalize_header(value) for value in headers]
     part_index = 0
@@ -50,6 +55,7 @@ def _find_columns(sheet) -> tuple[int, int]:
 
 
 def _load_count_map(source_path: Path) -> dict[str, str]:
+    """Load load count map data."""
     workbook = load_workbook(source_path, read_only=True, data_only=True)
     sheet = workbook[workbook.sheetnames[0]]
     part_index, qty_index = _find_columns(sheet)
@@ -65,6 +71,7 @@ def _load_count_map(source_path: Path) -> dict[str, str]:
 
 
 def _build_ahk_script(values_file_name: str) -> str:
+    """Build build ahk script data."""
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
 Persistent
@@ -120,6 +127,7 @@ Esc::
 
 
 def build_package(source_path: Path, output_dir: Path, counts_path: Path | None = None) -> dict[str, Path | int]:
+    """Build build package data."""
     workbook = load_workbook(source_path, read_only=True, data_only=True)
     sheet = workbook[workbook.sheetnames[0]]
     part_index, qty_index = _find_columns(sheet)
@@ -200,6 +208,7 @@ def build_package(source_path: Path, output_dir: Path, counts_path: Path | None 
 
 
 def main() -> None:
+    """Provide main behavior."""
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("--counts", type=Path, default=None)

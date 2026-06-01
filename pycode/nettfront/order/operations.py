@@ -2,7 +2,8 @@
 
 The functions in this module validate stock uploads, build order suggestions,
 persist approvals, and control the shared NettFront import helper process.
-"""
+
+This module is included in the pydoc surface for the NettFront order suggestion workflow."""
 
 from __future__ import annotations
 
@@ -25,7 +26,9 @@ from .pages import render_nettfront_order_form, render_nettfront_order_result
 
 
 def process_order_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, bytes]:
-    """Validate order uploads and build the order suggestion result page."""
+    """Validate order uploads and build the order suggestion result page.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     stock_file = files.get("stock_file")
     parts_file = files.get("parts_file")
 
@@ -72,7 +75,9 @@ def process_order_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, byte
 
 
 def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, bytes] | None:
-    """Handle approve order job logic for the NettFront workflows."""
+    """Handle approve order job logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     job_dir, metadata = read_order_job(job_id)
     if job_dir is None or metadata is None:
         return None
@@ -175,7 +180,9 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
 
 
 def launch_order_job(job_id: str) -> tuple[int, bytes] | None:
-    """Launch order job processing."""
+    """Launch order job processing.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     job_dir, metadata = read_order_job(job_id)
     if job_dir is None or metadata is None:
         return None
@@ -201,7 +208,9 @@ def launch_order_job(job_id: str) -> tuple[int, bytes] | None:
 
 
 def stop_order_job(job_id: str) -> tuple[int, bytes] | None:
-    """Stop order job processing."""
+    """Stop order job processing.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     job_dir, metadata = read_order_job(job_id)
     if job_dir is None or metadata is None:
         return None

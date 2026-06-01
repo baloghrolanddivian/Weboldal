@@ -2,7 +2,8 @@
 
 The order workflow uses the same helper process as procurement, so this module
 re-exports the shared process-management API from the procurement package.
-"""
+
+This module is included in the pydoc surface for the NettFront order suggestion workflow."""
 
 from __future__ import annotations
 

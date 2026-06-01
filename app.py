@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+﻿"""Page-level HTTP router and application entry point for Divian-HUB."""
+
+from __future__ import annotations
 
 import html
 import hashlib
@@ -294,6 +296,7 @@ def _render_nettfront_layout(
     single_column: bool = False,
     module_root_id: str = "",
 ) -> bytes:
+    """Render render nettfront layout output."""
     workflow_class = "workflow-grid is-single-column" if single_column else "workflow-grid"
     side_column_html = ""
     if side_html.strip() and not single_column:
@@ -2701,6 +2704,7 @@ configure_vacation_calendar(RUNTIME_DIR / "szabadsag-naptar", _render_nettfront_
 
 
 def render_nettfront_form(message: str = "") -> bytes:
+    """Render render nettfront form output."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
@@ -2796,6 +2800,7 @@ def render_nettfront_form(message: str = "") -> bytes:
 
 
 def render_nettfront_result(job_id: str, metadata: dict, message: str = "", success: bool = False) -> bytes:
+    """Render render nettfront result output."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""
@@ -2911,6 +2916,7 @@ configure_nettfront_compare(NETTFRONT_RUNTIME_DIR / "compare", _render_nettfront
 
 
 def render_nettfront_hub(message: str = "") -> bytes:
+    """Render render nettfront hub output."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
@@ -2981,29 +2987,35 @@ def render_nettfront_hub(message: str = "") -> bytes:
 
 
 def _front_inventory_saved_stock_name() -> str:
+    """Provide front inventory saved stock name behavior."""
     meta = _matt_inventory_read_meta(FRONT_INVENTORY_STOCK_META_PATH)
     return str(meta.get("original_name", "")).strip()
 
 
 def _front_inventory_saved_check_report_name() -> str:
+    """Provide front inventory saved check report name behavior."""
     meta = _matt_inventory_read_meta(FRONT_INVENTORY_CHECK_REPORT_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _front_inventory_saved_insight_meta() -> dict:
+    """Provide front inventory saved insight meta behavior."""
     meta = _matt_inventory_read_meta(FRONT_INVENTORY_INSIGHT_META_PATH)
     return meta if isinstance(meta, dict) else {}
 
 
 def _front_inventory_saved_insight_workbook_name() -> str:
+    """Provide front inventory saved insight workbook name behavior."""
     return str(_front_inventory_saved_insight_meta().get("workbook_name", "")).strip()
 
 
 def _front_inventory_saved_insight_script_name() -> str:
+    """Provide front inventory saved insight script name behavior."""
     return str(_front_inventory_saved_insight_meta().get("script_name", "")).strip()
 
 
 def _front_inventory_clear_generated_artifacts() -> None:
+    """Provide front inventory clear generated artifacts behavior."""
     for path in (
         FRONT_INVENTORY_CHECK_REPORT_PATH,
         FRONT_INVENTORY_CHECK_REPORT_META_PATH,
@@ -3018,6 +3030,7 @@ def _front_inventory_clear_generated_artifacts() -> None:
 
 
 def _front_inventory_store_insight_artifacts(session: dict) -> str:
+    """Provide front inventory store insight artifacts behavior."""
     insight_artifacts = build_front_inventory_insight_artifacts(session)
     workbook_body = insight_artifacts.get("workbook")
     script_body = insight_artifacts.get("script")
@@ -3046,6 +3059,7 @@ def _front_inventory_store_insight_artifacts(session: dict) -> str:
 
 
 def _front_inventory_ensure_insight_artifacts(session: dict | None) -> None:
+    """Provide front inventory ensure insight artifacts behavior."""
     if session is None or str(session.get("phase")) != "finalized":
         return
     if FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH.exists() and FRONT_INVENTORY_INSIGHT_SCRIPT_PATH.exists():
@@ -3057,21 +3071,25 @@ def _front_inventory_ensure_insight_artifacts(session: dict | None) -> None:
 
 
 def _material_inventory_saved_stock_name() -> str:
+    """Provide material inventory saved stock name behavior."""
     meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_STOCK_META_PATH)
     return str(meta.get("original_name", "")).strip()
 
 
 def _material_inventory_saved_insight_name() -> str:
+    """Provide material inventory saved insight name behavior."""
     meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_INSIGHT_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _material_inventory_saved_summary_name() -> str:
+    """Provide material inventory saved summary name behavior."""
     meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_SUMMARY_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _material_inventory_clear_generated_artifacts() -> None:
+    """Provide material inventory clear generated artifacts behavior."""
     for path in (
         MATERIAL_INVENTORY_INSIGHT_WORKBOOK_PATH,
         MATERIAL_INVENTORY_INSIGHT_META_PATH,
@@ -3085,6 +3103,7 @@ def _material_inventory_clear_generated_artifacts() -> None:
 
 
 def _material_inventory_store_exports(session: dict) -> None:
+    """Provide material inventory store exports behavior."""
     insight_body, insight_name, insight_count = build_material_inventory_insight_workbook(session)
     summary_body, summary_name, summary_count = build_material_inventory_summary_workbook(session)
     MATERIAL_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
@@ -3102,6 +3121,7 @@ def _material_inventory_store_exports(session: dict) -> None:
 
 
 def _material_inventory_hydrate_book_qty(session: dict | None) -> bool:
+    """Provide material inventory hydrate book qty behavior."""
     if not isinstance(session, dict):
         return False
     rows = session.get("rows")
@@ -3144,21 +3164,25 @@ def _material_inventory_hydrate_book_qty(session: dict | None) -> bool:
 
 
 def _semifinished_inventory_saved_stock_name() -> str:
+    """Provide semifinished inventory saved stock name behavior."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_INVENTORY_STOCK_META_PATH)
     return str(meta.get("original_name", "")).strip()
 
 
 def _semifinished_inventory_saved_insight_name() -> str:
+    """Provide semifinished inventory saved insight name behavior."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_INVENTORY_INSIGHT_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _semifinished_inventory_saved_summary_name() -> str:
+    """Provide semifinished inventory saved summary name behavior."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_INVENTORY_SUMMARY_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _semifinished_inventory_clear_generated_artifacts() -> None:
+    """Provide semifinished inventory clear generated artifacts behavior."""
     for path in (
         SEMIFINISHED_INVENTORY_INSIGHT_WORKBOOK_PATH,
         SEMIFINISHED_INVENTORY_INSIGHT_META_PATH,
@@ -3172,6 +3196,7 @@ def _semifinished_inventory_clear_generated_artifacts() -> None:
 
 
 def _semifinished_inventory_store_exports(session: dict) -> None:
+    """Provide semifinished inventory store exports behavior."""
     insight_body, insight_name, insight_count = build_material_inventory_insight_workbook(session)
     summary_body, summary_name, summary_count = build_material_inventory_summary_workbook(session)
     SEMIFINISHED_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
@@ -3189,21 +3214,25 @@ def _semifinished_inventory_store_exports(session: dict) -> None:
 
 
 def _semifinished_front_inventory_saved_stock_name() -> str:
+    """Provide semifinished front inventory saved stock name behavior."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_FRONT_INVENTORY_STOCK_META_PATH)
     return str(meta.get("original_name", "")).strip()
 
 
 def _semifinished_front_inventory_saved_insight_name() -> str:
+    """Provide semifinished front inventory saved insight name behavior."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_FRONT_INVENTORY_INSIGHT_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _semifinished_front_inventory_saved_summary_name() -> str:
+    """Provide semifinished front inventory saved summary name behavior."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_FRONT_INVENTORY_SUMMARY_META_PATH)
     return str(meta.get("download_name", "")).strip()
 
 
 def _semifinished_front_inventory_clear_generated_artifacts() -> None:
+    """Provide semifinished front inventory clear generated artifacts behavior."""
     for path in (
         SEMIFINISHED_FRONT_INVENTORY_INSIGHT_WORKBOOK_PATH,
         SEMIFINISHED_FRONT_INVENTORY_INSIGHT_META_PATH,
@@ -3217,6 +3246,7 @@ def _semifinished_front_inventory_clear_generated_artifacts() -> None:
 
 
 def _semifinished_front_inventory_store_exports(session: dict) -> None:
+    """Provide semifinished front inventory store exports behavior."""
     insight_body, insight_name, insight_count = build_material_inventory_insight_workbook(session)
     summary_body, summary_name, summary_count = build_material_inventory_summary_workbook(session)
     SEMIFINISHED_FRONT_INVENTORY_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
@@ -3234,6 +3264,7 @@ def _semifinished_front_inventory_store_exports(session: dict) -> None:
 
 
 def _material_inventory_worker_route(inventory_kind: str) -> str:
+    """Provide material inventory worker route behavior."""
     clean_inventory_kind = str(inventory_kind or "").strip().lower()
     if clean_inventory_kind == "semifinished_front":
         return SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE
@@ -3243,6 +3274,7 @@ def _material_inventory_worker_route(inventory_kind: str) -> str:
 
 
 def _material_inventory_admin_route(inventory_kind: str) -> str:
+    """Provide material inventory admin route behavior."""
     clean_inventory_kind = str(inventory_kind or "").strip().lower()
     if clean_inventory_kind == "semifinished_front":
         return ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE
@@ -3252,6 +3284,7 @@ def _material_inventory_admin_route(inventory_kind: str) -> str:
 
 
 def _material_inventory_normalize_view(value: str) -> str:
+    """Provide material inventory normalize view behavior."""
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
 
@@ -3263,6 +3296,7 @@ def render_material_inventory_form(
     auto_download_href: str = "",
     inventory_kind: str = "material",
 ) -> bytes:
+    """Render render material inventory form output."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""
@@ -3705,6 +3739,7 @@ def render_material_inventory_form(
 
 
 def _front_inventory_active_presence_categories() -> set[str]:
+    """Provide front inventory active presence categories behavior."""
     snapshot = _matt_inventory_read_meta(FRONT_INVENTORY_PRESENCE_PATH)
     now = datetime.now()
     active_categories: set[str] = set()
@@ -3734,6 +3769,7 @@ def _front_inventory_active_presence_categories() -> set[str]:
 
 
 def _front_inventory_touch_presence(token: str, category: str, view_mode: str, clear: bool = False) -> list[str]:
+    """Provide front inventory touch presence behavior."""
     clean_token = str(token or "").strip()
     snapshot = _matt_inventory_read_meta(FRONT_INVENTORY_PRESENCE_PATH)
     if clean_token:
@@ -3770,6 +3806,7 @@ def _front_inventory_touch_presence(token: str, category: str, view_mode: str, c
 
 
 def _front_inventory_build_sync_payload(selected_category: str) -> dict:
+    """Provide front inventory build sync payload behavior."""
     session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
     if session is None:
         return {"category_states": {}, "row_inputs": {}, "updated_at": ""}
@@ -3790,6 +3827,7 @@ def _front_inventory_build_sync_payload(selected_category: str) -> dict:
 
 
 def _unified_inventory_config(kind: str) -> dict:
+    """Provide unified inventory config behavior."""
     clean_kind = str(kind or "").strip().lower()
     configs = {
         "material": {
@@ -3851,10 +3889,12 @@ def _unified_inventory_config(kind: str) -> dict:
 
 
 def _unified_inventory_load_session(config: dict) -> dict | None:
+    """Provide unified inventory load session behavior."""
     return load_material_inventory_session_from_path(config["session_path"])
 
 
 def _unified_inventory_build_view_model(config: dict, selected_category: str, sort_mode: str = "default") -> dict:
+    """Provide unified inventory build view model behavior."""
     session = _unified_inventory_load_session(config)
     if session is None:
         return {"session": None, "categories": [], "selected_category": "all", "visible_rows": [], "finalized": False}
@@ -3874,6 +3914,7 @@ def _unified_inventory_build_view_model(config: dict, selected_category: str, so
 
 
 def _unified_inventory_touch_presence(config: dict, token: str, category: str, clear: bool = False) -> list[str]:
+    """Provide unified inventory touch presence behavior."""
     clean_token = str(token or "").strip()
     path = config["presence_path"]
     snapshot = _matt_inventory_read_meta(path)
@@ -3909,6 +3950,7 @@ def _unified_inventory_touch_presence(config: dict, token: str, category: str, c
 
 
 def _unified_inventory_sync_payload(config: dict, selected_category: str) -> dict:
+    """Provide unified inventory sync payload behavior."""
     view_model = _unified_inventory_build_view_model(config, selected_category)
     session = view_model.get("session")
     if session is None:
@@ -3925,6 +3967,7 @@ def _unified_inventory_sync_payload(config: dict, selected_category: str) -> dic
 
 
 def render_unified_inventory_worker_page(kind: str, selected_category: str = "", sort_mode: str = "default") -> bytes:
+    """Render render unified inventory worker page output."""
     config = _unified_inventory_config(kind)
     view_model = _unified_inventory_build_view_model(config, selected_category, sort_mode)
     session = view_model.get("session")
@@ -3932,6 +3975,7 @@ def render_unified_inventory_worker_page(kind: str, selected_category: str = "",
     selected = str(view_model.get("selected_category", "all") or "all")
 
     def sort_href(sort_key: str) -> str:
+        """Provide sort href behavior."""
         if current_sort == sort_key:
             next_sort = f"{sort_key}_desc"
         elif current_sort == f"{sort_key}_desc":
@@ -3941,6 +3985,7 @@ def render_unified_inventory_worker_page(kind: str, selected_category: str = "",
         return f"{config['worker_route']}?category={urllib.parse.quote(selected)}&sort={urllib.parse.quote(next_sort)}"
 
     def sort_label(label: str, sort_key: str) -> str:
+        """Provide sort label behavior."""
         indicator = ""
         if current_sort == sort_key:
             indicator = " ↑"
@@ -4064,6 +4109,7 @@ def render_unified_inventory_worker_page(kind: str, selected_category: str = "",
 
 
 def _unified_inventory_cell_html(row: dict, key: str) -> str:
+    """Provide unified inventory cell html behavior."""
     value = str(row.get(key, "") or "-")
     if key == "icg_code":
         return f'<span class="frontinv-color-chip">{html.escape(value)}</span>'
@@ -4071,6 +4117,7 @@ def _unified_inventory_cell_html(row: dict, key: str) -> str:
 
 
 def _unified_inventory_style() -> str:
+    """Provide unified inventory style behavior."""
     return """
 <style>
   :root { --frontinv-text:#0f172a; --frontinv-muted:#64748b; --frontinv-line:#d8e0ea; --frontinv-accent:#0c8d57; --frontinv-accent-strong:#12a566; }
@@ -4139,6 +4186,7 @@ def _unified_inventory_style() -> str:
 
 
 def _unified_inventory_script() -> str:
+    """Provide unified inventory script behavior."""
     return """
 <script>
 (() => {
@@ -4279,6 +4327,7 @@ def _unified_inventory_script() -> str:
 
 
 def _front_inventory_normalize_view(value: str) -> str:
+    """Provide front inventory normalize view behavior."""
     return "leltar" if str(value or "").strip().lower() == "leltar" else "admin"
 
 
@@ -4291,6 +4340,7 @@ def render_front_inventory_form(
     missing_summary: dict | None = None,
     auto_download_href: str = "",
 ) -> bytes:
+    """Render render front inventory form output."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""
@@ -4372,6 +4422,7 @@ def render_front_inventory_form(
         current_sort_mode = str(view_model.get("sort_mode", "default") or "default")
 
         def frontinv_sort_href(sort_key: str) -> str:
+            """Provide frontinv sort href behavior."""
             if current_sort_mode == sort_key:
                 next_sort = f"{sort_key}_desc"
             elif current_sort_mode == f"{sort_key}_desc":
@@ -4383,6 +4434,7 @@ def render_front_inventory_form(
             return f"{sort_base_route}?{sort_view_part}category={urllib.parse.quote(view_model['selected_category'])}&sort={urllib.parse.quote(next_sort)}"
 
         def frontinv_sort_label(label: str, sort_key: str) -> str:
+            """Provide frontinv sort label behavior."""
             indicator = ""
             if current_sort_mode == sort_key:
                 indicator = " ↑"
@@ -5820,11 +5872,14 @@ def render_front_inventory_form(
 
 
 class ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    """Represent ReusableThreadingHTTPServer data used by this package."""
     allow_reuse_address = True
 
 
 class InvoiceHandler(BaseHTTPRequestHandler):
+    """Represent InvoiceHandler data used by this package."""
     def do_GET(self):
+        """Provide do GET behavior."""
         path = _normalize_path(self.path)
         if path == DEV_RELOAD_ROUTE:
             self.respond_dev_reload_stream()
@@ -6279,6 +6334,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_dev_reload_stream(self):
+        """Provide respond dev reload stream behavior."""
         payload = json.dumps({"token": dev_reload_token(DEV_RELOAD_TOKEN_ENV)}).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -6302,6 +6358,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
     def do_POST(self):
+        """Provide do POST behavior."""
         path = _normalize_path(self.path)
         if path == MANUFACTURING_STATE_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -7472,6 +7529,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def respond_form(self, message: str):
+        """Provide respond form behavior."""
         body = render_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7480,6 +7538,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_nettfront_procurement_form(self, message: str):
+        """Provide respond nettfront procurement form behavior."""
         body = render_nettfront_procurement_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7488,6 +7547,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_matt_inventory_form(self, message: str):
+        """Provide respond matt inventory form behavior."""
         body = render_matt_inventory_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7496,6 +7556,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_material_inventory_form(self, message: str):
+        """Provide respond material inventory form behavior."""
         body = render_material_inventory_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7504,6 +7565,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_semifinished_inventory_form(self, message: str):
+        """Provide respond semifinished inventory form behavior."""
         body = render_material_inventory_form(message, inventory_kind="semifinished")
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7512,6 +7574,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_semifinished_front_inventory_form(self, message: str):
+        """Provide respond semifinished front inventory form behavior."""
         body = render_material_inventory_form(message, inventory_kind="semifinished_front")
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7520,6 +7583,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_front_inventory_form(self, message: str):
+        """Provide respond front inventory form behavior."""
         body = render_front_inventory_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7528,6 +7592,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_vacation_calendar(self, message: str, month_value: str = ""):
+        """Provide respond vacation calendar behavior."""
         body = render_vacation_calendar(month_value=month_value, message=message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7536,6 +7601,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def respond_json(self, status_code: int, payload: dict):
+        """Provide respond json behavior."""
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")

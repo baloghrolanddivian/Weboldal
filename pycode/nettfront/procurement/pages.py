@@ -1,4 +1,6 @@
-"""HTML page rendering for the NettFront procurement workflow."""
+"""HTML page rendering for the NettFront procurement workflow.
+
+This module is included in the pydoc surface for the NettFront procurement workflow."""
 
 from __future__ import annotations
 
@@ -19,7 +21,9 @@ from .routes import (
 
 
 def render_nettfront_procurement_form(message: str = "") -> bytes:
-    """Render the procurement upload form."""
+    """Render the procurement upload form.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
@@ -204,7 +208,9 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
 
 
 def _read_procurement_preview_rows(job_id: str, limit: int | None = None) -> tuple[list[list[str]], int]:
-    """Read procurement preview rows data."""
+    """Read procurement preview rows data.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     job_dir, _ = read_procurement_job(job_id)
     if job_dir is None:
         return [], 0
@@ -229,7 +235,9 @@ def _read_procurement_preview_rows(job_id: str, limit: int | None = None) -> tup
 
 
 def render_nettfront_procurement_result(job_id: str, metadata: dict, message: str = "", success: bool = False) -> bytes:
-    """Render a completed procurement job page."""
+    """Render a completed procurement job page.
+
+    This function is part of the pydoc-documented NettFront procurement workflow."""
     notice_html = ""
     if message:
         lowered_message = message.casefold()

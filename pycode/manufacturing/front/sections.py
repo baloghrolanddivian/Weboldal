@@ -5,15 +5,18 @@ from __future__ import annotations
 from ..workflow import *
 
 def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple[list[dict], int]:
+    """Provide manufacturing front sections behavior."""
     raw_sections, row_count = _manufacturing_document_sections(bundle, production_number, ("front_osszekeszito",))
 
     def folded(value: object) -> str:
+        """Provide folded behavior."""
         text = str(value or "").strip().lower()
         for source, target in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ö", "o"), ("ő", "o"), ("ú", "u"), ("ü", "u"), ("ű", "u"), ("õ", "o"), ("û", "u")):
             text = text.replace(source, target)
         return text
 
     def clean_text(value: object) -> str:
+        """Provide clean text behavior."""
         text = (
             str(value or "")
             .strip()
@@ -46,6 +49,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return text
 
     def size_sort_key(size_label: str) -> tuple[int, ...]:
+        """Provide size sort key behavior."""
         parts = [
             int(part.strip())
             for part in re.split(r"[xX]", str(size_label or ""))
@@ -54,6 +58,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return tuple(parts or [9999, 9999, 9999])
 
     def front_group_size_label(row: dict, size_label: str, type_label: str) -> str:
+        """Provide front group size label behavior."""
         source = " ".join(
             [
                 str(row.get("section_label", "")).strip().lower(),
@@ -77,6 +82,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return " x ".join(parts)
 
     def front_material_label(row: dict) -> str:
+        """Provide front material label behavior."""
         explicit_material = clean_text(row.get("frontMaterial"))
         if explicit_material:
             return explicit_material
@@ -86,6 +92,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return "Bútorlapos"
 
     def display_row_name(row: dict) -> str:
+        """Provide display row name behavior."""
         name = clean_text(row.get("name"))
         color = clean_text(row.get("color"))
         if not name:
@@ -102,6 +109,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return name
 
     def front_type_label(row: dict) -> str:
+        """Provide front type label behavior."""
         section_label = clean_text(row.get("section_label"))
         parts = [clean_text(part) for part in section_label.split(" - ") if clean_text(part)]
         if parts and folded(parts[0]).startswith("front "):
@@ -114,6 +122,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return " - ".join(parts) if parts else display_row_name(row)
 
     def front_box_type_label(type_label: str) -> str:
+        """Provide front box type label behavior."""
         clean_type = clean_text(type_label)
         if "alsó kihúzható" in folded(clean_type):
             return "Fiókelő"
@@ -123,6 +132,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return clean_type
 
     def front_model_label(row: dict) -> str:
+        """Provide front model label behavior."""
         detail_text = clean_text(row.get("detail"))
         if "·" in detail_text:
             return clean_text(detail_text.split("·", 1)[0])
@@ -131,6 +141,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return ""
 
     def is_glass_row(row: dict, type_label: str) -> bool:
+        """Return whether is glass row is true."""
         combined = " ".join(
             [
                 clean_text(row.get("name")),
@@ -142,17 +153,20 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return "uveges" in folded(combined) or "uveg" in folded(combined)
 
     def normalized_front_column_text(value: object) -> str:
+        """Provide normalized front column text behavior."""
         text = folded(clean_text(value))
         text = re.sub(r"\bkihuzhat\s+o\b", "kihuzhato", text)
         return re.sub(r"\s+", " ", text).strip()
 
     def is_pullout_front_row(row: dict) -> bool:
+        """Return whether is pullout front row is true."""
         detail_text = clean_text(row.get("detail"))
         if "·" in detail_text:
             detail_text = clean_text(detail_text.split("·", 1)[1])
         return bool(re.search(r"\balso\s+kihuzhato\b", normalized_front_column_text(detail_text)))
 
     def front_trait_label(row: dict, type_label: str) -> str:
+        """Provide front trait label behavior."""
         combined = " ".join(
             [
                 clean_text(row.get("name")),
@@ -173,6 +187,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return "-"
 
     def is_curved_front_row(row: dict) -> bool:
+        """Return whether is curved front row is true."""
         size_text = clean_text(row.get("size"))
         code_text = clean_text(row.get("code"))
         compact_size = re.sub(r"[^0-9X]", "", size_text.upper().replace("x", "X"))
@@ -192,6 +207,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
         return bool(compact_size and re.search(re.escape(compact_size) + r"[JB]", compact_code))
 
     def front_xml_source_sections() -> tuple[list[dict], int, bool]:
+        """Provide front xml source sections behavior."""
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return [], row_count, False
@@ -213,17 +229,21 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             return [], 0, True
 
         def local_name(tag: object) -> str:
+            """Provide local name behavior."""
             return str(tag or "").rsplit("}", 1)[-1].strip()
 
         def folded_ascii(value: object) -> str:
+            """Provide folded ascii behavior."""
             text = unicodedata.normalize("NFKD", clean_text(value))
             text = "".join(char for char in text if not unicodedata.combining(char))
             return re.sub(r"\s+", " ", text).strip().lower()
 
         def tag_key(tag: object) -> str:
+            """Provide tag key behavior."""
             return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
 
         def whole_number(value: object) -> str:
+            """Provide whole number behavior."""
             text = clean_text(value).replace(",", ".")
             if not text:
                 return ""
@@ -239,6 +259,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     return ""
 
         def quantity_value(value: object) -> int:
+            """Provide quantity value behavior."""
             number_text = whole_number(value)
             if not number_text:
                 return 1
@@ -248,6 +269,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                 return 1
 
         def con_fields(con_element: object) -> dict[str, str]:
+            """Provide con fields behavior."""
             fields: dict[str, str] = {}
             for child in list(con_element):
                 key = tag_key(getattr(child, "tag", ""))
@@ -256,6 +278,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             return fields
 
         def field_value(fields: dict[str, str], *names: str) -> str:
+            """Provide field value behavior."""
             for name in names:
                 value = fields.get(tag_key(name), "")
                 if value:
@@ -263,6 +286,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             return ""
 
         def category_label(fields: dict[str, str], name: str, model: str, color: str) -> str:
+            """Provide category label behavior."""
             front_group = re.sub(r"[^a-z0-9]+", "", folded_ascii(field_value(fields, "FRONT_CSOP"))).upper()
             opening = field_value(fields, "Nyitas", "Nyitás")
             opening_is_empty = re.sub(r"[^a-z0-9]+", "", folded_ascii(opening)) in {"", "nincs"}
@@ -284,12 +308,14 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             return name or "Front"
 
         def material_label(color: object) -> str:
+            """Provide material label behavior."""
             normalized = folded_ascii(color)
             if re.search(r"\bmf\b", normalized) or "folias" in normalized:
                 return "Fóliás"
             return "Bútorlapos"
 
         def is_pullout_door_type(value: object) -> bool:
+            """Return whether is pullout door type is true."""
             return folded_ascii(value) == "also kihuzhato"
 
         rows: list[dict] = []

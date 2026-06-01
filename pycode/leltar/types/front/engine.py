@@ -1,3 +1,5 @@
+"""Engine helpers for the inventory package."""
+
 from __future__ import annotations
 
 import csv
@@ -25,16 +27,19 @@ FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = REPO_ROOT / "data" / "nettfront-alkatres
 
 
 def file_name_allowed(file_name: str) -> bool:
+    """Provide file name allowed behavior."""
     return Path(file_name or "").suffix.lower() in FRONT_INVENTORY_ALLOWED_EXTENSIONS
 
 
 def read_bytes_if_exists(path: Path) -> bytes | None:
+    """Read read bytes if exists data."""
     if not path.exists():
         return None
     return path.read_bytes()
 
 
 def write_runtime_upload(base_path: Path, file_name: str, payload: bytes) -> Path:
+    """Write write runtime upload data."""
     suffix = Path(file_name or "").suffix.lower() or ".bin"
     target_path = base_path.with_suffix(suffix)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -43,6 +48,7 @@ def write_runtime_upload(base_path: Path, file_name: str, payload: bytes) -> Pat
 
 
 def load_session_from_path(path: Path) -> dict | None:
+    """Load load session from path data."""
     if not path.exists():
         return None
     try:
@@ -57,11 +63,13 @@ def load_session_from_path(path: Path) -> dict | None:
 
 
 def save_session_to_path(path: Path, payload: dict) -> None:
+    """Save save session to path data."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
+    """Build build front inventory session data."""
     serial_sizes = _load_serial_sizes()
     stock_rows = _read_stock_rows(file_name, payload, serial_sizes)
 
@@ -87,6 +95,7 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
 
 
 def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "add") -> tuple[bool, str]:
+    """Provide update row input behavior."""
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott frontsort nem találom."
@@ -118,6 +127,7 @@ def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "ad
 
 
 def summarize_missing_inputs(session: dict) -> dict:
+    """Provide summarize missing inputs behavior."""
     if str(session.get("phase")) == "finalized":
         return {"total_missing": 0, "categories": [], "rows": []}
 
@@ -152,6 +162,7 @@ def summarize_missing_inputs(session: dict) -> dict:
 
 
 def _set_worker_alert(session: dict, title: str, message: str) -> None:
+    """Provide set worker alert behavior."""
     session["worker_alert"] = {
         "id": datetime.now().isoformat(timespec="seconds"),
         "title": str(title or "").strip(),
@@ -160,6 +171,7 @@ def _set_worker_alert(session: dict, title: str, message: str) -> None:
 
 
 def build_inventory_check_workbook(session: dict, mode: str = "check", treat_missing_as_zero: bool = False) -> tuple[bytes | None, str, int]:
+    """Build build inventory check workbook data."""
     if Workbook is None:
         return None, "", 0
 
@@ -221,6 +233,7 @@ def build_inventory_check_workbook(session: dict, mode: str = "check", treat_mis
 
 
 def build_front_inventory_insight_artifacts(session: dict) -> dict[str, object]:
+    """Build build front inventory insight artifacts data."""
     if load_workbook is None:
         raise RuntimeError("Az inSight Excel generalasahoz hianyzik az openpyxl csomag.")
 
@@ -274,6 +287,7 @@ def build_front_inventory_insight_artifacts(session: dict) -> dict[str, object]:
 
 
 def run_inventory_check(session: dict, allow_missing: bool = False) -> tuple[bool, str]:
+    """Provide run inventory check behavior."""
     if str(session.get("phase")) == "finalized":
         return False, "A leltár már le van zárva."
 
@@ -351,6 +365,7 @@ def run_inventory_check(session: dict, allow_missing: bool = False) -> tuple[boo
 
 
 def finalize_inventory(session: dict, allow_missing: bool = False) -> tuple[bool, str]:
+    """Provide finalize inventory behavior."""
     if str(session.get("phase")) == "finalized":
         return False, "A leltar mar le van zarva."
 
@@ -382,11 +397,13 @@ def finalize_inventory(session: dict, allow_missing: bool = False) -> tuple[bool
 
 
 def _clear_all_pending_inputs(session: dict) -> None:
+    """Provide clear all pending inputs behavior."""
     for row in session.get("rows", []):
         row["input_qty"] = ""
 
 
 def _build_export_row(row: dict, phase: int, mode: str, treat_missing_as_zero: bool) -> dict:
+    """Build build export row data."""
     current_input = _row_input_value(row)
     if current_input is None and treat_missing_as_zero and str(row.get("status", "")) != "resolved":
         current_input = 0
@@ -416,6 +433,7 @@ def _build_export_row(row: dict, phase: int, mode: str, treat_missing_as_zero: b
 
 
 def _final_effective_qty(row: dict) -> int:
+    """Provide final effective qty behavior."""
     for key in ("resolved_qty", "final_check_qty", "second_check_qty", "first_check_qty"):
         parsed = _parse_non_negative_int(row.get(key))
         if parsed is not None:
@@ -424,6 +442,7 @@ def _final_effective_qty(row: dict) -> int:
 
 
 def _front_inventory_final_count_map(session: dict) -> dict[str, int]:
+    """Provide front inventory final count map behavior."""
     final_counts: dict[str, int] = {}
     for row in session.get("rows", []):
         if not isinstance(row, dict) or not _is_visible_inventory_row(row):
@@ -436,6 +455,7 @@ def _front_inventory_final_count_map(session: dict) -> dict[str, int]:
 
 
 def _resolve_front_inventory_insight_template_path() -> Path | None:
+    """Provide resolve front inventory insight template path behavior."""
     for candidate in (FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH, FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH):
         if candidate.exists():
             return candidate
@@ -443,6 +463,7 @@ def _resolve_front_inventory_insight_template_path() -> Path | None:
 
 
 def _front_inventory_insight_columns(sheet) -> tuple[int, int]:
+    """Provide front inventory insight columns behavior."""
     header_values = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     header_map = _build_header_map(header_values)
     part_index = (
@@ -464,6 +485,7 @@ def _front_inventory_insight_columns(sheet) -> tuple[int, int]:
 
 
 def _build_front_inventory_insight_ahk_script(quantities: list[int]) -> str:
+    """Build build front inventory insight ahk script data."""
     values_text = "\n".join(str(max(0, int(quantity or 0))) for quantity in quantities)
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
@@ -520,6 +542,7 @@ Esc::
 
 
 def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None:
+    """Provide fill finalize workbook behavior."""
     summary_sheet = workbook.active
     summary_sheet.title = "Vegleges darabszamok"
     summary_sheet.append(["Alkatresz szam", "Darabszam"])
@@ -555,6 +578,7 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
 
 
 def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default") -> dict:
+    """Build build front inventory view model data."""
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
     for row in source_rows:
@@ -624,6 +648,7 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
 
 
 def _finalized_rows(session: dict) -> list[dict]:
+    """Provide finalized rows behavior."""
     rows = []
     for row in session.get("rows", []):
         if not _is_visible_inventory_row(row):
@@ -651,6 +676,7 @@ def _finalized_rows(session: dict) -> list[dict]:
 
 
 def _active_rows_for_phase(session: dict, phase: int) -> list[dict]:
+    """Provide active rows for phase behavior."""
     if str(session.get("phase")) == "finalized":
         return []
     rows = []
@@ -666,6 +692,7 @@ def _active_rows_for_phase(session: dict, phase: int) -> list[dict]:
 
 
 def _find_row(session: dict, row_id: str) -> dict | None:
+    """Provide find row behavior."""
     target = str(row_id or "").strip().upper()
     for row in session.get("rows", []):
         if str(row.get("row_id", "")).strip().upper() == target:
@@ -674,10 +701,12 @@ def _find_row(session: dict, row_id: str) -> dict | None:
 
 
 def _touch_session(session: dict) -> None:
+    """Provide touch session behavior."""
     session["updated_at"] = datetime.now().isoformat(timespec="seconds")
 
 
 def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | None = None) -> list[dict]:
+    """Read read stock rows data."""
     rows = _read_rows(file_name, payload)
     if not rows:
         raise ValueError("A front készletfájl üres.")
@@ -733,6 +762,7 @@ def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | No
 
 
 def _looks_like_front(part_number: str, description: str) -> bool:
+    """Return whether a value looks like looks like front."""
     folded_description = _fold_text(description)
     return (
         str(part_number or "").strip().upper().startswith("NFA_")
@@ -749,11 +779,13 @@ def _looks_like_front(part_number: str, description: str) -> bool:
 
 
 def _is_inventory_excluded_flag(value: object) -> bool:
+    """Return whether is inventory excluded flag is true."""
     text = _fold_text(value)
     return text not in {"", "0", "nem", "false", "no"}
 
 
 def _load_serial_sizes() -> set[str]:
+    """Load load serial sizes data."""
     result: set[str] = set()
     for path, field_name in (
         (SERIAL_SIZES_DATA_PATH, "sizes"),
@@ -771,6 +803,7 @@ def _load_serial_sizes() -> set[str]:
 
 
 def _repair_session(session: dict, session_path: Path | None = None) -> bool:
+    """Provide repair session behavior."""
     changed = False
     serial_sizes = _load_serial_sizes()
     serial_size_list = sorted(serial_sizes, key=_size_sort_key)
@@ -811,6 +844,7 @@ def _repair_session(session: dict, session_path: Path | None = None) -> bool:
 
 
 def _merge_saved_stock_rows(session: dict, session_path: Path | None, serial_sizes: set[str]) -> bool:
+    """Provide merge saved stock rows behavior."""
     if session_path is None:
         return False
     stock_path = _find_saved_stock_upload_path(session_path.parent)
@@ -840,6 +874,7 @@ def _merge_saved_stock_rows(session: dict, session_path: Path | None, serial_siz
 
 
 def _find_saved_stock_upload_path(runtime_dir: Path) -> Path | None:
+    """Provide find saved stock upload path behavior."""
     for candidate in sorted(runtime_dir.glob("latest-stock.*")):
         if candidate.suffix.lower() in FRONT_INVENTORY_ALLOWED_EXTENSIONS:
             return candidate
@@ -847,6 +882,7 @@ def _find_saved_stock_upload_path(runtime_dir: Path) -> Path | None:
 
 
 def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
+    """Build build inventory session row data."""
     description = str(item.get("description", "")).strip()
     part_number = str(item.get("part_number", "")).strip()
     model = str(item.get("model", "")).strip() or _extract_model_value(description, part_number)
@@ -879,6 +915,7 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
 
 
 def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
+    """Read read rows data."""
     suffix = Path(file_name or "").suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
         if load_workbook is None:
@@ -893,6 +930,7 @@ def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
 
 
 def _decode_csv_bytes(payload: bytes) -> str:
+    """Provide decode csv bytes behavior."""
     for encoding in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
         try:
             return payload.decode(encoding)
@@ -902,10 +940,12 @@ def _decode_csv_bytes(payload: bytes) -> str:
 
 
 def _build_header_map(header_row: list[object]) -> dict[int, str]:
+    """Build build header map data."""
     return {index: _normalize_header(value) for index, value in enumerate(header_row)}
 
 
 def _find_header_index(header_map: dict[int, str], terms: tuple[str, ...]) -> int | None:
+    """Provide find header index behavior."""
     for index, normalized in header_map.items():
         if all(term in normalized for term in terms):
             return index
@@ -913,14 +953,17 @@ def _find_header_index(header_map: dict[int, str], terms: tuple[str, ...]) -> in
 
 
 def _normalize_header(value: object) -> str:
+    """Normalize normalize header values."""
     return re.sub(r"[^a-z0-9]+", "", _fold_text(value))
 
 
 def _normalize_part_number(value: object) -> str:
+    """Normalize normalize part number values."""
     return str(value or "").strip().upper()
 
 
 def _parse_non_negative_int(value: object) -> int | None:
+    """Parse parse non negative int input."""
     if value in (None, ""):
         return None
     text = str(value).strip().replace(" ", "")
@@ -945,6 +988,7 @@ def _parse_non_negative_int(value: object) -> int | None:
 
 
 def _extract_front_size(description: str, part_number: str) -> str:
+    """Extract extract front size data."""
     for source in (str(description or ""), str(part_number or "")):
         match = re.search(r"(\d{2,4}\s*x\s*\d{2,4})\s*x\s*\d{1,2}\b", source, flags=re.IGNORECASE)
         if match:
@@ -956,6 +1000,7 @@ def _extract_front_size(description: str, part_number: str) -> str:
 
 
 def _extract_color_value(description: object, explicit_color: object) -> str:
+    """Extract extract color value data."""
     clean_color = str(explicit_color or "").strip()
     if clean_color:
         return clean_color
@@ -974,6 +1019,7 @@ def _extract_color_value(description: object, explicit_color: object) -> str:
 
 
 def _extract_model_value(description: object, part_number: object = "") -> str:
+    """Extract extract model value data."""
     text = str(description or "").strip()
     if text:
         text = re.sub(r"^F[oó]li[aá]s\s*fr\.?", "", text, flags=re.IGNORECASE).strip()
@@ -991,6 +1037,7 @@ def _extract_model_value(description: object, part_number: object = "") -> str:
 
 
 def _compose_color_label(model: str, color: str) -> str:
+    """Provide compose color label behavior."""
     clean_model = str(model or "").strip()
     clean_color = str(color or "").strip()
     if clean_model and clean_color and not _fold_text(clean_color).startswith(_fold_text(clean_model)):
@@ -999,6 +1046,7 @@ def _compose_color_label(model: str, color: str) -> str:
 
 
 def _inventory_color_label(model: str, color: str, is_serial: bool) -> str:
+    """Provide inventory color label behavior."""
     clean_color = str(color or "").strip()
     if not is_serial:
         return clean_color
@@ -1006,6 +1054,7 @@ def _inventory_color_label(model: str, color: str, is_serial: bool) -> str:
 
 
 def _normalize_inventory_row_color(model: str, color: str, description: str = "") -> str:
+    """Normalize normalize inventory row color values."""
     clean_color = _cleanup_inventory_color_text(color)
     if not clean_color:
         clean_color = _cleanup_inventory_color_text(_extract_color_value(description, ""))
@@ -1020,6 +1069,7 @@ def _normalize_inventory_row_color(model: str, color: str, description: str = ""
 
 
 def _cleanup_inventory_color_text(value: object) -> str:
+    """Provide cleanup inventory color text behavior."""
     text = str(value or "").strip()
     if not text:
         return ""
@@ -1031,11 +1081,13 @@ def _cleanup_inventory_color_text(value: object) -> str:
 
 
 def _normalized_inventory_color(value: object) -> str:
+    """Normalize normalized inventory color values."""
     normalized = _fold_text(value).replace(".", " ").replace("-", " ").replace("_", " ")
     return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _is_excluded_inventory_color(model: object, color: object) -> bool:
+    """Return whether is excluded inventory color is true."""
     model_key = _fold_text(model)
     color_key = _normalized_inventory_color(color)
     if not color_key or color_key.startswith("sm "):
@@ -1050,10 +1102,12 @@ def _is_excluded_inventory_color(model: object, color: object) -> bool:
 
 
 def _is_excluded_inventory_row(model: object, color: object, is_serial: bool) -> bool:
+    """Return whether is excluded inventory row is true."""
     return bool(is_serial) and _is_excluded_inventory_color(model, color)
 
 
 def _is_visible_inventory_row(row: dict) -> bool:
+    """Return whether is visible inventory row is true."""
     model = str(row.get("model", "")).strip() or _extract_model_value(row.get("description", ""), row.get("part_number", ""))
     color = _normalize_inventory_row_color(model, str(row.get("color", "")).strip(), str(row.get("description", "")))
     is_serial = bool(row.get("is_serial"))
@@ -1070,12 +1124,14 @@ def _is_visible_inventory_row(row: dict) -> bool:
 
 
 def _normalize_inventory_sort_mode(value: object) -> str:
+    """Normalize normalize inventory sort mode values."""
     clean = str(value or "").strip().lower()
     allowed = {"default", "color", "color_desc", "description", "description_desc", "count", "count_desc"}
     return clean if clean in allowed else "default"
 
 
 def _inventory_sort_key(row: dict, mode: str, finalized: bool) -> tuple:
+    """Provide inventory sort key behavior."""
     if mode == "description":
         return (_fold_text(row.get("description", "")), _fold_text(row.get("color_label", row.get("color", ""))), str(row.get("part_number", "")))
     if mode == "count":
@@ -1089,6 +1145,7 @@ def _inventory_sort_key(row: dict, mode: str, finalized: bool) -> tuple:
 
 
 def _normalize_front_size(value: object) -> str:
+    """Normalize normalize front size values."""
     clean_value = re.sub(r"\s+", "", str(value or "")).lower()
     match = re.match(r"^(\d{2,4})x(\d{2,4})$", clean_value)
     if not match:
@@ -1097,6 +1154,7 @@ def _normalize_front_size(value: object) -> str:
 
 
 def _size_sort_key(value: str) -> tuple[int, int, str]:
+    """Provide size sort key behavior."""
     match = re.match(r"^(\d{2,4})x(\d{2,4})$", str(value or "").strip().lower())
     if not match:
         return (9999, 9999, str(value or ""))
@@ -1104,6 +1162,7 @@ def _size_sort_key(value: str) -> tuple[int, int, str]:
 
 
 def _inventory_category_key(size: str, is_serial: bool, is_glass: bool, special_category: str = "") -> str:
+    """Provide inventory category key behavior."""
     special = str(special_category or "").strip()
     clean_size = str(size or "").strip()
     if special == "Üveges" and clean_size:
@@ -1116,6 +1175,7 @@ def _inventory_category_key(size: str, is_serial: bool, is_glass: bool, special_
 
 
 def _inventory_category_sort_key(value: str) -> tuple[int, int, int, str]:
+    """Provide inventory category sort key behavior."""
     clean_value = str(value or "").strip()
     special_order = {"Íves": 1, "Üveges": 2, "Blende": 3}
     if clean_value in special_order:
@@ -1133,6 +1193,7 @@ def _inventory_category_sort_key(value: str) -> tuple[int, int, int, str]:
 
 
 def _inventory_special_category(part_number: object, description: object) -> str:
+    """Provide inventory special category behavior."""
     part = str(part_number or "").strip().upper()
     folded_description = _fold_text(description)
     if "blende" in folded_description or part.startswith("NFAB"):
@@ -1145,6 +1206,7 @@ def _inventory_special_category(part_number: object, description: object) -> str
 
 
 def _is_glass_front(part_number: object, description: object = "") -> bool:
+    """Return whether is glass front is true."""
     clean_part = str(part_number or "").strip().upper()
     if clean_part.startswith("NFAU_"):
         return True
@@ -1153,24 +1215,29 @@ def _is_glass_front(part_number: object, description: object = "") -> bool:
 
 
 def _row_category_sort_key(row: dict) -> tuple[int, tuple[int, int, str] | tuple[int, int, str], str]:
+    """Provide row category sort key behavior."""
     if row.get("is_serial"):
         return (0, _inventory_category_sort_key(str(row.get("category", ""))), str(row.get("part_number", "")))
     return (1, (9999, 9999, "egyedi"), str(row.get("part_number", "")))
 
 
 def _row_sort_key(row: dict) -> tuple[int, tuple[int, int, str], str]:
+    """Provide row sort key behavior."""
     return _row_category_sort_key(row)
 
 
 def _row_input_value(row: dict) -> int | None:
+    """Provide row input value behavior."""
     return _parse_non_negative_int(row.get("input_qty"))
 
 
 def _excel_cell_int(value: object) -> int | str:
+    """Provide excel cell int behavior."""
     parsed = _parse_non_negative_int(value)
     return parsed if parsed is not None else ""
 
 
 def _fold_text(value: object) -> str:
+    """Provide fold text behavior."""
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(char for char in normalized if not unicodedata.combining(char)).casefold().strip()

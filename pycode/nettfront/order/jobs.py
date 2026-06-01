@@ -2,7 +2,8 @@
 
 This module stores order suggestion rows, produces downloadable CSV and Excel
 outputs, and keeps approval state in runtime metadata.
-"""
+
+This module is included in the pydoc surface for the NettFront order suggestion workflow."""
 
 from __future__ import annotations
 
@@ -32,18 +33,24 @@ from .engine import (
 
 
 def _format_eu_number(value: float, decimals: int = 2) -> str:
-    """Format eu number values for display or export."""
+    """Format eu number values for display or export.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     formatted = f"{value:,.{decimals}f}"
     return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
 def read_order_job(job_id: str) -> tuple[Path | None, dict | None]:
-    """Read order job data."""
+    """Read order job data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     return read_job(order_runtime_dir(), job_id)
 
 
 def order_download_payload(job_id: str, artifact: str) -> tuple[bytes, str, str] | None:
-    """Handle order download payload logic for the NettFront workflows."""
+    """Handle order download payload logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     _job_dir, metadata = read_order_job(job_id)
     if metadata is None:
         return None
@@ -82,7 +89,9 @@ def order_download_payload(job_id: str, artifact: str) -> tuple[bytes, str, str]
     return download_payload(order_runtime_dir(), job_id, artifact, artifact_map)
 
 def _order_safe_number(value) -> float:
-    """Handle order safe number logic for the NettFront workflows."""
+    """Handle order safe number logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     if value in (None, ""):
         return 0.0
     if isinstance(value, (int, float)):
@@ -104,7 +113,9 @@ def _order_safe_number(value) -> float:
 
 
 def _order_parse_quantity_input(value: str) -> tuple[float, bool]:
-    """Handle order parse quantity input logic for the NettFront workflows."""
+    """Handle order parse quantity input logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     text = str(value or "").strip()
     if not text:
         return 0.0, True
@@ -123,7 +134,9 @@ def _order_parse_quantity_input(value: str) -> tuple[float, bool]:
 
 
 def _format_order_metric(value) -> str:
-    """Format order metric values for display or export."""
+    """Format order metric values for display or export.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     if value in (None, ""):
         return "—"
     raw = str(value).strip()
@@ -137,7 +150,9 @@ def _format_order_metric(value) -> str:
 
 
 def _format_order_input_value(value) -> str:
-    """Format order input value values for display or export."""
+    """Format order input value values for display or export.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     number = _order_safe_number(value)
     if abs(number - round(number)) < 1e-9:
         return str(int(round(number)))
@@ -145,12 +160,16 @@ def _format_order_input_value(value) -> str:
 
 
 def _count_positive_order_rows(rows: list[NettfrontOrderRow]) -> int:
-    """Handle count positive order rows logic for the NettFront workflows."""
+    """Handle count positive order rows logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     return sum(1 for row in rows if _order_safe_number(row.order_qty) > 0)
 
 
 def _nettfront_order_row_to_dict(row: NettfrontOrderRow) -> dict:
-    """Handle nettfront order row to dict logic for the NettFront workflows."""
+    """Handle nettfront order row to dict logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     return {
         "row_id": row.row_id,
         "part_number": row.part_number,
@@ -170,7 +189,9 @@ def _nettfront_order_row_to_dict(row: NettfrontOrderRow) -> dict:
 
 
 def _nettfront_order_row_from_dict(payload: dict) -> NettfrontOrderRow:
-    """Handle nettfront order row from dict logic for the NettFront workflows."""
+    """Handle nettfront order row from dict logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     return NettfrontOrderRow(
         row_id=str(payload.get("row_id", "")).strip(),
         part_number=str(payload.get("part_number", "")).strip(),
@@ -190,7 +211,9 @@ def _nettfront_order_row_from_dict(payload: dict) -> NettfrontOrderRow:
 
 
 def _read_nettfront_order_rows(job_dir: Path) -> list[NettfrontOrderRow]:
-    """Read nettfront order rows data."""
+    """Read nettfront order rows data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     rows_path = job_dir / "suggestions.json"
     if not rows_path.exists():
         return []
@@ -204,13 +227,17 @@ def _read_nettfront_order_rows(job_dir: Path) -> list[NettfrontOrderRow]:
 
 
 def _write_nettfront_order_rows(job_dir: Path, rows: list[NettfrontOrderRow]) -> None:
-    """Write nettfront order rows data."""
+    """Write nettfront order rows data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     payload = [_nettfront_order_row_to_dict(row) for row in rows]
     (job_dir / "suggestions.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _nettfront_order_quantity_text(value: float) -> str:
-    """Handle nettfront order quantity text logic for the NettFront workflows."""
+    """Handle nettfront order quantity text logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     number = _order_safe_number(value)
     if abs(number - round(number)) < 1e-9:
         return str(int(round(number)))
@@ -218,18 +245,24 @@ def _nettfront_order_quantity_text(value: float) -> str:
 
 
 def _normalize_nettfront_part_number(value: object) -> str:
-    """Normalize nettfront part number values."""
+    """Normalize nettfront part number values.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     text = str(value or "").strip().upper()
     return re.sub(r"\s+", "", text)
 
 
 def _nettfront_parts_list_header_key(value: str) -> str:
-    """Handle nettfront parts list header key logic for the NettFront workflows."""
+    """Handle nettfront parts list header key logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     return re.sub(r"[^A-Z0-9]+", "", _normalize_nettfront_part_number(value))
 
 
 def _nettfront_order_part_number_aliases(value: object) -> list[str]:
-    """Handle nettfront order part number aliases logic for the NettFront workflows."""
+    """Handle nettfront order part number aliases logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     normalized = _normalize_nettfront_part_number(value)
     if not normalized:
         return []
@@ -260,7 +293,9 @@ def _nettfront_order_part_number_aliases(value: object) -> list[str]:
 
 
 def _nettfront_order_display_part_number(value: object) -> str:
-    """Handle nettfront order display part number logic for the NettFront workflows."""
+    """Handle nettfront order display part number logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     aliases = _nettfront_order_part_number_aliases(value)
     if not aliases:
         return ""
@@ -270,7 +305,9 @@ def _nettfront_order_display_part_number(value: object) -> str:
 
 
 def _load_nettfront_parts_list_from_bytes(payload: bytes, file_name: str) -> list[str]:
-    """Load nettfront parts list from bytes data."""
+    """Load nettfront parts list from bytes data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     file_name = str(file_name or "").strip().lower()
     values: list[str] = []
 
@@ -326,7 +363,9 @@ def _load_nettfront_parts_list_from_bytes(payload: bytes, file_name: str) -> lis
 
 
 def _build_nettfront_order_import_csv(rows: list[NettfrontOrderRow]) -> bytes:
-    """Build nettfront order import csv data."""
+    """Build nettfront order import csv data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
     for row in rows:
@@ -340,7 +379,9 @@ def _build_nettfront_order_import_csv(rows: list[NettfrontOrderRow]) -> bytes:
 
 
 def _write_nettfront_order_bundle(job_dir: Path, metadata: dict) -> None:
-    """Write nettfront order bundle data."""
+    """Write nettfront order bundle data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     bundle_name = str(metadata.get("bundle_name", "nettfront-rendeles-output.zip")).strip() or "nettfront-rendeles-output.zip"
     bundle_files: list[str] = ["metadata.json", "suggestions.json", "rendelesi-javaslat.xlsx"]
 
@@ -384,7 +425,9 @@ def _write_nettfront_order_job(
     parts_bytes: bytes | None = None,
     parts_count: int = 0,
 ) -> tuple[str, dict]:
-    """Write nettfront order job data."""
+    """Write nettfront order job data.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     job_id = uuid.uuid4().hex[:12]
     job_dir = order_runtime_dir() / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -427,7 +470,9 @@ def _write_nettfront_order_job(
 
 
 def _persist_nettfront_order_approval(job_dir: Path, metadata: dict, rows: list[NettfrontOrderRow]) -> dict:
-    """Handle persist nettfront order approval logic for the NettFront workflows."""
+    """Handle persist nettfront order approval logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     suggestion_workbook = rows_to_suggestion_workbook(rows)
     approved_title = f"Divian-Mega Kft. Rendelés {datetime.now().strftime('%Y.%m.%d.')}"
     approved_workbook = rows_to_approved_workbook(rows, approved_title)

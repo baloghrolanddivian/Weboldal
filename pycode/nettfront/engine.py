@@ -2,7 +2,8 @@
 
 This module contains the shared parsing, translation, CSV, Excel, and bundle
 generation routines used by the NettFront workflows.
-"""
+
+This module is included in the pydoc surface for the shared NettFront workflow layer."""
 
 from __future__ import annotations
 
@@ -86,7 +87,9 @@ MOJIBAKE_FIXES = {
 
 @dataclass
 class ProcurementArtifacts:
-    """Represent ProcurementArtifacts data used by the NettFront workflows."""
+    """Represent ProcurementArtifacts data used by the NettFront workflows.
+
+    This class is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_rows: list[dict[str, str]]
     invoice_csv: bytes
     procurement_csv: bytes
@@ -95,7 +98,9 @@ class ProcurementArtifacts:
 
 @dataclass
 class CompareArtifacts:
-    """Represent CompareArtifacts data used by the NettFront workflows."""
+    """Represent CompareArtifacts data used by the NettFront workflows.
+
+    This class is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_rows: list[dict[str, str]]
     invoice_csv: bytes
     compare_workbook: bytes
@@ -104,7 +109,9 @@ class CompareArtifacts:
 
 @dataclass
 class NettfrontArtifacts:
-    """Represent NettfrontArtifacts data used by the NettFront workflows."""
+    """Represent NettfrontArtifacts data used by the NettFront workflows.
+
+    This class is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_rows: list[dict[str, str]]
     invoice_csv: bytes
     procurement_csv: bytes
@@ -115,29 +122,39 @@ class NettfrontArtifacts:
 
 
 def _require_pdf_support() -> None:
-    """Handle require pdf support logic for the NettFront workflows."""
+    """Handle require pdf support logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if PdfReader is None:
         raise RuntimeError("A pypdf csomag nincs telepítve.")
 
 
 def _require_workbook_support() -> None:
-    """Handle require workbook support logic for the NettFront workflows."""
+    """Handle require workbook support logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if openpyxl is None:
         raise RuntimeError("Az openpyxl csomag nincs telepítve.")
 
 
 def extract_page_text(pages: Iterable) -> str:
-    """Handle extract page text logic for the NettFront workflows."""
+    """Handle extract page text logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     return "\n".join((page.extract_text() or "").strip() for page in pages)
 
 
 def normalize_numeric(value: str) -> str:
-    """Normalize numeric values."""
+    """Normalize numeric values.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     return value.replace("\u00a0", " ").replace(" ", "").replace(",", ".")
 
 
 def is_numeric(value: str) -> bool:
-    """Return whether numeric is true."""
+    """Return whether numeric is true.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     try:
         float(normalize_numeric(value))
         return True
@@ -146,12 +163,16 @@ def is_numeric(value: str) -> bool:
 
 
 def format_currency(value: str) -> str:
-    """Format currency values for display or export."""
+    """Format currency values for display or export.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     return normalize_numeric(value).replace(".", ",")
 
 
 def fix_mojibake(value: str) -> str:
-    """Handle fix mojibake logic for the NettFront workflows."""
+    """Handle fix mojibake logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     fixed = value
     for bad, good in MOJIBAKE_FIXES.items():
         fixed = fixed.replace(bad, good)
@@ -159,7 +180,9 @@ def fix_mojibake(value: str) -> str:
 
 
 def normalize_text(value: str) -> str:
-    """Normalize text values."""
+    """Normalize text values.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     fixed = fix_mojibake(value)
     fixed = fixed.replace("\u00a0", " ").replace("  ", " ").strip()
     fixed = fixed.replace("Ă»", "ű").replace("Ă‚", "")
@@ -168,7 +191,9 @@ def normalize_text(value: str) -> str:
 
 
 def detect_handedness(*values: str) -> str | None:
-    """Handle detect handedness logic for the NettFront workflows."""
+    """Handle detect handedness logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     normalized_values = [normalize_text(value).upper() for value in values]
     joined = " ".join(normalized_values)
     token_map = {
@@ -192,7 +217,9 @@ def detect_handedness(*values: str) -> str | None:
 
 
 def strip_handedness(value: str) -> str:
-    """Handle strip handedness logic for the NettFront workflows."""
+    """Handle strip handedness logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     normalized = normalize_text(value)
     for token in (" jobbos", " balos", " jobb", " bal"):
         if normalized.lower().endswith(token):
@@ -202,7 +229,9 @@ def strip_handedness(value: str) -> str:
 
 
 def parse_rows(text: str) -> list[dict[str, str]]:
-    """Parse rows values."""
+    """Parse rows values.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     rows: list[dict[str, str]] = []
     in_table = False
@@ -252,7 +281,9 @@ def parse_rows(text: str) -> list[dict[str, str]]:
 
 
 def load_translations(path: Path = DEFAULT_TRANSLATIONS) -> dict:
-    """Load translations data."""
+    """Load translations data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if not path.is_file():
         raise FileNotFoundError(f"Translation table not found: {path}")
     with path.open("r", encoding="utf-8") as handle:
@@ -260,7 +291,9 @@ def load_translations(path: Path = DEFAULT_TRANSLATIONS) -> dict:
 
 
 def _normalize_product_code_for_size(product_code: str, meret: str) -> str:
-    """Normalize product code for size values."""
+    """Normalize product code for size values.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if not product_code or "_" not in product_code:
         return product_code
 
@@ -275,7 +308,9 @@ def _normalize_product_code_for_size(product_code: str, meret: str) -> str:
 
 
 def apply_translations(rows: list[dict[str, str]], table: dict) -> list[dict[str, str]]:
-    """Handle apply translations logic for the NettFront workflows."""
+    """Handle apply translations logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     products = table.get("products", {})
     colors = table.get("colors", {})
     standard_sizes = set(table.get("standard_sizes", []))
@@ -335,7 +370,9 @@ def apply_translations(rows: list[dict[str, str]], table: dict) -> list[dict[str
 
 
 def left_until_underscore(value: object) -> str:
-    """Handle left until underscore logic for the NettFront workflows."""
+    """Handle left until underscore logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     text = str(value).strip() if value is not None else ""
     if not text:
         return ""
@@ -351,7 +388,9 @@ def left_until_underscore(value: object) -> str:
 
 
 def load_alkatresz_map(path: Path = DEFAULT_ALKATRESZEK) -> dict[str, str]:
-    """Load alkatresz map data."""
+    """Load alkatresz map data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     _require_workbook_support()
     if not path.is_file():
         raise FileNotFoundError(f"Alkatreszek file not found: {path}")
@@ -369,7 +408,9 @@ def load_alkatresz_map(path: Path = DEFAULT_ALKATRESZEK) -> dict[str, str]:
 
 
 def _extract_alkatresz_code(value: object) -> str:
-    """Handle extract alkatresz code logic for the NettFront workflows."""
+    """Handle extract alkatresz code logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     text = str(value).strip() if value is not None else ""
     if not text:
         return ""
@@ -381,7 +422,9 @@ def _extract_alkatresz_code(value: object) -> str:
 
 
 def _load_alkatresz_rows_from_csv_bytes(data: bytes) -> list[list[str]]:
-    """Load alkatresz rows from csv bytes data."""
+    """Load alkatresz rows from csv bytes data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     encoding = "utf-8-sig"
     if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
         encoding = "utf-16"
@@ -398,7 +441,9 @@ def _load_alkatresz_rows_from_csv_bytes(data: bytes) -> list[list[str]]:
 
 
 def load_alkatresz_map_from_bytes(data: bytes, file_name: str = "") -> dict[str, str]:
-    """Load alkatresz map from bytes data."""
+    """Load alkatresz map from bytes data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     rows: list[Sequence[object]]
     suffix = Path(file_name).suffix.lower()
 
@@ -427,7 +472,9 @@ def load_alkatresz_map_from_bytes(data: bytes, file_name: str = "") -> dict[str,
 
 
 def build_invoice_rows(pdf_bytes: bytes) -> list[dict[str, str]]:
-    """Build invoice rows data."""
+    """Build invoice rows data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     _require_pdf_support()
     reader = PdfReader(io.BytesIO(pdf_bytes))
     text = extract_page_text(reader.pages)
@@ -442,7 +489,9 @@ def build_invoice_rows(pdf_bytes: bytes) -> list[dict[str, str]]:
 
 
 def build_invoice_csv(rows: list[dict[str, str]]) -> bytes:
-    """Build invoice csv data."""
+    """Build invoice csv data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=FIELDNAMES, delimiter=";", lineterminator="\n")
     writer.writeheader()
@@ -469,7 +518,9 @@ PROCUREMENT_CODE_ALIASES = {
 
 
 def _procurement_code_fallbacks(kod: str) -> list[str]:
-    """Handle procurement code fallbacks logic for the NettFront workflows."""
+    """Handle procurement code fallbacks logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     candidates: list[str] = list(PROCUREMENT_CODE_ALIASES.get(kod, []))
 
     if kod.startswith("NFAY_"):
@@ -500,7 +551,9 @@ def _procurement_code_fallbacks(kod: str) -> list[str]:
 
 
 def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, str] | None = None) -> tuple[bytes, list[str]]:
-    """Build procurement csv data."""
+    """Build procurement csv data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     mapping = alkatresz_map or load_alkatresz_map()
     missing: list[str] = []
     buffer = io.StringIO()
@@ -529,7 +582,9 @@ def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, s
 
 
 def read_order_rows_from_bytes(data: bytes) -> list[list[object]]:
-    """Read order rows from bytes data."""
+    """Read order rows from bytes data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     _require_workbook_support()
 
     if zipfile.is_zipfile(io.BytesIO(data)):
@@ -553,14 +608,18 @@ def read_order_rows_from_bytes(data: bytes) -> list[list[object]]:
 
 
 def _normalize_order_text(value: object) -> str:
-    """Normalize order text values."""
+    """Normalize order text values.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if value is None:
         return ""
     return str(value).strip()
 
 
 def _normalize_order_numeric(value: object) -> Decimal | None:
-    """Normalize order numeric values."""
+    """Normalize order numeric values.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if value is None:
         return None
     text = str(value).replace("\u00a0", " ").replace(" ", "").replace(",", ".").strip()
@@ -573,7 +632,9 @@ def _normalize_order_numeric(value: object) -> Decimal | None:
 
 
 def _numbers_equal(left: object, right: object) -> bool:
-    """Handle numbers equal logic for the NettFront workflows."""
+    """Handle numbers equal logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     left_num = _normalize_order_numeric(left)
     right_num = _normalize_order_numeric(right)
     if left_num is None and right_num is None:
@@ -584,14 +645,18 @@ def _numbers_equal(left: object, right: object) -> bool:
 
 
 def _get_column(row: Sequence[object], index: int) -> object:
-    """Handle get column logic for the NettFront workflows."""
+    """Handle get column logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if index - 1 < 0 or index - 1 >= len(row):
         return None
     return row[index - 1]
 
 
 def _build_invoice_index(rows: Iterable[dict[str, str]]) -> dict[str, deque[dict[str, str]]]:
-    """Build invoice index data."""
+    """Build invoice index data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     index: dict[str, deque[dict[str, str]]] = defaultdict(deque)
     for row in rows:
         code = _normalize_order_text(row.get("kod"))
@@ -600,7 +665,9 @@ def _build_invoice_index(rows: Iterable[dict[str, str]]) -> dict[str, deque[dict
 
 
 def _build_order_index(order_rows: list[list[object]]) -> dict[str, deque[list[object]]]:
-    """Build order index data."""
+    """Build order index data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     index: dict[str, deque[list[object]]] = defaultdict(deque)
     for row in order_rows[1:]:
         code = left_until_underscore(_get_column(row, 4))
@@ -609,7 +676,9 @@ def _build_order_index(order_rows: list[list[object]]) -> dict[str, deque[list[o
 
 
 def compare_rows(order_rows: list[list[object]], invoice_rows: list[dict[str, str]], invoice_header: list[str]) -> tuple[list[list[object]], list[bool]]:
-    """Handle compare rows logic for the NettFront workflows."""
+    """Handle compare rows logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_index = _build_invoice_index(invoice_rows)
     output_rows: list[list[object]] = []
     row_matches: list[bool] = []
@@ -651,7 +720,9 @@ def compare_rows(order_rows: list[list[object]], invoice_rows: list[dict[str, st
 
 
 def compare_invoice_rows(order_rows: list[list[object]], invoice_rows: list[dict[str, str]], invoice_header: list[str]) -> tuple[list[list[object]], list[bool]]:
-    """Handle compare invoice rows logic for the NettFront workflows."""
+    """Handle compare invoice rows logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     order_index = _build_order_index(order_rows)
     header = list(invoice_header) + ["status", "mismatch_details"]
     output_rows: list[list[object]] = [header]
@@ -685,7 +756,9 @@ def compare_invoice_rows(order_rows: list[list[object]], invoice_rows: list[dict
 
 
 def write_report(rows: list[list[object]], row_matches: list[bool], sheet_name: str, workbook: object | None = None):
-    """Write report data."""
+    """Write report data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     _require_workbook_support()
 
     if workbook is None:
@@ -710,7 +783,9 @@ def write_report(rows: list[list[object]], row_matches: list[bool], sheet_name: 
 
 
 def build_compare_workbook(order_rows: list[list[object]], invoice_rows: list[dict[str, str]]) -> bytes:
-    """Build compare workbook data."""
+    """Build compare workbook data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_header = list(FIELDNAMES)
     order_output_rows, order_row_matches = compare_rows(order_rows, invoice_rows, invoice_header)
     invoice_output_rows, invoice_row_matches = compare_invoice_rows(order_rows, invoice_rows, invoice_header)
@@ -724,7 +799,9 @@ def build_compare_workbook(order_rows: list[list[object]], invoice_rows: list[di
 
 
 def build_nettfront_artifacts(pdf_bytes: bytes, order_bytes: bytes | None = None):
-    """Build the full NettFront invoice, procurement, comparison, and bundle outputs."""
+    """Build the full NettFront invoice, procurement, comparison, and bundle outputs.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     procurement = build_procurement_artifacts(pdf_bytes)
     if order_bytes:
         return {
@@ -744,7 +821,9 @@ def build_nettfront_artifacts(pdf_bytes: bytes, order_bytes: bytes | None = None
 
 
 def create_bundle_zip(job_dir: Path, include_compare: bool) -> bytes:
-    """Create bundle zip data."""
+    """Create bundle zip data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(job_dir / "invoice-output.csv", "invoice-output.csv")
@@ -756,7 +835,9 @@ def create_bundle_zip(job_dir: Path, include_compare: bool) -> bytes:
 
 
 def build_procurement_artifacts(pdf_bytes: bytes, alkatresz_map: dict[str, str] | None = None) -> ProcurementArtifacts:
-    """Build procurement CSV and bundle outputs from an invoice PDF."""
+    """Build procurement CSV and bundle outputs from an invoice PDF.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_rows = build_invoice_rows(pdf_bytes)
     invoice_csv = build_invoice_csv(invoice_rows)
     procurement_csv, missing_codes = build_procurement_csv(invoice_rows, alkatresz_map=alkatresz_map)
@@ -770,7 +851,9 @@ def build_procurement_artifacts(pdf_bytes: bytes, alkatresz_map: dict[str, str] 
 
 
 def build_compare_artifacts(pdf_bytes: bytes, order_bytes: bytes) -> CompareArtifacts:
-    """Build comparison workbook output from invoice and order files."""
+    """Build comparison workbook output from invoice and order files.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     invoice_rows = build_invoice_rows(pdf_bytes)
     invoice_csv = build_invoice_csv(invoice_rows)
     order_rows = read_order_rows_from_bytes(order_bytes)
@@ -787,7 +870,9 @@ def build_compare_artifacts(pdf_bytes: bytes, order_bytes: bytes) -> CompareArti
 
 
 def create_bundle_archive(job_dir: Path, file_names: Sequence[str]) -> bytes:
-    """Create bundle archive data."""
+    """Create bundle archive data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for file_name in file_names:
@@ -798,7 +883,9 @@ def create_bundle_archive(job_dir: Path, file_names: Sequence[str]) -> bytes:
 
 
 def _find_procurement_program() -> Path | None:
-    """Handle find procurement program logic for the NettFront workflows."""
+    """Handle find procurement program logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     configured = os.getenv(DEFAULT_PROCUREMENT_ENV, "").strip()
     if not configured:
         configured = get_procurement_program_path()
@@ -811,7 +898,9 @@ def _find_procurement_program() -> Path | None:
 
 
 def _read_settings() -> dict:
-    """Read settings data."""
+    """Read settings data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     if not SETTINGS_FILE.exists():
         return {}
     try:
@@ -822,13 +911,17 @@ def _read_settings() -> dict:
 
 
 def _write_settings(payload: dict) -> None:
-    """Write settings data."""
+    """Write settings data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def get_procurement_program_path() -> str:
-    """Return procurement program path data."""
+    """Return procurement program path data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     configured = os.getenv(DEFAULT_PROCUREMENT_ENV, "").strip()
     if configured:
         candidate = Path(configured)
@@ -845,7 +938,9 @@ def get_procurement_program_path() -> str:
 
 
 def save_procurement_program_path(raw_path: str) -> str:
-    """Save procurement program path data."""
+    """Save procurement program path data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     candidate = Path(raw_path.strip().strip('"'))
     if not candidate.exists() or not candidate.is_file():
         raise ValueError("A megadott programfájl nem található.")
@@ -859,7 +954,9 @@ def save_procurement_program_path(raw_path: str) -> str:
 
 
 def _build_runtime_import_script(csv_path: Path, procurement_program: Path) -> str:
-    """Build runtime import script data."""
+    """Build runtime import script data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     csv_literal = str(csv_path).replace("'", "''")
     program_literal = str(procurement_program).replace("'", "''")
     return f"""$ErrorActionPreference = "Stop"
@@ -957,7 +1054,9 @@ foreach ($row in $rows) {{
 
 
 def launch_procurement_flow(job_dir: Path) -> tuple[bool, list[str]]:
-    """Launch procurement flow processing."""
+    """Launch procurement flow processing.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     job_dir.mkdir(parents=True, exist_ok=True)
     csv_path = job_dir / "rendeles_sima.csv"
     if not csv_path.exists():
@@ -995,7 +1094,9 @@ def launch_procurement_flow(job_dir: Path) -> tuple[bool, list[str]]:
 
 
 def _find_autohotkey_executable() -> Path | None:
-    """Handle find autohotkey executable logic for the NettFront workflows."""
+    """Handle find autohotkey executable logic for the NettFront workflows.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     candidates = [
         shutil.which("AutoHotkey64.exe"),
         shutil.which("AutoHotkey32.exe"),
@@ -1020,7 +1121,9 @@ def _find_autohotkey_executable() -> Path | None:
 
 
 def _build_runtime_ahk_script(csv_path: Path) -> str:
-    """Build runtime ahk script data."""
+    """Build runtime ahk script data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     csv_literal = str(csv_path).replace("\\", "\\\\")
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
@@ -1086,7 +1189,9 @@ csvPath := "{csv_literal}"
 
 
 def _build_runtime_import_script(csv_path: Path) -> str:  # type: ignore[no-redef]
-    """Build runtime import script data."""
+    """Build runtime import script data.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     csv_literal = str(csv_path).replace("'", "''")
     return f"""$ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
@@ -1162,7 +1267,9 @@ foreach ($row in $rows) {{
 
 
 def launch_procurement_flow(job_dir: Path) -> tuple[bool, list[str]]:  # type: ignore[no-redef]
-    """Launch procurement flow processing."""
+    """Launch procurement flow processing.
+
+    This function is part of the pydoc-documented shared NettFront workflow layer."""
     job_dir.mkdir(parents=True, exist_ok=True)
     csv_path = job_dir / "rendeles_sima.csv"
     if not csv_path.exists():

@@ -1,4 +1,6 @@
-"""HTML page rendering for the NettFront order suggestion workflow."""
+"""HTML page rendering for the NettFront order suggestion workflow.
+
+This module is included in the pydoc surface for the NettFront order suggestion workflow."""
 
 from __future__ import annotations
 
@@ -26,7 +28,9 @@ from .routes import (
 
 
 def render_nettfront_order_form(message: str = "", success: bool = False) -> bytes:
-    """Render the order suggestion upload form."""
+    """Render the order suggestion upload form.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""
@@ -462,7 +466,9 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
 
 
 def render_nettfront_order_result(job_id: str, metadata: dict, message: str = "", success: bool = False) -> bytes:
-    """Render a completed order suggestion job page."""
+    """Render a completed order suggestion job page.
+
+    This function is part of the pydoc-documented NettFront order suggestion workflow."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""

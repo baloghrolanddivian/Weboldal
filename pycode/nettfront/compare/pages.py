@@ -1,4 +1,6 @@
-"""HTML page rendering for the NettFront comparison workflow."""
+"""HTML page rendering for the NettFront comparison workflow.
+
+This module is included in the pydoc surface for the NettFront comparison workflow."""
 
 from __future__ import annotations
 
@@ -11,7 +13,9 @@ NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
 
 
 def render_nettfront_compare_form(message: str = "") -> bytes:
-    """Render the comparison upload form."""
+    """Render the comparison upload form.
+
+    This function is part of the pydoc-documented NettFront comparison workflow."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
@@ -81,7 +85,9 @@ def render_nettfront_compare_form(message: str = "") -> bytes:
 
 
 def render_nettfront_compare_result(job_id: str, metadata: dict, message: str = "") -> bytes:
-    """Render a completed comparison job page."""
+    """Render a completed comparison job page.
+
+    This function is part of the pydoc-documented NettFront comparison workflow."""
     notice_html = ""
     if message:
         notice_html = f'<div class="notice-banner">{html.escape(message)}</div>'
