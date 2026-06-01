@@ -3045,14 +3045,8 @@ def render_manufacturing_page(
           const hideBarcode = documentHidesBarcode(document);
           const hideSideTypeColumn = Boolean(group?.hideSideTypeColumn);
           const columnLayout = groupColumnLayout(group);
-          const groupHasRedRows = (Array.isArray(group.rows) ? group.rows : []).some((row) => rowStateValue(row) === "red");
           const isCncDocument = String(document?.key || "") === "cnc_furas";
-          const showPartialColumn =
-            isCncDocument ||
-            currentViewKey === "red" ||
-            currentSubcategoryKey === "red" ||
-            specialViewUsesRedFilter(currentSpecialView) ||
-            groupHasRedRows;
+          const showPartialColumn = isCncDocument;
           const effectiveHideBarcode = hideBarcode || showPartialColumn;
           const showPantoloExpanderColumn = documentUsesGroupedQuantityRows(document) && rowUsesGroupedQuantity({{ columnLayout }});
           const isPantoloLayout = columnLayout === "pantolo";
@@ -3565,7 +3559,7 @@ def render_manufacturing_page(
           else selectionState[key] = targetState;
         }}
         for (const key of clearOnlyKeys) delete selectionState[key];
-        if (targetState === "green") {{
+        if (targetState === "green" && String(currentDocument()?.key || "") === "cnc_furas") {{
           clearPartialQuantities(targetProductionNumber, [rowId, stateKey, storageKey, ...allStateKeys]);
         }}
         renderAll(scrollState);
@@ -3661,7 +3655,9 @@ def render_manufacturing_page(
         if (nextParentState) selectionState[parentKey] = nextParentState;
         else delete selectionState[parentKey];
         if (nextParentState === "green") partialKeysToClear.push(parentRowId, rowStorageKey(parentRow), parentKey);
-        clearPartialQuantities(targetProductionNumber, partialKeysToClear);
+        if (String(currentDocument()?.key || "") === "cnc_furas") {{
+          clearPartialQuantities(targetProductionNumber, partialKeysToClear);
+        }}
 
         renderAll(scrollState);
         setStatus("Mentés...");
