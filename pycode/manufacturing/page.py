@@ -2488,6 +2488,151 @@ def render_manufacturing_page(
         statusNode.classList.remove("is-error", "is-success");
         if (tone) statusNode.classList.add(tone);
       }};
+      const pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
+      let isFlushingPendingWrites = false;
+
+      const readPendingWrites = () => {{
+        try {{
+          const value = window.localStorage.getItem(pendingWriteStorageKey);
+          const parsed = value ? JSON.parse(value) : [];
+          return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
+        }} catch (_error) {{
+          return [];
+        }}
+      }};
+
+      const writePendingWrites = (writes) => {{
+        try {{
+          window.localStorage.setItem(pendingWriteStorageKey, JSON.stringify(Array.isArray(writes) ? writes : []));
+          return true;
+        }} catch (_error) {{
+          return false;
+        }}
+      }};
+
+      const pendingWriteCount = () => readPendingWrites().length;
+      const pendingStatusText = () => {{
+        const count = pendingWriteCount();
+        return count ? `Kapcsolat megszakadt. ${{count}} ment\u00e9s v\u00e1r felt\u00f6lt\u00e9sre.` : "";
+      }};
+
+      const removePendingWrite = (id) => {{
+        const cleanId = String(id || "");
+        if (!cleanId) return;
+        writePendingWrites(readPendingWrites().filter((item) => String(item.id || "") !== cleanId));
+      }};
+
+      const appendPendingWrite = (write) => {{
+        const writes = readPendingWrites();
+        const id = `${{Date.now()}}-${{Math.random().toString(36).slice(2)}}`;
+        writes.push({{ ...write, id, created_at: Date.now() }});
+        if (!writePendingWrites(writes)) {{
+          throw new Error("A b\u00f6ng\u00e9sz\u0151 helyi ment\u00e9st\u00e1ra megtelt vagy nem el\u00e9rhet\u0151.");
+        }}
+        return id;
+      }};
+
+      const postJson = async (route, body) => {{
+        const response = await fetch(route, {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(body || {{}}),
+        }});
+        const result = await response.json().catch(() => ({{}}));
+        if (!response.ok || !result.ok) {{
+          const error = new Error(result.error || "A ment\u00e9s nem siker\u00fclt.");
+          error.isPermanent = response.status >= 400 && response.status < 500;
+          throw error;
+        }}
+        return result;
+      }};
+
+      const applyPendingWriteToLocalState = (write) => {{
+        const body = write && write.body && typeof write.body === "object" ? write.body : {{}};
+        if (write?.type === "row-state") {{
+          const stateKeys = Array.isArray(body.state_keys) ? body.state_keys : [body.state_key];
+          const rowIds = Array.isArray(body.row_ids) ? body.row_ids : [body.row_id];
+          const cleanStateKeys = stateKeys.map((value) => String(value || "").trim()).filter(Boolean);
+          const cleanRowIds = rowIds.map((value) => String(value || "").trim()).filter(Boolean);
+          for (const key of cleanStateKeys) {{
+            const state = String(body.state || "").trim().toLowerCase();
+            if (!state || state === "clear" || state === "none") delete selectionState[key];
+            else selectionState[key] = state;
+          }}
+          for (const key of cleanRowIds) {{
+            if (cleanStateKeys.includes(key)) continue;
+            delete selectionState[key];
+          }}
+          return;
+        }}
+        if (write?.type === "partial-quantity") {{
+          const stateKey = String(body.state_key || "").trim();
+          const value = String(body.value || "").trim();
+          if (!stateKey) return;
+          if (value) partialQuantityState[stateKey] = value;
+          else delete partialQuantityState[stateKey];
+        }}
+      }};
+
+      const applyStoredPendingWritesToLocalState = () => {{
+        for (const write of readPendingWrites()) {{
+          applyPendingWriteToLocalState(write);
+        }}
+      }};
+
+      const sendPendingWrite = async (write) => {{
+        if (write?.type === "row-state") {{
+          await postJson(stateRoute, write.body || {{}});
+          return;
+        }}
+        if (write?.type === "partial-quantity") {{
+          const result = await postJson(partialQtyRoute, write.body || {{}});
+          const stateKey = String(write.body?.state_key || "").trim();
+          if (stateKey) {{
+            if (result.value) partialQuantityState[stateKey] = String(result.value);
+            else delete partialQuantityState[stateKey];
+          }}
+        }}
+      }};
+
+      const flushPendingWrites = async () => {{
+        if (isFlushingPendingWrites) return;
+        isFlushingPendingWrites = true;
+        try {{
+          while (true) {{
+            const writes = readPendingWrites();
+            if (!writes.length) {{
+              setStatus("Mentve.", "is-success");
+              return;
+            }}
+            const nextWrite = writes[0];
+            try {{
+              await sendPendingWrite(nextWrite);
+              removePendingWrite(nextWrite.id);
+            }} catch (error) {{
+              if (error?.isPermanent) {{
+                removePendingWrite(nextWrite.id);
+                setStatus(error instanceof Error ? error.message : "Egy f\u00fcgg\u0151 ment\u00e9s elutas\u00edtva.", "is-error");
+                continue;
+              }}
+              const message = pendingStatusText() || "Kapcsolat megszakadt. A ment\u00e9s k\u00e9s\u0151bb \u00fajrapr\u00f3b\u00e1lkozik.";
+              setStatus(message, "is-error");
+              return;
+            }}
+          }}
+        }} finally {{
+          isFlushingPendingWrites = false;
+        }}
+      }};
+
+      const queuePersistentWrite = (write) => {{
+        appendPendingWrite(write);
+        applyPendingWriteToLocalState(write);
+        void flushPendingWrites();
+      }};
+
+      window.addEventListener("online", () => void flushPendingWrites());
+      window.addEventListener("focus", () => void flushPendingWrites());
       const normalizeSearchText = (value) =>
         String(value ?? "")
           .toLocaleLowerCase("hu-HU")
@@ -3499,23 +3644,18 @@ def render_manufacturing_page(
             ? cleanSourceRowIds
             : Array.from(new Set([storageKey || rowId].map((value) => String(value || "").trim()).filter(Boolean)));
           const primarySaveKey = uniqueStateKeys[0] || storageKey || rowId;
-          const response = await fetch(stateRoute, {{
-            method: "POST",
-            headers: {{ "Content-Type": "application/json" }},
-            body: JSON.stringify({{
+          queuePersistentWrite({{
+            type: "row-state",
+            body: {{
               production_number: targetProductionNumber,
               row_id: rowId,
               row_ids: uniqueRowIds,
               state_key: primarySaveKey,
               state_keys: uniqueStateKeys,
               state: nextState || "clear",
-            }}),
+            }},
           }});
-          const result = await response.json().catch(() => ({{}}));
-          if (!response.ok || !result.ok) {{
-            throw new Error(result.error || "A mentés nem sikerült.");
-          }}
-          setStatus("Mentve.", "is-success");
+          setStatus("Mentés...");
         }} catch (error) {{
           for (const [previousKey, previousValue] of previousStateMap.entries()) {{
             if (previousValue) selectionState[previousKey] = previousValue;
@@ -3573,24 +3713,19 @@ def render_manufacturing_page(
             const rowId = String(update.rowId || "").trim();
             const storageKey = String(update.storageKey || rowId).trim();
             if (!rowId) continue;
-            const response = await fetch(stateRoute, {{
-              method: "POST",
-              headers: {{ "Content-Type": "application/json" }},
-              body: JSON.stringify({{
+            queuePersistentWrite({{
+              type: "row-state",
+              body: {{
                 production_number: targetProductionNumber,
                 row_id: rowId,
                 row_ids: [rowId],
                 state_key: storageKey || rowId,
                 state_keys: [storageKey || rowId],
                 state: update.state || "clear",
-              }}),
+              }},
             }});
-            const result = await response.json().catch(() => ({{}}));
-            if (!response.ok || !result.ok) {{
-              throw new Error(result.error || "A mentés nem sikerült.");
-            }}
           }}
-          setStatus("Mentve.", "is-success");
+          setStatus("Mentés...");
         }} catch (error) {{
           for (const [previousKey, previousValue] of previousStateMap.entries()) {{
             if (previousValue) selectionState[previousKey] = previousValue;
@@ -3697,22 +3832,15 @@ def render_manufacturing_page(
 
       const persistPartialQuantity = async (targetProductionNumber, stateKey, value, previousValue) => {{
         try {{
-          const response = await fetch(partialQtyRoute, {{
-            method: "POST",
-            headers: {{ "Content-Type": "application/json" }},
-            body: JSON.stringify({{
+          queuePersistentWrite({{
+            type: "partial-quantity",
+            body: {{
               production_number: targetProductionNumber,
               state_key: stateKey,
               value,
-            }}),
+            }},
           }});
-          const result = await response.json().catch(() => ({{}}));
-          if (!response.ok || !result.ok) {{
-            throw new Error(result.error || "A mentés nem sikerült.");
-          }}
-          if (result.value) partialQuantityState[stateKey] = String(result.value);
-          else delete partialQuantityState[stateKey];
-          setStatus("Mentve.", "is-success");
+          setStatus("Mentés...");
         }} catch (error) {{
           if (previousValue) partialQuantityState[stateKey] = previousValue;
           else delete partialQuantityState[stateKey];
@@ -3961,6 +4089,11 @@ def render_manufacturing_page(
         if (!canReportReady || reportReadyButtonNode.disabled) return;
         const isConfirmed = await requestConfirmModal();
         if (!isConfirmed) return;
+        await flushPendingWrites();
+        if (pendingWriteCount()) {{
+          setStatus("F\u00fcgg\u0151 ment\u00e9sek vannak. K\u00e9szre jelent\u00e9s el\u0151tt v\u00e1rd meg a kapcsolat vissza\u00e1ll\u00e1s\u00e1t.", "is-error");
+          return;
+        }}
 
         const visibleRows = filterGroupsBySearch(buildGroupsForView(document), document)
           .flatMap((group) => Array.isArray(group?.rows) ? group.rows : [])
@@ -4049,6 +4182,11 @@ def render_manufacturing_page(
         }}
       }});
 
+      applyStoredPendingWritesToLocalState();
+      if (pendingWriteCount()) {{
+        setStatus(pendingStatusText(), "is-error");
+        void flushPendingWrites();
+      }}
       renderAll();
     }})();
   </script>
