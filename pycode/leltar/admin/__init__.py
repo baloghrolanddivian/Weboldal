@@ -1,0 +1,2 @@
+"""Admin inventory flow package."""
+
