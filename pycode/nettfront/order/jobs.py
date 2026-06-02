@@ -11,6 +11,7 @@ import csv
 import io
 import json
 import mimetypes
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path

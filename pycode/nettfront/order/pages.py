@@ -11,6 +11,7 @@ from .jobs import (
     _count_positive_order_rows,
     _format_order_input_value,
     _format_order_metric,
+    _nettfront_order_display_part_number,
     _order_safe_number,
     _read_nettfront_order_rows,
     read_order_job,

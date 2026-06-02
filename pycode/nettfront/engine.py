@@ -51,6 +51,8 @@ DATA_DIR = BASE_DIR / "data"
 RUNTIME_DIR = BASE_DIR / "runtime" / "nettfront"
 DEFAULT_TRANSLATIONS = DATA_DIR / "nettfront-translations.json"
 DEFAULT_ALKATRESZEK = DATA_DIR / "nettfront-alkatreszek.xlsx"
+SETTINGS_FILE = RUNTIME_DIR / "settings.json"
+DEFAULT_PROCUREMENT_ENV = "NETTFRONT_PROCUREMENT_APP"
 
 GREEN_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid") if PatternFill else None
 RED_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid") if PatternFill else None
