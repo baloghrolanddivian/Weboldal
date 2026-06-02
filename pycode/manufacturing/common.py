@@ -155,12 +155,17 @@ def _pdf_first_page_lines(path: Path) -> list[str]:
     return [line for line in lines if line]
 
 
+def _is_pdf_file(path: Path) -> bool:
+    """Return whether path is a PDF file."""
+    return path.is_file() and path.suffix.lower() == ".pdf"
+
+
 def _find_osszekeszito_path(folder: Path) -> Path | None:
     """Provide find osszekeszito path behavior."""
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if not path.is_file():
+        if not _is_pdf_file(path):
             continue
         name = path.name.lower()
         if "sszek" in name and "front" not in name and "hettich" not in name:
@@ -171,10 +176,10 @@ def _find_osszekeszito_path(folder: Path) -> Path | None:
 def _find_alkatresz_kesz_path(folder: Path) -> Path | None:
     """Provide find alkatresz kesz path behavior."""
     candidate = folder / "Alkatresz_kesz.pdf"
-    if candidate.exists():
+    if _is_pdf_file(candidate):
         return candidate
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if path.is_file() and path.name.lower() == "alkatresz_kesz.pdf":
+        if _is_pdf_file(path) and path.name.lower() == "alkatresz_kesz.pdf":
             return path
     return None
 
@@ -184,7 +189,7 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if not path.is_file():
+        if not _is_pdf_file(path):
             continue
         name = path.name.lower()
         if "front" in name and "sszek" in name and "hettich" not in name:
@@ -195,12 +200,12 @@ def _find_front_osszekeszito_path(folder: Path) -> Path | None:
 def _find_cnc_path(folder: Path) -> Path | None:
     """Provide find cnc path behavior."""
     candidate = folder / "CNC.pdf"
-    if candidate.exists():
+    if _is_pdf_file(candidate):
         return candidate
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if path.is_file() and path.name.lower() == "cnc.pdf":
+        if _is_pdf_file(path) and path.name.lower() == "cnc.pdf":
             return path
     return None
 
@@ -210,7 +215,7 @@ def _find_fiokelo_furas_path(folder: Path) -> Path | None:
     if not folder.exists():
         return None
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if not path.is_file():
+        if not _is_pdf_file(path):
             continue
         name = path.name.lower()
         if "fiokelo" in name and "furas" in name:
@@ -223,12 +228,12 @@ def _find_pantolo_path(folder: Path) -> Path | None:
     if not folder.exists():
         return None
     candidate = folder / "Pantolo.pdf"
-    if candidate.exists():
+    if _is_pdf_file(candidate):
         return candidate
     for path in sorted(folder.iterdir(), key=lambda item: item.name.lower()):
-        if not path.is_file():
+        if not _is_pdf_file(path):
             continue
-        if "pantolo" in _fold_hu(path.name) and path.suffix.lower() == ".pdf":
+        if "pantolo" in _fold_hu(path.name):
             return path
     return None
 
