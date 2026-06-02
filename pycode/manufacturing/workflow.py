@@ -45,7 +45,7 @@ MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-02-pdf-only-discovery-v65"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-02-cnc-fiokelo-xml-v66"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -680,13 +680,13 @@ def _manufacturing_view_bundle(
         }
     )
 
-    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type = _manufacturing_cnc_sections(raw_bundle, current_number)
+    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, cnc_source_label = _manufacturing_cnc_sections(raw_bundle, current_number)
     documents.append(
         {
             "key": "cnc_furas",
             "label": "CNC fúrás",
             "sourceType": cnc_source_type,
-            "sourceLabel": f"Beolvasva: {cnc_source_type}",
+            "sourceLabel": cnc_source_label,
             "file_name": "",
             "sections": cnc_sections,
             "row_count": cnc_row_count,
