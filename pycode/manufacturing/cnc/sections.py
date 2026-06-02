@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from ..workflow import *
 
-def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str]:
+def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str, str]:
     """Provide manufacturing cnc sections behavior."""
     raw_sections, _ = _manufacturing_document_sections(bundle, production_number, ("cnc", "fiokelo_furas"))
     using_xml_cnc_source = False
+    using_xml_fiokelo_source = False
 
     def folded(value: object) -> str:
         """Provide folded behavior."""
@@ -187,6 +188,147 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             )
         return sections, True
 
+    def fiokelo_xml_source_sections() -> tuple[list[dict], bool]:
+        """Provide fiokelo XML source sections behavior."""
+        folder_text = str(bundle.get("folder", "") or "").strip()
+        if not folder_text:
+            return [], False
+        folder = Path(folder_text)
+        xml_path = folder / "Fiokelo_furas.xml"
+        if not xml_path.is_file():
+            try:
+                xml_path = next((path for path in folder.iterdir() if path.is_file() and path.name.lower() == "fiokelo_furas.xml"), xml_path)
+            except OSError:
+                return [], False
+        if not xml_path.is_file():
+            return [], False
+
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.parse(xml_path).getroot()
+        except Exception:
+            return [], True
+
+        def local_name(tag: object) -> str:
+            """Provide local name behavior."""
+            return str(tag or "").rsplit("}", 1)[-1].strip()
+
+        def folded_ascii(value: object) -> str:
+            """Provide folded ascii behavior."""
+            text = unicodedata.normalize("NFKD", clean_text(value))
+            text = "".join(char for char in text if not unicodedata.combining(char))
+            return re.sub(r"\s+", " ", text).strip().lower()
+
+        def tag_key(tag: object) -> str:
+            """Provide tag key behavior."""
+            return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
+
+        def whole_number(value: object) -> str:
+            """Provide whole number behavior."""
+            text = clean_text(value).replace(",", ".")
+            if not text:
+                return ""
+            try:
+                return str(int(Decimal(text).to_integral_value(rounding=ROUND_HALF_UP)))
+            except (InvalidOperation, ValueError):
+                match = re.search(r"-?\d+(?:\.\d+)?", text)
+                if not match:
+                    return ""
+                try:
+                    return str(int(Decimal(match.group(0)).to_integral_value(rounding=ROUND_HALF_UP)))
+                except Exception:
+                    return ""
+
+        def quantity_value(value: object) -> int:
+            """Provide quantity value behavior."""
+            number_text = whole_number(value)
+            if not number_text:
+                return 1
+            try:
+                return max(1, int(number_text))
+            except ValueError:
+                return 1
+
+        def con_fields(con_element: object) -> dict[str, str]:
+            """Provide con fields behavior."""
+            fields: dict[str, str] = {}
+            for child in list(con_element):
+                key = tag_key(getattr(child, "tag", ""))
+                if key and key not in fields:
+                    fields[key] = clean_text(getattr(child, "text", ""))
+            return fields
+
+        def field_value(fields: dict[str, str], *names: str) -> str:
+            """Provide field value behavior."""
+            for name in names:
+                value = fields.get(tag_key(name), "")
+                if value:
+                    return value
+            return ""
+
+        section_rows: dict[str, list[dict]] = {}
+        row_index = 0
+        for con_element in root.iter():
+            if tag_key(getattr(con_element, "tag", "")) != "con":
+                continue
+            fields = con_fields(con_element)
+            section_label = field_value(fields, "KorpTipPer") or "FiĂłkelĹ‘ fĂşrĂˇs"
+            name = field_value(fields, "Leiras", "LeĂ­rĂˇs") or "FiĂłkelĹ‘"
+            model = field_value(fields, "Modell") or "Ismeretlen modell"
+            length = whole_number(field_value(fields, "Hossz"))
+            width = whole_number(field_value(fields, "Szelleseg", "SzĂ©lessĂ©g"))
+            thickness = whole_number(field_value(fields, "Vastag"))
+            size_parts_for_label = [part for part in (length, width, thickness) if part]
+            size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
+            color = field_value(fields, "Szin", "SzĂ­n")
+            drill = field_value(fields, "Fog_furattal", "Fog furattal")
+            handle_type = field_value(fields, "Fog_tip", "Fog tip")
+            drawer_type = field_value(fields, "Fioktipus", "FiĂłktĂ­pus")
+            netfront_color = field_value(fields, "Nettfront_szin", "Nettfront szĂ­n")
+            if folded(netfront_color) == "nincs":
+                netfront_color = ""
+            detail_prefix = " ".join(part for part in (model, netfront_color) if part).strip()
+            detail_suffix = " ".join(part for part in (drill, drawer_type) if part).strip()
+            detail = " - ".join(part for part in (detail_prefix, detail_suffix) if part)
+            quantity = quantity_value(field_value(fields, "conQuantity"))
+            barcode = field_value(fields, "Barcode") or f"FIOKXML-{row_index + 1:04d}"
+            row_index += 1
+            row_id = hashlib.sha1(
+                f"fiokelo-xml|{production_number}|{row_index}|{barcode}|{section_label}|{name}|{model}|{size_label}|{color}|{handle_type}|{drill}|{drawer_type}|{netfront_color}|{quantity}".encode("utf-8")
+            ).hexdigest()[:16]
+            section_rows.setdefault(section_label, []).append(
+                {
+                    "row_id": row_id,
+                    "state_key": _manufacturing_state_key(production_number, row_id),
+                    "production_number": _manufacturing_normalize_number(production_number),
+                    "name": name,
+                    "source_name": name,
+                    "size": size_label,
+                    "color": color,
+                    "edge": "-",
+                    "quantity": quantity,
+                    "detail": detail,
+                    "code": barcode,
+                    "doc_key": "fiokelo_furas",
+                    "section_key": _manufacturing_local_slug(section_label),
+                    "section_label": section_label,
+                    "page_number": 1,
+                    **_manufacturing_xml_state_fields(production_number, "fiokelo_furas", barcode),
+                }
+            )
+
+        sections = [
+            {
+                "key": f"fiokelo_furas::{_manufacturing_local_slug(section_label)}",
+                "label": section_label,
+                "rows": rows,
+            }
+            for section_label, rows in section_rows.items()
+            if rows
+        ]
+        return sections, True
+
     xml_cnc_sections, xml_cnc_available = cnc_xml_source_sections()
     if xml_cnc_available:
         raw_sections = [
@@ -195,7 +337,20 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if not str(section.get("key", "")).startswith("cnc::")
         ] + xml_cnc_sections
         using_xml_cnc_source = True
-    cnc_source_type = "XML" if using_xml_cnc_source else "PDF"
+
+    xml_fiokelo_sections, xml_fiokelo_available = fiokelo_xml_source_sections()
+    if xml_fiokelo_available:
+        raw_sections = [
+            section
+            for section in raw_sections
+            if not str(section.get("key", "")).startswith("fiokelo_furas::")
+        ] + xml_fiokelo_sections
+        using_xml_fiokelo_source = True
+    cnc_source_type = "XML" if using_xml_cnc_source or using_xml_fiokelo_source else "PDF"
+    cnc_source_label = "Beolvasva: {0}, {1}".format(
+        "XML" if using_xml_cnc_source else "PDF",
+        "XML" if using_xml_fiokelo_source else "PDF",
+    )
 
     def size_parts(size_label: object) -> tuple[int, ...]:
         """Provide size parts behavior."""
@@ -1160,6 +1315,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "drillLabel": drill_label,
                         "drawerType": drawer_type,
                         "modelTone": model_tone,
+                        "code": raw_row.get("code", ""),
                         "quantity": int(raw_row.get("quantity", 0) or 0),
                     }
                 )
@@ -1211,6 +1367,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "color": color,
                     "edge": row.get("edge", ""),
                     "quantity": int(row.get("quantity", 0) or 0),
+                    "code": row.get("code", ""),
                     "detail": row.get("detail", ""),
                     "fiokeloGroup": row.get("groupLabel", ""),
                     "modelLabel": model_label,
@@ -2839,5 +2996,5 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "hideTab": True,
             }
         )
-    return main_sections, row_count, special_views, cnc_source_type
+    return main_sections, row_count, special_views, cnc_source_type, cnc_source_label
 
