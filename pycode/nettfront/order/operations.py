@@ -33,11 +33,11 @@ def process_order_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, byte
     parts_file = files.get("parts_file")
 
     if stock_file is None:
-        return 400, render_nettfront_order_form("A rakt?r Excel felt?lt?se k?telez?.")
+        return 400, render_nettfront_order_form("A raktár Excel feltöltése kötelező.")
 
     stock_name, stock_bytes = stock_file
     if not stock_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        return 400, render_nettfront_order_form("A rakt?rf?jl csak XLSX, XLSM vagy CSV lehet.")
+        return 400, render_nettfront_order_form("A raktárfájl csak XLSX, XLSM vagy CSV lehet.")
 
     uploaded_parts_name = ""
     uploaded_parts_bytes: bytes | None = None
@@ -45,13 +45,13 @@ def process_order_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, byte
     if parts_file is not None:
         uploaded_parts_name, uploaded_parts_bytes = parts_file
         if uploaded_parts_name and not uploaded_parts_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
-            return 400, render_nettfront_order_form("A friss alkatr?szlista csak XLSX, XLSM vagy CSV lehet.")
+            return 400, render_nettfront_order_form("A friss alkatrészlista csak XLSX, XLSM vagy CSV lehet.")
         try:
             uploaded_parts_count = len(_load_nettfront_parts_list_from_bytes(uploaded_parts_bytes or b"", uploaded_parts_name))
         except Exception as exc:
-            return 400, render_nettfront_order_form(f"A friss alkatr?szlista feldolgoz?sa nem siker?lt: {exc}")
+            return 400, render_nettfront_order_form(f"A friss alkatrészlista feldolgozása nem sikerült: {exc}")
         if uploaded_parts_count == 0:
-            return 400, render_nettfront_order_form("A friss alkatr?szlista ?res, ?gy nem tudom felhaszn?lni a j?v?hagy?sn?l.")
+            return 400, render_nettfront_order_form("A friss alkatrészlista üres, így nem tudom felhasználni a jóváhagyásnál.")
 
     try:
         result = build_order_suggestions(stock_bytes, default_avg_path=default_avg_path())
@@ -64,12 +64,12 @@ def process_order_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, byte
             uploaded_parts_count,
         )
     except Exception as exc:
-        return 400, render_nettfront_order_form(f"Hiba a rendel?si javaslat k?sz?t?se k?zben: {exc}")
+        return 400, render_nettfront_order_form(f"Hiba a rendelési javaslat készítése közben: {exc}")
 
     return 200, render_nettfront_order_result(
         job_id,
         metadata,
-        message="A rendel?si javaslat elk?sz?lt.",
+        message="A rendelési javaslat elkészült.",
         success=True,
     )
 
@@ -87,7 +87,7 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
         return 400, render_nettfront_order_result(
             job_id,
             metadata,
-            message="Ehhez a fut?shoz nem tal?lok szerkeszthet? rendel?si javaslatot.",
+            message="Ehhez a futáshoz nem találok szerkeszthető rendelési javaslatot.",
         )
 
     invalid_rows: list[str] = []
@@ -103,11 +103,11 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
     if invalid_rows:
         invalid_preview = ", ".join(invalid_rows[:3])
         if len(invalid_rows) > 3:
-            invalid_preview += f" ?s m?g {len(invalid_rows) - 3} t?tel"
+            invalid_preview += f" és még {len(invalid_rows) - 3} tétel"
         return 400, render_nettfront_order_result(
             job_id,
             metadata,
-            message=f"Hib?s mennyis?get kaptam ezekn?l a t?telekn?l: {invalid_preview}.",
+            message=f"Hibás mennyiséget kaptam ezeknél a tételeknél: {invalid_preview}.",
         )
 
     source_parts_file = str(metadata.get("source_parts_file", "")).strip() or str(metadata.get("source_average_file", "")).strip()
@@ -117,7 +117,7 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
             return 400, render_nettfront_order_result(
                 job_id,
                 metadata,
-                message="A felt?lt?tt friss alkatr?szlist?t nem tal?lom, ez?rt a j?v?hagy?st most nem tudom ellen?rizni.",
+                message="A feltöltött friss alkatrészlistát nem találom, ezért a jóváhagyást most nem tudom ellenőrizni.",
             )
 
         try:
@@ -129,7 +129,7 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
             return 400, render_nettfront_order_result(
                 job_id,
                 metadata,
-                message=f"A friss alkatr?szlista ellen?rz?se nem siker?lt: {exc}",
+                message=f"A friss alkatrészlista ellenőrzése nem sikerült: {exc}",
             )
 
         missing_parts: list[str] = []
@@ -152,12 +152,12 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
         if missing_parts:
             missing_preview = ", ".join(missing_parts[:4])
             if len(missing_parts) > 4:
-                missing_preview += f" ?s m?g {len(missing_parts) - 4} t?tel"
+                missing_preview += f" és még {len(missing_parts) - 4} tétel"
             return 400, render_nettfront_order_result(
                 job_id,
                 metadata,
                 message=(
-                    "A j?v?hagy?s most nem ment v?gig, mert ezek a cikksz?mok nem szerepelnek a friss alkatr?szlist?ban: "
+                    "A jóváhagyás most nem ment végig, mert ezek a cikkszámok nem szerepelnek a friss alkatrészlistában: "
                     f"{missing_preview}."
                 ),
             )
@@ -168,13 +168,13 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
         return 500, render_nettfront_order_result(
             job_id,
             metadata,
-            message=f"A k?sz rendel?s ment?se nem siker?lt: {exc}",
+            message=f"A kész rendelés mentése nem sikerült: {exc}",
         )
 
     return 200, render_nettfront_order_result(
         job_id,
         metadata,
-        message="A k?sz rendel?s elk?sz?lt.",
+        message="A kész rendelés elkészült.",
         success=True,
     )
 
@@ -191,18 +191,18 @@ def launch_order_job(job_id: str) -> tuple[int, bytes] | None:
         return 400, render_nettfront_order_result(
             job_id,
             metadata,
-            message="El?bb j?v? kell hagynod a rendel?st, ?s csak ut?na ind?that? a bev?telez?s.",
+            message="Előbb jóvá kell hagynod a rendelést, és csak utána indítható a bevételezés.",
         )
 
     try:
         success, messages = launch_procurement_helper(job_dir)
-        message = " ".join(messages) if messages else "A bev?telez?si seg?d elindult."
+        message = " ".join(messages) if messages else "A bevételezési segéd elindult."
         body = render_nettfront_order_result(job_id, metadata, message=message, success=success)
     except Exception as exc:
         body = render_nettfront_order_result(
             job_id,
             metadata,
-            message=f"A bev?telez?si seg?d ind?t?sa nem siker?lt: {exc}",
+            message=f"A bevételezési segéd indítása nem sikerült: {exc}",
         )
     return 200, body
 
@@ -217,12 +217,12 @@ def stop_order_job(job_id: str) -> tuple[int, bytes] | None:
 
     try:
         success, messages = stop_procurement_helper(job_dir)
-        message = " ".join(messages) if messages else "A bev?telez?si seg?d le?llt."
+        message = " ".join(messages) if messages else "A bevételezési segéd leállt."
         body = render_nettfront_order_result(job_id, metadata, message=message, success=success)
     except Exception as exc:
         body = render_nettfront_order_result(
             job_id,
             metadata,
-            message=f"A le?ll?t?s nem siker?lt: {exc}",
+            message=f"A leállítás nem sikerült: {exc}",
         )
     return 200, body
