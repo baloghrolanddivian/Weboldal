@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - Windows-only optional import
 
 from manufacturing import (
     MANUFACTURING_ACCESS_USER_IDS,
+    MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_OPERATION_DEFINITIONS,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_PRIME_SYNC_ON_START,
@@ -49,6 +50,8 @@ from manufacturing import (
     configure_manufacturing,
     load_partial_quantity_state,
     load_selection_state,
+    manufacturing_client_payload,
+    manufacturing_module_payload,
     render_manufacturing_module,
     runtime_dir as manufacturing_runtime_dir,
     save_partial_quantity_state,
@@ -310,6 +313,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (APP_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
     (GENERATE_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
     (MANUFACTURING_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
+    (MANUFACTURING_DATA_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
     (MANUFACTURING_STATE_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
     (MANUFACTURING_PARTIAL_QTY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
     (MANUFACTURING_REPORT_READY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
@@ -6148,6 +6152,19 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == MANUFACTURING_DATA_ROUTE:
+            query = _manufacturing_query_params(self.path)
+            try:
+                payload = manufacturing_module_payload(
+                    production_number=query.get("production", ""),
+                    operation=query.get("operation", ""),
+                    include_client_cache=False,
+                )
+                self.respond_json(200, {"ok": True, **manufacturing_client_payload(payload)})
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A gyártási papírok betöltése nem sikerült: {exc}"})
             return
 
         if path == MATT_INVENTORY_ROUTE:
