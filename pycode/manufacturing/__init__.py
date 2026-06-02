@@ -18,6 +18,7 @@ from .common import (
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
+    MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
@@ -37,10 +38,13 @@ from .workflow import (
     _manufacturing_view_bundle,
     _prime_manufacturing_cache_async,
     _prime_manufacturing_cache_worker,
+    manufacturing_client_payload,
+    manufacturing_module_payload,
     render_manufacturing_module,
 )
 
 __all__ = [
+    "MANUFACTURING_DATA_ROUTE",
     "MANUFACTURING_OPERATION_DEFINITIONS",
     "MANUFACTURING_PARTIAL_QTY_ROUTE",
     "MANUFACTURING_PRIME_SYNC_ON_START",
@@ -67,6 +71,8 @@ __all__ = [
     "load_partial_quantity_state",
     "load_production_bundle",
     "load_selection_state",
+    "manufacturing_client_payload",
+    "manufacturing_module_payload",
     "production_folder",
     "render_manufacturing_module",
     "runtime_dir",

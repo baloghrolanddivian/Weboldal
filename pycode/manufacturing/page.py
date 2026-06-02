@@ -15,6 +15,7 @@ def _json_script_payload(payload: object) -> str:
 def render_manufacturing_page(
     *,
     route: str,
+    data_route: str,
     state_route: str,
     partial_qty_route: str,
     report_ready_route: str,
@@ -22,6 +23,7 @@ def render_manufacturing_page(
     operations: list[dict[str, str]],
     selected_operation: str,
     recent_productions: list[dict[str, str]],
+    production_client_cache: list[dict[str, object]] | None,
     bundle: dict,
     selection_state: dict[str, str],
     partial_quantity_state: dict[str, str],
@@ -62,7 +64,8 @@ def render_manufacturing_page(
     recent_chips_html = "".join(
         (
             f'<a class="mfg-chip-link{" is-active" if str(entry.get("number", "")) == selected_number else ""}{" is-complete" if bool(entry.get("is_complete")) else ""}" '
-            f'href="{route}?production={urllib.parse.quote(str(entry.get("number", "")))}{selected_operation_query}">'
+            f'href="{route}?production={urllib.parse.quote(str(entry.get("number", "")))}{selected_operation_query}" '
+            f'data-mfg-production-link data-production-number="{html.escape(str(entry.get("number", "")))}">'
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
             f'<span class="mfg-chip-number">{html.escape(str(entry.get("number", "")))}</span>'
             f"</a>"
@@ -104,8 +107,8 @@ def render_manufacturing_page(
       <section class="mfg-operation-header">
         <div>
           <span class="mfg-kicker">Kiválasztott művelet</span>
-          <strong>{html.escape(str(active_document.get("label", "")))}</strong>
-          {active_source_markup}
+          <strong id="mfg-operation-title">{html.escape(str(active_document.get("label", "")))}</strong>
+          <span class="mfg-operation-source" id="mfg-operation-source"{"" if active_source_label else " hidden"}>{html.escape(active_source_label)}</span>
         </div>
         <a class="mfg-picker-back" href="{picker_href}">Másik művelet</a>
       </section>
@@ -117,9 +120,13 @@ def render_manufacturing_page(
     payload_json = _json_script_payload(
         {
             "productionNumber": selected_number,
+            "route": route,
+            "dataRoute": data_route,
             "folder": bundle.get("folder", ""),
             "documents": visible_documents,
             "currentDocumentKey": selected_operation_key,
+            "recentProductions": recent_productions,
+            "productionClientCache": production_client_cache or [],
             "selectionState": selection_state,
             "stateRoute": state_route,
             "partialQuantityState": partial_quantity_state,
@@ -2190,6 +2197,8 @@ def render_manufacturing_page(
       const contentNode = document.getElementById("mfg-content");
       const scrollRailNode = document.getElementById("mfg-scroll-rail");
       const statusNode = document.getElementById("mfg-status");
+      const operationTitleNode = document.getElementById("mfg-operation-title");
+      const operationSourceNode = document.getElementById("mfg-operation-source");
       const reportReadyButtonNode = document.getElementById("mfg-report-ready");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
       const choiceModalNode = document.getElementById("mfg-choice-modal");
@@ -2203,14 +2212,16 @@ def render_manufacturing_page(
         payload = {{}};
       }}
 
-      const documents = Array.isArray(payload.documents) ? payload.documents : [];
+      let documents = Array.isArray(payload.documents) ? payload.documents : [];
       if (!documents.length) return;
-      const selectionState = Object.assign({{}}, payload.selectionState || {{}});
-      const partialQuantityState = Object.assign({{}}, payload.partialQuantityState || {{}});
+      let selectionState = Object.assign({{}}, payload.selectionState || {{}});
+      let partialQuantityState = Object.assign({{}}, payload.partialQuantityState || {{}});
       const stateRoute = String(payload.stateRoute || "");
       const partialQtyRoute = String(payload.partialQtyRoute || "");
       const reportReadyRoute = String(payload.reportReadyRoute || "");
-      const productionNumber = String(payload.productionNumber || "");
+      const pageRoute = String(payload.route || window.location.pathname || "");
+      const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
+      let productionNumber = String(payload.productionNumber || "");
       let currentDocKey = String(payload.currentDocumentKey || documents[0]?.key || "");
       if (!documents.some((document) => document.key === currentDocKey)) {{
         currentDocKey = String(documents[0]?.key || "");
@@ -2236,6 +2247,111 @@ def render_manufacturing_page(
         }} catch (_error) {{
         }}
       }};
+
+      const productionPayloadCache = new Map();
+      const productionCacheKey = (operationKey, targetProductionNumber) =>
+        `${{String(operationKey || "").trim()}}::${{String(targetProductionNumber || "").trim()}}`;
+      const cacheProductionPayload = (nextPayload) => {{
+        const targetProductionNumber = String(nextPayload?.productionNumber || "").trim();
+        const operationKey = String(nextPayload?.currentDocumentKey || currentDocKey || "").trim();
+        if (!targetProductionNumber || !operationKey || !Array.isArray(nextPayload?.documents) || !nextPayload.documents.length) return;
+        productionPayloadCache.set(productionCacheKey(operationKey, targetProductionNumber), nextPayload);
+      }};
+      const storeCurrentProductionPayload = () => {{
+        cacheProductionPayload({{
+          productionNumber,
+          route: pageRoute,
+          dataRoute,
+          folder: String(payload.folder || ""),
+          documents,
+          currentDocumentKey: currentDocKey,
+          recentProductions: Array.isArray(payload.recentProductions) ? payload.recentProductions : [],
+          selectionState,
+          stateRoute,
+          partialQuantityState,
+          partialQtyRoute,
+          reportReadyRoute,
+        }});
+      }};
+      const productionDataUrl = (targetProductionNumber, operationKey = currentDocKey) => {{
+        const url = new URL(dataRoute || `${{pageRoute}}/data`, window.location.origin);
+        url.searchParams.set("production", targetProductionNumber);
+        if (operationKey) url.searchParams.set("operation", operationKey);
+        return url;
+      }};
+      const fetchProductionPayload = async (targetProductionNumber, operationKey = currentDocKey) => {{
+        const cacheKey = productionCacheKey(operationKey, targetProductionNumber);
+        const cached = productionPayloadCache.get(cacheKey);
+        if (cached) return cached;
+        const response = await fetch(productionDataUrl(targetProductionNumber, operationKey).toString(), {{
+          headers: {{ "Accept": "application/json" }},
+        }});
+        const result = await response.json().catch(() => ({{}}));
+        if (!response.ok || !result.ok) {{
+          throw new Error(result.error || "A gyĂˇrtĂˇs betĂ¶ltĂ©se nem sikerĂĽlt.");
+        }}
+        cacheProductionPayload(result);
+        return result;
+      }};
+      const updateProductionChipState = (recentProductions = []) => {{
+        const completionByNumber = new Map(
+          (Array.isArray(recentProductions) ? recentProductions : [])
+            .map((entry) => [String(entry?.number || ""), Boolean(entry?.is_complete)]),
+        );
+        document.querySelectorAll("[data-mfg-production-link]").forEach((link) => {{
+          if (!(link instanceof HTMLElement)) return;
+          const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
+          link.classList.toggle("is-active", linkNumber === productionNumber);
+          if (completionByNumber.has(linkNumber)) {{
+            link.classList.toggle("is-complete", Boolean(completionByNumber.get(linkNumber)));
+          }}
+        }});
+      }};
+      const refreshOperationHeader = () => {{
+        const activeDocument = documents.find((document) => document?.key === currentDocKey) || documents[0] || null;
+        if (operationTitleNode) {{
+          operationTitleNode.textContent = String(activeDocument?.label || "");
+        }}
+        if (operationSourceNode) {{
+          const sourceLabel = String(activeDocument?.sourceLabel || "").trim();
+          operationSourceNode.textContent = sourceLabel;
+          operationSourceNode.hidden = !sourceLabel;
+        }}
+      }};
+      const applyProductionPayload = (nextPayload) => {{
+        const nextDocuments = Array.isArray(nextPayload?.documents) ? nextPayload.documents : [];
+        if (!nextDocuments.length) throw new Error("A gyĂˇrtĂˇshoz nincs megjelenĂ­thetĹ‘ adat.");
+        payload = Object.assign({{}}, payload, nextPayload);
+        documents = nextDocuments;
+        selectionState = Object.assign({{}}, nextPayload.selectionState || {{}});
+        partialQuantityState = Object.assign({{}}, nextPayload.partialQuantityState || {{}});
+        productionNumber = String(nextPayload.productionNumber || "");
+        pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
+        currentDocKey = String(nextPayload.currentDocumentKey || documents[0]?.key || "");
+        if (!documents.some((document) => document.key === currentDocKey)) {{
+          currentDocKey = String(documents[0]?.key || "");
+        }}
+        currentViewKey = "all";
+        currentSubcategoryKey = "all";
+        secondaryViewKey = "";
+        activeSearchText = "";
+        searchInputNode.value = "";
+        applyStoredPendingWritesToLocalState();
+        syncUrlForDocument();
+        refreshOperationHeader();
+        updateProductionChipState(nextPayload.recentProductions);
+        renderAll();
+        if (pendingWriteCount()) {{
+          setStatus(pendingStatusText(), "is-error");
+          void flushPendingWrites();
+        }}
+      }};
+      if (Array.isArray(payload.productionClientCache)) {{
+        for (const cachedPayload of payload.productionClientCache) {{
+          cacheProductionPayload(cachedPayload);
+        }}
+      }}
+      cacheProductionPayload(payload);
 
       const escapeHtml = (value) =>
         String(value ?? "").replace(/[&<>"']/g, (character) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[character] || character);
@@ -2505,7 +2621,7 @@ def render_manufacturing_page(
         statusNode.classList.remove("is-error", "is-success");
         if (tone) statusNode.classList.add(tone);
       }};
-      const pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
+      let pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
       let isFlushingPendingWrites = false;
 
       const readPendingWrites = () => {{
@@ -3912,6 +4028,25 @@ def render_manufacturing_page(
         }}, 280);
         partialSaveTimers.set(stateKey, nextTimer);
       }};
+
+      document.addEventListener("click", async (event) => {{
+        const link = event.target.closest("[data-mfg-production-link]");
+        if (!(link instanceof HTMLElement)) return;
+        const targetProductionNumber = String(link.getAttribute("data-production-number") || "").trim();
+        if (!targetProductionNumber || targetProductionNumber === productionNumber || !currentDocKey) return;
+        event.preventDefault();
+        storeCurrentProductionPayload();
+        setStatus("GyĂˇrtĂˇs betĂ¶ltĂ©se...");
+        try {{
+          await flushPendingWrites();
+          const nextPayload = await fetchProductionPayload(targetProductionNumber, currentDocKey);
+          applyProductionPayload(nextPayload);
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "A gyĂˇrtĂˇs betĂ¶ltĂ©se nem sikerĂĽlt.", "is-error");
+          const href = String(link.getAttribute("href") || "");
+          if (href) window.location.href = href;
+        }}
+      }});
 
       docTabsNode.addEventListener("click", (event) => {{
         const button = event.target.closest("[data-doc-key]");

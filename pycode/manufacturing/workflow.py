@@ -33,6 +33,7 @@ from .common import (
 from .page import render_manufacturing_page
 from .config import bundle_disk_cache_dir, runtime_dir
 from .routes import (
+    MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
@@ -735,13 +736,14 @@ def _manufacturing_view_bundle(
         selection_state_payload,
     )
 
-def render_manufacturing_module(
+def manufacturing_module_payload(
     production_number: str = "",
     operation: str = "",
     message: str = "",
     success: bool = False,
-) -> bytes:
-    """Render render manufacturing module output."""
+    include_client_cache: bool = True,
+) -> dict[str, object]:
+    """Build the manufacturing module payload shared by HTML and JSON views."""
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
     lightweight_operation_picker = not bool(selected_operation)
@@ -841,20 +843,127 @@ def render_manufacturing_module(
             "documents": [],
         }
 
+    production_client_cache: list[dict[str, object]] = []
+    if include_client_cache and selected_operation and recent_productions:
+        for entry in recent_productions:
+            cache_number = _manufacturing_normalize_number(entry.get("number", ""))
+            if not cache_number:
+                continue
+            try:
+                if cache_number == selected_number:
+                    cache_bundle = bundle
+                    cache_selection_state = selection_state
+                    cache_partial_quantity_state = partial_quantity_state
+                else:
+                    cache_raw_bundle = _load_manufacturing_bundle_cached(cache_number)
+                    cache_saved_state = load_selection_state(runtime_dir(), cache_number)
+                    cache_partial_quantity_state = load_partial_quantity_state(runtime_dir(), cache_number)
+                    cache_bundle, cache_selection_state = _manufacturing_view_bundle(
+                        cache_raw_bundle,
+                        cache_number,
+                        cache_saved_state,
+                        include_all_red_view=True,
+                    )
+                production_client_cache.append(
+                    manufacturing_client_payload(
+                        {
+                            "route": MANUFACTURING_ROUTE,
+                            "dataRoute": MANUFACTURING_DATA_ROUTE,
+                            "stateRoute": MANUFACTURING_STATE_ROUTE,
+                            "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
+                            "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
+                            "productionNumber": cache_number,
+                            "selectedOperation": selected_operation,
+                            "recentProductions": recent_productions,
+                            "bundle": cache_bundle,
+                            "selectionState": cache_selection_state,
+                            "partialQuantityState": cache_partial_quantity_state,
+                            "message": "",
+                            "success": False,
+                        }
+                    )
+                )
+            except Exception:
+                continue
+
+    return {
+        "route": MANUFACTURING_ROUTE,
+        "dataRoute": MANUFACTURING_DATA_ROUTE,
+        "stateRoute": MANUFACTURING_STATE_ROUTE,
+        "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
+        "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
+        "productionNumber": selected_number,
+        "operations": operations,
+        "selectedOperation": selected_operation,
+        "recentProductions": recent_productions,
+        "bundle": bundle,
+        "selectionState": selection_state,
+        "partialQuantityState": partial_quantity_state,
+        "productionClientCache": production_client_cache,
+        "message": combined_message,
+        "success": combined_success,
+    }
+
+def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str, object]:
+    """Return the compact browser payload for one selected manufacturing operation."""
+    bundle = module_payload.get("bundle", {}) if isinstance(module_payload.get("bundle"), dict) else {}
+    selected_operation = _manufacturing_normalize_operation(module_payload.get("selectedOperation", ""))
+    documents = [document for document in bundle.get("documents", []) if isinstance(document, dict)]
+    active_document = next(
+        (
+            document
+            for document in documents
+            if str(document.get("key", "")).strip() == selected_operation
+        ),
+        None,
+    )
+    visible_documents = [active_document] if isinstance(active_document, dict) else documents
+    return {
+        "productionNumber": str(module_payload.get("productionNumber", "")),
+        "route": str(module_payload.get("route", MANUFACTURING_ROUTE)),
+        "dataRoute": str(module_payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
+        "folder": str(bundle.get("folder", "")),
+        "documents": visible_documents,
+        "currentDocumentKey": selected_operation,
+        "recentProductions": module_payload.get("recentProductions", []) if isinstance(module_payload.get("recentProductions"), list) else [],
+        "selectionState": module_payload.get("selectionState", {}) if isinstance(module_payload.get("selectionState"), dict) else {},
+        "stateRoute": str(module_payload.get("stateRoute", MANUFACTURING_STATE_ROUTE)),
+        "partialQuantityState": module_payload.get("partialQuantityState", {}) if isinstance(module_payload.get("partialQuantityState"), dict) else {},
+        "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
+        "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        "message": str(module_payload.get("message", "")),
+        "success": bool(module_payload.get("success", False)),
+    }
+
+def render_manufacturing_module(
+    production_number: str = "",
+    operation: str = "",
+    message: str = "",
+    success: bool = False,
+) -> bytes:
+    """Render render manufacturing module output."""
+    payload = manufacturing_module_payload(
+        production_number=production_number,
+        operation=operation,
+        message=message,
+        success=success,
+    )
     return render_manufacturing_page(
-        route=MANUFACTURING_ROUTE,
-        state_route=MANUFACTURING_STATE_ROUTE,
-        partial_qty_route=MANUFACTURING_PARTIAL_QTY_ROUTE,
-        report_ready_route=MANUFACTURING_REPORT_READY_ROUTE,
-        selected_number=selected_number,
-        operations=operations,
-        selected_operation=selected_operation,
-        recent_productions=recent_productions,
-        bundle=bundle,
-        selection_state=selection_state,
-        partial_quantity_state=partial_quantity_state,
-        message=combined_message,
-        success=combined_success,
+        route=str(payload.get("route", MANUFACTURING_ROUTE)),
+        data_route=str(payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
+        state_route=str(payload.get("stateRoute", MANUFACTURING_STATE_ROUTE)),
+        partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
+        report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        selected_number=str(payload.get("productionNumber", "")),
+        operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
+        selected_operation=str(payload.get("selectedOperation", "")),
+        recent_productions=payload.get("recentProductions", []) if isinstance(payload.get("recentProductions"), list) else [],
+        production_client_cache=payload.get("productionClientCache", []) if isinstance(payload.get("productionClientCache"), list) else [],
+        bundle=payload.get("bundle", {}) if isinstance(payload.get("bundle"), dict) else {},
+        selection_state=payload.get("selectionState", {}) if isinstance(payload.get("selectionState"), dict) else {},
+        partial_quantity_state=payload.get("partialQuantityState", {}) if isinstance(payload.get("partialQuantityState"), dict) else {},
+        message=str(payload.get("message", "")),
+        success=bool(payload.get("success", False)),
     )
 
 def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, limit: int = 10) -> None:
