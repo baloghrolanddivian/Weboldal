@@ -6156,13 +6156,17 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
         if path == MANUFACTURING_DATA_ROUTE:
             query = _manufacturing_query_params(self.path)
+            include_client_cache = str(query.get("refresh_cache", "")).strip().lower() in {"1", "true", "yes"}
             try:
                 payload = manufacturing_module_payload(
                     production_number=query.get("production", ""),
                     operation=query.get("operation", ""),
-                    include_client_cache=False,
+                    include_client_cache=include_client_cache,
                 )
-                self.respond_json(200, {"ok": True, **manufacturing_client_payload(payload)})
+                response_payload = {"ok": True, **manufacturing_client_payload(payload)}
+                if include_client_cache:
+                    response_payload["productionClientCache"] = payload.get("productionClientCache", [])
+                self.respond_json(200, response_payload)
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A gyártási papírok betöltése nem sikerült: {exc}"})
             return

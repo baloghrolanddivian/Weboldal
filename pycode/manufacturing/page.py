@@ -75,7 +75,8 @@ def render_manufacturing_page(
     toolbar_markup = (
         f"""
     <section class="mfg-toolbar">
-      <div class="mfg-chip-row">{recent_chips_html}</div>
+      <div class="mfg-chip-row" id="mfg-chip-row">{recent_chips_html}</div>
+      <button class="mfg-cache-refresh-button" id="mfg-cache-refresh" type="button" title="Frissites">&#8635;</button>
     </section>
         """
         if recent_chips_html
@@ -509,6 +510,32 @@ def render_manufacturing_page(
       overflow-y: hidden;
       align-items: center;
       flex-wrap: nowrap;
+      flex: 1 1 auto;
+      min-width: 0;
+    }}
+    .mfg-cache-refresh-button {{
+      flex: 0 0 auto;
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      border: 1px solid var(--mfg-line);
+      background: #ffffff;
+      color: #111827;
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .mfg-cache-refresh-button:hover {{
+      border-color: #111827;
+      background: #f5f7f9;
+    }}
+    .mfg-cache-refresh-button.is-loading {{
+      opacity: 0.62;
+      pointer-events: none;
     }}
     .mfg-chip-link {{
       min-height: 36px;
@@ -2189,6 +2216,8 @@ def render_manufacturing_page(
   <script>
     (() => {{
       const dataNode = document.getElementById("manufacturing-data");
+      const chipRowNode = document.getElementById("mfg-chip-row");
+      const cacheRefreshButtonNode = document.getElementById("mfg-cache-refresh");
       const docTabsNode = document.getElementById("mfg-doc-tabs");
       const sectionTabsNode = document.getElementById("mfg-section-tabs");
       const subsectionTabsNode = document.getElementById("mfg-subsection-tabs");
@@ -2293,6 +2322,34 @@ def render_manufacturing_page(
         cacheProductionPayload(result);
         return result;
       }};
+      const chipHref = (targetProductionNumber, operationKey = currentDocKey) => {{
+        const url = new URL(pageRoute || window.location.pathname, window.location.origin);
+        url.searchParams.set("production", targetProductionNumber);
+        if (operationKey) url.searchParams.set("operation", operationKey);
+        return `${{url.pathname}}${{url.search}}`;
+      }};
+      const renderProductionChips = (recentProductions = []) => {{
+        if (!chipRowNode) return;
+        chipRowNode.replaceChildren();
+        for (const entry of (Array.isArray(recentProductions) ? recentProductions.slice(0, 10) : [])) {{
+          const entryNumber = String(entry?.number || "").trim();
+          if (!entryNumber) continue;
+          const link = document.createElement("a");
+          link.className = "mfg-chip-link";
+          link.href = chipHref(entryNumber);
+          link.setAttribute("data-mfg-production-link", "");
+          link.setAttribute("data-production-number", entryNumber);
+          const dateNode = document.createElement("span");
+          dateNode.className = "mfg-chip-date";
+          dateNode.textContent = String(entry?.date_label || "DĂˇtum nĂ©lkĂĽl");
+          const numberNode = document.createElement("span");
+          numberNode.className = "mfg-chip-number";
+          numberNode.textContent = entryNumber;
+          link.append(dateNode, numberNode);
+          chipRowNode.append(link);
+        }}
+        updateProductionChipState(recentProductions);
+      }};
       const updateProductionChipState = (recentProductions = []) => {{
         const completionByNumber = new Map(
           (Array.isArray(recentProductions) ? recentProductions : [])
@@ -2352,6 +2409,36 @@ def render_manufacturing_page(
         }}
       }}
       cacheProductionPayload(payload);
+      const refreshProductionClientCache = async () => {{
+        if (!currentDocKey || !productionNumber) return;
+        if (cacheRefreshButtonNode) cacheRefreshButtonNode.classList.add("is-loading");
+        setStatus("GyĂˇrtĂˇsi lista frissĂ­tĂ©se...");
+        try {{
+          await flushPendingWrites();
+          const url = productionDataUrl(productionNumber, currentDocKey);
+          url.searchParams.set("refresh_cache", "1");
+          const response = await fetch(url.toString(), {{
+            headers: {{ "Accept": "application/json" }},
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "A gyorsĂ­tĂłtĂˇr frissĂ­tĂ©se nem sikerĂĽlt.");
+          }}
+          productionPayloadCache.clear();
+          payload.productionClientCache = Array.isArray(result.productionClientCache) ? result.productionClientCache : [];
+          for (const cachedPayload of payload.productionClientCache) {{
+            cacheProductionPayload(cachedPayload);
+          }}
+          cacheProductionPayload(result);
+          renderProductionChips(result.recentProductions);
+          applyProductionPayload(result);
+          setStatus("GyorsĂ­tĂłtĂˇr frissĂ­tve.", "is-success");
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "A gyorsĂ­tĂłtĂˇr frissĂ­tĂ©se nem sikerĂĽlt.", "is-error");
+        }} finally {{
+          if (cacheRefreshButtonNode) cacheRefreshButtonNode.classList.remove("is-loading");
+        }}
+      }};
 
       const escapeHtml = (value) =>
         String(value ?? "").replace(/[&<>"']/g, (character) => ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[character] || character);
@@ -4029,12 +4116,19 @@ def render_manufacturing_page(
         partialSaveTimers.set(stateKey, nextTimer);
       }};
 
+      if (cacheRefreshButtonNode) {{
+        cacheRefreshButtonNode.addEventListener("click", (event) => {{
+          event.preventDefault();
+          void refreshProductionClientCache();
+        }});
+      }}
+
       document.addEventListener("click", async (event) => {{
         const link = event.target.closest("[data-mfg-production-link]");
         if (!(link instanceof HTMLElement)) return;
         const targetProductionNumber = String(link.getAttribute("data-production-number") || "").trim();
-        if (!targetProductionNumber || targetProductionNumber === productionNumber || !currentDocKey) return;
         event.preventDefault();
+        if (!targetProductionNumber || targetProductionNumber === productionNumber || !currentDocKey) return;
         storeCurrentProductionPayload();
         setStatus("GyĂˇrtĂˇs betĂ¶ltĂ©se...");
         try {{
