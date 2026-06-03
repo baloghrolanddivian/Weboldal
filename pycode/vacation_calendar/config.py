@@ -13,8 +13,9 @@ VACATION_CALENDAR_EMPLOYEE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/kollegak/t
 VACATION_CALENDAR_LEAVE_SAVE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/mentes"
 VACATION_CALENDAR_LEAVE_DELETE_ROUTE = f"{VACATION_CALENDAR_ROUTE}/szabadsagok/torles"
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_runtime_dir = Path("runtime") / "szabadsag-naptar"
+_runtime_dir = REPO_ROOT / "runtime" / "szabadsag-naptar"
 _layout_renderer: Callable[..., bytes] | None = None
 
 
