@@ -1870,7 +1870,15 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
         return {}
     if not isinstance(payload, dict):
         return {}
-    return {str(key): str(value) for key, value in payload.items() if str(value) in {"green", "red", "done"}}
+    result: dict[str, str] = {}
+    for key, value in payload.items():
+        clean_key = str(key)
+        clean_value = str(value)
+        if clean_value in {"green", "red", "done"}:
+            result[clean_key] = clean_value
+        elif clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_value):
+            result[clean_key] = clean_value
+    return result
 
 
 def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
@@ -1880,6 +1888,8 @@ def save_selection_state(runtime_root: Path, production_number: str, row_id: str
     if normalized_state in {"", "none", "clear"}:
         current.pop(row_id, None)
     elif normalized_state in {"green", "red", "done"}:
+        current[row_id] = normalized_state
+    elif str(row_id or "").startswith("topfloor::") and re.fullmatch(r"\d{1,12}", normalized_state):
         current[row_id] = normalized_state
     path = selection_state_path(runtime_root, production_number)
     path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")

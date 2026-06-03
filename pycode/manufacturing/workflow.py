@@ -38,6 +38,7 @@ from .routes import (
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
+    MANUFACTURING_TOPFLOOR_BOX_ROUTE,
 )
 
 manufacturing_pdf_lines = _pdf_lines
@@ -46,7 +47,7 @@ MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-02-cnc-fiokelo-xml-v66"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-03-topfloor-xml-v1"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -55,12 +56,14 @@ MANUFACTURING_OPERATION_DEFINITIONS = (
     ("front_osszekeszites", "Front összekészítés"),
     ("cnc_furas", "CNC fúrás"),
     ("pantolas", "Pántolás"),
+    ("topfloor", "Anyagrakt\u00e1r"),
 )
 MANUFACTURING_OPERATION_HINTS = {
     "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
     "front_osszekeszites": "A front összekészítő PDF sorai és kategóriái.",
     "cnc_furas": "CNC, alsó, felső és fiókelő/front fúrás egy közös műveleti nézetben.",
     "pantolas": "A Pántoló papír sorai eredeti sorrendben, zöld/piros jelöléssel.",
+    "topfloor": "Anyagrakt\u00e1r Topfloor alaplogika: lerakod\u00e1s \u00e9s dobozol\u00e1s.",
 }
 MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
@@ -355,6 +358,8 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
                 return f"{operation_key}::{normalized_number}::{con_code}::{child_id}"
         if document_key == "front_osszekeszito":
             return f"front_osszekeszito::{normalized_number}::{con_code}::0"
+        if document_key == "topfloor":
+            return f"topfloor::{normalized_number}::{con_code}::0"
         if document_key in {"osszekeszito", "alkatresz_kesz"}:
             return f"korpusz_osszekeszito::{normalized_number}::{con_code}::0"
     return row_id
@@ -377,10 +382,10 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
     result: dict[str, str] = {}
     for row_id, state in raw_state.items():
         clean_state = str(state or "").strip().lower()
-        if clean_state not in {"green", "red", "done"}:
-            continue
         clean_key = str(row_id or "").strip()
-        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::", "cnc::")):
+        if clean_state not in {"green", "red", "done"} and not (clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_state)):
+            continue
+        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::", "cnc::", "topfloor::")):
             result[clean_key] = clean_state
             parts = clean_key.split("::")
             if len(parts) == 3:
@@ -442,7 +447,15 @@ def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
 
 def _manufacturing_ready_endpoint_key(document_key: object, category_key: object) -> str:
     """Provide manufacturing ready endpoint key behavior."""
-    if str(document_key or "").strip() == "front_osszekeszites":
+    clean_document_key = str(document_key or "").strip()
+    clean_category_key = str(category_key or "").strip().lower().replace("_", "-")
+    if clean_document_key == "topfloor":
+        if clean_category_key in {"topfloor-boxing", "boxing", "dobozolas", "dobozol\u00e1s"}:
+            return "topfloor_boxing"
+        if clean_category_key in {"topfloor-unloading", "unloading", "lerakodas", "lerakod\u00e1s"}:
+            return "topfloor_unloading"
+        return "topfloor_unloading"
+    if clean_document_key == "front_osszekeszites":
         return "front"
     if _manufacturing_uses_assembly_ready_endpoint(category_key):
         return "assembly"
@@ -579,6 +592,7 @@ def _manufacturing_view_bundle(
         _manufacturing_osszekeszito_xml_sections,
     )
     from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
+    from .topfloor.sections import _manufacturing_topfloor_document
 
     current_number = _manufacturing_normalize_number(production_number)
     documents: list[dict] = []
@@ -718,6 +732,7 @@ def _manufacturing_view_bundle(
             "singleColumnOverview": True,
         }
     )
+    documents.append(_manufacturing_topfloor_document(raw_bundle, current_number))
 
     existing_keys = {str(document.get("key", "")).strip() for document in documents}
     for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS:
@@ -872,6 +887,7 @@ def manufacturing_module_payload(
                             "stateRoute": MANUFACTURING_STATE_ROUTE,
                             "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
                             "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
+                            "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
                             "productionNumber": cache_number,
                             "selectedOperation": selected_operation,
                             "recentProductions": recent_productions,
@@ -892,6 +908,7 @@ def manufacturing_module_payload(
         "stateRoute": MANUFACTURING_STATE_ROUTE,
         "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
         "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
+        "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
         "productionNumber": selected_number,
         "operations": operations,
         "selectedOperation": selected_operation,
@@ -931,6 +948,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQuantityState": module_payload.get("partialQuantityState", {}) if isinstance(module_payload.get("partialQuantityState"), dict) else {},
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
         "message": str(module_payload.get("message", "")),
         "success": bool(module_payload.get("success", False)),
     }
@@ -954,6 +972,7 @@ def render_manufacturing_module(
         state_route=str(payload.get("stateRoute", MANUFACTURING_STATE_ROUTE)),
         partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        topfloor_box_route=str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
         selected_number=str(payload.get("productionNumber", "")),
         operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
         selected_operation=str(payload.get("selectedOperation", "")),

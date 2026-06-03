@@ -19,6 +19,7 @@ def render_manufacturing_page(
     state_route: str,
     partial_qty_route: str,
     report_ready_route: str,
+    topfloor_box_route: str = "",
     selected_number: str,
     operations: list[dict[str, str]],
     selected_operation: str,
@@ -133,6 +134,7 @@ def render_manufacturing_page(
             "partialQuantityState": partial_quantity_state,
             "partialQtyRoute": partial_qty_route,
             "reportReadyRoute": report_ready_route,
+            "topfloorBoxRoute": topfloor_box_route,
         }
     )
 
@@ -736,6 +738,31 @@ def render_manufacturing_page(
       transform: none;
       box-shadow: none;
     }}
+    .mfg-topfloor-actions {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }}
+    .mfg-topfloor-button {{
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(15, 23, 42, 0.14);
+      background: #ffffff;
+      color: #172033;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }}
+    .mfg-topfloor-button:not(:disabled):hover {{
+      border-color: rgba(22, 101, 52, 0.32);
+      color: #166534;
+    }}
+    .mfg-topfloor-button:disabled {{
+      opacity: 0.42;
+      cursor: default;
+    }}
     .mfg-layout-button {{
       width: 30px;
       min-width: 30px;
@@ -1044,6 +1071,10 @@ def render_manufacturing_page(
     .mfg-content.is-single-column-overview .mfg-row.is-front-standard.is-no-barcode.is-with-expander.is-with-partial {{
       grid-template-columns: 0.94fr 0.74fr 0.68fr 0.8fr 0.32fr 0.18fr 0.44fr;
     }}
+    .mfg-content.is-single-column-overview .mfg-table-head.is-topfloor,
+    .mfg-content.is-single-column-overview .mfg-row.is-topfloor {{
+      grid-template-columns: minmax(0, 1fr) 0.18fr minmax(180px, 0.42fr);
+    }}
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-lower > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-upper > :nth-child(4),
     .mfg-content.is-single-column-overview .mfg-table-head.is-cnc-fiokelo > :nth-child(4) {{
@@ -1269,6 +1300,10 @@ def render_manufacturing_page(
     }}
     .mfg-table-head.is-front-standard.is-no-barcode.is-with-expander.is-with-partial {{
       grid-template-columns: 0.94fr 0.74fr 0.68fr 0.8fr 0.32fr 0.3fr 0.44fr;
+    }}
+    .mfg-table-head.is-topfloor,
+    .mfg-row.is-topfloor {{
+      grid-template-columns: minmax(0, 1fr) 0.2fr minmax(160px, 0.46fr);
     }}
     .mfg-section-title {{
       font-size: 0.82rem;
@@ -2248,6 +2283,7 @@ def render_manufacturing_page(
       const stateRoute = String(payload.stateRoute || "");
       const partialQtyRoute = String(payload.partialQtyRoute || "");
       const reportReadyRoute = String(payload.reportReadyRoute || "");
+      const topfloorBoxRoute = String(payload.topfloorBoxRoute || "");
       const pageRoute = String(payload.route || window.location.pathname || "");
       const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
       let productionNumber = String(payload.productionNumber || "");
@@ -2300,6 +2336,7 @@ def render_manufacturing_page(
           partialQuantityState,
           partialQtyRoute,
           reportReadyRoute,
+          topfloorBoxRoute,
         }});
       }};
       const productionDataUrl = (targetProductionNumber, operationKey = currentDocKey) => {{
@@ -3045,6 +3082,25 @@ def render_manufacturing_page(
         `;
       }};
 
+      const topfloorCategoryActionsMarkup = (group) => {{
+        const category = group?.topfloorCategory || null;
+        if (!category || !topfloorBoxRoute) return "";
+        const categoryKey = String(category.categoryKey || "");
+        const boxId = String(category.boxId || "");
+        const createDisabled = category.createEnabled ? "" : " disabled";
+        const openDisabled = category.openEnabled ? "" : " disabled";
+        const closeDisabled = category.closeEnabled ? "" : " disabled";
+        const boxLabel = boxId ? `Doboz: ${{escapeHtml(boxId)}}` : "Nincs doboz";
+        return `
+          <div class="mfg-topfloor-actions" data-topfloor-category="${{escapeHtml(categoryKey)}}">
+            <span class="mfg-section-count">${{boxLabel}}</span>
+            <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
+            <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
+            <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
+          </div>
+        `;
+      }};
+
       const tabStateClassForRows = (rows) => {{
         if (!rows.length) return "";
         if (rows.some((row) => !rowStateValue(row))) return "";
@@ -3425,6 +3481,8 @@ def render_manufacturing_page(
                 ? " is-pantolo"
               : columnLayout === "front-standard"
               ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
+              : columnLayout === "topfloor"
+              ? " is-topfloor"
             : effectiveHideBarcode
               ? " is-no-barcode"
               : "";
@@ -3439,16 +3497,19 @@ def render_manufacturing_page(
                 ? " is-pantolo"
               : columnLayout === "front-standard"
                 ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
+              : columnLayout === "topfloor"
+                ? " is-topfloor"
               : effectiveHideBarcode
                 ? " is-no-barcode"
                 : "";
           const totalQuantity = (Array.isArray(group.rows) ? group.rows : []).reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
           const sectionTitleMarkup = isPantoloLayout ? pantoloCategoryLabelMarkup(group.label) : escapeHtml(group.label);
+          const topfloorActionsMarkup = String(document?.key || "") === "topfloor" ? topfloorCategoryActionsMarkup(group) : "";
           const headMarkup = showSectionHeader
             ? `
               <div class="mfg-section-head">
                 <div class="mfg-section-title">${{sectionTitleMarkup}}</div>
-                <div class="mfg-section-count">${{totalQuantity}} db</div>
+                ${{topfloorActionsMarkup || `<div class="mfg-section-count">${{totalQuantity}} db</div>`}}
               </div>
             `
             : "";
@@ -3507,6 +3568,14 @@ def render_manufacturing_page(
                   ${{sortButtonMarkup(group.key, "quantity", "ME")}}
                   ${{showPartialColumn ? "<span>HiĂˇnyzik</span>" : ""}}
                   ${{showPantoloExpanderColumn ? "<span></span>" : ""}}
+                </div>
+              `
+            : columnLayout === "topfloor"
+              ? `
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
+                  ${{sortButtonMarkup(group.key, "name", "Leírás")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "Db")}}
+                  ${{sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `
             : columnLayout === "front-standard"
@@ -3724,6 +3793,17 @@ def render_manufacturing_page(
                         : columnLayout === "pantolo"
                           ? `
                               ${{pantoloCellsMarkup(row, pantoloQuantityText(row), pantoloExpandMarkup, partialMarkup)}}
+                            `
+                        : columnLayout === "topfloor"
+                          ? `
+                              <div class="mfg-row-main">
+                                <div class="mfg-row-title">${{escapeHtml(row.name || "Anyagraktár tétel")}}</div>
+                                ${{subtitleMarkup}}
+                              </div>
+                              <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
+                              <div class="mfg-row-barcode-wrap">
+                                <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
+                              </div>
                             `
                         : columnLayout === "front-standard"
                           ? `
@@ -4236,6 +4316,67 @@ def render_manufacturing_page(
         renderAll();
       }});
 
+      contentNode.addEventListener("click", async (event) => {{
+        const button = event.target.closest("[data-topfloor-action]");
+        if (!(button instanceof HTMLElement)) return;
+        if (button.disabled || !topfloorBoxRoute) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const action = String(button.getAttribute("data-topfloor-action") || "").trim();
+        const categoryNode = button.closest("[data-topfloor-category]");
+        const categoryKey = String(categoryNode?.getAttribute("data-topfloor-category") || "").trim();
+        const document = currentDocument();
+        if (String(document?.key || "") !== "topfloor" || !categoryKey) return;
+        const groups = filterGroupsBySearch(buildGroupsForView(document), document);
+        const group = groups.find((item) => String(item?.topfloorCategory?.categoryKey || "") === categoryKey);
+        if (!group) return;
+        const category = group.topfloorCategory || {{}};
+        const entries = action === "close"
+          ? (Array.isArray(group.rows) ? group.rows : [])
+              .filter((row) => isReadyGreenState(rowStateValue(row)))
+              .map((row) => ({{
+                code: String(row?.code || "").trim(),
+                state_key: String(rowStateKey(row) || "").trim(),
+                state_storage_key: String(rowStorageKey(row) || "").trim(),
+              }}))
+              .filter((entry) => entry.code && entry.state_storage_key)
+          : [];
+        if (action === "close" && !entries.length) {{
+          setStatus("Nincs zöld tétel ebben a kategóriában.", "is-error");
+          return;
+        }}
+        button.disabled = true;
+        setStatus("Anyagraktár doboz művelet folyamatban...");
+        try {{
+          const response = await fetch(topfloorBoxRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              action,
+              category_key: categoryKey,
+              shipment_id: String(category.shipmentID || "").trim(),
+              buyer: String(category.buyer || "").trim(),
+              location: String(category.location || "").trim(),
+              buyer_id: String(category.buyerID || "").trim(),
+              entries,
+            }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "Az Anyagraktár doboz művelet nem sikerült.");
+          }}
+          productionPayloadCache.delete(productionCacheKey(currentDocKey, productionNumber));
+          const refreshed = await fetchProductionPayload(productionNumber, currentDocKey);
+          documents = Array.isArray(refreshed.documents) ? refreshed.documents : documents;
+          selectionState = Object.assign({{}}, refreshed.selectionState || selectionState || {{}});
+          setStatus("Anyagraktár doboz művelet kész.", "is-success");
+          renderAll();
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "Az Anyagraktár doboz művelet nem sikerült.", "is-error");
+          renderAll();
+        }}
+      }});
+
       contentNode.addEventListener("click", (event) => {{
         const partialInput = event.target.closest("[data-partial-input]");
         if (partialInput instanceof HTMLElement) {{
@@ -4284,6 +4425,9 @@ def render_manufacturing_page(
         if (!rowId) return;
         const currentState = row.getAttribute("data-pantolo-state") || selectionState[stateKey] || "";
         if (currentState === "done") {{
+          return;
+        }}
+        if (String(currentDocument()?.key || "") === "topfloor" && /^\\d{{1,12}}$/.test(currentState)) {{
           return;
         }}
         if (row.hasAttribute("data-pantolo-unit")) {{

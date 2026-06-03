@@ -23,6 +23,7 @@ from .routes import (
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
+    MANUFACTURING_TOPFLOOR_BOX_ROUTE,
 )
 from .workflow import (
     MANUFACTURING_OPERATION_DEFINITIONS,
@@ -51,6 +52,7 @@ __all__ = [
     "MANUFACTURING_REPORT_READY_ROUTE",
     "MANUFACTURING_ROUTE",
     "MANUFACTURING_STATE_ROUTE",
+    "MANUFACTURING_TOPFLOOR_BOX_ROUTE",
     "MANUFACTURING_ACCESS_USER_IDS",
     "_load_manufacturing_bundle_cached",
     "_manufacturing_is_virtual_unit_row_id",

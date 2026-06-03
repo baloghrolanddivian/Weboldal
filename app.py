@@ -37,6 +37,7 @@ from manufacturing import (
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
+    MANUFACTURING_TOPFLOOR_BOX_ROUTE,
     _load_manufacturing_bundle_cached,
     _manufacturing_is_virtual_unit_row_id,
     _manufacturing_normalize_number,
@@ -239,6 +240,11 @@ from tools.login import (
 )
 from tools.shopfloor import extract_con_code as _extract_con_code
 from tools.shopfloor import report_con_ready as _shopfloor_report_con_ready
+from tools.shopfloor import (
+    create_closed_topfloor_category_box as _topfloor_create_category_box,
+    load_and_close_topfloor_category_box as _topfloor_load_and_close_category_box,
+    open_topfloor_category_box as _topfloor_open_category_box,
+)
 from tools.static_assets import load_static_asset
 
 try:
@@ -317,6 +323,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (MANUFACTURING_STATE_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
     (MANUFACTURING_PARTIAL_QTY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
     (MANUFACTURING_REPORT_READY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
+    (MANUFACTURING_TOPFLOOR_BOX_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
     (PRODUCTION_INVENTORY_GROUP_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (FRONT_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
@@ -6757,6 +6764,87 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+
+        if path == MANUFACTURING_TOPFLOOR_BOX_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+
+            action = str(payload.get("action", "")).strip().lower()
+            category_key = str(payload.get("category_key", "")).strip()
+            shipment_id = _manufacturing_normalize_number(payload.get("shipment_id", ""))
+            raw_entries = payload.get("entries", [])
+            if not category_key:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik az Anyagraktár kategória azonosító."})
+                return
+            if action not in {"create", "open", "close"}:
+                self.respond_json(400, {"ok": False, "error": "Érvénytelen Anyagraktár doboz művelet."})
+                return
+
+            try:
+                if action == "create":
+                    # TODO: Generate the final Topfloor box description from buyer, location and current date.
+                    buyer = str(payload.get("buyer", "")).strip()
+                    location = str(payload.get("location", "")).strip()
+                    con_description = " ".join(part for part in (buyer, location, date.today().isoformat()) if part)
+                    result = _topfloor_create_category_box(category_key, con_description=con_description)
+                    self.respond_json(200, {"ok": True, "action": action, "box": result})
+                    return
+
+                if action == "open":
+                    result = _topfloor_open_category_box(category_key)
+                    self.respond_json(200, {"ok": True, "action": action, "box": result})
+                    return
+
+                entries = [
+                    {
+                        "code": str(item.get("code", "")).strip(),
+                        "state_storage_key": str(item.get("state_storage_key", "") or item.get("state_key", "")).strip(),
+                    }
+                    for item in raw_entries
+                    if isinstance(item, dict)
+                ] if isinstance(raw_entries, list) else []
+                entries = [entry for entry in entries if entry["code"] and entry["state_storage_key"]]
+                if not shipment_id:
+                    shipment_id = _manufacturing_normalize_number(category_key.split("::", 1)[0])
+                if not shipment_id:
+                    self.respond_json(400, {"ok": False, "error": "Hiányzik a shipmentID."})
+                    return
+                if not entries:
+                    self.respond_json(400, {"ok": False, "error": "Nincs zöld Anyagraktár tétel a kategóriában."})
+                    return
+                result = _topfloor_load_and_close_category_box(category_key, [entry["code"] for entry in entries])
+                box_id = str(result.get("conId", "")).strip()
+                if not box_id:
+                    self.respond_json(500, {"ok": False, "error": "A doboz zárása után nincs conId."})
+                    return
+                current_state: dict[str, str] = {}
+                for entry in entries:
+                    current_state = save_selection_state(
+                        manufacturing_runtime_dir(),
+                        shipment_id,
+                        entry["state_storage_key"],
+                        box_id,
+                    )
+                self.respond_json(
+                    200,
+                    {
+                        "ok": True,
+                        "action": action,
+                        "box": result,
+                        "shipment_id": shipment_id,
+                        "state": box_id,
+                        "state_keys": [entry["state_storage_key"] for entry in entries],
+                    },
+                )
+                return
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"Az Anyagraktár doboz művelet nem sikerült: {exc}"})
+                return
 
         if path == MANUFACTURING_REPORT_READY_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
