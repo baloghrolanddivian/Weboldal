@@ -1426,8 +1426,6 @@ def render_manufacturing_page(
       box-shadow: inset 3px 0 0 var(--mfg-red-line);
     }}
     .mfg-row.is-done {{
-      background: linear-gradient(180deg, #12a566, #0c8d57);
-      box-shadow: inset 5px 0 0 #0a7448;
       color: #f4fff8;
     }}
     .mfg-row.is-muted {{
@@ -1525,6 +1523,16 @@ def render_manufacturing_page(
     }}
     .mfg-row.is-mixed .mfg-row-meta span {{
       color: #86198f;
+    }}
+    .mfg-row.is-done {{
+      background: linear-gradient(180deg, #12a566, #0c8d57);
+      box-shadow: inset 5px 0 0 #0a7448;
+    }}
+    .mfg-row.is-glass.is-done,
+    .mfg-row.is-pullout.is-done,
+    .mfg-row[class*="is-model-"].is-done {{
+      background: linear-gradient(180deg, #12a566, #0c8d57);
+      box-shadow: inset 5px 0 0 #0a7448;
     }}
     .mfg-row.is-done .mfg-row-title,
     .mfg-row.is-done .mfg-row-meta span,
@@ -2568,20 +2576,23 @@ def render_manufacturing_page(
         return false;
       }};
       const childUnitState = (row, index) => {{
+        const parentState = selectionState[rowStateKey(row)] || "";
+        if (parentState === "done") return "done";
         const unitKey = childUnitStateKey(row, index);
         if (Object.prototype.hasOwnProperty.call(selectionState, unitKey)) return selectionState[unitKey] || "";
         const legacyUnitKey = stateKeyForRowId(rowProductionNumber(row), childUnitRowId(row, index));
         if (Object.prototype.hasOwnProperty.call(selectionState, legacyUnitKey)) return selectionState[legacyUnitKey] || "";
-        const parentState = selectionState[rowStateKey(row)] || "";
         return pantoloHasExplicitUnitState(row) ? "" : parentState;
       }};
       const pantoloGroupState = (row) => {{
         if (!isPantoloGroupedRow(row)) return selectionState[rowStateKey(row)] || "";
+        const parentState = selectionState[rowStateKey(row)] || "";
+        if (parentState === "done") return "done";
         const states = Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitState(row, index));
         if (states.every((state) => !state)) return "";
         if (states.every((state) => state === "red")) return "red";
         if (states.every((state) => state === "done")) return "done";
-        if (states.every((state) => isGreenLikeState(state))) return "green";
+        if (states.every((state) => isGreenLikeState(state))) return states.includes("green") ? "green" : "done";
         return "mixed";
       }};
       const rowSourceStateKeys = (row) => Array.from(new Set(
@@ -2595,7 +2606,7 @@ def render_manufacturing_page(
         const states = keys.map((key) => selectionState[key] || "").filter(Boolean);
         if (!states.length) return "";
         if (states.every((state) => state === states[0])) return states[0];
-        if (states.every((state) => isGreenLikeState(state))) return "green";
+        if (states.every((state) => isGreenLikeState(state))) return states.includes("green") ? "green" : "done";
         return "mixed";
       }};
       const rowStateValue = (row) => {{
@@ -4396,9 +4407,13 @@ def render_manufacturing_page(
             const stateKey = String(rowStateKey(row) || "").trim();
             const stateStorageKey = String(rowStorageKey(row) || rowId).trim();
             const code = extractConCode(row);
-            const sourceRowIds = Array.isArray(row?.sourceRowIds)
+            const explicitSourceRowIds = Array.isArray(row?.sourceRowIds)
               ? row.sourceRowIds.map((value) => String(value || "").trim()).filter((value) => value && !isChildUnitRowId(value))
               : [];
+            const groupedSourceRowIds = isPantoloGroupedRow(row)
+              ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitStorageKey(row, index))
+              : [];
+            const sourceRowIds = Array.from(new Set([...explicitSourceRowIds, ...groupedSourceRowIds].filter(Boolean)));
             if (!rowId || !stateKey || !code) return null;
             return {{ row_id: rowId, state_key: stateKey, state_storage_key: stateStorageKey, code, document_key: documentKey, category_key: categoryKey, source_row_ids: sourceRowIds }};
           }})
