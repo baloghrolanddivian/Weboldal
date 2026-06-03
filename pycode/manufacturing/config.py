@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_runtime_dir = Path("runtime") / "gyartasi-papirok"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+_runtime_dir = REPO_ROOT / "runtime" / "gyartasi-papirok"
 
 
 def configure_manufacturing(runtime_dir: Path) -> None:

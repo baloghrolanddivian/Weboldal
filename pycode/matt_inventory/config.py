@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-_runtime_dir = Path("runtime") / "matt-raktarertek"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+_runtime_dir = REPO_ROOT / "runtime" / "matt-raktarertek"
 _layout_renderer: Callable[..., bytes] | None = None
 
 
