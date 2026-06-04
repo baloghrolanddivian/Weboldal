@@ -246,6 +246,7 @@ DEV_EVENT_HEARTBEAT_SECONDS = 10
 WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", ".csv"}
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
+APP_VERSION = "2.0.10"
 
 
 NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
@@ -399,6 +400,7 @@ def render_home_page(user: AuthUser, raw_path: str = "/") -> bytes:
     """Render the home page with only the modules available to the user."""
     page = (BASE_DIR / "index.html").read_text(encoding="utf-8")
     page = _filter_home_module_cards(page, user)
+    page = page.replace("{{APP_VERSION}}", html.escape(APP_VERSION), 1)
     page = page.replace("</header>", _login_form_html(user, raw_path) + "\n      </header>", 1)
     return page.encode("utf-8")
 
