@@ -96,7 +96,7 @@ def render_manufacturing_page(
             f'<span class="mfg-chip-number">{html.escape(str(entry.get("number", "")))}</span>'
             f"</a>"
         )
-        for entry in recent_productions[:10]
+        for entry in recent_productions
     )
     toolbar_markup = (
         f"""
@@ -1181,6 +1181,40 @@ def render_manufacturing_page(
       gap: 0;
       overflow: hidden;
     }}
+    .mfg-section-card.is-topfloor-boxed {{
+      border-color: rgba(185, 28, 28, 0.62);
+      box-shadow: inset 7px 0 0 #b91c1c;
+    }}
+    .mfg-section-card.is-topfloor-boxed .mfg-section-head {{
+      background: #fee2e2;
+    }}
+    .mfg-section-card.is-topfloor-open {{
+      border-color: rgba(5, 150, 105, 0.62);
+      box-shadow: inset 7px 0 0 #059669;
+    }}
+    .mfg-section-card.is-topfloor-open .mfg-section-head {{
+      background: #bbf7d0;
+    }}
+    .mfg-section-card.is-topfloor-done {{
+      border-color: rgba(4, 120, 87, 0.82);
+      box-shadow: inset 8px 0 0 #047857;
+    }}
+    .mfg-section-card.is-topfloor-done .mfg-section-head {{
+      background: linear-gradient(180deg, #12a566, #0c8d57);
+      color: #f4fff8;
+    }}
+    .mfg-section-card.is-topfloor-done .mfg-topfloor-title,
+    .mfg-section-card.is-topfloor-done .mfg-topfloor-title strong {{
+      color: #f4fff8;
+    }}
+    .mfg-section-card.is-topfloor-done .mfg-section-count {{
+      color: #ffffff;
+      background: rgba(5, 46, 22, 0.42);
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-weight: 900;
+    }}
     .mfg-table-head {{
       display: grid;
       grid-template-columns: 1fr 0.74fr 0.82fr 0.24fr 0.46fr 1.74fr;
@@ -1403,6 +1437,10 @@ def render_manufacturing_page(
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
+    }}
+    .mfg-row:disabled {{
+      cursor: default;
+      opacity: 1;
     }}
     .mfg-row.is-no-barcode {{
       grid-template-columns: 1.14fr 0.78fr 0.8fr 0.44fr 0.56fr;
@@ -2011,11 +2049,15 @@ def render_manufacturing_page(
       font-size: 0.9rem;
       color: #475569;
       line-height: 1.45;
+      white-space: pre-line;
     }}
     .mfg-confirm-actions {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+    }}
+    .mfg-confirm-actions.is-single {{
+      grid-template-columns: 1fr;
     }}
     .mfg-confirm-button {{
       min-height: 42px;
@@ -2391,7 +2433,8 @@ def render_manufacturing_page(
       const cacheProductionPayload = (nextPayload) => {{
         const targetProductionNumber = String(nextPayload?.productionNumber || "").trim();
         const operationKey = String(nextPayload?.currentDocumentKey || currentDocKey || "").trim();
-        if (!targetProductionNumber || !operationKey || !Array.isArray(nextPayload?.documents) || !nextPayload.documents.length) return;
+        if (!operationKey || !Array.isArray(nextPayload?.documents) || !nextPayload.documents.length) return;
+        if (operationKey !== "topfloor" && !targetProductionNumber) return;
         productionPayloadCache.set(productionCacheKey(operationKey, targetProductionNumber), nextPayload);
       }};
       const storeCurrentProductionPayload = () => {{
@@ -2413,7 +2456,8 @@ def render_manufacturing_page(
       }};
       const productionDataUrl = (targetProductionNumber, operationKey = currentDocKey) => {{
         const url = new URL(dataRoute || `${{pageRoute}}/data`, window.location.origin);
-        url.searchParams.set("production", targetProductionNumber);
+        const normalizedProductionNumber = String(targetProductionNumber || "").trim();
+        if (normalizedProductionNumber) url.searchParams.set("production", normalizedProductionNumber);
         if (operationKey) url.searchParams.set("operation", operationKey);
         return url;
       }};
@@ -2426,7 +2470,7 @@ def render_manufacturing_page(
         }});
         const result = await response.json().catch(() => ({{}}));
         if (!response.ok || !result.ok) {{
-          throw new Error(result.error || "A gyĂˇrtĂˇs betĂ¶ltĂ©se nem sikerĂĽlt.");
+          throw new Error(result.error || "A gyártás betöltése nem sikerült.");
         }}
         cacheProductionPayload(result);
         return result;
@@ -2444,7 +2488,7 @@ def render_manufacturing_page(
       const renderProductionChips = (recentProductions = []) => {{
         if (!chipRowNode) return;
         chipRowNode.replaceChildren();
-        for (const entry of (Array.isArray(recentProductions) ? recentProductions.slice(0, 10) : [])) {{
+        for (const entry of (Array.isArray(recentProductions) ? recentProductions : [])) {{
           const entryNumber = String(entry?.number || "").trim();
           if (!entryNumber) continue;
           const entryKind = String(entry?.kind || "").trim();
@@ -2462,7 +2506,7 @@ def render_manufacturing_page(
           }}
           const dateNode = document.createElement("span");
           dateNode.className = "mfg-chip-date";
-          dateNode.textContent = String(entry?.date_label || "DĂˇtum nĂ©lkĂĽl");
+          dateNode.textContent = String(entry?.date_label || "Dátum nélkül");
           const numberNode = document.createElement("span");
           numberNode.className = "mfg-chip-number";
           numberNode.textContent = entryNumber;
@@ -2479,7 +2523,9 @@ def render_manufacturing_page(
         document.querySelectorAll("[data-mfg-shipment-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
+          const shipmentComplete = topfloorSectionsComplete(topfloorShipmentSectionsForKey(currentDocument(), viewKey));
           link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
+          link.classList.toggle("is-complete", shipmentComplete);
         }});
         document.querySelectorAll("[data-mfg-production-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
@@ -2503,7 +2549,7 @@ def render_manufacturing_page(
       }};
       const applyProductionPayload = (nextPayload) => {{
         const nextDocuments = Array.isArray(nextPayload?.documents) ? nextPayload.documents : [];
-        if (!nextDocuments.length) throw new Error("A gyĂˇrtĂˇshoz nincs megjelenĂ­thetĹ‘ adat.");
+        if (!nextDocuments.length) throw new Error("A gyártáshoz nincs megjeleníthető adat.");
         payload = Object.assign({{}}, payload, nextPayload);
         documents = nextDocuments;
         selectionState = Object.assign({{}}, nextPayload.selectionState || {{}});
@@ -2537,19 +2583,22 @@ def render_manufacturing_page(
       }}
       cacheProductionPayload(payload);
       const refreshProductionClientCache = async () => {{
-        if (!currentDocKey || !productionNumber) return;
+        if (!currentDocKey) return;
+        const isTopfloor = String(currentDocKey || "").trim() === "topfloor";
+        if (!isTopfloor && !productionNumber) return;
+        const refreshProductionNumber = isTopfloor ? "" : productionNumber;
         if (cacheRefreshButtonNode) cacheRefreshButtonNode.classList.add("is-loading");
-        setStatus("GyĂˇrtĂˇsi lista frissĂ­tĂ©se...");
+        setStatus("Gyártási lista frissítése...");
         try {{
           await flushPendingWrites();
-          const url = productionDataUrl(productionNumber, currentDocKey);
+          const url = productionDataUrl(refreshProductionNumber, currentDocKey);
           url.searchParams.set("refresh_cache", "1");
           const response = await fetch(url.toString(), {{
             headers: {{ "Accept": "application/json" }},
           }});
           const result = await response.json().catch(() => ({{}}));
           if (!response.ok || !result.ok) {{
-            throw new Error(result.error || "A gyorsĂ­tĂłtĂˇr frissĂ­tĂ©se nem sikerĂĽlt.");
+            throw new Error(result.error || "A gyorsítótár frissítése nem sikerült.");
           }}
           productionPayloadCache.clear();
           payload.productionClientCache = Array.isArray(result.productionClientCache) ? result.productionClientCache : [];
@@ -2559,9 +2608,9 @@ def render_manufacturing_page(
           cacheProductionPayload(result);
           renderProductionChips(result.recentProductions);
           applyProductionPayload(result);
-          setStatus("GyorsĂ­tĂłtĂˇr frissĂ­tve.", "is-success");
+          setStatus("Gyorsítótár frissítve.", "is-success");
         }} catch (error) {{
-          setStatus(error instanceof Error ? error.message : "A gyorsĂ­tĂłtĂˇr frissĂ­tĂ©se nem sikerĂĽlt.", "is-error");
+          setStatus(error instanceof Error ? error.message : "A gyorsítótár frissítése nem sikerült.", "is-error");
         }} finally {{
           if (cacheRefreshButtonNode) cacheRefreshButtonNode.classList.remove("is-loading");
         }}
@@ -3006,16 +3055,34 @@ def render_manufacturing_page(
         const searchable = normalizeSearchText(collectSearchParts(row, [group?.label || "", group?.key || ""]).join(" "));
         return terms.every((term) => searchable.includes(term));
       }};
+      const topfloorCategoryMatchesSearch = (group, terms) => {{
+        if (!terms.length) return true;
+        const category = group?.topfloorCategory || {{}};
+        const searchable = normalizeSearchText([
+          group?.label || "",
+          category.productionID,
+          category.buyer,
+          category.location,
+          category.orderNumber,
+          category.buyerID,
+          category.boxId,
+          category.boxDescription,
+          category.defaultBoxDescription,
+        ].map((value) => String(value || "")).join(" "));
+        return terms.every((term) => searchable.includes(term));
+      }};
       const filterGroupsBySearch = (groups, document) => {{
         const terms = activeSearchTerms();
         if (!documentUsesSearch(document) || !terms.length) return groups;
-        const keepTopfloorCategoryShell = String(document?.key || "") === "topfloor";
+        if (String(document?.key || "") === "topfloor") {{
+          return (Array.isArray(groups) ? groups : []).filter((group) => topfloorCategoryMatchesSearch(group, terms));
+        }}
         return (Array.isArray(groups) ? groups : [])
           .map((group) => ({{
             ...group,
             rows: (Array.isArray(group?.rows) ? group.rows : []).filter((row) => rowMatchesSearch(row, group, terms)),
           }}))
-          .filter((group) => (Array.isArray(group.rows) && group.rows.length) || (keepTopfloorCategoryShell && group?.topfloorCategory));
+          .filter((group) => Array.isArray(group.rows) && group.rows.length);
       }};
       const updateSearchControls = (activeDocument) => {{
         const enabled = documentUsesSearch(activeDocument);
@@ -3197,6 +3264,7 @@ def render_manufacturing_page(
         const category = group?.topfloorCategory || null;
         if (!category) return escapeHtml(group?.label || "");
         const lines = [
+          ["Termelés", category.productionID],
           ["Vevő", category.buyer],
           ["Cím", category.location],
           ["Vevő rendelés sz.", category.orderNumber],
@@ -3299,6 +3367,32 @@ def render_manufacturing_page(
         if (!shipmentId) return [];
         return sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
       }};
+      const topfloorShipmentSectionsForKey = (document, shipmentKey) => {{
+        const sections = Array.isArray(document?.sections) ? document.sections : [];
+        if (String(document?.key || "") !== "topfloor") return [];
+        const shipmentId = topfloorShipmentIdFromKey(shipmentKey);
+        if (!shipmentId) return [];
+        return sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
+      }};
+      const isTopfloorDoneState = (value) => /^\\d{{1,12}}$/.test(String(value || "").trim());
+      const topfloorSectionComplete = (section) => {{
+        const category = section?.topfloorCategory || null;
+        const rows = Array.isArray(section?.rows) ? section.rows : [];
+        if (!category || !String(category.boxId || "").trim() || category.boxOpen || !rows.length) return false;
+        return rows.every((row) => isTopfloorDoneState(rowStateValue(row)));
+      }};
+      const topfloorCategoryStateClass = (section) => {{
+        const category = section?.topfloorCategory || null;
+        if (!category || !String(category.boxId || "").trim()) return "";
+        if (topfloorSectionComplete(section)) return " is-topfloor-done";
+        if (category.boxOpen) return " is-topfloor-open";
+        return " is-topfloor-boxed";
+      }};
+      const topfloorSectionsComplete = (sections) => {{
+        const cleanSections = (Array.isArray(sections) ? sections : []).filter((section) => section?.topfloorCategory);
+        return cleanSections.length > 0 && cleanSections.every((section) => topfloorSectionComplete(section));
+      }};
+      const topfloorSectionsStateClass = (sections) => topfloorSectionsComplete(sections) ? " is-complete" : "";
       const topfloorProductionViewKey = (productionId) => `topfloor-production::${{String(productionId || "").trim()}}`;
       const topfloorProductionIdFromViewKey = (key) => {{
         const text = String(key || "").trim();
@@ -3324,8 +3418,43 @@ def render_manufacturing_page(
             label: productionId,
             count: totalQuantityForSections(groupSections),
             sections: groupSections,
-            stateClass: tabStateClassForRows(groupSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])),
+            stateClass: topfloorSectionsStateClass(groupSections),
           }}));
+      }};
+      const topfloorOpenBoxCategory = (document, exceptCategoryKey = "") => {{
+        if (String(document?.key || "") !== "topfloor") return null;
+        const cleanExcept = String(exceptCategoryKey || "").trim();
+        const sections = Array.isArray(document?.sections) ? document.sections : [];
+        for (const section of sections) {{
+          const category = section?.topfloorCategory || null;
+          if (!category || !category.boxOpen) continue;
+          if (String(category.categoryKey || "").trim() === cleanExcept) continue;
+          return {{
+            category,
+            label: String(section?.label || "").trim(),
+          }};
+        }}
+        return null;
+      }};
+      const warnTopfloorOpenBox = (openBox) => {{
+        const category = openBox?.category || {{}};
+        const boxId = String(category.boxId || "").trim();
+        const description = String(category.boxDescription || category.defaultBoxDescription || "").trim();
+        const categoryKey = String(category.categoryKey || "").trim();
+        const shipmentId = String(category.shipmentID || (categoryKey.split("::")[0] || "")).trim();
+        const label = String(openBox?.label || category.categoryKey || "").trim();
+        const lines = ["Már van nyitott Anyagraktár doboz."];
+        if (shipmentId) lines.push(`Szállítmány: ${{shipmentId}}`);
+        if (boxId) lines.push(`Doboz: ${{boxId}}`);
+        if (label) lines.push(`Kategória: ${{label}}`);
+        if (description) lines.push(`Leírás: ${{description}}`);
+        lines.push("Zárd le ezt a dobozt, mielőtt másikat nyitsz.");
+        return requestConfirmModal({{
+          title: "Nyitott Anyagraktár doboz",
+          copy: lines.join("\\n"),
+          confirmText: "Vissza",
+          singleAction: true,
+        }});
       }};
 
       const buildGroupsForView = (document) => {{
@@ -3483,7 +3612,7 @@ def render_manufacturing_page(
           subsectionTabsNode.innerHTML = "";
           subsectionTabsNode.style.display = "none";
           const tabs = [
-            {{ key: "all", label: "Összes", count: countRowsInSections(sections), stateClass: tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])) }},
+            {{ key: "all", label: "Összes", count: countRowsInSections(sections), stateClass: topfloorSectionsStateClass(sections) }},
             {{ key: "plain", label: "Simák", count: countRowsInSections(sections, (row) => !rowStateValue(row)), stateClass: "" }},
             {{ key: "green", label: "Zöldek", count: countRowsInSections(sections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
             {{ key: "red", label: "Pirosak", count: countRowsInSections(sections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
@@ -3705,7 +3834,9 @@ def render_manufacturing_page(
             `
             : "";
           const tableHeadExtraClass = `${{showPartialColumn ? " is-with-partial" : ""}}${{expanderClass}}`;
-          const tableHeadMarkup = columnLayout === "cnc-lower"
+          const tableHeadMarkup = columnLayout === "topfloor"
+            ? ""
+            : columnLayout === "cnc-lower"
             ? `
                 <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Megnevezés")}}
@@ -3747,17 +3878,17 @@ def render_manufacturing_page(
             : columnLayout === "pantolo"
               ? `
                 <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
-                  ${{sortButtonMarkup(group.key, "color", "SzĂ­n")}}
-                  ${{sortButtonMarkup(group.key, "color23", "SzĂ­n 2/3")}}
-                  ${{sortButtonMarkup(group.key, "pant_type", "PĂˇnt tĂ­pus")}}
+                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{sortButtonMarkup(group.key, "color23", "Szín 2/3")}}
+                  ${{sortButtonMarkup(group.key, "pant_type", "Pánt típus")}}
                   ${{sortButtonMarkup(group.key, "model", "Modell")}}
-                  ${{sortButtonMarkup(group.key, "size", "MĂ©ret")}}
-                  ${{sortButtonMarkup(group.key, "handle_drill", "FogantyĂş furat")}}
-                  ${{sortButtonMarkup(group.key, "handle_type", "FogantyĂş tĂ­pus")}}
-                  ${{sortButtonMarkup(group.key, "opening_dir", "NyitĂˇs irĂˇny")}}
-                  ${{sortButtonMarkup(group.key, "door_type", "AjtĂł tĂ­pus")}}
+                  ${{sortButtonMarkup(group.key, "size", "Méret")}}
+                  ${{sortButtonMarkup(group.key, "handle_drill", "Fogantyú furat")}}
+                  ${{sortButtonMarkup(group.key, "handle_type", "Fogantyú típus")}}
+                  ${{sortButtonMarkup(group.key, "opening_dir", "Nyitás irány")}}
+                  ${{sortButtonMarkup(group.key, "door_type", "Ajtó típus")}}
                   ${{sortButtonMarkup(group.key, "quantity", "ME")}}
-                  ${{showPartialColumn ? "<span>HiĂˇnyzik</span>" : ""}}
+                  ${{showPartialColumn ? "<span>Hiányzik</span>" : ""}}
                   ${{showPantoloExpanderColumn ? "<span></span>" : ""}}
                 </div>
               `
@@ -3793,8 +3924,12 @@ def render_manufacturing_page(
                   ${{effectiveHideBarcode ? "" : sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
               `;
+          const topfloorRowsLocked = String(document?.key || "") === "topfloor" && group?.topfloorCategory && !Boolean(group.topfloorCategory.boxOpen);
           const rowMarkup = sortedRowsForView(group.rows, group.key).map((row) => {{
             const rowState = rowStateValue(row);
+            const rowStateClass = String(document?.key || "") === "topfloor" && isTopfloorDoneState(rowState)
+              ? " is-done"
+              : (rowState ? ` is-${{escapeHtml(rowState)}}` : "");
             const partialKey = rowStateKey(row);
             const partialValue = showPartialColumn && rowState === "red" ? String(partialQuantityState[partialKey] || "") : "";
             const partialMarkup = showPartialColumn
@@ -3875,7 +4010,7 @@ def render_manufacturing_page(
               ? Array.from(new Set([...(Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []), ...pantoloGroupSourceRowIds]))
               : (Array.isArray(row.sourceRowIds) ? row.sourceRowIds : []);
             const pantoloExpandMarkup = pantoloIsGroup
-              ? `<span class="mfg-pantolo-expand" role="button" tabindex="0" data-pantolo-expand data-state-key="${{escapeHtml(rowStateKey(row))}}" aria-label="${{pantoloGroupExpanded ? "BezĂˇrĂˇs" : "KinyitĂˇs"}}">${{pantoloGroupExpanded ? "\\u25B2" : "\\u25BC"}}</span>`
+              ? `<span class="mfg-pantolo-expand" role="button" tabindex="0" data-pantolo-expand data-state-key="${{escapeHtml(rowStateKey(row))}}" aria-label="${{pantoloGroupExpanded ? "Bezárás" : "Kinyitás"}}">${{pantoloGroupExpanded ? "\\u25B2" : "\\u25BC"}}</span>`
               : `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`;
             const pantoloCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") => `
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{escapeHtml(displayRow.color23 || "-")}}</span></div>
@@ -3940,7 +4075,7 @@ def render_manufacturing_page(
                 }}).join("")
               : "";
             return `
-              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowState ? ` is-${{rowState}}` : ""}}" type="button" data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-state-storage-key="${{escapeHtml(rowStorageKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
+              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" type="button"${{topfloorRowsLocked ? " disabled" : ""}} data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-state-storage-key="${{escapeHtml(rowStorageKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
@@ -4036,7 +4171,7 @@ def render_manufacturing_page(
               ${{pantoloChildRowsMarkup}}
             `;
           }}).join("");
-          const sectionClass = columnLayout === "pantolo" ? " is-pantolo" : "";
+          const sectionClass = `${{columnLayout === "pantolo" ? " is-pantolo" : ""}}${{String(document?.key || "") === "topfloor" ? topfloorCategoryStateClass(group) : ""}}`;
           return `<section class="mfg-section-card${{sectionClass}}" data-section-key="${{escapeHtml(group.key || "")}}">${{headMarkup}}${{tableHeadMarkup}}<div class="mfg-row-list" data-section-key="${{escapeHtml(group.key || "")}}">${{rowMarkup}}</div></section>`;
         }}).join("");
       }};
@@ -4359,8 +4494,18 @@ def render_manufacturing_page(
         }}
       }};
 
-      const requestConfirmModal = () =>
+      const requestConfirmModal = (options = {{}}) =>
         new Promise((resolve) => {{
+          const titleNode = confirmModalNode.querySelector(".mfg-confirm-title");
+          const copyNode = confirmModalNode.querySelector(".mfg-confirm-copy");
+          const actionsNode = confirmModalNode.querySelector(".mfg-confirm-actions");
+          const cancelButton = confirmModalNode.querySelector('[data-confirm-action="cancel"]');
+          const confirmButton = confirmModalNode.querySelector('[data-confirm-action="confirm"]');
+          if (titleNode) titleNode.textContent = String(options.title || "Biztosan készre jelented a zöld tételeket?");
+          if (copyNode) copyNode.textContent = String(options.copy || "A sikeresen készre jelentett sorok sötétzöldre váltanak és többé nem módosíthatók.");
+          if (confirmButton instanceof HTMLElement) confirmButton.textContent = String(options.confirmText || "Igen, készre");
+          if (cancelButton instanceof HTMLElement) cancelButton.hidden = Boolean(options.singleAction);
+          if (actionsNode instanceof HTMLElement) actionsNode.classList.toggle("is-single", Boolean(options.singleAction));
           pendingConfirmResolve = resolve;
           confirmModalNode.hidden = false;
         }});
@@ -4425,13 +4570,13 @@ def render_manufacturing_page(
         event.preventDefault();
         if (!targetProductionNumber || targetProductionNumber === productionNumber || !currentDocKey) return;
         storeCurrentProductionPayload();
-        setStatus("GyĂˇrtĂˇs betĂ¶ltĂ©se...");
+        setStatus("Gyártás betöltése...");
         try {{
           await flushPendingWrites();
           const nextPayload = await fetchProductionPayload(targetProductionNumber, currentDocKey);
           applyProductionPayload(nextPayload);
         }} catch (error) {{
-          setStatus(error instanceof Error ? error.message : "A gyĂˇrtĂˇs betĂ¶ltĂ©se nem sikerĂĽlt.", "is-error");
+          setStatus(error instanceof Error ? error.message : "A gyártás betöltése nem sikerült.", "is-error");
           const href = String(link.getAttribute("href") || "");
           if (href) window.location.href = href;
         }}
@@ -4548,6 +4693,14 @@ def render_manufacturing_page(
         const group = groups.find((item) => String(item?.topfloorCategory?.categoryKey || "") === categoryKey);
         if (!group) return;
         const category = group.topfloorCategory || {{}};
+        if (action === "open") {{
+          const openBox = topfloorOpenBoxCategory(document, categoryKey);
+          if (openBox) {{
+            await warnTopfloorOpenBox(openBox);
+            setStatus("Már van nyitott Anyagraktár doboz.", "is-error");
+            return;
+          }}
+        }}
         const entries = action === "close"
           ? (Array.isArray(group.rows) ? group.rows : [])
               .filter((row) => isReadyGreenState(rowStateValue(row)))
@@ -4558,9 +4711,15 @@ def render_manufacturing_page(
               }}))
               .filter((entry) => entry.code && entry.state_storage_key)
           : [];
-        if (action === "close" && !entries.length) {{
-          setStatus("Nincs zöld tétel ebben a kategóriában.", "is-error");
-          return;
+        if (action === "close") {{
+          const isConfirmed = await requestConfirmModal({{
+            title: "Biztosan lezárod a dobozt?",
+            copy: entries.length
+              ? `A doboz lezárásakor ${{entries.length}} zöld tétel kerül a dobozba, majd a doboz bezáródik.`
+              : "A doboz zöld tétel nélkül lesz lezárva.",
+            confirmText: "Igen, lezárom",
+          }});
+          if (!isConfirmed) return;
         }}
         button.disabled = true;
         setStatus("Anyagraktár doboz művelet folyamatban...");

@@ -29,7 +29,7 @@ TOPFLOOR_BOXING_TAB_ID = int(os.getenv("TOPFLOOR_BOXING_TAB_ID", "202"))
 TOPFLOOR_UNLOADING_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_UNLOADING_CHECKPOINT_ID", "126"))
 TOPFLOOR_UNLOADING_TAB_ID = int(os.getenv("TOPFLOOR_UNLOADING_TAB_ID", "204"))
 TOPFLOOR_BOX_CTS_ID = int(os.getenv("TOPFLOOR_BOX_CTS_ID", "24"))
-TOPFLOOR_BOXES_RUNTIME_DIR = Path(os.getenv("TOPFLOOR_BOXES_RUNTIME_DIR", "runtime/gyartasi-papirok/dobozok"))
+TOPFLOOR_RUNTIME_DIR = Path(os.getenv("TOPFLOOR_RUNTIME_DIR", "runtime/gyartasi-papirok/topfloor"))
 SHOPFLOOR_PROCESS_PAYLOAD = {
     "allowAnonymousInventory": False,
     "cdsmId": 4,
@@ -183,9 +183,7 @@ def report_con_ready(
 def create_topfloor_box(con_description: str = "", client: ShopfloorApiClient | None = None) -> dict[str, object]:
     """Create a Topfloor box container and persist its draft metadata."""
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
-    box = _topfloor_create_box(client, con_description=con_description)
-    _save_topfloor_box_todo(box)
-    return box
+    return _topfloor_create_box(client, con_description=con_description)
 
 
 def create_closed_topfloor_category_box(
@@ -212,6 +210,7 @@ def open_topfloor_box(box: dict[str, object] | int, client: ShopfloorApiClient |
 
 def open_topfloor_category_box(category_key: str, client: ShopfloorApiClient | None = None) -> dict[str, object]:
     """Open the box assigned to a Topfloor category."""
+    _topfloor_require_no_other_open_box(category_key)
     box = _topfloor_category_box(category_key)
     result = open_topfloor_box(box, client=client)
     _save_topfloor_category_box(category_key, box, open_state=True)
@@ -243,10 +242,18 @@ def unload_topfloor_items_into_box(
     """Unload multiple items into an already-open Topfloor box."""
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     loaded_items: list[str] = []
+    failed_items: list[dict[str, str]] = []
     for barcode_id in barcode_ids:
-        result = unload_topfloor_item_into_box(box, barcode_id, client=client)
+        clean_barcode_id = str(barcode_id or "").strip()
+        if not clean_barcode_id:
+            continue
+        try:
+            result = unload_topfloor_item_into_box(box, clean_barcode_id, client=client)
+        except Exception as exc:
+            failed_items.append({"barcodeId": clean_barcode_id, "error": str(exc)})
+            continue
         loaded_items.append(str(result["barcodeId"]))
-    return {"conId": _topfloor_box_con_id(box), "items": loaded_items}
+    return {"conId": _topfloor_box_con_id(box), "items": loaded_items, "failedItems": failed_items}
 
 
 def close_topfloor_box_with_items(
@@ -269,7 +276,6 @@ def close_topfloor_box_with_items(
         int(box_payload["ctsId"]),
     )
     completed_items = [str(item).strip() for item in loaded_barcode_ids if str(item).strip()]
-    _save_topfloor_box_items_done_todo(int(box_payload["conId"]), completed_items)
     return {**box_payload, "items": completed_items, "closed": True}
 
 
@@ -296,28 +302,8 @@ def load_and_close_topfloor_category_box(
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     box = _topfloor_category_box(category_key)
     loaded = unload_topfloor_items_into_box(box, barcode_ids, client=client)
-    return close_topfloor_category_box_with_items(category_key, loaded["items"], client=client)
-
-
-def fill_topfloor_box(
-    box: dict[str, object],
-    barcode_ids: list[str] | tuple[str, ...],
-) -> dict[str, object]:
-    """Open a Topfloor box, unload items, put them in the box, then close it."""
-    client = ShopfloorApiClient.for_endpoint("topfloor_boxing")
-    open_topfloor_box(box, client=client)
-    loaded = unload_topfloor_items_into_box(box, barcode_ids, client=client)
-    return close_topfloor_box_with_items(box, loaded["items"], client=client)
-
-
-def create_and_fill_topfloor_box(
-    barcode_ids: list[str] | tuple[str, ...],
-    *,
-    con_description: str = "",
-) -> dict[str, object]:
-    """Create a Topfloor box and fill it with the provided barcode IDs."""
-    box = create_topfloor_box(con_description=con_description)
-    return fill_topfloor_box(box, barcode_ids)
+    result = close_topfloor_category_box_with_items(category_key, loaded["items"], client=client)
+    return {**result, "failedItems": loaded.get("failedItems", [])}
 
 
 def _shopfloor_auth_header(username: str = SHOPFLOOR_USERNAME, password: str = SHOPFLOOR_PASSWORD) -> str:
@@ -565,67 +551,65 @@ def _shopfloor_require_success(status_code: int, response_body: str, action: str
     raise RuntimeError(f"{action} sikertelen ({int(status_code)}): {error}")
 
 
-def _save_topfloor_box_todo(box: dict[str, object]) -> None:
-    """Persist new Topfloor box metadata."""
-    # TODO: Finalize Topfloor box persistence schema and retention.
-    try:
-        con_id = _topfloor_box_con_id(box)
-        TOPFLOOR_BOXES_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-        path = TOPFLOOR_BOXES_RUNTIME_DIR / f"{con_id}.json"
-        payload = {
-            "todo": "Finalize Topfloor box saving.",
-            "box": box,
-            "items": [],
-        }
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        return
+def _topfloor_category_shipment_id(category_key: str) -> str:
+    """Return the shipment ID encoded in a Topfloor category key."""
+    shipment_id = str(category_key or "").split("::", 1)[0].strip()
+    if not shipment_id:
+        raise ValueError("Hiányzik a Topfloor shipmentID.")
+    return shipment_id
 
 
-def _save_topfloor_box_items_done_todo(con_id: int, barcode_ids: list[str]) -> None:
-    """Persist the items completed into a Topfloor box."""
-    # TODO: Save done state using the final manufacturing row/state model.
-    try:
-        TOPFLOOR_BOXES_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-        path = TOPFLOOR_BOXES_RUNTIME_DIR / f"{int(con_id)}.json"
-        payload: dict[str, object] = {}
-        if path.exists():
-            try:
-                loaded = json.loads(path.read_text(encoding="utf-8") or "{}")
-                if isinstance(loaded, dict):
-                    payload = loaded
-            except Exception:
-                payload = {}
-        payload["todo"] = "Finalize Topfloor box saving and item done-state persistence."
-        payload["items"] = [{"barcodeId": str(item), "state": "done"} for item in barcode_ids]
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        return
+def _topfloor_state_path(shipment_id: str) -> Path:
+    """Return the Topfloor shipment state path."""
+    clean_id = _topfloor_category_shipment_id(shipment_id)
+    target_dir = TOPFLOOR_RUNTIME_DIR / clean_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir / "state.json"
 
 
-def _topfloor_categories_path() -> Path:
-    """Return the Topfloor category assignment registry path."""
-    return TOPFLOOR_BOXES_RUNTIME_DIR / "categories.json"
-
-
-def _load_topfloor_categories() -> dict[str, dict]:
-    """Load Topfloor category-to-box assignments."""
-    path = _topfloor_categories_path()
+def _load_topfloor_state_payload(shipment_id: str) -> dict:
+    """Load the raw Topfloor shipment state payload."""
+    path = _topfloor_state_path(shipment_id)
     if not path.exists():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8") or "{}")
     except Exception:
         return {}
-    if not isinstance(payload, dict):
-        return {}
-    return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+    return payload if isinstance(payload, dict) else {}
 
 
-def _save_topfloor_categories(payload: dict[str, dict]) -> None:
-    """Save Topfloor category-to-box assignments."""
-    TOPFLOOR_BOXES_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    _topfloor_categories_path().write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+def _save_topfloor_state_payload(shipment_id: str, payload: dict) -> None:
+    """Save the raw Topfloor shipment state payload."""
+    path = _topfloor_state_path(shipment_id)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_topfloor_state_boxes(shipment_id: str) -> dict[str, dict]:
+    """Load box assignments from one Topfloor shipment state file."""
+    payload = _load_topfloor_state_payload(shipment_id)
+    return {
+        str(key): value
+        for key, value in payload.items()
+        if isinstance(value, dict) and str(key).startswith(f"{shipment_id}::")
+    }
+
+
+def _save_topfloor_state_box(category_key: str, box: dict[str, object]) -> None:
+    """Save one Topfloor category box into its shipment state file."""
+    shipment_id = _topfloor_category_shipment_id(category_key)
+    payload = _load_topfloor_state_payload(shipment_id)
+    payload[str(category_key)] = dict(box)
+    _save_topfloor_state_payload(shipment_id, payload)
+
+
+def _load_topfloor_categories() -> dict[str, dict]:
+    """Load Topfloor category-to-box assignments."""
+    result: dict[str, dict] = {}
+    for state_path in sorted(TOPFLOOR_RUNTIME_DIR.glob("*/state.json")):
+        shipment_id = state_path.parent.name
+        result.update(_load_topfloor_state_boxes(shipment_id))
+    return result
 
 
 def _save_topfloor_category_box(category_key: str, box: dict[str, object], *, open_state: bool) -> None:
@@ -633,16 +617,14 @@ def _save_topfloor_category_box(category_key: str, box: dict[str, object], *, op
     clean_key = str(category_key or "").strip()
     if not clean_key:
         raise ValueError("Hiányzik a Topfloor kategória azonosító.")
-    payload = _load_topfloor_categories()
     box_payload = _topfloor_box_payload(box)
-    payload[clean_key] = {
+    _save_topfloor_state_box(clean_key, {
         "conId": int(box_payload["conId"]),
         "conDate": str(box_payload["conDate"]),
         "conDescription": str(box_payload["conDescription"]),
         "ctsId": int(box_payload["ctsId"]),
         "open": bool(open_state),
-    }
-    _save_topfloor_categories(payload)
+    })
 
 
 def _topfloor_category_box(category_key: str) -> dict[str, object]:
@@ -653,6 +635,21 @@ def _topfloor_category_box(category_key: str) -> dict[str, object]:
     if not isinstance(box, dict) or not box.get("conId"):
         raise ValueError("Ehhez a Topfloor kategóriához nincs mentett doboz.")
     return box
+
+
+def _topfloor_require_no_other_open_box(category_key: str) -> None:
+    """Prevent opening multiple Topfloor boxes at the same time."""
+    clean_key = str(category_key or "").strip()
+    for open_key, box in _load_topfloor_categories().items():
+        if open_key == clean_key or not bool(box.get("open")):
+            continue
+        shipment_id = _topfloor_category_shipment_id(open_key)
+        con_id = str(box.get("conId", "") or "").strip()
+        description = str(box.get("conDescription", "") or "").strip()
+        details = f"Szállítmány {shipment_id}, {con_id} ({open_key})" if con_id else f"Szállítmány {shipment_id}, {open_key}"
+        if description:
+            details = f"{details} - {description}"
+        raise RuntimeError(f"Már nyitva van egy Anyagraktár doboz: {details}. Zárd le ezt, mielőtt másikat nyitsz.")
 
 
 def _shopfloor_ready_endpoint_config(ready_endpoint: str, use_assembly_validate: bool) -> tuple[int, int, bool]:

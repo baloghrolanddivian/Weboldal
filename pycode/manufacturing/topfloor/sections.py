@@ -22,7 +22,6 @@ TOPFLOOR_XML_NAMES = (
     "Anyagrakt\u00e1r.xml",
     "Anyagraktar_topfloor.xml",
 )
-TOPFLOOR_MAX_SHIPMENTS = 20
 TOPFLOOR_VENCODE_ABBREVIATIONS: dict[str, str] = {
     # TODO: Add manually approved venCode abbreviations here.
 }
@@ -68,7 +67,7 @@ def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]
         {row["shipmentID"] for row in rows if row["shipmentID"]},
         key=_topfloor_id_sort_key,
         reverse=True,
-    )[:TOPFLOOR_MAX_SHIPMENTS]
+    )
     shipment_set = set(shipment_ids)
     rows = [row for row in rows if row["shipmentID"] in shipment_set]
 
@@ -231,6 +230,7 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
                     "categoryKey": box_category_key,
                     "groupKey": group_key,
                     "boxId": str(box.get("conId", "") or ""),
+                    "boxDescription": str(box.get("conDescription", "") or ""),
                     "boxOpen": bool(box.get("open")),
                     "createEnabled": not bool(box.get("conId")),
                     "openEnabled": bool(box.get("conId")) and not bool(box.get("open")),
@@ -453,13 +453,20 @@ def _topfloor_fold(value: object) -> str:
 
 def _topfloor_category_box_registry() -> dict[str, dict]:
     """Read saved Topfloor category-to-box assignments."""
-    path = runtime_dir() / "dobozok" / "categories.json"
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    if not isinstance(payload, dict):
-        return {}
-    return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+    result: dict[str, dict] = {}
+    for state_path in sorted((runtime_dir() / "topfloor").glob("*/state.json")):
+        try:
+            payload = json.loads(state_path.read_text(encoding="utf-8") or "{}")
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        shipment_id = state_path.parent.name
+        result.update(
+            {
+                str(key): value
+                for key, value in payload.items()
+                if isinstance(value, dict) and str(key).startswith(f"{shipment_id}::")
+            }
+        )
+    return result

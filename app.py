@@ -6816,22 +6816,32 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if not shipment_id:
                     self.respond_json(400, {"ok": False, "error": "Hiányzik a shipmentID."})
                     return
-                if not entries:
-                    self.respond_json(400, {"ok": False, "error": "Nincs zöld Anyagraktár tétel a kategóriában."})
-                    return
                 result = _topfloor_load_and_close_category_box(category_key, [entry["code"] for entry in entries])
                 box_id = str(result.get("conId", "")).strip()
                 if not box_id:
                     self.respond_json(500, {"ok": False, "error": "A doboz zárása után nincs conId."})
                     return
                 current_state: dict[str, str] = {}
+                topfloor_runtime_root = manufacturing_runtime_dir() / "topfloor"
+                failed_barcodes = {
+                    str(item.get("barcodeId", "")).strip().upper()
+                    for item in result.get("failedItems", [])
+                    if isinstance(item, dict) and str(item.get("barcodeId", "")).strip()
+                }
+                loaded_state_keys: list[str] = []
+                failed_state_keys: list[str] = []
                 for entry in entries:
+                    target_state = "red" if str(entry["code"]).strip().upper() in failed_barcodes else box_id
                     current_state = save_selection_state(
-                        manufacturing_runtime_dir(),
+                        topfloor_runtime_root,
                         shipment_id,
                         entry["state_storage_key"],
-                        box_id,
+                        target_state,
                     )
+                    if target_state == "red":
+                        failed_state_keys.append(entry["state_storage_key"])
+                    else:
+                        loaded_state_keys.append(entry["state_storage_key"])
                 self.respond_json(
                     200,
                     {
@@ -6840,7 +6850,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         "box": result,
                         "shipment_id": shipment_id,
                         "state": box_id,
-                        "state_keys": [entry["state_storage_key"] for entry in entries],
+                        "state_keys": loaded_state_keys,
+                        "failed_state_keys": failed_state_keys,
+                        "failed_items": result.get("failedItems", []),
                     },
                 )
                 return
