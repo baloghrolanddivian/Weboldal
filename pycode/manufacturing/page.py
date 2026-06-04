@@ -62,11 +62,36 @@ def render_manufacturing_page(
     selected_operation_query = (
         f"&operation={urllib.parse.quote(selected_operation_key)}" if selected_operation_key else ""
     )
+
+    def chip_href(entry: dict) -> str:
+        entry_kind = str(entry.get("kind", ""))
+        entry_number = str(entry.get("number", ""))
+        target_number = selected_number if entry_kind == "shipment" else entry_number
+        target_query = f"production={urllib.parse.quote(target_number)}" if target_number else ""
+        if target_query and selected_operation_query:
+            return f"{route}?{target_query}{selected_operation_query}"
+        if target_query:
+            return f"{route}?{target_query}"
+        if selected_operation_key:
+            return f"{route}?operation={urllib.parse.quote(selected_operation_key)}"
+        return route
+
+    def chip_attrs(entry: dict) -> str:
+        if str(entry.get("kind", "")) == "shipment":
+            return (
+                "data-mfg-shipment-link "
+                f'data-view-key="{html.escape(str(entry.get("view_key", "")), quote=True)}"'
+            )
+        return (
+            "data-mfg-production-link "
+            f'data-production-number="{html.escape(str(entry.get("number", "")), quote=True)}"'
+        )
+
     recent_chips_html = "".join(
         (
-            f'<a class="mfg-chip-link{" is-active" if str(entry.get("number", "")) == selected_number else ""}{" is-complete" if bool(entry.get("is_complete")) else ""}" '
-            f'href="{route}?production={urllib.parse.quote(str(entry.get("number", "")))}{selected_operation_query}" '
-            f'data-mfg-production-link data-production-number="{html.escape(str(entry.get("number", "")))}">'
+            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{" is-complete" if bool(entry.get("is_complete")) else ""}" '
+            f'href="{chip_href(entry)}" '
+            f"{chip_attrs(entry)}>"
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
             f'<span class="mfg-chip-number">{html.escape(str(entry.get("number", "")))}</span>'
             f"</a>"
@@ -83,11 +108,11 @@ def render_manufacturing_page(
         if recent_chips_html
         else ""
     )
-    picker_href = f"{route}?production={urllib.parse.quote(selected_number)}" if selected_number else route
+    picker_href = route
     operation_buttons_html = "".join(
         (
             f'<a class="mfg-operation-button{" is-active" if str(item.get("key", "")) == selected_operation_key else ""}" '
-            f'href="{route}?production={urllib.parse.quote(selected_number)}&operation={urllib.parse.quote(str(item.get("key", "")))}">'
+            f'href="{route}?operation={urllib.parse.quote(str(item.get("key", "")))}">'
             f'<strong>{html.escape(str(item.get("label", "")))}</strong>'
             f"</a>"
         )
@@ -743,6 +768,30 @@ def render_manufacturing_page(
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+    }}
+    .mfg-topfloor-title {{
+      display: grid;
+      gap: 2px;
+      font-size: 13px;
+      line-height: 1.25;
+      color: #111827;
+    }}
+    .mfg-topfloor-title span {{
+      font-weight: 500;
+    }}
+    .mfg-topfloor-title strong {{
+      font-weight: 800;
+    }}
+    .mfg-topfloor-description {{
+      width: min(320px, 42vw);
+      min-height: 34px;
+      border: 1px solid rgba(15, 23, 42, 0.16);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #172033;
+      background: #ffffff;
     }}
     .mfg-topfloor-button {{
       min-height: 34px;
@@ -2294,6 +2343,7 @@ def render_manufacturing_page(
       let currentViewKey = "all";
       let currentSubcategoryKey = "all";
       let secondaryViewKey = "";
+      let currentTopfloorShipmentKey = "";
       let layoutMode = "single";
       const sectionSortState = Object.create(null);
       const partialSaveTimers = new Map();
@@ -2302,11 +2352,33 @@ def render_manufacturing_page(
       let pendingConfirmResolve = null;
       let activeSearchText = "";
       let pantoloStickyFrame = 0;
+      const firstTopfloorShipmentViewKey = () => {{
+        const document = currentDocument();
+        if (String(document?.key || "") !== "topfloor") return "";
+        const views = Array.isArray(document?.topfloorShipmentViews) ? document.topfloorShipmentViews : [];
+        const firstView = views.find((view) => String(view?.key || "").startsWith("shipment::"));
+        return String(firstView?.key || "");
+      }};
+      const topfloorShipmentViewForKey = (document, key) => {{
+        if (String(document?.key || "") !== "topfloor") return null;
+        const views = Array.isArray(document?.topfloorShipmentViews) ? document.topfloorShipmentViews : [];
+        return views.find((view) => String(view?.key || "") === String(key || "")) || null;
+      }};
+      const topfloorShipmentIdFromKey = (key) => {{
+        const text = String(key || "").trim();
+        return text.startsWith("shipment::") ? text.slice("shipment::".length).trim() : "";
+      }};
 
       const syncUrlForDocument = () => {{
         try {{
           const url = new URL(window.location.href);
-          if (productionNumber) url.searchParams.set("production", productionNumber);
+          if (String(currentDocKey || "") === "topfloor") {{
+            url.searchParams.delete("production");
+          }} else if (productionNumber) {{
+            url.searchParams.set("production", productionNumber);
+          }} else {{
+            url.searchParams.delete("production");
+          }}
           if (currentDocKey) url.searchParams.set("operation", currentDocKey);
           window.history.replaceState({{}}, "", url.toString());
         }} catch (_error) {{
@@ -2361,7 +2433,11 @@ def render_manufacturing_page(
       }};
       const chipHref = (targetProductionNumber, operationKey = currentDocKey) => {{
         const url = new URL(pageRoute || window.location.pathname, window.location.origin);
-        url.searchParams.set("production", targetProductionNumber);
+        const normalizedOperationKey = String(operationKey || "").trim();
+        const normalizedProductionNumber = String(targetProductionNumber || "").trim();
+        if (normalizedOperationKey !== "topfloor" && normalizedProductionNumber) {{
+          url.searchParams.set("production", normalizedProductionNumber);
+        }}
         if (operationKey) url.searchParams.set("operation", operationKey);
         return `${{url.pathname}}${{url.search}}`;
       }};
@@ -2371,11 +2447,19 @@ def render_manufacturing_page(
         for (const entry of (Array.isArray(recentProductions) ? recentProductions.slice(0, 10) : [])) {{
           const entryNumber = String(entry?.number || "").trim();
           if (!entryNumber) continue;
+          const entryKind = String(entry?.kind || "").trim();
+          const entryViewKey = String(entry?.view_key || "").trim();
           const link = document.createElement("a");
           link.className = "mfg-chip-link";
-          link.href = chipHref(entryNumber);
-          link.setAttribute("data-mfg-production-link", "");
-          link.setAttribute("data-production-number", entryNumber);
+          if (entryKind === "shipment" && entryViewKey) {{
+            link.href = chipHref(productionNumber);
+            link.setAttribute("data-mfg-shipment-link", "");
+            link.setAttribute("data-view-key", entryViewKey);
+          }} else {{
+            link.href = chipHref(entryNumber);
+            link.setAttribute("data-mfg-production-link", "");
+            link.setAttribute("data-production-number", entryNumber);
+          }}
           const dateNode = document.createElement("span");
           dateNode.className = "mfg-chip-date";
           dateNode.textContent = String(entry?.date_label || "DĂˇtum nĂ©lkĂĽl");
@@ -2392,6 +2476,11 @@ def render_manufacturing_page(
           (Array.isArray(recentProductions) ? recentProductions : [])
             .map((entry) => [String(entry?.number || ""), Boolean(entry?.is_complete)]),
         );
+        document.querySelectorAll("[data-mfg-shipment-link]").forEach((link) => {{
+          if (!(link instanceof HTMLElement)) return;
+          const viewKey = String(link.getAttribute("data-view-key") || "").trim();
+          link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
+        }});
         document.querySelectorAll("[data-mfg-production-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
           const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
@@ -2428,6 +2517,7 @@ def render_manufacturing_page(
         currentViewKey = "all";
         currentSubcategoryKey = "all";
         secondaryViewKey = "";
+        currentTopfloorShipmentKey = "";
         activeSearchText = "";
         searchInputNode.value = "";
         applyStoredPendingWritesToLocalState();
@@ -2919,12 +3009,13 @@ def render_manufacturing_page(
       const filterGroupsBySearch = (groups, document) => {{
         const terms = activeSearchTerms();
         if (!documentUsesSearch(document) || !terms.length) return groups;
+        const keepTopfloorCategoryShell = String(document?.key || "") === "topfloor";
         return (Array.isArray(groups) ? groups : [])
           .map((group) => ({{
             ...group,
             rows: (Array.isArray(group?.rows) ? group.rows : []).filter((row) => rowMatchesSearch(row, group, terms)),
           }}))
-          .filter((group) => Array.isArray(group.rows) && group.rows.length);
+          .filter((group) => (Array.isArray(group.rows) && group.rows.length) || (keepTopfloorCategoryShell && group?.topfloorCategory));
       }};
       const updateSearchControls = (activeDocument) => {{
         const enabled = documentUsesSearch(activeDocument);
@@ -3091,12 +3182,31 @@ def render_manufacturing_page(
         const openDisabled = category.openEnabled ? "" : " disabled";
         const closeDisabled = category.closeEnabled ? "" : " disabled";
         const boxLabel = boxId ? `Doboz: ${{escapeHtml(boxId)}}` : "Nincs doboz";
+        const defaultDescription = String(category.defaultBoxDescription || "");
         return `
           <div class="mfg-topfloor-actions" data-topfloor-category="${{escapeHtml(categoryKey)}}">
             <span class="mfg-section-count">${{boxLabel}}</span>
+            <input class="mfg-topfloor-description" type="text" value="${{escapeHtml(defaultDescription)}}" data-topfloor-description aria-label="Doboz leírás" />
             <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
             <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
             <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
+          </div>
+        `;
+      }};
+      const topfloorCategoryTitleMarkup = (group) => {{
+        const category = group?.topfloorCategory || null;
+        if (!category) return escapeHtml(group?.label || "");
+        const lines = [
+          ["Vevő", category.buyer],
+          ["Cím", category.location],
+          ["Vevő rendelés sz.", category.orderNumber],
+          ["Vevő kód", category.buyerID],
+        ].filter((item) => String(item[1] || "").trim());
+        return `
+          <div class="mfg-topfloor-title">
+            ${{lines.map((item) => `
+              <div><span>${{escapeHtml(item[0])}}:</span> <strong>${{escapeHtml(String(item[1] || ""))}}</strong></div>
+            `).join("")}}
           </div>
         `;
       }};
@@ -3182,9 +3292,62 @@ def render_manufacturing_page(
           .filter((section) => Array.isArray(section.rows) && section.rows.length);
         return [...baseSections, ...extraSections];
       }};
+      const topfloorShipmentSections = (document) => {{
+        const sections = Array.isArray(document?.sections) ? document.sections : [];
+        if (String(document?.key || "") !== "topfloor") return sections;
+        const shipmentId = topfloorShipmentIdFromKey(currentTopfloorShipmentKey || firstTopfloorShipmentViewKey());
+        if (!shipmentId) return [];
+        return sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
+      }};
+      const topfloorProductionViewKey = (productionId) => `topfloor-production::${{String(productionId || "").trim()}}`;
+      const topfloorProductionIdFromViewKey = (key) => {{
+        const text = String(key || "").trim();
+        return text.startsWith("topfloor-production::") ? text.slice("topfloor-production::".length).trim() : "";
+      }};
+      const topfloorProductionTabs = (sections) => {{
+        const groups = new Map();
+        for (const section of (Array.isArray(sections) ? sections : [])) {{
+          const productionId = String(section?.topfloorCategory?.productionID || "").trim();
+          if (!productionId) continue;
+          if (!groups.has(productionId)) groups.set(productionId, []);
+          groups.get(productionId).push(section);
+        }}
+        return Array.from(groups.entries())
+          .sort((left, right) => {{
+            const leftNum = Number(left[0]);
+            const rightNum = Number(right[0]);
+            if (Number.isFinite(leftNum) && Number.isFinite(rightNum) && leftNum !== rightNum) return rightNum - leftNum;
+            return left[0].localeCompare(right[0], "hu");
+          }})
+          .map(([productionId, groupSections]) => ({{
+            key: topfloorProductionViewKey(productionId),
+            label: productionId,
+            count: totalQuantityForSections(groupSections),
+            sections: groupSections,
+            stateClass: tabStateClassForRows(groupSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])),
+          }}));
+      }};
 
       const buildGroupsForView = (document) => {{
         if (!document) return [];
+        if (String(document?.key || "") === "topfloor") {{
+          const sections = topfloorShipmentSections(document);
+          const productionId = topfloorProductionIdFromViewKey(currentViewKey);
+          if (productionId) {{
+            return sections.filter((section) => String(section?.topfloorCategory?.productionID || "") === productionId);
+          }}
+          if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
+            return sections
+              .map((section) => ({{
+                ...section,
+                rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
+                  currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
+                ),
+              }}))
+              .filter((section) => section.rows.length || section?.topfloorCategory);
+          }}
+          return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
+        }}
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         if (String(document?.key || "") === "korpusz_osszekeszites" && currentSpecialView) {{
           const sections = orderedSectionsForTabs(Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : []);
@@ -3308,6 +3471,30 @@ def render_manufacturing_page(
           sectionTabsNode.innerHTML = "";
           subsectionTabsNode.innerHTML = "";
           subsectionTabsNode.style.display = "none";
+          return;
+        }}
+        if (String(document?.key || "") === "topfloor") {{
+          const sections = topfloorShipmentSections(document);
+          const productionTabs = topfloorProductionTabs(sections);
+          const validKeys = new Set(["all", "plain", "green", "red", ...productionTabs.map((item) => item.key)]);
+          if (!validKeys.has(currentViewKey)) {{
+            currentViewKey = "all";
+          }}
+          subsectionTabsNode.innerHTML = "";
+          subsectionTabsNode.style.display = "none";
+          const tabs = [
+            {{ key: "all", label: "Összes", count: countRowsInSections(sections), stateClass: tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])) }},
+            {{ key: "plain", label: "Simák", count: countRowsInSections(sections, (row) => !rowStateValue(row)), stateClass: "" }},
+            {{ key: "green", label: "Zöldek", count: countRowsInSections(sections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
+            {{ key: "red", label: "Pirosak", count: countRowsInSections(sections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
+            ...productionTabs,
+          ];
+          sectionTabsNode.innerHTML = tabs.map((item) => `
+            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{item.stateClass || ""}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+              <strong>${{escapeHtml(item.label)}}</strong>
+              <small>${{item.count}}</small>
+            </button>
+          `).join("");
           return;
         }}
         const mainKorpuszViews = korpuszMainViews(document);
@@ -3462,7 +3649,7 @@ def render_manufacturing_page(
         }}
 
         contentNode.innerHTML = groups.map((group) => {{
-          const showSectionHeader = isOverviewMode || isSplitMode;
+          const showSectionHeader = isOverviewMode || isSplitMode || (String(document?.key || "") === "topfloor" && group?.topfloorCategory);
           const hideBarcode = documentHidesBarcode(document);
           const hideSideTypeColumn = Boolean(group?.hideSideTypeColumn);
           const columnLayout = groupColumnLayout(group);
@@ -3503,7 +3690,11 @@ def render_manufacturing_page(
                 ? " is-no-barcode"
                 : "";
           const totalQuantity = (Array.isArray(group.rows) ? group.rows : []).reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
-          const sectionTitleMarkup = isPantoloLayout ? pantoloCategoryLabelMarkup(group.label) : escapeHtml(group.label);
+          const sectionTitleMarkup = String(document?.key || "") === "topfloor" && group?.topfloorCategory
+            ? topfloorCategoryTitleMarkup(group)
+            : isPantoloLayout
+              ? pantoloCategoryLabelMarkup(group.label)
+              : escapeHtml(group.label);
           const topfloorActionsMarkup = String(document?.key || "") === "topfloor" ? topfloorCategoryActionsMarkup(group) : "";
           const headMarkup = showSectionHeader
             ? `
@@ -3928,7 +4119,17 @@ def render_manufacturing_page(
       const renderAll = (snapshot = null) => {{
         const scrollState = snapshot || captureScrollState();
         const document = currentDocument();
-        if (documentUsesSingleColumnOverview(document) && !isSpecialViewKey(currentViewKey, document)) {{
+        if (String(document?.key || "") === "topfloor") {{
+          if (!topfloorShipmentViewForKey(document, currentTopfloorShipmentKey)) {{
+            currentTopfloorShipmentKey = firstTopfloorShipmentViewKey();
+          }}
+          const productionTabs = topfloorProductionTabs(topfloorShipmentSections(document));
+          const validKeys = new Set(["all", "plain", "green", "red", ...productionTabs.map((item) => item.key)]);
+          if (!validKeys.has(currentViewKey)) {{
+            currentViewKey = "all";
+          }}
+        }}
+        if (String(document?.key || "") !== "topfloor" && documentUsesSingleColumnOverview(document) && !isSpecialViewKey(currentViewKey, document)) {{
           currentViewKey = "all";
           secondaryViewKey = "";
         }}
@@ -3960,6 +4161,7 @@ def render_manufacturing_page(
           const mode = button.getAttribute("data-layout-mode") || "single";
           button.classList.toggle("is-active", mode === layoutMode);
         }});
+        updateProductionChipState(Array.isArray(payload.recentProductions) ? payload.recentProductions : []);
         renderRows(visibleGroups);
         normalizePantoloHeaders();
         renderBarcodes();
@@ -4204,6 +4406,19 @@ def render_manufacturing_page(
       }}
 
       document.addEventListener("click", async (event) => {{
+        const shipmentLink = event.target.closest("[data-mfg-shipment-link]");
+        if (shipmentLink instanceof HTMLElement) {{
+          event.preventDefault();
+          const nextViewKey = String(shipmentLink.getAttribute("data-view-key") || "").trim();
+          const document = currentDocument();
+          if (String(document?.key || "") !== "topfloor" || !topfloorShipmentViewForKey(document, nextViewKey)) return;
+          currentTopfloorShipmentKey = nextViewKey;
+          currentViewKey = "all";
+          currentSubcategoryKey = "all";
+          secondaryViewKey = "";
+          renderAll();
+          return;
+        }}
         const link = event.target.closest("[data-mfg-production-link]");
         if (!(link instanceof HTMLElement)) return;
         const targetProductionNumber = String(link.getAttribute("data-production-number") || "").trim();
@@ -4325,6 +4540,8 @@ def render_manufacturing_page(
         const action = String(button.getAttribute("data-topfloor-action") || "").trim();
         const categoryNode = button.closest("[data-topfloor-category]");
         const categoryKey = String(categoryNode?.getAttribute("data-topfloor-category") || "").trim();
+        const descriptionInput = categoryNode?.querySelector("[data-topfloor-description]");
+        const conDescription = descriptionInput instanceof HTMLInputElement ? String(descriptionInput.value || "").trim() : "";
         const document = currentDocument();
         if (String(document?.key || "") !== "topfloor" || !categoryKey) return;
         const groups = filterGroupsBySearch(buildGroupsForView(document), document);
@@ -4358,6 +4575,7 @@ def render_manufacturing_page(
               buyer: String(category.buyer || "").trim(),
               location: String(category.location || "").trim(),
               buyer_id: String(category.buyerID || "").trim(),
+              con_description: conDescription,
               entries,
             }}),
           }});

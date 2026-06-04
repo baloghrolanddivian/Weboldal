@@ -229,10 +229,10 @@ def unload_topfloor_item_into_box(
     scan = str(barcode_id or "").strip()
     if not scan:
         raise ValueError("Hiányzik a Topfloor tétel barcodeId.")
-    _topfloor_scan_unloading_item(client, scan)
+    scan_result = _topfloor_try_scan_unloading_item(client, scan)
     _topfloor_put_item_in_box(client, con_id, scan)
     _topfloor_update_box(client, con_id)
-    return {"conId": con_id, "barcodeId": scan, "state": "loaded"}
+    return {"conId": con_id, "barcodeId": scan, "state": "loaded", "scan": scan_result}
 
 
 def unload_topfloor_items_into_box(
@@ -478,6 +478,23 @@ def _topfloor_scan_unloading_item(client: ShopfloorApiClient, barcode_id: str) -
         json.loads(process_body.decode("utf-8")),
     )
     _shopfloor_require_success(status_code, response_body, f"topfloor unloading processscan {barcode_id}")
+
+
+def _topfloor_try_scan_unloading_item(client: ShopfloorApiClient, barcode_id: str) -> dict[str, object]:
+    """Best-effort unloading scan before adding an item to a Topfloor box."""
+    try:
+        _topfloor_scan_unloading_item(client, barcode_id)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "skipped": True,
+            "error": str(exc),
+        }
+    return {
+        "ok": True,
+        "skipped": False,
+        "error": "",
+    }
 
 
 def _topfloor_response_data(response_body: str) -> dict[str, object]:

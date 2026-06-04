@@ -16,27 +16,52 @@ from ..config import runtime_dir
 TOPFLOOR_OPERATION_KEY = "topfloor"
 TOPFLOOR_OPERATION_LABEL = "Anyagrakt\u00e1r"
 TOPFLOOR_XML_NAMES = (
+    "Szerelveny_dobozolas.xml",
     "Topfloor.xml",
     "Anyagraktar.xml",
     "Anyagrakt\u00e1r.xml",
     "Anyagraktar_topfloor.xml",
 )
 TOPFLOOR_MAX_SHIPMENTS = 20
+TOPFLOOR_VENCODE_ABBREVIATIONS: dict[str, str] = {
+    # TODO: Add manually approved venCode abbreviations here.
+}
 
 
 def _manufacturing_topfloor_document(bundle: dict, production_number: str) -> dict:
     """Build the Topfloor operation document from the shipment XML."""
-    xml_path = _topfloor_xml_path(bundle)
-    if xml_path is None:
-        return _topfloor_empty_document("Az Anyagrakt\u00e1r XML m\u00e9g nem tal\u00e1lhat\u00f3.")
+    return _manufacturing_topfloor_document_from_bundles([(bundle, production_number)])
 
-    try:
-        rows = _topfloor_xml_rows(xml_path)
-    except Exception as exc:
-        return _topfloor_empty_document(f"Az Anyagrakt\u00e1r XML feldolgoz\u00e1sa nem siker\u00fclt: {exc}")
+
+def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]]) -> dict:
+    """Build the Topfloor operation document from multiple production XML folders."""
+    xml_paths: list[Path] = []
+    for bundle, _production_number in bundles:
+        xml_path = _topfloor_xml_path(bundle)
+        if xml_path is not None:
+            xml_paths.append(xml_path)
+    if not xml_paths:
+        return _topfloor_empty_document("Az Anyagraktár XML még nem található.")
+
+    rows: list[dict[str, str]] = []
+    errors: list[str] = []
+    for xml_path in xml_paths:
+        try:
+            rows.extend(_topfloor_xml_rows(xml_path))
+        except Exception as exc:
+            errors.append(f"{xml_path.name}: {exc}")
+    if errors and not rows:
+        return _topfloor_empty_document(f"Az Anyagraktár XML feldolgozása nem sikerült: {'; '.join(errors)}")
+    rows = _topfloor_deduplicate_rows(rows)
+    source_xml_path = xml_paths[0]
+    source_label = (
+        f"Beolvasva: {source_xml_path.name}"
+        if len(xml_paths) == 1
+        else f"Beolvasva: {len(xml_paths)} Anyagraktár XML"
+    )
 
     if not rows:
-        return _topfloor_empty_document("Az Anyagrakt\u00e1r XML-ben nincs megjelen\u00edthet\u0151 elem.", xml_path=xml_path)
+        return _topfloor_empty_document("Az Anyagraktár XML-ben nincs megjeleníthető elem.", xml_path=source_xml_path)
 
     box_registry = _topfloor_category_box_registry()
     shipment_ids = sorted(
@@ -47,7 +72,7 @@ def _manufacturing_topfloor_document(bundle: dict, production_number: str) -> di
     shipment_set = set(shipment_ids)
     rows = [row for row in rows if row["shipmentID"] in shipment_set]
 
-    special_views: list[dict] = []
+    shipment_views: list[dict] = []
     row_count = 0
     all_sections: list[dict] = []
     for shipment_id in shipment_ids:
@@ -55,12 +80,11 @@ def _manufacturing_topfloor_document(bundle: dict, production_number: str) -> di
         sections = _topfloor_category_sections(shipment_id, shipment_rows, box_registry)
         if not sections:
             continue
-        special_views.append(
+        shipment_views.append(
             {
                 "key": f"shipment::{shipment_id}",
                 "label": f"Sz\u00e1ll\u00edtm\u00e1ny {shipment_id}",
                 "count": sum(len(section.get("rows", [])) for section in sections),
-                "sections": sections,
             }
         )
         row_count += sum(len(section.get("rows", [])) for section in sections)
@@ -70,12 +94,13 @@ def _manufacturing_topfloor_document(bundle: dict, production_number: str) -> di
         "key": TOPFLOOR_OPERATION_KEY,
         "label": TOPFLOOR_OPERATION_LABEL,
         "sourceType": "XML",
-        "sourceLabel": f"Beolvasva: {xml_path.name}",
-        "file_name": xml_path.name,
+        "sourceLabel": source_label,
+        "file_name": source_xml_path.name,
         "sections": all_sections,
         "row_count": row_count,
-        "placeholderMessage": "Az Anyagrakt\u00e1r XML-ben nincs megjelen\u00edthet\u0151 elem.",
-        "specialViews": special_views,
+        "placeholderMessage": "Az Anyagraktár XML-ben nincs megjeleníthető elem.",
+        "specialViews": [],
+        "topfloorShipmentViews": shipment_views,
         "hideBarcodeColumn": False,
         "allowSplit": False,
         "singleColumnOverview": True,
@@ -95,6 +120,7 @@ def _topfloor_empty_document(message: str, *, xml_path: Path | None = None) -> d
         "row_count": 0,
         "placeholderMessage": message,
         "specialViews": [],
+        "topfloorShipmentViews": [],
         "hideBarcodeColumn": False,
         "allowSplit": False,
         "singleColumnOverview": True,
@@ -122,6 +148,24 @@ def _topfloor_xml_path(bundle: dict) -> Path | None:
     return None
 
 
+def _topfloor_deduplicate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Remove repeated XML rows when the same shipment appears in multiple folders."""
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in rows:
+        key = (
+            str(row.get("shipmentID", "") or "").strip(),
+            str(row.get("productionID", "") or "").strip(),
+            str(row.get("orderNumber", "") or "").strip(),
+            str(row.get("barcode", "") or "").strip(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(row)
+    return result
+
+
 def _topfloor_xml_rows(xml_path: Path) -> list[dict[str, str]]:
     """Read Topfloor XML elements into normalized row dictionaries."""
     root = ET.parse(xml_path).getroot()
@@ -137,7 +181,7 @@ def _topfloor_xml_rows(xml_path: Path) -> list[dict[str, str]]:
         result.append(
             {
                 "buyer": _topfloor_value(values, "buyer"),
-                "location": _topfloor_value(values, "location"),
+                "location": _topfloor_location(values),
                 "orderNumber": _topfloor_value(values, "orderNumber"),
                 "buyerID": _topfloor_value(values, "buyerID"),
                 "shipmentID": shipment_id,
@@ -145,6 +189,8 @@ def _topfloor_xml_rows(xml_path: Path) -> list[dict[str, str]]:
                 "description": _topfloor_value(values, "description"),
                 "quantity": _topfloor_value(values, "quantity") or "1",
                 "barcode": barcode,
+                "venCode": _topfloor_value(values, "venCode"),
+                "prdInfo1": _topfloor_value(values, "prdInfo1"),
                 "_index": str(index),
             }
         )
@@ -166,6 +212,7 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
             "location": row["location"],
             "buyerID": row["buyerID"],
             "boxCategoryKey": _topfloor_category_key(row),
+            "defaultBoxDescription": _topfloor_default_box_description(row),
         }
 
     sections: list[dict] = []
@@ -249,17 +296,29 @@ def _topfloor_field_key(value: object) -> str:
     text = re.sub(r"[^a-z0-9]+", "", _topfloor_fold(str(value or "").split("}", 1)[-1]))
     aliases = {
         "buyer": "buyer",
+        "vencompanyname": "buyer",
         "location": "location",
+        "addcity": "addCity",
+        "addaddress1": "addAddress1",
         "ordernumber": "orderNumber",
+        "ordorderno": "orderNumber",
         "order": "orderNumber",
         "rendelesszam": "orderNumber",
         "buyerid": "buyerID",
+        "rendkod": "buyerID",
         "shipmentid": "shipmentID",
+        "shpid": "shipmentID",
         "productionid": "productionID",
+        "prdid": "productionID",
         "description": "description",
+        "leiras": "description",
         "quantity": "quantity",
+        "conquantity": "quantity",
         "qty": "quantity",
         "barcode": "barcode",
+        "vencode": "venCode",
+        "prdinfo1": "prdInfo1",
+        "prdinfo01": "prdInfo1",
     }
     return aliases.get(text, "")
 
@@ -267,6 +326,44 @@ def _topfloor_field_key(value: object) -> str:
 def _topfloor_value(values: dict[str, str], key: str) -> str:
     """Return a stripped XML value."""
     return str(values.get(key, "") or "").strip()
+
+
+def _topfloor_location(values: dict[str, str]) -> str:
+    """Return the Topfloor location from city and address fields."""
+    explicit = _topfloor_value(values, "location")
+    if explicit:
+        return explicit
+    return ", ".join(part for part in (_topfloor_value(values, "addCity"), _topfloor_value(values, "addAddress1")) if part)
+
+
+def _topfloor_default_box_description(row: dict[str, str]) -> str:
+    """Return the editable default Topfloor box description."""
+    ven_code = str(row.get("venCode", "") or "").strip()
+    ven_code = TOPFLOOR_VENCODE_ABBREVIATIONS.get(ven_code, ven_code)
+    description = " ".join(
+        part
+        for part in (
+            ven_code,
+            str(row.get("location", "") or "").split(",", 1)[0].strip(),
+            _topfloor_box_prd_info(row.get("prdInfo1", "")),
+        )
+        if part
+    )
+    return _topfloor_strip_trailing_matt(description)
+
+
+def _topfloor_box_prd_info(value: object) -> str:
+    """Trim prdInfo text to the date suffix used for box descriptions."""
+    text = str(value or "").strip()
+    matches = re.findall(r"\b(\d{2}\.\d{2})\.?", text)
+    if matches:
+        return f"{matches[-1]}."
+    return text
+
+
+def _topfloor_strip_trailing_matt(value: object) -> str:
+    """Remove the trailing Matt marker from box descriptions."""
+    return re.sub(r"\s+\bMatt\b\s*$", "", str(value or "").strip(), flags=re.IGNORECASE)
 
 
 def _topfloor_category_key(row: dict[str, str]) -> str:
@@ -290,7 +387,17 @@ def _topfloor_group_key(row: dict[str, str]) -> str:
 
 def _topfloor_category_label(meta: dict[str, str]) -> str:
     """Return the visible Topfloor category label."""
-    return " · ".join(part for part in (meta.get("buyer", ""), meta.get("location", ""), meta.get("buyerID", "")) if part) or "Kateg\u00f3ria"
+    return " · ".join(
+        part
+        for part in (
+            meta.get("productionID", ""),
+            meta.get("buyer", ""),
+            meta.get("buyerID", ""),
+            meta.get("orderNumber", ""),
+            meta.get("location", ""),
+        )
+        if part
+    ) or "Kateg\u00f3ria"
 
 
 def _topfloor_row_id(row: dict[str, str], category_key: str) -> str:

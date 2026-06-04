@@ -6787,10 +6787,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             try:
                 if action == "create":
-                    # TODO: Generate the final Topfloor box description from buyer, location and current date.
                     buyer = str(payload.get("buyer", "")).strip()
                     location = str(payload.get("location", "")).strip()
-                    con_description = " ".join(part for part in (buyer, location, date.today().isoformat()) if part)
+                    con_description = str(payload.get("con_description", "")).strip()
+                    if not con_description:
+                        # TODO: Keep this only as a fallback; the UI sends the editable XML-derived default.
+                        con_description = " ".join(part for part in (buyer, location, date.today().isoformat()) if part)
                     result = _topfloor_create_category_box(category_key, con_description=con_description)
                     self.respond_json(200, {"ok": True, "action": action, "box": result})
                     return
