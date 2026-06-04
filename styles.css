@@ -640,6 +640,15 @@ select {
   margin-top: 2px;
 }
 
+.site-footer {
+  display: flex;
+  justify-content: center;
+  padding: 28px 0 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .reveal {
   opacity: 0;
   transform: translateY(24px);
