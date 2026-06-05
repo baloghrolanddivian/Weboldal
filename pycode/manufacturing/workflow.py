@@ -38,6 +38,7 @@ from .routes import (
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
+    MANUFACTURING_TOPFLOOR_BOX_ROUTE,
 )
 
 manufacturing_pdf_lines = _pdf_lines
@@ -46,7 +47,7 @@ MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-02-cnc-fiokelo-xml-v66"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-03-topfloor-xml-v1"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 
@@ -55,12 +56,14 @@ MANUFACTURING_OPERATION_DEFINITIONS = (
     ("front_osszekeszites", "Front összekészítés"),
     ("cnc_furas", "CNC fúrás"),
     ("pantolas", "Pántolás"),
+    ("topfloor", "Anyagrakt\u00e1r"),
 )
 MANUFACTURING_OPERATION_HINTS = {
     "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
     "front_osszekeszites": "A front összekészítő PDF sorai és kategóriái.",
     "cnc_furas": "CNC, alsó, felső és fiókelő/front fúrás egy közös műveleti nézetben.",
     "pantolas": "A Pántoló papír sorai eredeti sorrendben, zöld/piros jelöléssel.",
+    "topfloor": "Anyagrakt\u00e1r Topfloor alaplogika: lerakod\u00e1s \u00e9s dobozol\u00e1s.",
 }
 MANUFACTURING_SOURCE_LABELS = {
     "osszekeszito": "Összekészítő",
@@ -355,6 +358,8 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
                 return f"{operation_key}::{normalized_number}::{con_code}::{child_id}"
         if document_key == "front_osszekeszito":
             return f"front_osszekeszito::{normalized_number}::{con_code}::0"
+        if document_key == "topfloor":
+            return f"topfloor::{normalized_number}::{con_code}::0"
         if document_key in {"osszekeszito", "alkatresz_kesz"}:
             return f"korpusz_osszekeszito::{normalized_number}::{con_code}::0"
     return row_id
@@ -377,10 +382,10 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
     result: dict[str, str] = {}
     for row_id, state in raw_state.items():
         clean_state = str(state or "").strip().lower()
-        if clean_state not in {"green", "red", "done"}:
-            continue
         clean_key = str(row_id or "").strip()
-        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::", "cnc::")):
+        if clean_state not in {"green", "red", "done"} and not (clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_state)):
+            continue
+        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::", "cnc::", "topfloor::")):
             result[clean_key] = clean_state
             parts = clean_key.split("::")
             if len(parts) == 3:
@@ -463,7 +468,15 @@ def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
 
 def _manufacturing_ready_endpoint_key(document_key: object, category_key: object) -> str:
     """Provide manufacturing ready endpoint key behavior."""
-    if str(document_key or "").strip() == "front_osszekeszites":
+    clean_document_key = str(document_key or "").strip()
+    clean_category_key = str(category_key or "").strip().lower().replace("_", "-")
+    if clean_document_key == "topfloor":
+        if clean_category_key in {"topfloor-boxing", "boxing", "dobozolas", "dobozol\u00e1s"}:
+            return "topfloor_boxing"
+        if clean_category_key in {"topfloor-unloading", "unloading", "lerakodas", "lerakod\u00e1s"}:
+            return "topfloor_unloading"
+        return "topfloor_unloading"
+    if clean_document_key == "front_osszekeszites":
         return "front"
     if _manufacturing_uses_assembly_ready_endpoint(category_key):
         return "assembly"
@@ -584,6 +597,93 @@ def _manufacturing_placeholder_document(key: str, label: str) -> dict:
         "specialViews": [],
     }
 
+def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, object]]:
+    """Return shipment-based toolbar entries for the Topfloor operation."""
+    documents = bundle.get("documents", []) if isinstance(bundle, dict) else []
+    topfloor_document = next(
+        (
+            document
+            for document in documents
+            if isinstance(document, dict) and str(document.get("key", "")).strip() == "topfloor"
+        ),
+        None,
+    )
+    if not isinstance(topfloor_document, dict):
+        return []
+    entries: list[dict[str, object]] = []
+    shipment_views = topfloor_document.get("topfloorShipmentViews", [])
+    if not isinstance(shipment_views, list):
+        shipment_views = []
+    for view in shipment_views:
+        if not isinstance(view, dict):
+            continue
+        view_key = str(view.get("key", "") or "").strip()
+        if not view_key.startswith("shipment::"):
+            continue
+        shipment_id = view_key.split("::", 1)[1].strip()
+        if not shipment_id:
+            continue
+        entries.append(
+            {
+                "kind": "shipment",
+                "number": shipment_id,
+                "date_label": "Szállítmány",
+                "view_key": view_key,
+                "is_active": not entries,
+                "is_complete": False,
+            }
+        )
+    return entries
+
+def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> tuple[dict, dict[str, str], dict[str, str]]:
+    """Build the Topfloor bundle from all recent production folders."""
+    from .topfloor.sections import _manufacturing_topfloor_document_from_bundles
+
+    source_bundles: list[tuple[dict, str]] = []
+    for production_number in production_numbers:
+        normalized_number = _manufacturing_normalize_number(production_number)
+        if not normalized_number:
+            continue
+        source_bundles.append(
+            (
+                {
+                    "production_number": normalized_number,
+                    "folder": str(production_folder(normalized_number)),
+                },
+                normalized_number,
+            )
+        )
+
+    topfloor_document = _manufacturing_topfloor_document_from_bundles(source_bundles)
+    shipment_views = topfloor_document.get("topfloorShipmentViews", [])
+    if not isinstance(shipment_views, list):
+        shipment_views = []
+    shipment_ids = [
+        view_key.split("::", 1)[1].strip()
+        for view_key in [
+            str(view.get("key", "") or "").strip()
+            for view in shipment_views
+            if isinstance(view, dict)
+        ]
+        if view_key.startswith("shipment::") and view_key.split("::", 1)[1].strip()
+    ]
+    selection_state: dict[str, str] = {}
+    partial_quantity_state: dict[str, str] = {}
+    topfloor_runtime_root = runtime_dir() / "topfloor"
+    for shipment_id in shipment_ids:
+        legacy_state = load_selection_state(runtime_dir(), shipment_id)
+        raw_state = {**legacy_state, **load_selection_state(topfloor_runtime_root, shipment_id)}
+        selection_state.update(_manufacturing_selection_state_payload(shipment_id, raw_state))
+    return (
+        {
+            "production_number": "",
+            "folder": "",
+            "documents": [topfloor_document],
+        },
+        selection_state,
+        partial_quantity_state,
+    )
+
 def _manufacturing_view_bundle(
     raw_bundle: dict,
     production_number: str,
@@ -600,6 +700,7 @@ def _manufacturing_view_bundle(
         _manufacturing_osszekeszito_xml_sections,
     )
     from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
+    from .topfloor.sections import _manufacturing_topfloor_document
 
     current_number = _manufacturing_normalize_number(production_number)
     documents: list[dict] = []
@@ -739,6 +840,7 @@ def _manufacturing_view_bundle(
             "singleColumnOverview": True,
         }
     )
+    documents.append(_manufacturing_topfloor_document(raw_bundle, current_number))
 
     existing_keys = {str(document.get("key", "")).strip() for document in documents}
     for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS:
@@ -776,7 +878,7 @@ def manufacturing_module_payload(
     else:
         recent_productions = available_production_entries(
             limit=12,
-            ready_only=True,
+            ready_only=selected_operation != "topfloor",
         )
         recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
         selected_number = (
@@ -792,7 +894,7 @@ def manufacturing_module_payload(
         }
         for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS
     ]
-    if requested_number and requested_number not in recent_numbers and not lightweight_operation_picker:
+    if requested_number and requested_number not in recent_numbers and not lightweight_operation_picker and selected_operation != "topfloor":
         combined_prefix = f"A {requested_number} gyártásban nem található meg mindkét szükséges PDF, ezért a legfrissebb használható gyártást nyitottam meg."
         message = f"{combined_prefix} {message}".strip() if message else combined_prefix
         success = False
@@ -825,13 +927,17 @@ def manufacturing_module_payload(
                 return False
         return True
 
-    recent_productions = [
-        {
-            **dict(entry),
-            "is_complete": is_complete_production(str(entry.get("number", "")), selected_operation),
-        }
-        for entry in recent_productions
-    ]
+    if selected_operation == "topfloor":
+        recent_productions = [{**dict(entry), "is_complete": False} for entry in recent_productions]
+        selected_number = ""
+    else:
+        recent_productions = [
+            {
+                **dict(entry),
+                "is_complete": is_complete_production(str(entry.get("number", "")), selected_operation),
+            }
+            for entry in recent_productions
+        ]
 
     bundle: dict | None = None
     selection_state: dict[str, str] = {}
@@ -839,7 +945,17 @@ def manufacturing_module_payload(
     combined_message = message
     combined_success = success
 
-    if not selected_number:
+    if selected_operation == "topfloor" and not lightweight_operation_picker:
+        try:
+            bundle, selection_state, partial_quantity_state = _manufacturing_topfloor_aggregate_bundle(recent_numbers)
+            recent_productions = _manufacturing_topfloor_shipment_entries(bundle)
+            if not recent_productions:
+                combined_message = "Nem találok megjeleníthető Anyagraktár szállítmányt a legutóbbi gyártási mappákban."
+                combined_success = False
+        except Exception as exc:
+            combined_message = f"Az Anyagraktár XML-ek betöltése nem sikerült: {exc}"
+            combined_success = False
+    elif not selected_number:
         combined_message = "Nem találok használható gyártási mappát a beállított gyártási útvonalon."
         combined_success = False
     elif not lightweight_operation_picker:
@@ -865,7 +981,7 @@ def manufacturing_module_payload(
         }
 
     production_client_cache: list[dict[str, object]] = []
-    if include_client_cache and selected_operation and recent_productions:
+    if include_client_cache and selected_operation and recent_productions and selected_operation != "topfloor":
         for entry in recent_productions[:10]:
             cache_number = _manufacturing_normalize_number(entry.get("number", ""))
             if not cache_number:
@@ -893,6 +1009,7 @@ def manufacturing_module_payload(
                             "stateRoute": MANUFACTURING_STATE_ROUTE,
                             "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
                             "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
+                            "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
                             "productionNumber": cache_number,
                             "selectedOperation": selected_operation,
                             "recentProductions": recent_productions,
@@ -913,6 +1030,7 @@ def manufacturing_module_payload(
         "stateRoute": MANUFACTURING_STATE_ROUTE,
         "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
         "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
+        "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
         "productionNumber": selected_number,
         "operations": operations,
         "selectedOperation": selected_operation,
@@ -952,6 +1070,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQuantityState": module_payload.get("partialQuantityState", {}) if isinstance(module_payload.get("partialQuantityState"), dict) else {},
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
         "message": str(module_payload.get("message", "")),
         "success": bool(module_payload.get("success", False)),
     }
@@ -975,6 +1094,7 @@ def render_manufacturing_module(
         state_route=str(payload.get("stateRoute", MANUFACTURING_STATE_ROUTE)),
         partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        topfloor_box_route=str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
         selected_number=str(payload.get("productionNumber", "")),
         operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
         selected_operation=str(payload.get("selectedOperation", "")),

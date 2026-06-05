@@ -273,19 +273,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if tag_key(getattr(con_element, "tag", "")) != "con":
                 continue
             fields = con_fields(con_element)
-            section_label = field_value(fields, "KorpTipPer") or "FiĂłkelĹ‘ fĂşrĂˇs"
-            name = field_value(fields, "Leiras", "LeĂ­rĂˇs") or "FiĂłkelĹ‘"
+            section_label = field_value(fields, "KorpTipPer") or "Fiókelő fúrás"
+            name = field_value(fields, "Leiras", "Leírás") or "Fiókelő"
             model = field_value(fields, "Modell") or "Ismeretlen modell"
             length = whole_number(field_value(fields, "Hossz"))
-            width = whole_number(field_value(fields, "Szelleseg", "SzĂ©lessĂ©g"))
+            width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
             thickness = whole_number(field_value(fields, "Vastag"))
             size_parts_for_label = [part for part in (length, width, thickness) if part]
             size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
-            color = field_value(fields, "Szin", "SzĂ­n")
+            color = field_value(fields, "Szin", "Szín")
             drill = field_value(fields, "Fog_furattal", "Fog furattal")
             handle_type = field_value(fields, "Fog_tip", "Fog tip")
-            drawer_type = field_value(fields, "Fioktipus", "FiĂłktĂ­pus")
-            netfront_color = field_value(fields, "Nettfront_szin", "Nettfront szĂ­n")
+            drawer_type = field_value(fields, "Fioktipus", "Fióktípus")
+            netfront_color = field_value(fields, "Nettfront_szin", "Nettfront szín")
             if folded(netfront_color) == "nincs":
                 netfront_color = ""
             detail_prefix = " ".join(part for part in (model, netfront_color) if part).strip()

@@ -1870,19 +1870,40 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
         return {}
     if not isinstance(payload, dict):
         return {}
-    return {str(key): str(value) for key, value in payload.items() if str(value) in {"green", "red", "done"}}
+    result: dict[str, str] = {}
+    for key, value in payload.items():
+        clean_key = str(key)
+        clean_value = str(value)
+        if clean_value in {"green", "red", "done"}:
+            result[clean_key] = clean_value
+        elif clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_value):
+            result[clean_key] = clean_value
+    return result
 
 
 def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
     """Save save selection state data."""
+    path = selection_state_path(runtime_root, production_number)
+    try:
+        raw_payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        raw_payload = {}
+    if not isinstance(raw_payload, dict):
+        raw_payload = {}
+    metadata = {
+        str(key): value
+        for key, value in raw_payload.items()
+        if isinstance(value, (dict, list))
+    }
     current = load_selection_state(runtime_root, production_number)
     normalized_state = str(state or "").strip().lower()
     if normalized_state in {"", "none", "clear"}:
         current.pop(row_id, None)
     elif normalized_state in {"green", "red", "done"}:
         current[row_id] = normalized_state
-    path = selection_state_path(runtime_root, production_number)
-    path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    elif str(row_id or "").startswith("topfloor::") and re.fullmatch(r"\d{1,12}", normalized_state):
+        current[row_id] = normalized_state
+    path.write_text(json.dumps({**metadata, **current}, ensure_ascii=False, indent=2), encoding="utf-8")
     return current
 
 
