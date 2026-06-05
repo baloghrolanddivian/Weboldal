@@ -396,34 +396,9 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
             result[_manufacturing_state_key(normalized_number, clean_key)] = clean_state
     return result
 
-
-def _manufacturing_load_existing_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
-    """Load selection state without creating runtime folders."""
-    normalized_number = _manufacturing_normalize_number(production_number)
-    if not normalized_number:
-        return {}
-    path = runtime_root / normalized_number / "state.json"
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8") or "{}")
-    except Exception:
-        return {}
-    if not isinstance(payload, dict):
-        return {}
-    result: dict[str, str] = {}
-    for key, value in payload.items():
-        clean_key = str(key)
-        clean_value = str(value)
-        if clean_value in {"green", "red", "done"}:
-            result[clean_key] = clean_value
-        elif clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_value):
-            result[clean_key] = clean_value
-    return result
-
-
-def _manufacturing_apply_row_state_aliases(documents: list[dict], production_number: str, raw_state: dict[str, str], selection_state: dict[str, str]) -> None:
-    """Provide manufacturing apply row state aliases behavior."""
+def _manufacturing_document_state_rows(documents: list[dict]) -> list[dict]:
+    """Provide manufacturing document state rows behavior."""
+    rows: list[dict] = []
     for document in documents:
         if not isinstance(document, dict):
             continue
@@ -696,7 +671,8 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
     partial_quantity_state: dict[str, str] = {}
     topfloor_runtime_root = runtime_dir() / "topfloor"
     for shipment_id in shipment_ids:
-        raw_state = _manufacturing_load_existing_selection_state(topfloor_runtime_root, shipment_id)
+        legacy_state = load_selection_state(runtime_dir(), shipment_id)
+        raw_state = {**legacy_state, **load_selection_state(topfloor_runtime_root, shipment_id)}
         selection_state.update(_manufacturing_selection_state_payload(shipment_id, raw_state))
     return (
         {
