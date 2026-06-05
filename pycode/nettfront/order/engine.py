@@ -289,7 +289,12 @@ def collect_replaced_ant_variant_parts(parts) -> set[str]:
     return replaced_parts
 
 
-def calculate_order_qty(current: float, capacity: float, desc=None) -> int:
+def _is_fill_storage_rule(safe_stock: float, capacity: float) -> bool:
+    """Return whether the small-bin fill-to-capacity rule applies."""
+    return math.isclose(safe_stock, 1.0, abs_tol=1e-9) and math.isclose(capacity, 2.0, abs_tol=1e-9)
+
+
+def calculate_order_qty(current: float, capacity: float, desc=None, safe_stock: float | None = None) -> int:
     """Handle calculate order qty logic for the NettFront workflows.
 
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
@@ -300,6 +305,8 @@ def calculate_order_qty(current: float, capacity: float, desc=None) -> int:
     diff = capacity - current
     if diff <= 0:
         return 0
+    if safe_stock is not None and _is_fill_storage_rule(safe_stock, capacity):
+        return int(math.ceil(diff))
     return int(diff // 5) * 5
 
 
@@ -530,14 +537,13 @@ def build_order_suggestions(
             continue
         if is_legacy_matt_to_exclude(desc, part):
             continue
-        if (stock_unit is None or str(stock_unit).strip() == "") and (current_value is None or str(current_value).strip() == ""):
-            continue
-
         current = _safe_number(current_value)
         safe_stock = _safe_number(safe_value)
-        if current < safe_stock:
+        capacity = _safe_number(row[idx_capacity])
+        should_fill_storage = _is_fill_storage_rule(safe_stock, capacity) and current < capacity
+        if current < safe_stock or should_fill_storage:
             filtered_rows.append(row)
-            order_by_part[str(part)] = calculate_order_qty(current, _safe_number(row[idx_capacity]), desc)
+            order_by_part[str(part)] = calculate_order_qty(current, capacity, desc, safe_stock)
 
     suggestion_rows: list[NettfrontOrderRow] = []
     existing_descs: set[str] = set()
@@ -569,10 +575,12 @@ def build_order_suggestions(
 
         current = _safe_number(row[idx_current])
         safe_stock = _safe_number(row[idx_safe])
-        if current >= safe_stock:
+        capacity = _safe_number(row[idx_capacity])
+        should_fill_storage = _is_fill_storage_rule(safe_stock, capacity) and current < capacity
+        if current >= safe_stock and not should_fill_storage:
             continue
 
-        order_qty = calculate_order_qty(current, _safe_number(row[idx_capacity]), desc)
+        order_qty = calculate_order_qty(current, capacity, desc, safe_stock)
         suggestion = _row_to_suggestion(row, headers, order_qty, row_index, is_super_matt_row=True)
         suggestion_rows.append(suggestion)
         existing_descs.add(norm(suggestion.description))

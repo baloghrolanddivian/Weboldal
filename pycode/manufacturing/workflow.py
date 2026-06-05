@@ -390,6 +390,8 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
             parts = clean_key.split("::")
             if len(parts) == 3:
                 result[f"{clean_key}::0"] = clean_state
+        elif normalized_number and clean_key.startswith(f"{normalized_number}::"):
+            result[clean_key] = clean_state
         else:
             result[_manufacturing_state_key(normalized_number, clean_key)] = clean_state
     return result
@@ -425,25 +427,43 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
     for document in documents:
         if not isinstance(document, dict):
             continue
-        for section in document.get("sections", []):
-            if not isinstance(section, dict):
+        state_sections = [
+            section
+            for section in document.get("sections", [])
+            if isinstance(section, dict)
+        ]
+        for special_view in document.get("specialViews", []):
+            if not isinstance(special_view, dict):
                 continue
-            for row in section.get("rows", []):
-                if not isinstance(row, dict):
-                    continue
-                state_key = str(row.get("state_key", "") or "").strip()
-                if not state_key:
-                    continue
-                candidate_keys = [
-                    str(row.get("state_storage_key", "") or "").strip(),
-                    re.sub(r"::0$", "", str(row.get("state_storage_key", "") or "").strip()),
-                    str(row.get("row_id", "") or "").strip(),
-                ]
-                for candidate_key in candidate_keys:
-                    clean_state = str(raw_state.get(candidate_key, "") or "").strip().lower()
-                    if clean_state in {"green", "red", "done"}:
-                        selection_state[state_key] = clean_state
-                        break
+            state_sections.extend(
+                section
+                for section in special_view.get("sections", [])
+                if isinstance(section, dict)
+            )
+        for section in state_sections:
+            rows.extend(row for row in section.get("rows", []) if isinstance(row, dict))
+    return rows
+
+def _manufacturing_apply_row_state_aliases(documents: list[dict], production_number: str, raw_state: dict[str, str], selection_state: dict[str, str]) -> None:
+    """Provide manufacturing apply row state aliases behavior."""
+    normalized_number = _manufacturing_normalize_number(production_number)
+    for row in _manufacturing_document_state_rows(documents):
+        state_key = str(row.get("state_key", "") or "").strip()
+        if not state_key:
+            continue
+        row_id = str(row.get("row_id", "") or "").strip()
+        storage_key = str(row.get("state_storage_key", "") or "").strip()
+        candidate_keys = [
+            storage_key,
+            re.sub(r"::0$", "", storage_key),
+            row_id,
+            _manufacturing_state_key(normalized_number, row_id) if row_id else "",
+        ]
+        for candidate_key in candidate_keys:
+            clean_state = str(raw_state.get(candidate_key, "") or "").strip().lower()
+            if clean_state in {"green", "red", "done"}:
+                selection_state[state_key] = clean_state
+                break
 
 def _manufacturing_row_with_context(row: dict, production_number: str, detail_suffix: str = "") -> dict:
     """Provide manufacturing row with context behavior."""
