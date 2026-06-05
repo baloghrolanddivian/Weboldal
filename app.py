@@ -5748,7 +5748,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         target_state_keys.append(candidate_state_key)
                 if not target_state_keys:
                     target_state_keys = target_row_ids
-                current_saved_state = load_selection_state(manufacturing_runtime_dir(), production_number)
+                state_runtime_root = manufacturing_runtime_dir()
+                if any(str(target_key or "").startswith("topfloor::") for target_key in target_state_keys):
+                    state_runtime_root = manufacturing_runtime_dir() / "topfloor"
+                current_saved_state = load_selection_state(state_runtime_root, production_number)
                 locked_done_row_ids = [
                     target_key
                     for target_key in target_state_keys
@@ -5766,10 +5769,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     return
                 current_state: dict[str, str] = {}
                 for target_state_key in target_state_keys:
-                    current_state = save_selection_state(manufacturing_runtime_dir(), production_number, target_state_key, state)
+                    current_state = save_selection_state(state_runtime_root, production_number, target_state_key, state)
                 for legacy_row_id in target_row_ids:
                     if legacy_row_id not in target_state_keys:
-                        current_state = save_selection_state(manufacturing_runtime_dir(), production_number, legacy_row_id, "clear")
+                        current_state = save_selection_state(state_runtime_root, production_number, legacy_row_id, "clear")
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
                 return
