@@ -580,6 +580,14 @@ def _topfloor_category_shipment_id(category_key: str) -> str:
     return shipment_id
 
 
+def _topfloor_legacy_category_key(category_key: str) -> str:
+    """Return the pre-buyerID Topfloor category key when applicable."""
+    parts = str(category_key or "").split("::")
+    if len(parts) >= 4:
+        return "::".join(parts[:3])
+    return str(category_key or "").strip()
+
+
 def _topfloor_state_path(shipment_id: str) -> Path:
     """Return the Topfloor shipment state path."""
     clean_id = _topfloor_category_shipment_id(shipment_id)
@@ -620,7 +628,11 @@ def _save_topfloor_state_box(category_key: str, box: dict[str, object]) -> None:
     """Save one Topfloor category box into its shipment state file."""
     shipment_id = _topfloor_category_shipment_id(category_key)
     payload = _load_topfloor_state_payload(shipment_id)
-    payload[str(category_key)] = dict(box)
+    clean_key = str(category_key).strip()
+    legacy_key = _topfloor_legacy_category_key(clean_key)
+    payload[clean_key] = dict(box)
+    if legacy_key and legacy_key != clean_key:
+        payload.pop(legacy_key, None)
     _save_topfloor_state_payload(shipment_id, payload)
 
 
@@ -652,7 +664,7 @@ def _topfloor_category_box(category_key: str) -> dict[str, object]:
     """Return the assigned Topfloor box for a category."""
     clean_key = str(category_key or "").strip()
     payload = _load_topfloor_categories()
-    box = payload.get(clean_key)
+    box = payload.get(clean_key) or payload.get(_topfloor_legacy_category_key(clean_key))
     if not isinstance(box, dict) or not box.get("conId"):
         raise ValueError("Ehhez a Topfloor kategóriához nincs mentett doboz.")
     return box
@@ -661,8 +673,9 @@ def _topfloor_category_box(category_key: str) -> dict[str, object]:
 def _topfloor_require_no_other_open_box(category_key: str) -> None:
     """Prevent opening multiple Topfloor boxes at the same time."""
     clean_key = str(category_key or "").strip()
+    legacy_key = _topfloor_legacy_category_key(clean_key)
     for open_key, box in _load_topfloor_categories().items():
-        if open_key == clean_key or not bool(box.get("open")):
+        if open_key in {clean_key, legacy_key} or not bool(box.get("open")):
             continue
         shipment_id = _topfloor_category_shipment_id(open_key)
         con_id = str(box.get("conId", "") or "").strip()
