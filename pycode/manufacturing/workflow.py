@@ -697,7 +697,8 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
     partial_quantity_state: dict[str, str] = {}
     topfloor_runtime_root = runtime_dir() / "topfloor"
     for shipment_id in shipment_ids:
-        raw_state = _manufacturing_load_existing_selection_state(topfloor_runtime_root, shipment_id)
+        legacy_state = load_selection_state(runtime_dir(), shipment_id)
+        raw_state = {**legacy_state, **load_selection_state(topfloor_runtime_root, shipment_id)}
         selection_state.update(_manufacturing_selection_state_payload(shipment_id, raw_state))
     return (
         {
