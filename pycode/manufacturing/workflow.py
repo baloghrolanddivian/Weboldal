@@ -422,8 +422,9 @@ def _manufacturing_load_existing_selection_state(runtime_root: Path, production_
     return result
 
 
-def _manufacturing_apply_row_state_aliases(documents: list[dict], production_number: str, raw_state: dict[str, str], selection_state: dict[str, str]) -> None:
-    """Provide manufacturing apply row state aliases behavior."""
+def _manufacturing_document_state_rows(documents: list[dict]) -> list[dict]:
+    """Return rows that can contribute persisted manufacturing state."""
+    rows: list[dict] = []
     for document in documents:
         if not isinstance(document, dict):
             continue
