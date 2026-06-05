@@ -211,6 +211,7 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
             "location": row["location"],
             "buyerID": row["buyerID"],
             "boxCategoryKey": _topfloor_category_key(row),
+            "legacyBoxCategoryKey": _topfloor_legacy_category_key(row),
             "defaultBoxDescription": _topfloor_default_box_description(row),
         }
 
@@ -218,7 +219,7 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
     for group_key, category_rows in sorted(grouped.items(), key=lambda item: _topfloor_category_sort_key(category_meta[item[0]])):
         meta = category_meta[group_key]
         box_category_key = meta["boxCategoryKey"]
-        box = box_registry.get(box_category_key, {})
+        box = box_registry.get(box_category_key) or box_registry.get(meta["legacyBoxCategoryKey"], {})
         section_rows = [_topfloor_view_row(row, group_key) for row in category_rows]
         sections.append(
             {
@@ -368,6 +369,12 @@ def _topfloor_strip_trailing_matt(value: object) -> str:
 
 def _topfloor_category_key(row: dict[str, str]) -> str:
     """Return the persisted Topfloor box/category key."""
+    buyer_id = str(row.get("buyerID", "") or "").strip() or "Nincs"
+    return f"{row['shipmentID']}::{row['productionID']}::{row['orderNumber']}::{buyer_id}"
+
+
+def _topfloor_legacy_category_key(row: dict[str, str]) -> str:
+    """Return the pre-buyerID Topfloor box/category key for compatibility reads."""
     return f"{row['shipmentID']}::{row['productionID']}::{row['orderNumber']}"
 
 
