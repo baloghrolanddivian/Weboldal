@@ -6786,10 +6786,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 return
 
             try:
+                con_description = str(payload.get("con_description", "")).strip()
                 if action == "create":
                     buyer = str(payload.get("buyer", "")).strip()
                     location = str(payload.get("location", "")).strip()
-                    con_description = str(payload.get("con_description", "")).strip()
                     if not con_description:
                         # TODO: Keep this only as a fallback; the UI sends the editable XML-derived default.
                         con_description = " ".join(part for part in (buyer, location, date.today().isoformat()) if part)
@@ -6798,7 +6798,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     return
 
                 if action == "open":
-                    result = _topfloor_open_category_box(category_key)
+                    result = _topfloor_open_category_box(category_key, con_description=con_description)
                     self.respond_json(200, {"ok": True, "action": action, "box": result})
                     return
 
@@ -6816,7 +6816,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if not shipment_id:
                     self.respond_json(400, {"ok": False, "error": "Hiányzik a shipmentID."})
                     return
-                result = _topfloor_load_and_close_category_box(category_key, [entry["code"] for entry in entries])
+                result = _topfloor_load_and_close_category_box(
+                    category_key,
+                    [entry["code"] for entry in entries],
+                    con_description=con_description,
+                )
                 box_id = str(result.get("conId", "")).strip()
                 if not box_id:
                     self.respond_json(500, {"ok": False, "error": "A doboz zárása után nincs conId."})

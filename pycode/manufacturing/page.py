@@ -764,10 +764,22 @@ def render_manufacturing_page(
       box-shadow: none;
     }}
     .mfg-topfloor-actions {{
-      display: inline-flex;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      justify-items: start;
+    }}
+    .mfg-topfloor-box-row {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }}
+    .mfg-topfloor-button-row {{
+      display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }}
     .mfg-topfloor-title {{
       display: grid;
@@ -784,6 +796,7 @@ def render_manufacturing_page(
     }}
     .mfg-topfloor-description {{
       width: min(320px, 42vw);
+      max-width: 100%;
       min-height: 34px;
       border: 1px solid rgba(15, 23, 42, 0.16);
       border-radius: 6px;
@@ -795,6 +808,7 @@ def render_manufacturing_page(
     }}
     .mfg-topfloor-button {{
       min-height: 34px;
+      min-width: 118px;
       padding: 7px 10px;
       border-radius: 6px;
       border: 1px solid rgba(15, 23, 42, 0.14);
@@ -3249,14 +3263,18 @@ def render_manufacturing_page(
         const openDisabled = category.openEnabled ? "" : " disabled";
         const closeDisabled = category.closeEnabled ? "" : " disabled";
         const boxLabel = boxId ? `Doboz: ${{escapeHtml(boxId)}}` : "Nincs doboz";
-        const defaultDescription = String(category.defaultBoxDescription || "");
+        const defaultDescription = String(category.boxDescription || category.defaultBoxDescription || "");
         return `
           <div class="mfg-topfloor-actions" data-topfloor-category="${{escapeHtml(categoryKey)}}">
-            <span class="mfg-section-count">${{boxLabel}}</span>
-            <input class="mfg-topfloor-description" type="text" value="${{escapeHtml(defaultDescription)}}" data-topfloor-description aria-label="Doboz leírás" />
-            <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
-            <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
-            <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
+            <div class="mfg-topfloor-box-row">
+              <span class="mfg-section-count">${{boxLabel}}</span>
+              <input class="mfg-topfloor-description" type="text" value="${{escapeHtml(defaultDescription)}}" data-topfloor-description aria-label="Doboz leírás" />
+            </div>
+            <div class="mfg-topfloor-button-row">
+              <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
+              <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
+              <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
+            </div>
           </div>
         `;
       }};

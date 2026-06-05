@@ -195,7 +195,7 @@ def create_closed_topfloor_category_box(
     """Create, close, and assign a Topfloor box to a category."""
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     box = create_topfloor_box(con_description=con_description, client=client)
-    closed = close_topfloor_box_with_items(box, (), client=client)
+    closed = close_topfloor_box_with_items(box, (), con_description=con_description, client=client)
     _save_topfloor_category_box(category_key, closed, open_state=False)
     return closed
 
@@ -208,10 +208,16 @@ def open_topfloor_box(box: dict[str, object] | int, client: ShopfloorApiClient |
     return {"conId": con_id, "opened": True}
 
 
-def open_topfloor_category_box(category_key: str, client: ShopfloorApiClient | None = None) -> dict[str, object]:
+def open_topfloor_category_box(
+    category_key: str,
+    *,
+    con_description: str | None = None,
+    client: ShopfloorApiClient | None = None,
+) -> dict[str, object]:
     """Open the box assigned to a Topfloor category."""
     _topfloor_require_no_other_open_box(category_key)
-    box = _topfloor_category_box(category_key)
+    box = _topfloor_box_with_description(_topfloor_category_box(category_key), con_description)
+    _save_topfloor_category_box(category_key, box, open_state=False)
     result = open_topfloor_box(box, client=client)
     _save_topfloor_category_box(category_key, box, open_state=True)
     return result
@@ -261,7 +267,7 @@ def close_topfloor_box_with_items(
     loaded_barcode_ids: list[str] | tuple[str, ...] = (),
     *,
     con_date: str = "",
-    con_description: str = "",
+    con_description: str | None = None,
     cts_id: int | None = None,
     client: ShopfloorApiClient | None = None,
 ) -> dict[str, object]:
@@ -283,11 +289,12 @@ def close_topfloor_category_box_with_items(
     category_key: str,
     loaded_barcode_ids: list[str] | tuple[str, ...],
     *,
+    con_description: str | None = None,
     client: ShopfloorApiClient | None = None,
 ) -> dict[str, object]:
     """Close a Topfloor category box with loaded item IDs."""
-    box = _topfloor_category_box(category_key)
-    result = close_topfloor_box_with_items(box, loaded_barcode_ids, client=client)
+    box = _topfloor_box_with_description(_topfloor_category_box(category_key), con_description)
+    result = close_topfloor_box_with_items(box, loaded_barcode_ids, con_description=con_description, client=client)
     _save_topfloor_category_box(category_key, result, open_state=False)
     return result
 
@@ -296,13 +303,20 @@ def load_and_close_topfloor_category_box(
     category_key: str,
     barcode_ids: list[str] | tuple[str, ...],
     *,
+    con_description: str | None = None,
     client: ShopfloorApiClient | None = None,
 ) -> dict[str, object]:
     """Load items into an open Topfloor category box and close it."""
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
-    box = _topfloor_category_box(category_key)
+    box = _topfloor_box_with_description(_topfloor_category_box(category_key), con_description)
+    _save_topfloor_category_box(category_key, box, open_state=True)
     loaded = unload_topfloor_items_into_box(box, barcode_ids, client=client)
-    result = close_topfloor_category_box_with_items(category_key, loaded["items"], client=client)
+    result = close_topfloor_category_box_with_items(
+        category_key,
+        loaded["items"],
+        con_description=con_description,
+        client=client,
+    )
     return {**result, "failedItems": loaded.get("failedItems", [])}
 
 
@@ -511,7 +525,7 @@ def _topfloor_box_payload(
     box: dict[str, object] | int,
     *,
     con_date: str = "",
-    con_description: str = "",
+    con_description: str | None = None,
     cts_id: int | None = None,
 ) -> dict[str, object]:
     """Build the closing payload fields for a Topfloor box."""
@@ -519,9 +533,16 @@ def _topfloor_box_payload(
     return {
         "conId": _topfloor_box_con_id(box),
         "conDate": str(con_date or source.get("conDate") or date.today().isoformat()),
-        "conDescription": str(con_description or source.get("conDescription") or ""),
+        "conDescription": str((source.get("conDescription") or "") if con_description is None else con_description),
         "ctsId": int(cts_id or source.get("ctsId") or TOPFLOOR_BOX_CTS_ID),
     }
+
+
+def _topfloor_box_with_description(box: dict[str, object], con_description: str | None) -> dict[str, object]:
+    """Return a box payload with the submitted description applied."""
+    if con_description is None:
+        return dict(box)
+    return {**dict(box), "conDescription": str(con_description)}
 
 
 def _shopfloor_scan_numeric_id(value: object) -> int:
