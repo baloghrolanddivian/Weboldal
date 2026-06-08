@@ -252,7 +252,7 @@ DEV_EVENT_HEARTBEAT_SECONDS = 10
 WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", ".csv"}
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
-APP_VERSION = "2.0.10"
+APP_VERSION = "2.1.0"
 
 
 NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
