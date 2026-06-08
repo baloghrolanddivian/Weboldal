@@ -649,11 +649,12 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
         shipment_id = view_key.split("::", 1)[1].strip()
         if not shipment_id:
             continue
+        shipment_label = str(view.get("label", "") or "").strip() or "Nagyautó"
         entries.append(
             {
                 "kind": "shipment",
                 "number": shipment_id,
-                "date_label": "Szállítmány",
+                "date_label": shipment_label,
                 "view_key": view_key,
                 "is_active": not entries,
                 "is_complete": False,

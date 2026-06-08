@@ -82,7 +82,7 @@ def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]
         shipment_views.append(
             {
                 "key": f"shipment::{shipment_id}",
-                "label": f"Sz\u00e1ll\u00edtm\u00e1ny {shipment_id}",
+                "label": _topfloor_shipment_buyer_label(shipment_rows),
                 "count": sum(len(section.get("rows", [])) for section in sections),
             }
         )
@@ -365,6 +365,18 @@ def _topfloor_box_prd_info(value: object) -> str:
 def _topfloor_strip_trailing_matt(value: object) -> str:
     """Remove the trailing Matt marker from box descriptions."""
     return re.sub(r"\s+\bMatt\b\s*$", "", str(value or "").strip(), flags=re.IGNORECASE)
+
+
+def _topfloor_shipment_buyer_label(rows: list[dict[str, str]]) -> str:
+    """Return the buyer label shown for a shipment tab."""
+    buyers = {
+        str(row.get("buyer", "") or "").strip()
+        for row in rows
+        if str(row.get("buyer", "") or "").strip()
+    }
+    if len(buyers) == 1:
+        return next(iter(buyers))
+    return "Nagyaut\u00f3"
 
 
 def _topfloor_category_key(row: dict[str, str]) -> str:
