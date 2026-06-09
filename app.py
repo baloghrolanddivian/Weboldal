@@ -223,8 +223,10 @@ from tools.shopfloor import extract_con_code as _extract_con_code
 from tools.shopfloor import report_con_ready as _shopfloor_report_con_ready
 from tools.shopfloor import (
     create_closed_topfloor_category_box as _topfloor_create_category_box,
+    issue_topfloor_storage_box as _topfloor_issue_storage_box,
     load_and_close_topfloor_category_box as _topfloor_load_and_close_category_box,
     open_topfloor_category_box as _topfloor_open_category_box,
+    reprint_topfloor_category_label as _topfloor_reprint_category_label,
 )
 from tools.static_assets import load_static_asset
 
@@ -5852,7 +5854,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if not category_key:
                 self.respond_json(400, {"ok": False, "error": "Hiányzik az Anyagraktár kategória azonosító."})
                 return
-            if action not in {"create", "open", "close"}:
+            if action not in {"create", "open", "close", "reprint-label", "issue-storage-box"}:
                 self.respond_json(400, {"ok": False, "error": "Érvénytelen Anyagraktár doboz művelet."})
                 return
 
@@ -5870,6 +5872,24 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
                 if action == "open":
                     result = _topfloor_open_category_box(category_key, con_description=con_description)
+                    self.respond_json(200, {"ok": True, "action": action, "box": result})
+                    return
+
+                if action == "reprint-label":
+                    result = _topfloor_reprint_category_label(category_key, con_description=con_description)
+                    self.respond_json(200, {"ok": True, "action": action, "box": result})
+                    return
+
+                if action == "issue-storage-box":
+                    box_type = payload.get("box_type", {})
+                    if not isinstance(box_type, dict):
+                        box_type = {}
+                    result = _topfloor_issue_storage_box(
+                        category_key,
+                        box_type_name=str(box_type.get("name", "")).strip(),
+                        box_type_code=str(box_type.get("code", "")).strip(),
+                        box_type_id=int(box_type.get("id") or 0),
+                    )
                     self.respond_json(200, {"ok": True, "action": action, "box": result})
                     return
 
