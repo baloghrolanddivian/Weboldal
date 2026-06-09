@@ -28,6 +28,8 @@ TOPFLOOR_BOXING_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_BOXING_CHECKPOINT_ID", "
 TOPFLOOR_BOXING_TAB_ID = int(os.getenv("TOPFLOOR_BOXING_TAB_ID", "202"))
 TOPFLOOR_UNLOADING_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_UNLOADING_CHECKPOINT_ID", "126"))
 TOPFLOOR_UNLOADING_TAB_ID = int(os.getenv("TOPFLOOR_UNLOADING_TAB_ID", "204"))
+TOPFLOOR_STORAGE_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_STORAGE_CHECKPOINT_ID", "137"))
+TOPFLOOR_STORAGE_TAB_ID = int(os.getenv("TOPFLOOR_STORAGE_TAB_ID", "228"))
 TOPFLOOR_BOX_CTS_ID = int(os.getenv("TOPFLOOR_BOX_CTS_ID", "24"))
 TOPFLOOR_RUNTIME_DIR = Path(os.getenv("TOPFLOOR_RUNTIME_DIR", "runtime/gyartasi-papirok/topfloor"))
 SHOPFLOOR_PROCESS_PAYLOAD = {
@@ -182,6 +184,7 @@ def report_con_ready(
 
 def create_topfloor_box(con_description: str = "", client: ShopfloorApiClient | None = None) -> dict[str, object]:
     """Create a Topfloor box container and persist its draft metadata."""
+    _topfloor_require_no_other_open_box("")
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     return _topfloor_create_box(client, con_description=con_description)
 
@@ -193,6 +196,7 @@ def create_closed_topfloor_category_box(
     client: ShopfloorApiClient | None = None,
 ) -> dict[str, object]:
     """Create, close, and assign a Topfloor box to a category."""
+    _topfloor_require_no_other_open_box(category_key)
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     box = create_topfloor_box(con_description=con_description, client=client)
     closed = close_topfloor_box_with_items(box, (), con_description=con_description, client=client)
@@ -202,6 +206,7 @@ def create_closed_topfloor_category_box(
 
 def open_topfloor_box(box: dict[str, object] | int, client: ShopfloorApiClient | None = None) -> dict[str, object]:
     """Open an existing Topfloor box and refresh its state."""
+    _topfloor_require_no_other_open_box("")
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     con_id = _topfloor_box_con_id(box)
     _topfloor_open_box(client, con_id)
@@ -320,6 +325,56 @@ def load_and_close_topfloor_category_box(
     return {**result, "failedItems": loaded.get("failedItems", [])}
 
 
+def reprint_topfloor_category_label(
+    category_key: str,
+    *,
+    con_description: str | None = None,
+    client: ShopfloorApiClient | None = None,
+) -> dict[str, object]:
+    """Trigger Topfloor label reprint by opening and closing a completed box."""
+    _topfloor_require_no_other_open_box(category_key)
+    client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
+    box = _topfloor_box_with_description(_topfloor_category_box(category_key), con_description)
+    _save_topfloor_category_box(category_key, box, open_state=False)
+    open_topfloor_box(box, client=client)
+    _save_topfloor_category_box(category_key, box, open_state=True)
+    result = close_topfloor_box_with_items(box, (), con_description=con_description, client=client)
+    _save_topfloor_category_box(category_key, result, open_state=False)
+    return {**result, "reprinted": True}
+
+
+def issue_topfloor_storage_box(
+    category_key: str,
+    *,
+    box_type_name: str,
+    box_type_code: str,
+    box_type_id: int | None,
+    client: ShopfloorApiClient | None = None,
+) -> dict[str, object]:
+    """Issue a physical storage box for a completed Topfloor category."""
+    clean_name = str(box_type_name or "").strip()
+    clean_code = str(box_type_code or "").strip()
+    clean_id = int(box_type_id or 0)
+    if not clean_name or clean_name == "Válassz dobozt!":
+        raise ValueError("Válassz dobozt a kiadáshoz.")
+    box = _topfloor_category_box(category_key)
+    if clean_name != "Nincs":
+        if not clean_code or clean_id <= 0:
+            raise ValueError("Hiányzik a kiadandó doboz típusa.")
+        client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
+        _topfloor_issue_storage_box(client, clean_code, clean_id)
+    result = {
+        **dict(box),
+        "storageBoxIssued": True,
+        "storageBoxName": clean_name,
+        "storageBoxCode": clean_code,
+        "storageBoxId": clean_id if clean_name != "Nincs" else None,
+        "storageBoxIssuedAt": date.today().isoformat(),
+    }
+    _save_topfloor_category_box(category_key, result, open_state=bool(box.get("open")))
+    return result
+
+
 def _shopfloor_auth_header(username: str = SHOPFLOOR_USERNAME, password: str = SHOPFLOOR_PASSWORD) -> str:
     """Provide shopfloor auth header behavior."""
     auth_raw = f"{username}:{password}"
@@ -368,6 +423,7 @@ def _shopfloor_extract_validate_data(response_body: str) -> object | None:
 
 def _topfloor_create_box(client: ShopfloorApiClient, *, con_description: str = "") -> dict[str, object]:
     """Run the Topfloor create/update sequence for a new box."""
+    _topfloor_require_no_other_open_box("")
     status_code, response_body = client.run_procedure(
         TOPFLOOR_BOXING_CHECKPOINT_ID,
         TOPFLOOR_BOXING_TAB_ID,
@@ -395,6 +451,7 @@ def _topfloor_create_box(client: ShopfloorApiClient, *, con_description: str = "
 
 def _topfloor_open_box(client: ShopfloorApiClient, con_id: int) -> None:
     """Open an existing Topfloor box before item scans."""
+    _topfloor_require_no_other_open_box("")
     status_code, response_body = client.run_procedure(
         TOPFLOOR_BOXING_CHECKPOINT_ID,
         TOPFLOOR_BOXING_TAB_ID,
@@ -453,6 +510,41 @@ def _topfloor_close_box(
         processing_options=2,
     )
     _shopfloor_require_success(status_code, response_body, "topfloor close box")
+
+
+def _topfloor_issue_storage_box(client: ShopfloorApiClient, box_code: str, box_id: int) -> None:
+    """Issue one physical box from inventory for Topfloor packing."""
+    status_code, response_body = client.run_procedure(
+        TOPFLOOR_STORAGE_CHECKPOINT_ID,
+        TOPFLOOR_STORAGE_TAB_ID,
+        1,
+        {
+            "scan": str(box_code),
+            "invtTypeId": 3,
+            "uomPriority": 0,
+        },
+    )
+    _shopfloor_require_success(status_code, response_body, f"topfloor storage box scan {box_code}")
+    status_code, response_body = client.run_procedure(
+        TOPFLOOR_STORAGE_CHECKPOINT_ID,
+        TOPFLOOR_STORAGE_TAB_ID,
+        2,
+        {
+            "itmId": int(box_id),
+            "lotId": None,
+            "invtTypeId": 3,
+            "invtTransDate": date.today().isoformat(),
+            "prdId": None,
+            "invtTransUomQty": 1,
+            "transUomCode": "DB   ",
+            "glcCode": "UNDEFINED",
+            "invtComment": "",
+            "lcIdFrom": 8,
+            "lcIdTo": None,
+            "isLocQty": False,
+        },
+    )
+    _shopfloor_require_success(status_code, response_body, f"topfloor storage box issue {box_code}")
 
 
 def _topfloor_scan_unloading_item(client: ShopfloorApiClient, barcode_id: str) -> None:
@@ -651,7 +743,14 @@ def _save_topfloor_category_box(category_key: str, box: dict[str, object], *, op
     if not clean_key:
         raise ValueError("Hiányzik a Topfloor kategória azonosító.")
     box_payload = _topfloor_box_payload(box)
+    existing = _load_topfloor_categories().get(clean_key) or _load_topfloor_categories().get(_topfloor_legacy_category_key(clean_key)) or {}
+    extra_payload = {
+        str(key): value
+        for key, value in {**dict(existing), **dict(box)}.items()
+        if str(key) not in {"conId", "conDate", "conDescription", "ctsId", "open", "closed"}
+    }
     _save_topfloor_state_box(clean_key, {
+        **extra_payload,
         "conId": int(box_payload["conId"]),
         "conDate": str(box_payload["conDate"]),
         "conDescription": str(box_payload["conDescription"]),
@@ -672,10 +771,8 @@ def _topfloor_category_box(category_key: str) -> dict[str, object]:
 
 def _topfloor_require_no_other_open_box(category_key: str) -> None:
     """Prevent opening multiple Topfloor boxes at the same time."""
-    clean_key = str(category_key or "").strip()
-    legacy_key = _topfloor_legacy_category_key(clean_key)
     for open_key, box in _load_topfloor_categories().items():
-        if open_key in {clean_key, legacy_key} or not bool(box.get("open")):
+        if not bool(box.get("open")):
             continue
         shipment_id = _topfloor_category_shipment_id(open_key)
         con_id = str(box.get("conId", "") or "").strip()
