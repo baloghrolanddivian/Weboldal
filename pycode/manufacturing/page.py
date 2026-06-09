@@ -261,9 +261,7 @@ def render_manufacturing_page(
     }}
     .mfg-toolbar {{
       padding: 8px 10px;
-      height: 52px;
-      min-height: 52px;
-      max-height: 52px;
+      min-height: 64px;
       border-radius: 18px 18px 0 0;
       background: rgba(255, 255, 255, 0.96);
       border: 1px solid rgba(18, 20, 23, 0.08);
@@ -531,8 +529,7 @@ def render_manufacturing_page(
     .mfg-chip-row {{
       display: flex;
       gap: 6px;
-      min-height: 28px;
-      max-height: 28px;
+      min-height: 44px;
       overflow-x: auto;
       overflow-y: hidden;
       align-items: center;
@@ -825,6 +822,28 @@ def render_manufacturing_page(
     .mfg-topfloor-button:disabled {{
       opacity: 0.42;
       cursor: default;
+    }}
+    .mfg-topfloor-select {{
+      min-height: 34px;
+      min-width: 170px;
+      border: 1px solid rgba(15, 23, 42, 0.14);
+      border-radius: 6px;
+      padding: 7px 10px;
+      background: #ffffff;
+      color: #172033;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .mfg-topfloor-issued {{
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 6px;
+      padding: 7px 10px;
+      background: rgba(5, 46, 22, 0.24);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 900;
     }}
     .mfg-layout-button {{
       width: 30px;
@@ -2716,6 +2735,16 @@ def render_manufacturing_page(
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
+      const topfloorStorageBoxTypes = [
+        {{ name: "Válassz dobozt!", code: "", id: 0 }},
+        {{ name: "Nincs", code: "", id: 0 }},
+        {{ name: "Kis kis", code: "PD_DOB_220x100x115", id: 153881 }},
+        {{ name: "Kis nagy", code: "PD_DOB_200x150x100", id: 153882 }},
+        {{ name: "Evőeszköz", code: "PD_DOB_610x213x430", id: 153133 }},
+        {{ name: "Nagy", code: "PD_DOB_620x250x120_L", id: 171862 }},
+        {{ name: "Divianos", code: "PD_DOB_620x280x220_L", id: 153880 }},
+        {{ name: "Öntapadós", code: "PD_DOB_310x230x160_RSB40", id: 186251 }},
+      ];
       const pantoloQuantity = (row) => Math.max(1, Number(row?.meValue || row?.quantity || 0) || 1);
       const groupedQuantityLayouts = new Set(["pantolo", "front-standard"]);
       const documentUsesGroupedQuantityRows = (document) => ["pantolas", "front_osszekeszites"].includes(String(document?.key || ""));
@@ -3275,6 +3304,27 @@ def render_manufacturing_page(
         const closeDisabled = category.closeEnabled ? "" : " disabled";
         const boxLabel = boxId ? `Doboz: ${{escapeHtml(boxId)}}` : "Nincs doboz";
         const defaultDescription = String(category.boxDescription || category.defaultBoxDescription || "");
+        const isDoneCategory = topfloorSectionComplete(group);
+        const selectedStorageBox = String(category.storageBoxName || "").trim();
+        const issueDisabled = selectedStorageBox && selectedStorageBox !== "Válassz dobozt!" ? "" : " disabled";
+        const storageOptions = topfloorStorageBoxTypes.map((item) => `
+          <option value="${{escapeHtml(item.name)}}" data-code="${{escapeHtml(item.code)}}" data-id="${{escapeHtml(String(item.id || 0))}}"${{item.name === selectedStorageBox ? " selected" : ""}}>${{escapeHtml(item.name)}}</option>
+        `).join("");
+        const doneActionMarkup = category.storageBoxIssued
+          ? `
+              <button class="mfg-topfloor-button" type="button" data-topfloor-action="reprint-label">Címke Újranyomtatása</button>
+              <span class="mfg-topfloor-issued">Kiadva</span>
+            `
+          : `
+              <button class="mfg-topfloor-button" type="button" data-topfloor-action="reprint-label">Címke Újranyomtatása</button>
+              <button class="mfg-topfloor-button" type="button" data-topfloor-action="issue-storage-box"${{issueDisabled}}>Doboz Kiadása</button>
+              <select class="mfg-topfloor-select" data-topfloor-box-type aria-label="Doboz típus">${{storageOptions}}</select>
+            `;
+        const regularActionMarkup = `
+          <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
+          <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
+          <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
+        `;
         return `
           <div class="mfg-topfloor-actions" data-topfloor-category="${{escapeHtml(categoryKey)}}">
             <div class="mfg-topfloor-box-row">
@@ -3282,9 +3332,7 @@ def render_manufacturing_page(
               <input class="mfg-topfloor-description" type="text" value="${{escapeHtml(defaultDescription)}}" data-topfloor-description aria-label="Doboz leírás" />
             </div>
             <div class="mfg-topfloor-button-row">
-              <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
-              <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
-              <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
+              ${{isDoneCategory ? doneActionMarkup : regularActionMarkup}}
             </div>
           </div>
         `;
@@ -3495,14 +3543,11 @@ def render_manufacturing_page(
             return sections.filter((section) => String(section?.topfloorCategory?.productionID || "") === productionId);
           }}
           if (currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "plain") {{
-            return sections
-              .map((section) => ({{
-                ...section,
-                rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) =>
-                  currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
-                ),
-              }}))
-              .filter((section) => section.rows.length || section?.topfloorCategory);
+            return sections.filter((section) =>
+              (Array.isArray(section.rows) ? section.rows : []).some((row) =>
+                currentViewKey === "plain" ? !rowStateValue(row) : (currentViewKey === "green" ? isReadyGreenState(rowStateValue(row)) : rowStateValue(row) === currentViewKey)
+              )
+            );
           }}
           return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
         }}
@@ -3643,8 +3688,8 @@ def render_manufacturing_page(
           const tabs = [
             {{ key: "all", label: "Összes", count: countRowsInSections(sections), stateClass: topfloorSectionsStateClass(sections) }},
             {{ key: "plain", label: "Simák", count: countRowsInSections(sections, (row) => !rowStateValue(row)), stateClass: "" }},
-            {{ key: "green", label: "Zöldek", count: countRowsInSections(sections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
-            {{ key: "red", label: "Pirosak", count: countRowsInSections(sections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
+            {{ key: "green", label: "Nyitot", count: countRowsInSections(sections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
+            {{ key: "red", label: "Zártak", count: countRowsInSections(sections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
             ...productionTabs,
           ];
           sectionTabsNode.innerHTML = tabs.map((item) => `
@@ -4716,19 +4761,31 @@ def render_manufacturing_page(
         const categoryKey = String(categoryNode?.getAttribute("data-topfloor-category") || "").trim();
         const descriptionInput = categoryNode?.querySelector("[data-topfloor-description]");
         const conDescription = descriptionInput instanceof HTMLInputElement ? String(descriptionInput.value || "").trim() : "";
+        const boxTypeSelect = categoryNode?.querySelector("[data-topfloor-box-type]");
+        const selectedBoxOption = boxTypeSelect instanceof HTMLSelectElement ? boxTypeSelect.selectedOptions[0] : null;
+        const selectedBoxName = boxTypeSelect instanceof HTMLSelectElement ? String(boxTypeSelect.value || "").trim() : "";
+        const selectedBoxType = {{
+          name: selectedBoxName,
+          code: selectedBoxOption instanceof HTMLOptionElement ? String(selectedBoxOption.getAttribute("data-code") || "").trim() : "",
+          id: selectedBoxOption instanceof HTMLOptionElement ? Number(selectedBoxOption.getAttribute("data-id") || 0) || 0 : 0,
+        }};
         const document = currentDocument();
         if (String(document?.key || "") !== "topfloor" || !categoryKey) return;
         const groups = filterGroupsBySearch(buildGroupsForView(document), document);
         const group = groups.find((item) => String(item?.topfloorCategory?.categoryKey || "") === categoryKey);
         if (!group) return;
         const category = group.topfloorCategory || {{}};
-        if (action === "open") {{
+        if (["create", "open", "reprint-label"].includes(action)) {{
           const openBox = topfloorOpenBoxCategory(document, categoryKey);
           if (openBox) {{
             await warnTopfloorOpenBox(openBox);
             setStatus("Már van nyitott Anyagraktár doboz.", "is-error");
             return;
           }}
+        }}
+        if (action === "issue-storage-box" && selectedBoxName === "Válassz dobozt!") {{
+          setStatus("Válassz dobozt a kiadáshoz.", "is-error");
+          return;
         }}
         const entries = action === "close"
           ? (Array.isArray(group.rows) ? group.rows : [])
@@ -4764,6 +4821,7 @@ def render_manufacturing_page(
               location: String(category.location || "").trim(),
               buyer_id: String(category.buyerID || "").trim(),
               con_description: conDescription,
+              box_type: selectedBoxType,
               entries,
             }}),
           }});
@@ -4866,6 +4924,16 @@ def render_manufacturing_page(
         const normalizedValue = String(input.value || "").replace(/[^0-9]/g, "").slice(0, 4);
         if (input.value !== normalizedValue) input.value = normalizedValue;
         queuePartialQuantitySave(targetProductionNumber, stateKey, normalizedValue);
+      }});
+
+      contentNode.addEventListener("change", (event) => {{
+        const select = event.target.closest("[data-topfloor-box-type]");
+        if (!(select instanceof HTMLSelectElement)) return;
+        const categoryNode = select.closest("[data-topfloor-category]");
+        const issueButton = categoryNode?.querySelector('[data-topfloor-action="issue-storage-box"]');
+        if (issueButton instanceof HTMLButtonElement) {{
+          issueButton.disabled = String(select.value || "").trim() === "Válassz dobozt!";
+        }}
       }});
 
       choiceModalNode.addEventListener("click", (event) => {{
