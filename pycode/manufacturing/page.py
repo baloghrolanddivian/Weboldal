@@ -20,6 +20,7 @@ def render_manufacturing_page(
     partial_qty_route: str,
     report_ready_route: str,
     topfloor_box_route: str = "",
+    topfloor_storage_box_types: list[dict[str, object]] | None = None,
     selected_number: str,
     operations: list[dict[str, str]],
     selected_operation: str,
@@ -160,6 +161,7 @@ def render_manufacturing_page(
             "partialQtyRoute": partial_qty_route,
             "reportReadyRoute": report_ready_route,
             "topfloorBoxRoute": topfloor_box_route,
+            "topfloorStorageBoxTypes": topfloor_storage_box_types or [],
         }
     )
 
@@ -2493,6 +2495,7 @@ def render_manufacturing_page(
           partialQtyRoute,
           reportReadyRoute,
           topfloorBoxRoute,
+          topfloorStorageBoxTypes,
         }});
       }};
       const productionDataUrl = (targetProductionNumber, operationKey = currentDocKey) => {{
@@ -2595,6 +2598,7 @@ def render_manufacturing_page(
         documents = nextDocuments;
         selectionState = Object.assign({{}}, nextPayload.selectionState || {{}});
         partialQuantityState = Object.assign({{}}, nextPayload.partialQuantityState || {{}});
+        topfloorStorageBoxTypes = Array.isArray(nextPayload.topfloorStorageBoxTypes) ? nextPayload.topfloorStorageBoxTypes : topfloorStorageBoxTypes;
         productionNumber = String(nextPayload.productionNumber || "");
         pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
         currentDocKey = String(nextPayload.currentDocumentKey || documents[0]?.key || "");
@@ -2735,16 +2739,7 @@ def render_manufacturing_page(
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
       const isReadyGreenState = (value) => value === "green";
       const isGreenLikeState = (value) => value === "green" || value === "done";
-      const topfloorStorageBoxTypes = [
-        {{ name: "Válassz dobozt!", code: "", id: 0 }},
-        {{ name: "Nincs", code: "", id: 0 }},
-        {{ name: "Kis kis", code: "PD_DOB_220x100x115", id: 153881 }},
-        {{ name: "Kis nagy", code: "PD_DOB_200x150x100", id: 153882 }},
-        {{ name: "Evőeszköz", code: "PD_DOB_610x213x430", id: 153133 }},
-        {{ name: "Nagy", code: "PD_DOB_620x250x120_L", id: 171862 }},
-        {{ name: "Divianos", code: "PD_DOB_620x280x220_L", id: 153880 }},
-        {{ name: "Öntapadós", code: "PD_DOB_310x230x160_RSB40", id: 186251 }},
-      ];
+      let topfloorStorageBoxTypes = Array.isArray(payload.topfloorStorageBoxTypes) ? payload.topfloorStorageBoxTypes : [];
       const pantoloQuantity = (row) => Math.max(1, Number(row?.meValue || row?.quantity || 0) || 1);
       const groupedQuantityLayouts = new Set(["pantolo", "front-standard"]);
       const documentUsesGroupedQuantityRows = (document) => ["pantolas", "front_osszekeszites"].includes(String(document?.key || ""));
