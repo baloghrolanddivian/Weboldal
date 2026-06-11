@@ -31,7 +31,7 @@ from .common import (
     save_selection_state,
 )
 from .page import render_manufacturing_page
-from .config import bundle_disk_cache_dir, runtime_dir
+from .config import REPO_ROOT, bundle_disk_cache_dir, runtime_dir
 from .routes import (
     MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
@@ -50,6 +50,11 @@ MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-11-topfloor-prd-prod-date-v1"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
+TOPFLOOR_BOX_TYPES_PATH = REPO_ROOT / "data" / "topfloor_box_types.json"
+TOPFLOOR_BOX_TYPES_FALLBACK = [
+    {"name": "Válassz dobozt!", "code": "", "id": 0},
+    {"name": "Nincs", "code": "", "id": 0},
+]
 
 MANUFACTURING_OPERATION_DEFINITIONS = (
     ("korpusz_osszekeszites", "Korpusz összekészítés"),
@@ -83,6 +88,35 @@ def _manufacturing_query_params(raw_path: str) -> dict[str, str]:
 def _manufacturing_normalize_number(value: object) -> str:
     """Provide manufacturing normalize number behavior."""
     return re.sub(r"[^0-9]", "", str(value or ""))
+
+
+def _topfloor_storage_box_types() -> list[dict[str, object]]:
+    """Load Topfloor storage box type options from data."""
+    try:
+        payload = json.loads(TOPFLOOR_BOX_TYPES_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = []
+    if not isinstance(payload, list):
+        payload = []
+    result: list[dict[str, object]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "") or "").strip()
+        if not name:
+            continue
+        try:
+            item_id = int(item.get("id", 0) or 0)
+        except (TypeError, ValueError):
+            item_id = 0
+        result.append(
+            {
+                "name": name,
+                "code": str(item.get("code", "") or "").strip(),
+                "id": item_id,
+            }
+        )
+    return result or [dict(item) for item in TOPFLOOR_BOX_TYPES_FALLBACK]
 
 def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) -> str:
     """Provide manufacturing signature key behavior."""
@@ -1007,6 +1041,7 @@ def manufacturing_module_payload(
         }
 
     production_client_cache: list[dict[str, object]] = []
+    topfloor_storage_box_types = _topfloor_storage_box_types()
     if include_client_cache and selected_operation and recent_productions and selected_operation != "topfloor":
         for entry in recent_productions:
             cache_number = _manufacturing_normalize_number(entry.get("number", ""))
@@ -1036,6 +1071,7 @@ def manufacturing_module_payload(
                             "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
                             "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
                             "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+                            "topfloorStorageBoxTypes": topfloor_storage_box_types,
                             "productionNumber": cache_number,
                             "selectedOperation": selected_operation,
                             "recentProductions": recent_productions,
@@ -1057,6 +1093,7 @@ def manufacturing_module_payload(
         "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
         "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
         "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+        "topfloorStorageBoxTypes": topfloor_storage_box_types,
         "productionNumber": selected_number,
         "operations": operations,
         "selectedOperation": selected_operation,
@@ -1097,6 +1134,11 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        "topfloorStorageBoxTypes": (
+            module_payload.get("topfloorStorageBoxTypes", [])
+            if isinstance(module_payload.get("topfloorStorageBoxTypes"), list)
+            else []
+        ),
         "message": str(module_payload.get("message", "")),
         "success": bool(module_payload.get("success", False)),
     }
@@ -1121,6 +1163,7 @@ def render_manufacturing_module(
         partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         topfloor_box_route=str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        topfloor_storage_box_types=payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
         selected_number=str(payload.get("productionNumber", "")),
         operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
         selected_operation=str(payload.get("selectedOperation", "")),
