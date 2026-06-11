@@ -904,7 +904,7 @@ def manufacturing_module_payload(
     else:
         recent_productions = available_production_entries(
             limit=12,
-            ready_only=selected_operation != "topfloor",
+            ready_only=True,
         )
         recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
         selected_number = (
