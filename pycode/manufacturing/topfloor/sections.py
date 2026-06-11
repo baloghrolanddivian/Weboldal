@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
-from ..config import runtime_dir
+from ..config import REPO_ROOT, runtime_dir
 
 
 TOPFLOOR_OPERATION_KEY = "topfloor"
@@ -22,9 +22,9 @@ TOPFLOOR_XML_NAMES = (
     "Anyagrakt\u00e1r.xml",
     "Anyagraktar_topfloor.xml",
 )
-TOPFLOOR_VENCODE_ABBREVIATIONS: dict[str, str] = {
-    # TODO: Add manually approved venCode abbreviations here.
-}
+TOPFLOOR_VENCODE_ABBREVIATIONS_PATH = REPO_ROOT / "data" / "venCode_Abrv"
+_TOPFLOOR_VENCODE_ABBREVIATIONS: dict[str, str] | None = None
+_TOPFLOOR_VENCODE_ABBREVIATIONS_MTIME_NS: int | None = None
 
 
 def _manufacturing_topfloor_document(bundle: dict, production_number: str) -> dict:
@@ -344,7 +344,7 @@ def _topfloor_location(values: dict[str, str]) -> str:
 def _topfloor_default_box_description(row: dict[str, str]) -> str:
     """Return the editable default Topfloor box description."""
     ven_code = str(row.get("venCode", "") or "").strip()
-    ven_code = TOPFLOOR_VENCODE_ABBREVIATIONS.get(ven_code, ven_code)
+    ven_code = _topfloor_vencode_abbreviations().get(ven_code, ven_code)
     description = " ".join(
         part
         for part in (
@@ -355,6 +355,33 @@ def _topfloor_default_box_description(row: dict[str, str]) -> str:
         if part
     )
     return _topfloor_strip_trailing_matt(description)
+
+
+def _topfloor_vencode_abbreviations() -> dict[str, str]:
+    """Return manually maintained Topfloor venCode abbreviations."""
+    global _TOPFLOOR_VENCODE_ABBREVIATIONS, _TOPFLOOR_VENCODE_ABBREVIATIONS_MTIME_NS
+    try:
+        file_mtime_ns = TOPFLOOR_VENCODE_ABBREVIATIONS_PATH.stat().st_mtime_ns
+    except OSError:
+        file_mtime_ns = None
+    if (
+        _TOPFLOOR_VENCODE_ABBREVIATIONS is not None
+        and _TOPFLOOR_VENCODE_ABBREVIATIONS_MTIME_NS == file_mtime_ns
+    ):
+        return dict(_TOPFLOOR_VENCODE_ABBREVIATIONS)
+    try:
+        payload = json.loads(TOPFLOOR_VENCODE_ABBREVIATIONS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    _TOPFLOOR_VENCODE_ABBREVIATIONS = {
+        str(key).strip(): str(value).strip()
+        for key, value in payload.items()
+        if str(key).strip() and str(value).strip()
+    }
+    _TOPFLOOR_VENCODE_ABBREVIATIONS_MTIME_NS = file_mtime_ns
+    return dict(_TOPFLOOR_VENCODE_ABBREVIATIONS)
 
 
 def _topfloor_box_prd_info(value: object) -> str:
