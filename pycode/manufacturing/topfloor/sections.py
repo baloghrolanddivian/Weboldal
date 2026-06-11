@@ -190,6 +190,7 @@ def _topfloor_xml_rows(xml_path: Path) -> list[dict[str, str]]:
                 "barcode": barcode,
                 "venCode": _topfloor_value(values, "venCode"),
                 "prdInfo1": _topfloor_value(values, "prdInfo1"),
+                "prdProdDate": _topfloor_value(values, "prdProdDate"),
                 "_index": str(index),
             }
         )
@@ -324,6 +325,7 @@ def _topfloor_field_key(value: object) -> str:
         "vencode": "venCode",
         "prdinfo1": "prdInfo1",
         "prdinfo01": "prdInfo1",
+        "prdproddate": "prdProdDate",
     }
     return aliases.get(text, "")
 
@@ -350,7 +352,7 @@ def _topfloor_default_box_description(row: dict[str, str]) -> str:
         for part in (
             ven_code,
             str(row.get("location", "") or "").split(",", 1)[0].strip(),
-            _topfloor_box_prd_info(row.get("prdInfo1", "")),
+            _topfloor_box_prod_date(row.get("prdProdDate", "")),
         )
         if part
     )
@@ -384,9 +386,12 @@ def _topfloor_vencode_abbreviations() -> dict[str, str]:
     return dict(_TOPFLOOR_VENCODE_ABBREVIATIONS)
 
 
-def _topfloor_box_prd_info(value: object) -> str:
-    """Trim prdInfo text to the date suffix used for box descriptions."""
+def _topfloor_box_prod_date(value: object) -> str:
+    """Format prdProdDate as the date suffix used for box descriptions."""
     text = str(value or "").strip()
+    match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", text)
+    if match:
+        return f"{match.group(2)}.{match.group(3)}."
     matches = re.findall(r"\b(\d{2}\.\d{2})\.?", text)
     if matches:
         return f"{matches[-1]}."
