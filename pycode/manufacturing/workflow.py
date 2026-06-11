@@ -1008,7 +1008,7 @@ def manufacturing_module_payload(
 
     production_client_cache: list[dict[str, object]] = []
     if include_client_cache and selected_operation and recent_productions and selected_operation != "topfloor":
-        for entry in recent_productions[:10]:
+        for entry in recent_productions:
             cache_number = _manufacturing_normalize_number(entry.get("number", ""))
             if not cache_number:
                 continue
