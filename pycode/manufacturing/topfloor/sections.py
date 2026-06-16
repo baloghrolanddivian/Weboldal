@@ -191,6 +191,7 @@ def _topfloor_xml_rows(xml_path: Path) -> list[dict[str, str]]:
                 "venCode": _topfloor_value(values, "venCode"),
                 "prdInfo1": _topfloor_value(values, "prdInfo1"),
                 "prdProdDate": _topfloor_value(values, "prdProdDate"),
+                "orderType": _topfloor_value(values, "orderType"),
                 "_index": str(index),
             }
         )
@@ -211,6 +212,7 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
             "buyer": row["buyer"],
             "location": row["location"],
             "buyerID": row["buyerID"],
+            "orderType": row["orderType"],
             "boxCategoryKey": _topfloor_category_key(row),
             "legacyBoxCategoryKey": _topfloor_legacy_category_key(row),
             "defaultBoxDescription": _topfloor_default_box_description(row),
@@ -326,6 +328,7 @@ def _topfloor_field_key(value: object) -> str:
         "prdinfo1": "prdInfo1",
         "prdinfo01": "prdInfo1",
         "prdproddate": "prdProdDate",
+        "otpdescription": "orderType",
     }
     return aliases.get(text, "")
 

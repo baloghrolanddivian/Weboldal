@@ -3114,6 +3114,7 @@ def render_manufacturing_page(
           category.location,
           category.orderNumber,
           category.buyerID,
+          category.orderType,
           category.boxId,
           category.boxDescription,
           category.defaultBoxDescription,
@@ -3341,6 +3342,7 @@ def render_manufacturing_page(
           ["Cím", category.location],
           ["Vevő rendelés sz.", category.orderNumber],
           ["Vevő kód", category.buyerID],
+          ["Rendelés Típusa", category.orderType],
         ].filter((item) => String(item[1] || "").trim());
         return `
           <div class="mfg-topfloor-title">
