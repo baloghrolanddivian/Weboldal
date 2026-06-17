@@ -254,7 +254,7 @@ DEV_EVENT_HEARTBEAT_SECONDS = 10
 WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", ".csv"}
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
-APP_VERSION = "2.1.2"
+APP_VERSION = "2.1.3"
 
 
 NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
@@ -5727,6 +5727,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if isinstance(payload.get("state_keys"), list)
                 else []
             )
+            document_key = str(payload.get("document_key", "")).strip()
             state = str(payload.get("state", "")).strip().lower()
 
             if not production_number:
@@ -5751,7 +5752,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if not target_state_keys:
                     target_state_keys = target_row_ids
                 state_runtime_root = manufacturing_runtime_dir()
-                if any(str(target_key or "").startswith("topfloor::") for target_key in target_state_keys):
+                if document_key == "topfloor":
                     state_runtime_root = manufacturing_runtime_dir() / "topfloor"
                 current_saved_state = load_selection_state(state_runtime_root, production_number)
                 locked_done_row_ids = [

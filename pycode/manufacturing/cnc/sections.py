@@ -136,6 +136,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             thickness = whole_number(field_value(fields, "Vastag"))
             size_parts_for_label = [part for part in (length, width, thickness) if part]
             size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
+            mark_size_black = is_upper_xml_section and length == "720" and width == "290"
             name = field_value(fields, "Leiras", "Leírás") or "Tétel"
             color = field_value(fields, "Szin", "Szín")
             edge = field_value(fields, "Elzaras", "Élzárás") or "-"
@@ -145,7 +146,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             cnc_detail = "" if re.sub(r"[^a-z0-9]+", "", folded_ascii(cnc_tag_value)).upper() == "N" else cnc_tag_value
             drawer_drill = drawer_drill_value(field_value(fields, "FIOKSIN_FURAS", "Fióksín Fúrás"))
             quantity = quantity_value(field_value(fields, "conQuantity"))
-            barcode = field_value(fields, "Barcode") or f"CNCXML-{row_index + 1:04d}"
+            prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+            con_id = field_value(fields, "conID", "ConID", "Barcode")
+            child_id = field_value(fields, "childID", "ChildID")
+            barcode = field_value(fields, "Barcode") or con_id or f"CNCXML-{row_index + 1:04d}"
             detail = clean_text(" ".join(part for part in (drawer_drill if is_lower_xml_section else "", side_type, edge, cnc_detail, hardware_type) if part and part != "-"))
             row_index += 1
             row_id = hashlib.sha1(
@@ -171,7 +175,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "section_key": _manufacturing_local_slug(section_label),
                     "section_label": section_label,
                     "page_number": 1,
-                    **_manufacturing_xml_state_fields(production_number, "cnc", barcode),
+                    "markSizeBlack": mark_size_black,
+                    **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
             )
 
@@ -292,7 +297,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             detail_suffix = " ".join(part for part in (drill, drawer_type) if part).strip()
             detail = " - ".join(part for part in (detail_prefix, detail_suffix) if part)
             quantity = quantity_value(field_value(fields, "conQuantity"))
-            barcode = field_value(fields, "Barcode") or f"FIOKXML-{row_index + 1:04d}"
+            prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+            con_id = field_value(fields, "conID", "ConID", "Barcode")
+            child_id = field_value(fields, "childID", "ChildID")
+            barcode = field_value(fields, "Barcode") or con_id or f"FIOKXML-{row_index + 1:04d}"
             row_index += 1
             row_id = hashlib.sha1(
                 f"fiokelo-xml|{production_number}|{row_index}|{barcode}|{section_label}|{name}|{model}|{size_label}|{color}|{handle_type}|{drill}|{drawer_type}|{netfront_color}|{quantity}".encode("utf-8")
@@ -314,7 +322,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "section_key": _manufacturing_local_slug(section_label),
                     "section_label": section_label,
                     "page_number": 1,
-                    **_manufacturing_xml_state_fields(production_number, "fiokelo_furas", barcode),
+                    **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
             )
 
@@ -346,10 +354,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if not str(section.get("key", "")).startswith("fiokelo_furas::")
         ] + xml_fiokelo_sections
         using_xml_fiokelo_source = True
-    cnc_source_type = "XML" if using_xml_cnc_source or using_xml_fiokelo_source else "PDF"
+    cnc_source_type = "XML" if using_xml_cnc_source or using_xml_fiokelo_source else "Nincs XML"
     cnc_source_label = "Beolvasva: {0}, {1}".format(
-        "XML" if using_xml_cnc_source else "PDF",
-        "XML" if using_xml_fiokelo_source else "PDF",
+        "XML" if using_xml_cnc_source else "Nincs XML",
+        "XML" if using_xml_fiokelo_source else "Nincs XML",
     )
 
     def size_parts(size_label: object) -> tuple[int, ...]:
@@ -520,7 +528,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if side_text and side_text not in {"-", ""}:
             return color_text, canonical_side_type(side_text)
 
-        # Some PDF rows append side-type code to color, e.g. "Antracit kr. K60R".
+        # Some legacy rows append side-type code to color, e.g. "Antracit kr. K60R".
         # Move trailing code-like token into the side-type column.
         match = re.match(r"^(.*\S)\s+(K\d{1,2}[A-Z0-9]{0,6})$", color_text, flags=re.IGNORECASE)
         if match:
@@ -901,18 +909,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_expected_upper_excenter_counts() -> dict[tuple[str, str, str, str, str, str, str], int]:
         """Build build expected upper excenter counts data."""
-        if using_xml_cnc_source:
-            return {}
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return {}
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return {}
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return {}
+        return {}
 
         expected: dict[tuple[str, str, str, str, str, str, str], int] = {}
         current_label = ""
@@ -987,6 +984,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             side_type = clean_text(parsed_row.get("side_type"))
             edge = clean_text(parsed_row.get("edge")) or "-"
             quantity = int(parsed_row.get("quantity", 0) or 0)
+            mark_size_black = bool(parsed_row.get("markSizeBlack"))
             merge_key = (source_group, name, size, color, hardware_type, side_type, edge)
             existing = merged.get(merge_key)
             source_row_id = ""
@@ -1012,11 +1010,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "quantity": quantity,
                     "detail": clean_text(parsed_row.get("detail")),
                     "columnLayout": "cnc-upper",
+                    "markSizeBlack": mark_size_black,
                     "sourceRowIds": [source_row_id] if source_row_id else [],
                     **row_state_fields,
                 }
             else:
                 existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+                existing["markSizeBlack"] = bool(existing.get("markSizeBlack")) or mark_size_black
                 if source_name:
                     existing["source_name"] = f"{existing.get('source_name', '')} · {source_name}".strip(" ·")
                 if source_row_id:
@@ -1061,6 +1061,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "edge": edge,
                         "quantity": raw_quantity,
                         "detail": clean_upper_detail_for_display(raw_row.get("detail"), side_type, hardware_type),
+                        "markSizeBlack": bool(raw_row.get("markSizeBlack")),
                     },
                     raw_row,
                 )
@@ -1152,7 +1153,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             prefix = clean_text(parts[0]) if parts else ""
             suffix = clean_text(" - ".join(parts[1:])) if len(parts) > 1 else ""
 
-            # Some PDF extracts split across lines and produce a leading technical token
+            # Some legacy extracts split across lines and produce a leading technical token
             # ("Nincs", "Fúrva", "front"), while the real model+color starts in the next chunk.
             leading_token = re.sub(r"[^a-z0-9]+", "", folded(prefix))
             if len(parts) >= 2 and leading_token in {"nincs", "furva", "front", "frontos", "fio", "fiok"}:
@@ -1165,7 +1166,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 suffix = clean_text(" - ".join(tail_parts))
 
             prefix_tokens = [token for token in prefix.split() if token]
-            # Some PDF extracts keep a broken leading token from "Fiókelő"
+            # Some legacy extracts keep a broken leading token from "Fiókelő"
             # (for example only "ó"), which would shift model/color columns.
             while prefix_tokens:
                 lead_normalized = re.sub(r"[^a-z0-9]+", "", folded(prefix_tokens[0]))
@@ -1278,7 +1279,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 detail = clean_text(raw_row.get("detail"))
                 model_label, netfront_color, drill_label, drawer_type = parse_fiokelo_detail(detail)
 
-                # PDF extraction sometimes shifts model into color/netfront fields (e.g. "Kira Fehér").
+                # Legacy extraction sometimes shifts model into color/netfront fields (e.g. "Kira Fehér").
                 # Recover model + color before rendering so model column never shows technical placeholders.
                 model_from_color, color_without_model = split_model_color_token(color)
                 model_from_netfront, netfront_without_model = split_model_color_token(netfront_color)
@@ -1317,6 +1318,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "modelTone": model_tone,
                         "code": raw_row.get("code", ""),
                         "quantity": int(raw_row.get("quantity", 0) or 0),
+                        "doc_key": raw_row.get("doc_key", "fiokelo_furas"),
+                        "state_key": raw_row.get("state_key", ""),
+                        "state_storage_key": raw_row.get("state_storage_key", ""),
                     }
                 )
 
@@ -1357,10 +1361,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             row_id = hashlib.sha1(
                 f"cnc-front|{production_number}|{index}|{row.get('groupLabel','')}|{row.get('name','')}|{model_label}|{color}|{row.get('size','')}|{netfront_color}|{row.get('drillLabel','')}|{row.get('drawerType','')}|{row.get('quantity',0)}".encode("utf-8")
             ).hexdigest()[:16]
+            state_storage_key = str(row.get("state_storage_key", "") or "").strip()
+            state_key = str(row.get("state_key", "") or state_storage_key).strip()
             rendered_rows.append(
                 {
                     "row_id": row_id,
-                    "state_key": _manufacturing_state_key(production_number, row_id),
+                    "state_key": state_key or _manufacturing_state_key(production_number, row_id),
+                    "state_storage_key": state_storage_key or row_id,
+                    "sourceRowIds": [state_storage_key] if state_storage_key else [],
                     "production_number": _manufacturing_normalize_number(production_number),
                     "name": row.get("name", ""),
                     "size": row.get("size", ""),
@@ -1368,6 +1376,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "edge": row.get("edge", ""),
                     "quantity": int(row.get("quantity", 0) or 0),
                     "code": row.get("code", ""),
+                    "doc_key": row.get("doc_key", "fiokelo_furas"),
                     "detail": row.get("detail", ""),
                     "fiokeloGroup": row.get("groupLabel", ""),
                     "modelLabel": model_label,
@@ -1632,20 +1641,18 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         """Return whether is boxos teleszkop row is true."""
         return is_boxos_target_row(row) and folded(row.get("drawer_drill")).startswith("teleszk")
 
+    def is_box1_mergeable_boxos_teleszkop_row(row: dict) -> bool:
+        """Return whether AF/AAF teleszkop rows should merge into the normal lower box."""
+        return (
+            is_boxos_teleszkop_row(row)
+            and clean_text(row.get("size")) == "724 x 505 x 18"
+            and normalize_side_type(row.get("side_type")) in {"af 1+2 fiokos", "aaf fiokos ajtos"}
+            and str(row.get("row_id", "")) not in box_avz_ids
+        )
+
     def build_raw_normal_also_box_rows() -> list[dict]:
         """Build build raw normal also box rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -1744,18 +1751,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_kinga_anna_box_rows() -> list[dict]:
         """Build build raw kinga anna box rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -1978,18 +1974,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_egyebek_box_rows() -> list[dict]:
         """Build build raw egyebek box rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -2114,18 +2099,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_takarolap_rows() -> list[dict]:
         """Build build raw takarolap rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -2273,11 +2247,25 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     box1_source_rows = [
         row for row in lower_rows
-        if is_normal_also_row(row) and clean_text(row.get("size")) == "724 x 505 x 18"
+        if (
+            (
+                is_normal_also_row(row)
+                and clean_text(row.get("size")) == "724 x 505 x 18"
+            )
+            or is_box1_mergeable_boxos_teleszkop_row(row)
+        )
         and str(row.get("row_id", "")) not in box_avz_ids
     ]
     box1_extra_rows = build_raw_boxos_teleszkop_rows()
-    box1_display_rows = (build_raw_normal_also_box_rows() or box1_source_rows) + box1_extra_rows
+    box1_display_rows = (
+        build_raw_normal_also_box_rows()
+        or [
+            clone_row(row, side_type="Normáls alsó")
+            if is_box1_mergeable_boxos_teleszkop_row(row)
+            else row
+            for row in box1_source_rows
+        ]
+    ) + box1_extra_rows
     box1_rows = aggregate_lower_rows(
         box1_display_rows,
         ("name", "size", "color", "side_type"),
@@ -2396,6 +2384,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
     for row in uncategorized_lower_rows:
         row["hideSubtitle"] = True
+    uncategorized_also_oldal_rows = [
+        row
+        for row in uncategorized_lower_rows
+        if folded(row.get("name")) == "also oldal"
+    ]
+    if uncategorized_also_oldal_rows:
+        box4_rows.extend(dict(row) for row in uncategorized_also_oldal_rows)
+        moved_also_oldal_ids = {str(row.get("row_id", "")) for row in uncategorized_also_oldal_rows}
+        uncategorized_lower_rows = [
+            row
+            for row in uncategorized_lower_rows
+            if str(row.get("row_id", "")) not in moved_also_oldal_ids
+        ]
 
     box2_rows.sort(
         key=lambda row: (
@@ -2403,7 +2404,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_text(row.get("name")),
         )
     )
-    # Kinga/Anna: keep original PDF row order, no merge and no additional sorting.
+    # Kinga/Anna: keep original source row order, no merge and no additional sorting.
     box4_rows.sort(
         key=lambda row: (
             lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
@@ -2586,10 +2587,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "quantity": int(row.get("quantity", 0) or 0),
                     "detail": clean_text(row.get("detail")),
                     "columnLayout": "cnc-upper",
+                    "markSizeBlack": bool(row.get("markSizeBlack")),
                     "sourceRowIds": source_row_ids,
                 }
             else:
                 existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+                existing["markSizeBlack"] = bool(existing.get("markSizeBlack")) or bool(row.get("markSizeBlack"))
                 source_row_ids = list(existing.get("sourceRowIds", []))
                 for source_row_id in (
                     str(source_id).strip()
@@ -2997,4 +3000,3 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             }
         )
     return main_sections, row_count, special_views, cnc_source_type, cnc_source_label
-

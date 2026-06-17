@@ -333,7 +333,10 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             size_parts_for_label = [part for part in (length, width, thickness) if part]
             size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
             quantity = quantity_value(field_value(fields, "conQuantity"))
-            barcode = field_value(fields, "Barcode") or f"FRONTXML-{row_index + 1:04d}"
+            prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+            con_id = field_value(fields, "conID", "ConID", "Barcode")
+            child_id = field_value(fields, "childID", "ChildID")
+            barcode = field_value(fields, "Barcode") or con_id or f"FRONTXML-{row_index + 1:04d}"
             type_label = category_label(fields, name, model, color)
             door_type = field_value(fields, "AJTO_TIP", "Ajto Tip", "Ajtó Tip")
             row_index += 1
@@ -362,7 +365,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     "frontPair8165Group": True,
                     "frontModel": model,
                     "frontPullOut": is_pullout_door_type(door_type),
-                    **_manufacturing_xml_state_fields(production_number, "front_osszekeszito", barcode),
+                    **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
             )
 

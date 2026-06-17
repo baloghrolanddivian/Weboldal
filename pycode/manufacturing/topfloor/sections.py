@@ -188,10 +188,12 @@ def _topfloor_xml_rows(xml_path: Path) -> list[dict[str, str]]:
                 "description": _topfloor_value(values, "description"),
                 "quantity": _topfloor_value(values, "quantity") or "1",
                 "barcode": barcode,
+                "childID": _topfloor_value(values, "childID"),
                 "venCode": _topfloor_value(values, "venCode"),
                 "prdInfo1": _topfloor_value(values, "prdInfo1"),
                 "prdProdDate": _topfloor_value(values, "prdProdDate"),
                 "orderType": _topfloor_value(values, "orderType"),
+                "sourceFileStem": xml_path.stem,
                 "_index": str(index),
             }
         )
@@ -253,7 +255,9 @@ def _topfloor_view_row(row: dict[str, str], category_key: str) -> dict:
     """Convert a Topfloor XML row into the manufacturing row shape."""
     shipment_id = row["shipmentID"]
     barcode = row["barcode"]
-    state_key = f"topfloor::{shipment_id}::{barcode}::0"
+    child_id = str(row.get("childID", "") or row.get("childId", "") or "0").strip() or "0"
+    source_file_stem = str(row.get("sourceFileStem", "") or TOPFLOOR_OPERATION_KEY).strip()
+    state_key = f"{source_file_stem}::{shipment_id}::{barcode}::{child_id}"
     row_id = _topfloor_row_id(row, category_key)
     return {
         "row_id": row_id,

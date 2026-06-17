@@ -2752,22 +2752,22 @@ def render_manufacturing_page(
         return text.includes("__child_unit_") || text.includes("__pantolo_unit_");
       }};
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
-      const xmlOperationStateKeyPattern = /^(front_osszekeszito|korpusz_osszekeszito|pantolo|cnc)::/;
+      const xmlSourceStateKeyPattern = /^[^:\\s][^:]*::\\d+::[^:]+::\\d+$/;
       const normalizeSelectionKey = (targetProductionNumber, value) => {{
         const text = String(value || "").trim();
         if (!text) return "";
-        return xmlOperationStateKeyPattern.test(text) ? text : stateKeyForRowId(targetProductionNumber, text);
+        return xmlSourceStateKeyPattern.test(text) ? text : stateKeyForRowId(targetProductionNumber, text);
       }};
       const childUnitStorageKey = (row, index) => {{
         const parentStorageKey = rowStorageKey(row);
-        if (xmlOperationStateKeyPattern.test(parentStorageKey)) {{
+        if (xmlSourceStateKeyPattern.test(parentStorageKey)) {{
           return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
         }}
         return childUnitRowId(row, index);
       }};
       const childUnitStateKey = (row, index) => {{
         const storageKey = childUnitStorageKey(row, index);
-        return xmlOperationStateKeyPattern.test(storageKey)
+        return xmlSourceStateKeyPattern.test(storageKey)
           ? storageKey
           : stateKeyForRowId(rowProductionNumber(row), storageKey);
       }};
@@ -3210,7 +3210,7 @@ def render_manufacturing_page(
         if (columnLayout === "cnc-fiokelo") {{
           return {{ key: "color", direction: "asc" }};
         }}
-        return {{ key: "pdf", direction: "asc" }};
+        return {{ key: "source", direction: "asc" }};
       }};
       const getSectionSortState = (sectionKey) => {{
         const normalizedKey = normalizedSectionSortKey(sectionKey);
@@ -3218,7 +3218,7 @@ def render_manufacturing_page(
       }};
       const compareRowsBySort = (leftRow, rightRow, sectionKey) => {{
         const sortState = getSectionSortState(sectionKey);
-        if (sortState.key === "pdf") return 0;
+        if (sortState.key === "source") return 0;
         const leftValue = rowSortValue(leftRow, sortState.key);
         const rightValue = rowSortValue(rightRow, sortState.key);
         let primaryResult = 0;
@@ -3264,7 +3264,7 @@ def render_manufacturing_page(
       }};
       const sortedRowsForView = (rows, sectionKey) => {{
         const items = Array.isArray(rows) ? [...rows] : [];
-        if (getSectionSortState(sectionKey).key === "pdf") return items;
+        if (getSectionSortState(sectionKey).key === "source") return items;
         items.sort((leftRow, rightRow) => compareRowsBySort(leftRow, rightRow, sectionKey));
         return items;
       }};
@@ -3525,6 +3525,39 @@ def render_manufacturing_page(
         lines.push("Zárd le ezt a dobozt, mielőtt másikat nyitsz.");
         return requestConfirmModal({{
           title: "Nyitott Anyagraktár doboz",
+          copy: lines.join("\\n"),
+          confirmText: "Vissza",
+          singleAction: true,
+        }});
+      }};
+      const topfloorUnissuedDoneBoxCategory = (document) => {{
+        if (String(document?.key || "") !== "topfloor") return null;
+        const sections = Array.isArray(document?.sections) ? document.sections : [];
+        for (const section of sections) {{
+          const category = section?.topfloorCategory || null;
+          if (!category || category.storageBoxIssued || !topfloorSectionComplete(section)) continue;
+          return {{
+            category,
+            label: String(section?.label || "").trim(),
+          }};
+        }}
+        return null;
+      }};
+      const warnTopfloorUnissuedDoneBox = (doneBox) => {{
+        const category = doneBox?.category || {{}};
+        const boxId = String(category.boxId || "").trim();
+        const description = String(category.boxDescription || category.defaultBoxDescription || "").trim();
+        const categoryKey = String(category.categoryKey || "").trim();
+        const shipmentId = String(category.shipmentID || (categoryKey.split("::")[0] || "")).trim();
+        const label = String(doneBox?.label || category.categoryKey || "").trim();
+        const lines = ["Van lezárt, de még ki nem adott Anyagraktár doboz."];
+        if (shipmentId) lines.push(`Szállítmány: ${{shipmentId}}`);
+        if (boxId) lines.push(`Doboz: ${{boxId}}`);
+        if (label) lines.push(`Kategória: ${{label}}`);
+        if (description) lines.push(`Leírás: ${{description}}`);
+        lines.push("Add ki ezt a dobozt, mielőtt másik dobozműveletet indítasz.");
+        return requestConfirmModal({{
+          title: "Kiadatlan Anyagraktár doboz",
           copy: lines.join("\\n"),
           confirmText: "Vissza",
           singleAction: true,
@@ -4026,6 +4059,9 @@ def render_manufacturing_page(
             const fiokeloDrawerTypeMarkup = fiokeloDrawerTypeValue === "HE"
               ? `<span class="is-pill-black">${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`
               : `<span>${{escapeHtml(fiokeloDrawerTypeValue)}}</span>`;
+            const cncUpperSizeMarkup = row.markSizeBlack
+              ? `<span class="is-pill-black">${{escapeHtml(row.size || "Méret nélkül")}}</span>`
+              : `<span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>`;
             const pantoloNormalizeMarkText = (value) =>
               String(value || "")
                 .trim()
@@ -4168,7 +4204,7 @@ def render_manufacturing_page(
                             <div class="mfg-row-title">${{escapeHtml(row.name || "Névtelen sor")}}${{modelBadgeMarkup}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}</div>
                             ${{subtitleMarkup}}
                           </div>
-                          <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span></div>
+                          <div class="mfg-row-meta">${{cncUpperSizeMarkup}}</div>
                           <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
@@ -4389,6 +4425,7 @@ def render_manufacturing_page(
             type: "row-state",
             body: {{
               production_number: targetProductionNumber,
+              document_key: String(currentDocument()?.key || ""),
               row_id: rowId,
               row_ids: uniqueRowIds,
               state_key: primarySaveKey,
@@ -4458,6 +4495,7 @@ def render_manufacturing_page(
               type: "row-state",
               body: {{
                 production_number: targetProductionNumber,
+                document_key: String(currentDocument()?.key || ""),
                 row_id: rowId,
                 row_ids: [rowId],
                 state_key: storageKey || rowId,
@@ -4772,6 +4810,14 @@ def render_manufacturing_page(
         const group = groups.find((item) => String(item?.topfloorCategory?.categoryKey || "") === categoryKey);
         if (!group) return;
         const category = group.topfloorCategory || {{}};
+        if (action !== "issue-storage-box") {{
+          const unissuedDoneBox = topfloorUnissuedDoneBoxCategory(document);
+          if (unissuedDoneBox) {{
+            await warnTopfloorUnissuedDoneBox(unissuedDoneBox);
+            setStatus("Van lezárt, de még ki nem adott Anyagraktár doboz.", "is-error");
+            return;
+          }}
+        }}
         if (["create", "open", "reprint-label"].includes(action)) {{
           const openBox = topfloorOpenBoxCategory(document, categoryKey);
           if (openBox) {{
@@ -4848,7 +4894,7 @@ def render_manufacturing_page(
         if (sortButton instanceof HTMLElement) {{
           event.preventDefault();
           event.stopPropagation();
-          const nextSortKey = sortButton.getAttribute("data-sort-key") || "pdf";
+          const nextSortKey = sortButton.getAttribute("data-sort-key") || "source";
           const sectionKey = sortButton.getAttribute("data-section-key") || "__default__";
           const normalizedKey = normalizedSectionSortKey(sectionKey);
           const currentSectionSortState = getSectionSortState(sectionKey);
@@ -4857,7 +4903,7 @@ def render_manufacturing_page(
           }} else if (currentSectionSortState.direction === "asc") {{
             sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "desc" }};
           }} else {{
-            sectionSortState[normalizedKey] = {{ key: "pdf", direction: "asc" }};
+            sectionSortState[normalizedKey] = {{ key: "source", direction: "asc" }};
           }}
           renderAll();
           return;
