@@ -3530,6 +3530,39 @@ def render_manufacturing_page(
           singleAction: true,
         }});
       }};
+      const topfloorUnissuedDoneBoxCategory = (document) => {{
+        if (String(document?.key || "") !== "topfloor") return null;
+        const sections = Array.isArray(document?.sections) ? document.sections : [];
+        for (const section of sections) {{
+          const category = section?.topfloorCategory || null;
+          if (!category || category.storageBoxIssued || !topfloorSectionComplete(section)) continue;
+          return {{
+            category,
+            label: String(section?.label || "").trim(),
+          }};
+        }}
+        return null;
+      }};
+      const warnTopfloorUnissuedDoneBox = (doneBox) => {{
+        const category = doneBox?.category || {{}};
+        const boxId = String(category.boxId || "").trim();
+        const description = String(category.boxDescription || category.defaultBoxDescription || "").trim();
+        const categoryKey = String(category.categoryKey || "").trim();
+        const shipmentId = String(category.shipmentID || (categoryKey.split("::")[0] || "")).trim();
+        const label = String(doneBox?.label || category.categoryKey || "").trim();
+        const lines = ["Van lezárt, de még ki nem adott Anyagraktár doboz."];
+        if (shipmentId) lines.push(`Szállítmány: ${{shipmentId}}`);
+        if (boxId) lines.push(`Doboz: ${{boxId}}`);
+        if (label) lines.push(`Kategória: ${{label}}`);
+        if (description) lines.push(`Leírás: ${{description}}`);
+        lines.push("Add ki ezt a dobozt, mielőtt másik dobozműveletet indítasz.");
+        return requestConfirmModal({{
+          title: "Kiadatlan Anyagraktár doboz",
+          copy: lines.join("\\n"),
+          confirmText: "Vissza",
+          singleAction: true,
+        }});
+      }};
 
       const buildGroupsForView = (document) => {{
         if (!document) return [];
@@ -4775,6 +4808,14 @@ def render_manufacturing_page(
         const group = groups.find((item) => String(item?.topfloorCategory?.categoryKey || "") === categoryKey);
         if (!group) return;
         const category = group.topfloorCategory || {{}};
+        if (action !== "issue-storage-box") {{
+          const unissuedDoneBox = topfloorUnissuedDoneBoxCategory(document);
+          if (unissuedDoneBox) {{
+            await warnTopfloorUnissuedDoneBox(unissuedDoneBox);
+            setStatus("Van lezárt, de még ki nem adott Anyagraktár doboz.", "is-error");
+            return;
+          }}
+        }}
         if (["create", "open", "reprint-label"].includes(action)) {{
           const openBox = topfloorOpenBoxCategory(document, categoryKey);
           if (openBox) {{
