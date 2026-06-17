@@ -136,6 +136,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             thickness = whole_number(field_value(fields, "Vastag"))
             size_parts_for_label = [part for part in (length, width, thickness) if part]
             size_label = " x ".join(size_parts_for_label) if len(size_parts_for_label) == 3 else ""
+            mark_size_black = is_upper_xml_section and length == "720" and width == "290"
             name = field_value(fields, "Leiras", "Leírás") or "Tétel"
             color = field_value(fields, "Szin", "Szín")
             edge = field_value(fields, "Elzaras", "Élzárás") or "-"
@@ -171,6 +172,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "section_key": _manufacturing_local_slug(section_label),
                     "section_label": section_label,
                     "page_number": 1,
+                    "markSizeBlack": mark_size_black,
                     **_manufacturing_xml_state_fields(production_number, "cnc", barcode),
                 }
             )
@@ -987,6 +989,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             side_type = clean_text(parsed_row.get("side_type"))
             edge = clean_text(parsed_row.get("edge")) or "-"
             quantity = int(parsed_row.get("quantity", 0) or 0)
+            mark_size_black = bool(parsed_row.get("markSizeBlack"))
             merge_key = (source_group, name, size, color, hardware_type, side_type, edge)
             existing = merged.get(merge_key)
             source_row_id = ""
@@ -1012,11 +1015,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "quantity": quantity,
                     "detail": clean_text(parsed_row.get("detail")),
                     "columnLayout": "cnc-upper",
+                    "markSizeBlack": mark_size_black,
                     "sourceRowIds": [source_row_id] if source_row_id else [],
                     **row_state_fields,
                 }
             else:
                 existing["quantity"] = int(existing.get("quantity", 0) or 0) + quantity
+                existing["markSizeBlack"] = bool(existing.get("markSizeBlack")) or mark_size_black
                 if source_name:
                     existing["source_name"] = f"{existing.get('source_name', '')} · {source_name}".strip(" ·")
                 if source_row_id:
@@ -1061,6 +1066,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "edge": edge,
                         "quantity": raw_quantity,
                         "detail": clean_upper_detail_for_display(raw_row.get("detail"), side_type, hardware_type),
+                        "markSizeBlack": bool(raw_row.get("markSizeBlack")),
                     },
                     raw_row,
                 )
@@ -2586,10 +2592,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "quantity": int(row.get("quantity", 0) or 0),
                     "detail": clean_text(row.get("detail")),
                     "columnLayout": "cnc-upper",
+                    "markSizeBlack": bool(row.get("markSizeBlack")),
                     "sourceRowIds": source_row_ids,
                 }
             else:
                 existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+                existing["markSizeBlack"] = bool(existing.get("markSizeBlack")) or bool(row.get("markSizeBlack"))
                 source_row_ids = list(existing.get("sourceRowIds", []))
                 for source_row_id in (
                     str(source_id).strip()
