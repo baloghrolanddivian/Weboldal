@@ -348,10 +348,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             if not str(section.get("key", "")).startswith("fiokelo_furas::")
         ] + xml_fiokelo_sections
         using_xml_fiokelo_source = True
-    cnc_source_type = "XML" if using_xml_cnc_source or using_xml_fiokelo_source else "PDF"
+    cnc_source_type = "XML" if using_xml_cnc_source or using_xml_fiokelo_source else "Nincs XML"
     cnc_source_label = "Beolvasva: {0}, {1}".format(
-        "XML" if using_xml_cnc_source else "PDF",
-        "XML" if using_xml_fiokelo_source else "PDF",
+        "XML" if using_xml_cnc_source else "Nincs XML",
+        "XML" if using_xml_fiokelo_source else "Nincs XML",
     )
 
     def size_parts(size_label: object) -> tuple[int, ...]:
@@ -522,7 +522,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if side_text and side_text not in {"-", ""}:
             return color_text, canonical_side_type(side_text)
 
-        # Some PDF rows append side-type code to color, e.g. "Antracit kr. K60R".
+        # Some legacy rows append side-type code to color, e.g. "Antracit kr. K60R".
         # Move trailing code-like token into the side-type column.
         match = re.match(r"^(.*\S)\s+(K\d{1,2}[A-Z0-9]{0,6})$", color_text, flags=re.IGNORECASE)
         if match:
@@ -903,18 +903,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_expected_upper_excenter_counts() -> dict[tuple[str, str, str, str, str, str, str], int]:
         """Build build expected upper excenter counts data."""
-        if using_xml_cnc_source:
-            return {}
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return {}
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return {}
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return {}
+        return {}
 
         expected: dict[tuple[str, str, str, str, str, str, str], int] = {}
         current_label = ""
@@ -1158,7 +1147,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             prefix = clean_text(parts[0]) if parts else ""
             suffix = clean_text(" - ".join(parts[1:])) if len(parts) > 1 else ""
 
-            # Some PDF extracts split across lines and produce a leading technical token
+            # Some legacy extracts split across lines and produce a leading technical token
             # ("Nincs", "Fúrva", "front"), while the real model+color starts in the next chunk.
             leading_token = re.sub(r"[^a-z0-9]+", "", folded(prefix))
             if len(parts) >= 2 and leading_token in {"nincs", "furva", "front", "frontos", "fio", "fiok"}:
@@ -1171,7 +1160,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 suffix = clean_text(" - ".join(tail_parts))
 
             prefix_tokens = [token for token in prefix.split() if token]
-            # Some PDF extracts keep a broken leading token from "Fiókelő"
+            # Some legacy extracts keep a broken leading token from "Fiókelő"
             # (for example only "ó"), which would shift model/color columns.
             while prefix_tokens:
                 lead_normalized = re.sub(r"[^a-z0-9]+", "", folded(prefix_tokens[0]))
@@ -1284,7 +1273,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 detail = clean_text(raw_row.get("detail"))
                 model_label, netfront_color, drill_label, drawer_type = parse_fiokelo_detail(detail)
 
-                # PDF extraction sometimes shifts model into color/netfront fields (e.g. "Kira Fehér").
+                # Legacy extraction sometimes shifts model into color/netfront fields (e.g. "Kira Fehér").
                 # Recover model + color before rendering so model column never shows technical placeholders.
                 model_from_color, color_without_model = split_model_color_token(color)
                 model_from_netfront, netfront_without_model = split_model_color_token(netfront_color)
@@ -1640,18 +1629,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_normal_also_box_rows() -> list[dict]:
         """Build build raw normal also box rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -1750,18 +1728,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_kinga_anna_box_rows() -> list[dict]:
         """Build build raw kinga anna box rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -1984,18 +1951,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_egyebek_box_rows() -> list[dict]:
         """Build build raw egyebek box rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -2120,18 +2076,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def build_raw_takarolap_rows() -> list[dict]:
         """Build build raw takarolap rows data."""
-        if using_xml_cnc_source:
-            return []
-        folder_text = str(bundle.get("folder", "") or "").strip()
-        if not folder_text:
-            return []
-        cnc_path = Path(folder_text) / "CNC.pdf"
-        if not cnc_path.is_file():
-            return []
-        try:
-            pages = manufacturing_pdf_lines(cnc_path)
-        except Exception:
-            return []
+        return []
 
         def is_boundary(token: str) -> bool:
             """Return whether is boundary is true."""
@@ -2409,7 +2354,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_text(row.get("name")),
         )
     )
-    # Kinga/Anna: keep original PDF row order, no merge and no additional sorting.
+    # Kinga/Anna: keep original source row order, no merge and no additional sorting.
     box4_rows.sort(
         key=lambda row: (
             lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
@@ -3005,4 +2950,3 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             }
         )
     return main_sections, row_count, special_views, cnc_source_type, cnc_source_label
-

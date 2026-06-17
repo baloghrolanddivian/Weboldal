@@ -19,7 +19,6 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
 from .common import (
-    _pdf_lines,
     available_production_entries,
     available_production_numbers,
     latest_production_number,
@@ -41,7 +40,6 @@ from .routes import (
     MANUFACTURING_TOPFLOOR_BOX_ROUTE,
 )
 
-manufacturing_pdf_lines = _pdf_lines
 MANUFACTURING_BUNDLE_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
@@ -65,7 +63,7 @@ MANUFACTURING_OPERATION_DEFINITIONS = (
 )
 MANUFACTURING_OPERATION_HINTS = {
     "korpusz_osszekeszites": "A jelenlegi korpusz nézet és a piros listák.",
-    "front_osszekeszites": "A front összekészítő PDF sorai és kategóriái.",
+    "front_osszekeszites": "A front összekészítő XML sorai és kategóriái.",
     "cnc_furas": "CNC, alsó, felső és fiókelő/front fúrás egy közös műveleti nézetben.",
     "pantolas": "A Pántoló papír sorai eredeti sorrendben, zöld/piros jelöléssel.",
     "topfloor": "Anyagrakt\u00e1r Topfloor alaplogika: lerakod\u00e1s \u00e9s dobozol\u00e1s.",
@@ -653,7 +651,7 @@ def _manufacturing_placeholder_document(key: str, label: str) -> dict:
         "file_name": "",
         "sections": [],
         "row_count": 0,
-        "placeholderMessage": f"A {label.lower()} PDF feldolgozási logikája még nincs kialakítva.",
+        "placeholderMessage": f"A {label.lower()} feldolgozási logikája még nincs kialakítva.",
         "specialViews": [],
     }
 
@@ -768,17 +766,9 @@ def _manufacturing_view_bundle(
 
     korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
     korpusz_osszekeszito_sections, korpusz_osszekeszito_count, korpusz_osszekeszito_xml_available = _manufacturing_osszekeszito_xml_sections(raw_bundle, current_number)
-    if not korpusz_osszekeszito_xml_available:
-        korpusz_osszekeszito_sections, korpusz_osszekeszito_count = _manufacturing_document_sections(
-            raw_bundle, current_number, ("osszekeszito",), include_source_prefix=False
-        )
-    korpusz_osszekeszito_source_type = "XML" if korpusz_osszekeszito_xml_available else "PDF"
+    korpusz_osszekeszito_source_type = "XML" if korpusz_osszekeszito_xml_available else "Nincs XML"
     korpusz_alkatresz_sections, korpusz_alkatresz_count, korpusz_alkatresz_xml_available = _manufacturing_alkatresz_kesz_xml_sections(raw_bundle, current_number)
-    if not korpusz_alkatresz_xml_available:
-        korpusz_alkatresz_sections, korpusz_alkatresz_count = _manufacturing_document_sections(
-            raw_bundle, current_number, ("alkatresz_kesz",), include_source_prefix=False
-        )
-    korpusz_alkatresz_source_type = "XML" if korpusz_alkatresz_xml_available else "PDF"
+    korpusz_alkatresz_source_type = "XML" if korpusz_alkatresz_xml_available else "Nincs XML"
     if include_all_red_view:
         all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
         selection_state_payload.update(all_red_selection_state)
@@ -820,7 +810,7 @@ def _manufacturing_view_bundle(
     )
 
     front_sections, front_row_count = _manufacturing_front_sections(raw_bundle, current_number)
-    front_source_type = "PDF"
+    front_source_type = "Nincs XML"
     front_folder = Path(str(raw_bundle.get("folder", "") or "").strip())
     front_xml_path = front_folder / "Front_osszekeszito.xml"
     if front_xml_path.is_file():
@@ -883,7 +873,7 @@ def _manufacturing_view_bundle(
 
     pantolo_sections, pantolo_row_count = _manufacturing_pantolo_sections(raw_bundle, current_number)
     _, _, pantolo_xml_available = _manufacturing_pantolo_xml_sections(raw_bundle, current_number)
-    pantolo_source_type = "XML" if pantolo_xml_available else "PDF"
+    pantolo_source_type = "XML" if pantolo_xml_available else "Nincs XML"
     documents.append(
         {
             "key": "pantolas",
@@ -939,6 +929,7 @@ def manufacturing_module_payload(
         recent_productions = available_production_entries(
             limit=12,
             ready_only=True,
+            operation=selected_operation,
         )
         recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
         selected_number = (
@@ -955,7 +946,7 @@ def manufacturing_module_payload(
         for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS
     ]
     if requested_number and requested_number not in recent_numbers and not lightweight_operation_picker and selected_operation != "topfloor":
-        combined_prefix = f"A {requested_number} gyártásban nem található meg mindkét szükséges PDF, ezért a legfrissebb használható gyártást nyitottam meg."
+        combined_prefix = f"A {requested_number} gyártás nem szerepel a friss használható XML-es gyártási listában, ezért a legfrissebb használható gyártást nyitottam meg."
         message = f"{combined_prefix} {message}".strip() if message else combined_prefix
         success = False
 
@@ -1179,7 +1170,13 @@ def render_manufacturing_module(
 def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, limit: int = 10) -> None:
     """Provide prime manufacturing cache worker behavior."""
     try:
-        entries = available_production_entries(limit=12, ready_only=True)
+        entries_by_number: dict[str, dict[str, str]] = {}
+        for operation_key, _operation_label in MANUFACTURING_OPERATION_DEFINITIONS:
+            for entry in available_production_entries(limit=12, ready_only=True, operation=operation_key):
+                normalized_number = _manufacturing_normalize_number(entry.get("number", ""))
+                if normalized_number and normalized_number not in entries_by_number:
+                    entries_by_number[normalized_number] = dict(entry)
+        entries = list(entries_by_number.values())
         numbers = [
             _manufacturing_normalize_number(item.get("number", ""))
             for item in entries

@@ -765,7 +765,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 if not candidate_pant:
                     continue
                 # Prioritás: fogantyú típus + fogantyú furat > nyitás irány > ajtó típus > méret.
-                # Ez stabilabb azokra az első sorokra, ahol a pánt mező hiányos a PDF-ből.
+                # Ez stabilabb azokra az első sorokra, ahol a pánt mező hiányos a forrásból.
                 feature_score = (
                     int(clean_text(candidate_row.get("handleType")) == clean_text(target_row.get("handleType"))),
                     int(clean_text(candidate_row.get("handleDrill")) == clean_text(target_row.get("handleDrill"))),
@@ -955,4 +955,3 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 row.pop("_pantolo_missing_pant", None)
 
     return sections, row_count
-

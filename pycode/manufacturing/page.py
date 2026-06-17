@@ -3210,7 +3210,7 @@ def render_manufacturing_page(
         if (columnLayout === "cnc-fiokelo") {{
           return {{ key: "color", direction: "asc" }};
         }}
-        return {{ key: "pdf", direction: "asc" }};
+        return {{ key: "source", direction: "asc" }};
       }};
       const getSectionSortState = (sectionKey) => {{
         const normalizedKey = normalizedSectionSortKey(sectionKey);
@@ -3218,7 +3218,7 @@ def render_manufacturing_page(
       }};
       const compareRowsBySort = (leftRow, rightRow, sectionKey) => {{
         const sortState = getSectionSortState(sectionKey);
-        if (sortState.key === "pdf") return 0;
+        if (sortState.key === "source") return 0;
         const leftValue = rowSortValue(leftRow, sortState.key);
         const rightValue = rowSortValue(rightRow, sortState.key);
         let primaryResult = 0;
@@ -3264,7 +3264,7 @@ def render_manufacturing_page(
       }};
       const sortedRowsForView = (rows, sectionKey) => {{
         const items = Array.isArray(rows) ? [...rows] : [];
-        if (getSectionSortState(sectionKey).key === "pdf") return items;
+        if (getSectionSortState(sectionKey).key === "source") return items;
         items.sort((leftRow, rightRow) => compareRowsBySort(leftRow, rightRow, sectionKey));
         return items;
       }};
@@ -4851,7 +4851,7 @@ def render_manufacturing_page(
         if (sortButton instanceof HTMLElement) {{
           event.preventDefault();
           event.stopPropagation();
-          const nextSortKey = sortButton.getAttribute("data-sort-key") || "pdf";
+          const nextSortKey = sortButton.getAttribute("data-sort-key") || "source";
           const sectionKey = sortButton.getAttribute("data-section-key") || "__default__";
           const normalizedKey = normalizedSectionSortKey(sectionKey);
           const currentSectionSortState = getSectionSortState(sectionKey);
@@ -4860,7 +4860,7 @@ def render_manufacturing_page(
           }} else if (currentSectionSortState.direction === "asc") {{
             sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "desc" }};
           }} else {{
-            sectionSortState[normalizedKey] = {{ key: "pdf", direction: "asc" }};
+            sectionSortState[normalizedKey] = {{ key: "source", direction: "asc" }};
           }}
           renderAll();
           return;
