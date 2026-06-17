@@ -5,7 +5,6 @@ from __future__ import annotations
 MANUFACTURING_ACCESS_USER_IDS = frozenset({"manufacturer"})
 
 from .common import (
-    _pdf_lines,
     available_production_entries,
     available_production_numbers,
     latest_production_number,
@@ -63,7 +62,6 @@ __all__ = [
     "_manufacturing_ready_endpoint_key",
     "_manufacturing_selection_state_payload",
     "_manufacturing_view_bundle",
-    "_pdf_lines",
     "_prime_manufacturing_cache_async",
     "_prime_manufacturing_cache_worker",
     "available_production_entries",

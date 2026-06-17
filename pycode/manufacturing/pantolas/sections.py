@@ -113,7 +113,10 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
         opening = field_value(fields, "Nyitas", "Nyitás") or "-"
         door_type = field_value(fields, "AJTO_TIP", "Ajto Tip", "Ajtó Tip") or "-"
         quantity = quantity_value(field_value(fields, "conQuality", "conQuantity"))
-        barcode = field_value(fields, "Barcode") or f"PANTXML-{row_index + 1:04d}"
+        prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+        con_id = field_value(fields, "conID", "ConID", "Barcode")
+        child_id = field_value(fields, "childID", "ChildID")
+        barcode = field_value(fields, "Barcode") or con_id or f"PANTXML-{row_index + 1:04d}"
         detail_tail = " ".join(part for part in (handle_drill, handle_type, opening, door_type) if part and part != "-").strip()
         detail = f"Front típus: {front_type} · {pant_type}"
         if detail_tail:
@@ -139,7 +142,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
                 "section_key": "pantolo",
                 "section_label": "Pántoló",
                 "page_number": 1,
-                **_manufacturing_xml_state_fields(production_number, "pantolo", barcode),
+                **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
             }
         )
 
@@ -765,7 +768,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 if not candidate_pant:
                     continue
                 # Prioritás: fogantyú típus + fogantyú furat > nyitás irány > ajtó típus > méret.
-                # Ez stabilabb azokra az első sorokra, ahol a pánt mező hiányos a PDF-ből.
+                # Ez stabilabb azokra az első sorokra, ahol a pánt mező hiányos a forrásból.
                 feature_score = (
                     int(clean_text(candidate_row.get("handleType")) == clean_text(target_row.get("handleType"))),
                     int(clean_text(candidate_row.get("handleDrill")) == clean_text(target_row.get("handleDrill"))),
@@ -955,4 +958,3 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 row.pop("_pantolo_missing_pant", None)
 
     return sections, row_count
-
