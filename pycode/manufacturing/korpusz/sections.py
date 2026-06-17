@@ -190,7 +190,10 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         color = field_value(fields, "Szin", "Szín")
         edge = edge_value(field_value(fields, "Elzartip", "Elzártip", "Élzártip"))
         quantity = quantity_value(field_value(fields, "conQuantity"))
-        barcode = field_value(fields, "Barcode") or f"OSSZXML-{row_index + 1:04d}"
+        prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+        con_id = field_value(fields, "conID", "ConID", "Barcode")
+        child_id = field_value(fields, "childID", "ChildID")
+        barcode = field_value(fields, "Barcode") or con_id or f"OSSZXML-{row_index + 1:04d}"
         row_index += 1
         row_id = hashlib.sha1(
             f"osszekeszito-xml|{production_number}|{row_index}|{barcode}|{label}|{name}|{size_label}|{color}|{edge}|{quantity}".encode("utf-8")
@@ -212,7 +215,7 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
                 "section_key": _manufacturing_local_slug(label),
                 "section_label": label,
                 "page_number": 1,
-                **_manufacturing_xml_state_fields(production_number, "korpusz_osszekeszito", barcode),
+                **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
             }
         )
 
@@ -341,7 +344,10 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
         color = field_value(fields, "Szin", "Szín")
         edge = field_value(fields, "Elzaras", "Elzárás") or "-"
         item_number = field_value(fields, "itmItemNumber")
-        barcode = field_value(fields, "Barcode") or f"ALKXML-{row_index + 1:04d}"
+        prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+        con_id = field_value(fields, "conID", "ConID", "Barcode")
+        child_id = field_value(fields, "childID", "ChildID")
+        barcode = field_value(fields, "Barcode") or con_id or f"ALKXML-{row_index + 1:04d}"
         quantity = quantity_value(field_value(fields, "conQuantity"))
         row_index += 1
         row_id = hashlib.sha1(
@@ -364,7 +370,7 @@ def _manufacturing_alkatresz_kesz_xml_sections(bundle: dict, production_number: 
                 "section_key": _manufacturing_local_slug(name),
                 "section_label": name,
                 "page_number": 1,
-                **_manufacturing_xml_state_fields(production_number, "korpusz_osszekeszito", barcode),
+                **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
             }
         )
 

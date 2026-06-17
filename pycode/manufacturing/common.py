@@ -7,6 +7,7 @@ import os
 import re
 import threading
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
@@ -51,6 +52,18 @@ MANUFACTURING_XML_SOURCE_NAMES = frozenset(
 )
 
 
+def is_structured_manufacturing_state_key(value: object) -> bool:
+    """Return whether value looks like source_file::prdID::conID::childID."""
+    parts = str(value or "").strip().split("::")
+    return (
+        len(parts) == 4
+        and bool(parts[0].strip())
+        and parts[1].strip().isdigit()
+        and bool(parts[2].strip())
+        and parts[3].strip().isdigit()
+    )
+
+
 def _production_xml_names(folder: Path) -> frozenset[str]:
     """Return normalized XML file names in a production folder."""
     if not folder.exists():
@@ -63,6 +76,23 @@ def _production_xml_names(folder: Path) -> frozenset[str]:
         )
     except OSError:
         return frozenset()
+
+
+def _production_xml_files(folder: Path) -> list[Path]:
+    """Return XML files in deterministic source-priority order."""
+    if not folder.exists():
+        return []
+    try:
+        xml_files = [
+            path
+            for path in folder.iterdir()
+            if path.is_file() and path.suffix.lower() == ".xml"
+        ]
+    except OSError:
+        return []
+    priority = {name: index for index, name in enumerate(sorted(MANUFACTURING_XML_SOURCE_NAMES))}
+    xml_files.sort(key=lambda path: (priority.get(path.name.lower(), 999), path.name.lower()))
+    return xml_files
 
 
 def has_usable_manufacturing_xml(folder: Path, operation: str = "") -> bool:
@@ -93,12 +123,27 @@ def _entries_cache_signature() -> tuple[tuple[str, int], ...]:
     return tuple(entries[:200])
 
 
+def _production_date_cache_signature(folder: Path) -> tuple[tuple[str, int, int], ...]:
+    """Return a signature for XML dates, falling back to folder mtime."""
+    entries: list[tuple[str, int, int]] = []
+    for path in _production_xml_files(folder):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        entries.append((path.name, stat.st_mtime_ns, stat.st_size))
+    if entries:
+        return tuple(entries)
+    try:
+        stat = folder.stat()
+    except OSError:
+        return tuple()
+    return (("__folder__", stat.st_mtime_ns, 0),)
+
+
 def _production_date_label_cached(folder: Path) -> str:
     """Provide production date label cached behavior."""
-    try:
-        signature = (folder.stat().st_mtime_ns,)
-    except OSError:
-        signature = tuple()
+    signature = _production_date_cache_signature(folder)
     with MANUFACTURING_ENTRIES_CACHE_LOCK:
         cached = MANUFACTURING_DATE_LABEL_CACHE.get(str(folder))
         if cached and cached.get("signature") == signature:
@@ -158,11 +203,56 @@ def available_production_entries(limit: int = 60, ready_only: bool = False, oper
 
 def _production_date_label(folder: Path) -> str:
     """Provide production date label behavior."""
+    xml_date_label = _production_prd_prod_date_label(folder)
+    if xml_date_label:
+        return xml_date_label
     try:
         timestamp = folder.stat().st_mtime
     except OSError:
         return ""
     return datetime.fromtimestamp(timestamp).strftime("%Y.%m.%d.")
+
+
+def _production_xml_field_key(value: object) -> str:
+    """Normalize XML field names for date lookup."""
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").rsplit("}", 1)[-1].strip().lower())
+
+
+def _format_production_prd_prod_date(value: object) -> str:
+    """Format prdProdDate for production chips."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    match = re.search(r"\b(\d{4})[-./](\d{1,2})[-./](\d{1,2})\b", text)
+    if match:
+        return f"{match.group(1)}.{int(match.group(2)):02d}.{int(match.group(3)):02d}."
+    match = re.search(r"\b(\d{1,2})[.](\d{1,2})[.]?(?:\s|$)", text)
+    if match:
+        year = datetime.now().year
+        return f"{year}.{int(match.group(1)):02d}.{int(match.group(2)):02d}."
+    return text
+
+
+def _production_prd_prod_date_label(folder: Path) -> str:
+    """Read prdProdDate from the production XML files."""
+    for xml_path in _production_xml_files(folder):
+        try:
+            root = ET.parse(xml_path).getroot()
+        except Exception:
+            continue
+        for element in root.iter():
+            for attr_key, attr_value in element.attrib.items():
+                if _production_xml_field_key(attr_key) == "prdproddate":
+                    label = _format_production_prd_prod_date(attr_value)
+                    if label:
+                        return label
+            for child in list(element):
+                if _production_xml_field_key(child.tag) != "prdproddate":
+                    continue
+                label = _format_production_prd_prod_date(child.text)
+                if label:
+                    return label
+    return ""
 
 
 def available_production_numbers(limit: int = 60, ready_only: bool = False, operation: str = "") -> list[str]:
@@ -222,7 +312,7 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
         clean_value = str(value)
         if clean_value in {"green", "red", "done"}:
             result[clean_key] = clean_value
-        elif clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_value):
+        elif is_structured_manufacturing_state_key(clean_key) and re.fullmatch(r"\d{1,12}", clean_value):
             result[clean_key] = clean_value
     return result
 
@@ -247,7 +337,7 @@ def save_selection_state(runtime_root: Path, production_number: str, row_id: str
         current.pop(row_id, None)
     elif normalized_state in {"green", "red", "done"}:
         current[row_id] = normalized_state
-    elif str(row_id or "").startswith("topfloor::") and re.fullmatch(r"\d{1,12}", normalized_state):
+    elif is_structured_manufacturing_state_key(row_id) and re.fullmatch(r"\d{1,12}", normalized_state):
         current[row_id] = normalized_state
     path.write_text(json.dumps({**metadata, **current}, ensure_ascii=False, indent=2), encoding="utf-8")
     return current

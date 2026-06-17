@@ -21,6 +21,7 @@ from pathlib import Path
 from .common import (
     available_production_entries,
     available_production_numbers,
+    is_structured_manufacturing_state_key,
     latest_production_number,
     load_partial_quantity_state,
     load_production_bundle,
@@ -45,7 +46,7 @@ MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-16-topfloor-order-type-v1"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-17-xml-source-file-state-v1"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 TOPFLOOR_BOX_TYPES_PATH = REPO_ROOT / "data" / "topfloor_box_types.json"
@@ -361,17 +362,33 @@ def _manufacturing_row_con_code(row: dict) -> str:
     """Provide manufacturing row con code behavior."""
     return _manufacturing_normalize_con_code(row.get("Barcode") or row.get("barcode") or row.get("code", ""))
 
-def _manufacturing_xml_state_fields(production_number: str, operation_key: str, barcode: object, child_id: object = 0) -> dict:
+def _manufacturing_xml_source_stem(source_file: object) -> str:
+    """Return the XML source filename without extension for state keys."""
+    text = str(source_file or "").strip()
+    if not text:
+        return ""
+    return Path(text).stem.strip() or text
+
+def _manufacturing_xml_state_fields(
+    production_number: str,
+    source_file: object,
+    barcode: object,
+    child_id: object = 0,
+    prd_id: object = "",
+    con_id: object = "",
+) -> dict:
     """Provide manufacturing xml state fields behavior."""
-    con_code = _manufacturing_normalize_con_code(barcode)
+    con_code = _manufacturing_normalize_con_code(con_id) or _manufacturing_normalize_con_code(barcode)
+    normalized_child_id = re.sub(r"[^0-9]", "", str(child_id if child_id is not None else "").strip()) or "0"
+    source_stem = _manufacturing_xml_source_stem(source_file)
     fields = {
         "xmlSource": True,
-        "xmlOperation": str(operation_key or "").strip(),
-        "xmlChildId": str(child_id if child_id is not None else 0).strip() or "0",
+        "xmlSourceFile": source_stem,
+        "xmlChildId": normalized_child_id,
     }
-    normalized_number = _manufacturing_normalize_number(production_number)
-    if normalized_number and fields["xmlOperation"] and con_code:
-        state_key = f"{fields['xmlOperation']}::{normalized_number}::{con_code}::{fields['xmlChildId']}"
+    normalized_number = _manufacturing_normalize_number(prd_id) or _manufacturing_normalize_number(production_number)
+    if normalized_number and source_stem and con_code:
+        state_key = f"{source_stem}::{normalized_number}::{con_code}::{normalized_child_id}"
         fields["state_storage_key"] = state_key
         fields["state_key"] = state_key
     return fields
@@ -384,16 +401,10 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
     con_code = _manufacturing_row_con_code(row)
     if normalized_number and con_code:
         if bool(row.get("xmlSource")):
-            operation_key = str(row.get("xmlOperation", "") or "").strip()
+            operation_key = _manufacturing_xml_source_stem(row.get("xmlSourceFile", "") or row.get("xmlOperation", ""))
             child_id = str(row.get("xmlChildId", "0") or "0").strip()
             if operation_key:
                 return f"{operation_key}::{normalized_number}::{con_code}::{child_id}"
-        if document_key == "front_osszekeszito":
-            return f"front_osszekeszito::{normalized_number}::{con_code}::0"
-        if document_key == "topfloor":
-            return f"topfloor::{normalized_number}::{con_code}::0"
-        if document_key in {"osszekeszito", "alkatresz_kesz"}:
-            return f"korpusz_osszekeszito::{normalized_number}::{con_code}::0"
     return row_id
 
 def _manufacturing_row_state_view_key(production_number: str, row: dict) -> str:
@@ -401,6 +412,63 @@ def _manufacturing_row_state_view_key(production_number: str, row: dict) -> str:
     storage_key = _manufacturing_row_state_storage_key(production_number, row)
     row_id = str(row.get("row_id", "") or "").strip()
     return storage_key if "::" in storage_key else _manufacturing_state_key(production_number, row_id)
+
+def _manufacturing_legacy_state_prefixes_for_source(source_file: object) -> tuple[str, ...]:
+    """Return legacy operation prefixes that used to persist this XML source."""
+    source_stem = _manufacturing_xml_source_stem(source_file)
+    folded_stem = re.sub(r"[^a-z0-9]+", "_", source_stem.strip().lower()).strip("_")
+    aliases: list[str] = []
+    if folded_stem:
+        aliases.append(folded_stem)
+    legacy_by_source = {
+        "osszekeszito": ("korpusz_osszekeszito",),
+        "alkatresz_kesz": ("korpusz_osszekeszito",),
+        "front_osszekeszito": ("front_osszekeszito",),
+        "cnc": ("cnc",),
+        "fiokelo_furas": ("fiokelo_furas",),
+        "pantolo": ("pantolo",),
+        "topfloor": ("topfloor",),
+        "anyagraktar": ("topfloor",),
+        "anyagraktar_topfloor": ("topfloor",),
+        "szerelveny_dobozolas": ("topfloor",),
+    }
+    aliases.extend(legacy_by_source.get(folded_stem, tuple()))
+    result: list[str] = []
+    for alias in aliases:
+        if alias and alias not in result:
+            result.append(alias)
+    return tuple(result)
+
+def _manufacturing_legacy_state_keys_for_row(row: dict, storage_key: str) -> tuple[str, ...]:
+    """Return old state keys that should hydrate the row's current storage key."""
+    parts = str(storage_key or "").strip().split("::")
+    if len(parts) != 4:
+        return tuple()
+    current_prefix, production_number, con_code, child_id = parts
+    candidate_prefixes = list(_manufacturing_legacy_state_prefixes_for_source(row.get("xmlSourceFile", "") or current_prefix))
+    document_key = str(row.get("doc_key", "") or "").strip()
+    document_fallbacks = {
+        "osszekeszito": ("korpusz_osszekeszito",),
+        "alkatresz_kesz": ("korpusz_osszekeszito",),
+        "front_osszekeszito": ("front_osszekeszito",),
+        "cnc": ("cnc",),
+        "fiokelo_furas": ("fiokelo_furas",),
+        "pantolo": ("pantolo",),
+        "topfloor": ("topfloor",),
+    }
+    candidate_prefixes.extend(document_fallbacks.get(document_key, tuple()))
+    result: list[str] = []
+    for prefix in candidate_prefixes:
+        if not prefix or prefix == current_prefix:
+            continue
+        legacy_key = f"{prefix}::{production_number}::{con_code}::{child_id}"
+        if legacy_key not in result:
+            result.append(legacy_key)
+        if child_id == "0":
+            legacy_key_without_child = f"{prefix}::{production_number}::{con_code}"
+            if legacy_key_without_child not in result:
+                result.append(legacy_key_without_child)
+    return tuple(result)
 
 def _manufacturing_normalize_operation(value: object) -> str:
     """Provide manufacturing normalize operation behavior."""
@@ -415,13 +483,10 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
     for row_id, state in raw_state.items():
         clean_state = str(state or "").strip().lower()
         clean_key = str(row_id or "").strip()
-        if clean_state not in {"green", "red", "done"} and not (clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_state)):
+        if clean_state not in {"green", "red", "done"} and not (is_structured_manufacturing_state_key(clean_key) and re.fullmatch(r"\d{1,12}", clean_state)):
             continue
-        if clean_key.startswith(("front_osszekeszito::", "korpusz_osszekeszito::", "pantolo::", "cnc::", "topfloor::")):
+        if is_structured_manufacturing_state_key(clean_key):
             result[clean_key] = clean_state
-            parts = clean_key.split("::")
-            if len(parts) == 3:
-                result[f"{clean_key}::0"] = clean_state
         elif normalized_number and clean_key.startswith(f"{normalized_number}::"):
             result[clean_key] = clean_state
         else:
@@ -449,7 +514,7 @@ def _manufacturing_load_existing_selection_state(runtime_root: Path, production_
         clean_value = str(value)
         if clean_value in {"green", "red", "done"}:
             result[clean_key] = clean_value
-        elif clean_key.startswith("topfloor::") and re.fullmatch(r"\d{1,12}", clean_value):
+        elif is_structured_manufacturing_state_key(clean_key) and re.fullmatch(r"\d{1,12}", clean_value):
             result[clean_key] = clean_value
     return result
 
@@ -489,6 +554,7 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
         candidate_keys = [
             storage_key,
             re.sub(r"::0$", "", storage_key),
+            *_manufacturing_legacy_state_keys_for_row(row, storage_key),
             row_id,
             _manufacturing_state_key(normalized_number, row_id) if row_id else "",
         ]
@@ -616,7 +682,13 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
                     continue
                 storage_key = _manufacturing_row_state_storage_key(production_number, row)
                 legacy_storage_key = re.sub(r"::0$", "", storage_key)
-                if str(row.get("row_id", "")).strip() not in red_state_keys and storage_key not in red_state_keys and legacy_storage_key not in red_state_keys:
+                legacy_state_keys = _manufacturing_legacy_state_keys_for_row(row, storage_key)
+                if (
+                    str(row.get("row_id", "")).strip() not in red_state_keys
+                    and storage_key not in red_state_keys
+                    and legacy_storage_key not in red_state_keys
+                    and not any(legacy_key in red_state_keys for legacy_key in legacy_state_keys)
+                ):
                     continue
                 suffix_parts = [f"Gyártás {production_number}"]
                 if section_label:
@@ -732,6 +804,7 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
     for shipment_id in shipment_ids:
         raw_state = _manufacturing_load_existing_selection_state(topfloor_runtime_root, shipment_id)
         selection_state.update(_manufacturing_selection_state_payload(shipment_id, raw_state))
+        _manufacturing_apply_row_state_aliases([topfloor_document], shipment_id, raw_state, selection_state)
     return (
         {
             "production_number": "",

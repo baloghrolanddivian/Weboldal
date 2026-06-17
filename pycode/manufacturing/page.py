@@ -2752,22 +2752,22 @@ def render_manufacturing_page(
         return text.includes("__child_unit_") || text.includes("__pantolo_unit_");
       }};
       const stateKeyForRowId = (targetProductionNumber, rowId) => `${{targetProductionNumber}}::${{rowId}}`;
-      const xmlOperationStateKeyPattern = /^(front_osszekeszito|korpusz_osszekeszito|pantolo|cnc)::/;
+      const xmlSourceStateKeyPattern = /^[^:\\s][^:]*::\\d+::[^:]+::\\d+$/;
       const normalizeSelectionKey = (targetProductionNumber, value) => {{
         const text = String(value || "").trim();
         if (!text) return "";
-        return xmlOperationStateKeyPattern.test(text) ? text : stateKeyForRowId(targetProductionNumber, text);
+        return xmlSourceStateKeyPattern.test(text) ? text : stateKeyForRowId(targetProductionNumber, text);
       }};
       const childUnitStorageKey = (row, index) => {{
         const parentStorageKey = rowStorageKey(row);
-        if (xmlOperationStateKeyPattern.test(parentStorageKey)) {{
+        if (xmlSourceStateKeyPattern.test(parentStorageKey)) {{
           return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
         }}
         return childUnitRowId(row, index);
       }};
       const childUnitStateKey = (row, index) => {{
         const storageKey = childUnitStorageKey(row, index);
-        return xmlOperationStateKeyPattern.test(storageKey)
+        return xmlSourceStateKeyPattern.test(storageKey)
           ? storageKey
           : stateKeyForRowId(rowProductionNumber(row), storageKey);
       }};
@@ -4425,6 +4425,7 @@ def render_manufacturing_page(
             type: "row-state",
             body: {{
               production_number: targetProductionNumber,
+              document_key: String(currentDocument()?.key || ""),
               row_id: rowId,
               row_ids: uniqueRowIds,
               state_key: primarySaveKey,
@@ -4494,6 +4495,7 @@ def render_manufacturing_page(
               type: "row-state",
               body: {{
                 production_number: targetProductionNumber,
+                document_key: String(currentDocument()?.key || ""),
                 row_id: rowId,
                 row_ids: [rowId],
                 state_key: storageKey || rowId,

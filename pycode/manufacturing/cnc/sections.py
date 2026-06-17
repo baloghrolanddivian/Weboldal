@@ -146,7 +146,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             cnc_detail = "" if re.sub(r"[^a-z0-9]+", "", folded_ascii(cnc_tag_value)).upper() == "N" else cnc_tag_value
             drawer_drill = drawer_drill_value(field_value(fields, "FIOKSIN_FURAS", "Fióksín Fúrás"))
             quantity = quantity_value(field_value(fields, "conQuantity"))
-            barcode = field_value(fields, "Barcode") or f"CNCXML-{row_index + 1:04d}"
+            prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+            con_id = field_value(fields, "conID", "ConID", "Barcode")
+            child_id = field_value(fields, "childID", "ChildID")
+            barcode = field_value(fields, "Barcode") or con_id or f"CNCXML-{row_index + 1:04d}"
             detail = clean_text(" ".join(part for part in (drawer_drill if is_lower_xml_section else "", side_type, edge, cnc_detail, hardware_type) if part and part != "-"))
             row_index += 1
             row_id = hashlib.sha1(
@@ -173,7 +176,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "section_label": section_label,
                     "page_number": 1,
                     "markSizeBlack": mark_size_black,
-                    **_manufacturing_xml_state_fields(production_number, "cnc", barcode),
+                    **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
             )
 
@@ -294,7 +297,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             detail_suffix = " ".join(part for part in (drill, drawer_type) if part).strip()
             detail = " - ".join(part for part in (detail_prefix, detail_suffix) if part)
             quantity = quantity_value(field_value(fields, "conQuantity"))
-            barcode = field_value(fields, "Barcode") or f"FIOKXML-{row_index + 1:04d}"
+            prd_id = field_value(fields, "prdID", "PrdID", "productionID")
+            con_id = field_value(fields, "conID", "ConID", "Barcode")
+            child_id = field_value(fields, "childID", "ChildID")
+            barcode = field_value(fields, "Barcode") or con_id or f"FIOKXML-{row_index + 1:04d}"
             row_index += 1
             row_id = hashlib.sha1(
                 f"fiokelo-xml|{production_number}|{row_index}|{barcode}|{section_label}|{name}|{model}|{size_label}|{color}|{handle_type}|{drill}|{drawer_type}|{netfront_color}|{quantity}".encode("utf-8")
@@ -316,7 +322,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "section_key": _manufacturing_local_slug(section_label),
                     "section_label": section_label,
                     "page_number": 1,
-                    **_manufacturing_xml_state_fields(production_number, "fiokelo_furas", barcode),
+                    **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
             )
 
@@ -1312,6 +1318,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                         "modelTone": model_tone,
                         "code": raw_row.get("code", ""),
                         "quantity": int(raw_row.get("quantity", 0) or 0),
+                        "doc_key": raw_row.get("doc_key", "fiokelo_furas"),
+                        "state_key": raw_row.get("state_key", ""),
+                        "state_storage_key": raw_row.get("state_storage_key", ""),
                     }
                 )
 
@@ -1352,10 +1361,14 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             row_id = hashlib.sha1(
                 f"cnc-front|{production_number}|{index}|{row.get('groupLabel','')}|{row.get('name','')}|{model_label}|{color}|{row.get('size','')}|{netfront_color}|{row.get('drillLabel','')}|{row.get('drawerType','')}|{row.get('quantity',0)}".encode("utf-8")
             ).hexdigest()[:16]
+            state_storage_key = str(row.get("state_storage_key", "") or "").strip()
+            state_key = str(row.get("state_key", "") or state_storage_key).strip()
             rendered_rows.append(
                 {
                     "row_id": row_id,
-                    "state_key": _manufacturing_state_key(production_number, row_id),
+                    "state_key": state_key or _manufacturing_state_key(production_number, row_id),
+                    "state_storage_key": state_storage_key or row_id,
+                    "sourceRowIds": [state_storage_key] if state_storage_key else [],
                     "production_number": _manufacturing_normalize_number(production_number),
                     "name": row.get("name", ""),
                     "size": row.get("size", ""),
@@ -1363,6 +1376,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "edge": row.get("edge", ""),
                     "quantity": int(row.get("quantity", 0) or 0),
                     "code": row.get("code", ""),
+                    "doc_key": row.get("doc_key", "fiokelo_furas"),
                     "detail": row.get("detail", ""),
                     "fiokeloGroup": row.get("groupLabel", ""),
                     "modelLabel": model_label,
@@ -1626,6 +1640,15 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     def is_boxos_teleszkop_row(row: dict) -> bool:
         """Return whether is boxos teleszkop row is true."""
         return is_boxos_target_row(row) and folded(row.get("drawer_drill")).startswith("teleszk")
+
+    def is_box1_mergeable_boxos_teleszkop_row(row: dict) -> bool:
+        """Return whether AF/AAF teleszkop rows should merge into the normal lower box."""
+        return (
+            is_boxos_teleszkop_row(row)
+            and clean_text(row.get("size")) == "724 x 505 x 18"
+            and normalize_side_type(row.get("side_type")) in {"af 1+2 fiokos", "aaf fiokos ajtos"}
+            and str(row.get("row_id", "")) not in box_avz_ids
+        )
 
     def build_raw_normal_also_box_rows() -> list[dict]:
         """Build build raw normal also box rows data."""
@@ -2224,11 +2247,25 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     box1_source_rows = [
         row for row in lower_rows
-        if is_normal_also_row(row) and clean_text(row.get("size")) == "724 x 505 x 18"
+        if (
+            (
+                is_normal_also_row(row)
+                and clean_text(row.get("size")) == "724 x 505 x 18"
+            )
+            or is_box1_mergeable_boxos_teleszkop_row(row)
+        )
         and str(row.get("row_id", "")) not in box_avz_ids
     ]
     box1_extra_rows = build_raw_boxos_teleszkop_rows()
-    box1_display_rows = (build_raw_normal_also_box_rows() or box1_source_rows) + box1_extra_rows
+    box1_display_rows = (
+        build_raw_normal_also_box_rows()
+        or [
+            clone_row(row, side_type="Normáls alsó")
+            if is_box1_mergeable_boxos_teleszkop_row(row)
+            else row
+            for row in box1_source_rows
+        ]
+    ) + box1_extra_rows
     box1_rows = aggregate_lower_rows(
         box1_display_rows,
         ("name", "size", "color", "side_type"),
@@ -2347,6 +2384,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     ]
     for row in uncategorized_lower_rows:
         row["hideSubtitle"] = True
+    uncategorized_also_oldal_rows = [
+        row
+        for row in uncategorized_lower_rows
+        if folded(row.get("name")) == "also oldal"
+    ]
+    if uncategorized_also_oldal_rows:
+        box4_rows.extend(dict(row) for row in uncategorized_also_oldal_rows)
+        moved_also_oldal_ids = {str(row.get("row_id", "")) for row in uncategorized_also_oldal_rows}
+        uncategorized_lower_rows = [
+            row
+            for row in uncategorized_lower_rows
+            if str(row.get("row_id", "")) not in moved_also_oldal_ids
+        ]
 
     box2_rows.sort(
         key=lambda row: (
