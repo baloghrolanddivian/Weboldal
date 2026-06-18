@@ -188,6 +188,8 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
     def is_curved_front_row(row: dict) -> bool:
         """Return whether is curved front row is true."""
+        if folded(row.get("doorType")) == "fzn":
+            return True
         size_text = clean_text(row.get("size"))
         code_text = clean_text(row.get("code"))
         compact_size = re.sub(r"[^0-9X]", "", size_text.upper().replace("x", "X"))
@@ -364,6 +366,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     "frontMaterial": material_label(color),
                     "frontPair8165Group": True,
                     "frontModel": model,
+                    "doorType": door_type,
                     "frontPullOut": is_pullout_door_type(door_type),
                     **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
