@@ -1646,6 +1646,9 @@ def render_manufacturing_page(
       font-weight: 700;
       color: #111827;
     }}
+    .mfg-row.is-front-standard .mfg-row-meta.is-model.is-laura-model span {{
+      font-style: italic;
+    }}
     .mfg-row.is-green {{
       background: var(--mfg-green-bg);
       box-shadow: inset 3px 0 0 var(--mfg-green-line);
@@ -4232,7 +4235,7 @@ def render_manufacturing_page(
                 <div class="mfg-row-title">${{escapeHtml(displayRow.name || "Névtelen sor")}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
                 ${{subtitleMarkup}}
               </div>
-              <div class="mfg-row-meta is-model"><span>${{escapeHtml(displayRow.modelLabel || "-")}}</span></div>
+              <div class="mfg-row-meta is-model${{String(displayRow.modelLabel || "").trim().toLowerCase() === "laura" ? " is-laura-model" : ""}}"><span>${{escapeHtml(displayRow.modelLabel || "-")}}</span></div>
               <div class="mfg-row-meta"><span class="is-size">${{escapeHtml(displayRow.size || "Méret nélkül")}}</span></div>
               <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(displayRow.color || "Szín nélkül")}}</span></div>
               <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(quantityText)}} db</div></div>
