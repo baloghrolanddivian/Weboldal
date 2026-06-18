@@ -88,9 +88,19 @@ def render_manufacturing_page(
             f'data-production-number="{html.escape(str(entry.get("number", "")), quote=True)}"'
         )
 
+    def chip_state_class(entry: dict) -> str:
+        status = str(entry.get("state_status", "") or "").strip().lower()
+        if status == "done":
+            return " is-done"
+        if status == "red":
+            return " is-red"
+        if status == "green" or bool(entry.get("is_complete")):
+            return " is-complete"
+        return ""
+
     recent_chips_html = "".join(
         (
-            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{" is-complete" if bool(entry.get("is_complete")) else ""}" '
+            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}" '
             f'href="{chip_href(entry)}" '
             f"{chip_attrs(entry)}>"
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
@@ -194,6 +204,9 @@ def render_manufacturing_page(
       --mfg-green-bg: #e7f8ee;
       --mfg-green-line: #6fc893;
       --mfg-green-text: #0d6b37;
+      --mfg-done-bg: #0c8d57;
+      --mfg-done-line: #047857;
+      --mfg-done-text: #f4fff8;
       --mfg-red-bg: #ffecec;
       --mfg-red-line: #ef7b7b;
       --mfg-red-text: #b33131;
@@ -593,6 +606,35 @@ def render_manufacturing_page(
       border-color: #0b6c44;
       background: #dcf3e7;
       color: #0b6c44;
+    }}
+    .mfg-chip-link.is-red {{
+      border-color: var(--mfg-red-line);
+      background: var(--mfg-red-bg);
+      color: var(--mfg-red-text);
+    }}
+    .mfg-chip-link.is-red .mfg-chip-number {{
+      color: var(--mfg-red-text);
+    }}
+    .mfg-chip-link.is-red.is-active {{
+      border-color: var(--mfg-red-text);
+      background: #ffdcdc;
+      color: var(--mfg-red-text);
+    }}
+    .mfg-chip-link.is-done {{
+      border-color: var(--mfg-done-line);
+      background: var(--mfg-done-bg);
+      color: var(--mfg-done-text);
+    }}
+    .mfg-chip-link.is-done .mfg-chip-number {{
+      color: rgba(244, 255, 248, 0.86);
+    }}
+    .mfg-chip-link.is-done.is-active {{
+      border-color: #064e3b;
+      background: #047857;
+      color: #ffffff;
+    }}
+    .mfg-chip-link.is-done.is-active .mfg-chip-number {{
+      color: rgba(255, 255, 255, 0.92);
     }}
     .mfg-chip-date {{
       font-size: 0.67rem;
@@ -1004,6 +1046,25 @@ def render_manufacturing_page(
       color: var(--mfg-green-text);
       opacity: 0.9;
     }}
+    .mfg-subsection-tab.is-done {{
+      border-color: var(--mfg-done-line);
+      background: var(--mfg-done-bg);
+      color: var(--mfg-done-text);
+    }}
+    .mfg-subsection-tab.is-done strong {{
+      color: #ffffff;
+    }}
+    .mfg-subsection-tab.is-done small {{
+      color: rgba(255, 255, 255, 0.9);
+    }}
+    .mfg-subsection-tab.is-done.is-active {{
+      border-color: #064e3b;
+      background: #047857;
+      color: #ffffff;
+    }}
+    .mfg-subsection-tab.is-done.is-active small {{
+      color: rgba(255, 255, 255, 0.9);
+    }}
     .mfg-subsection-tab.is-alert {{
       border-color: var(--mfg-red-line);
       background: var(--mfg-red-bg);
@@ -1046,6 +1107,17 @@ def render_manufacturing_page(
     .mfg-section-tab.is-complete small {{
       color: var(--mfg-green-text);
       opacity: 0.82;
+    }}
+    .mfg-section-tab.is-done {{
+      border-color: var(--mfg-done-line);
+      background: var(--mfg-done-bg);
+      color: var(--mfg-done-text);
+    }}
+    .mfg-section-tab.is-done strong {{
+      color: #ffffff;
+    }}
+    .mfg-section-tab.is-done small {{
+      color: rgba(255, 255, 255, 0.9);
     }}
     .mfg-section-tab.is-alert {{
       border-color: var(--mfg-red-line);
@@ -2529,6 +2601,19 @@ def render_manufacturing_page(
         if (operationKey) url.searchParams.set("operation", operationKey);
         return `${{url.pathname}}${{url.search}}`;
       }};
+      const chipStatusClass = (status, isComplete = false) => {{
+        const normalizedStatus = String(status || "").trim().toLowerCase();
+        if (normalizedStatus === "done") return "is-done";
+        if (normalizedStatus === "red") return "is-red";
+        if (normalizedStatus === "green" || isComplete) return "is-complete";
+        return "";
+      }};
+      const applyChipStatusClass = (link, status, isComplete = false) => {{
+        if (!(link instanceof HTMLElement)) return;
+        link.classList.remove("is-complete", "is-red", "is-done");
+        const statusClass = chipStatusClass(status, isComplete);
+        if (statusClass) link.classList.add(statusClass);
+      }};
       const renderProductionChips = (recentProductions = []) => {{
         if (!chipRowNode) return;
         chipRowNode.replaceChildren();
@@ -2548,6 +2633,7 @@ def render_manufacturing_page(
             link.setAttribute("data-mfg-production-link", "");
             link.setAttribute("data-production-number", entryNumber);
           }}
+          applyChipStatusClass(link, entry?.state_status || "", Boolean(entry?.is_complete));
           const dateNode = document.createElement("span");
           dateNode.className = "mfg-chip-date";
           dateNode.textContent = String(entry?.date_label || "Dátum nélkül");
@@ -2560,23 +2646,30 @@ def render_manufacturing_page(
         updateProductionChipState(recentProductions);
       }};
       const updateProductionChipState = (recentProductions = []) => {{
-        const completionByNumber = new Map(
+        const statusByNumber = new Map(
           (Array.isArray(recentProductions) ? recentProductions : [])
-            .map((entry) => [String(entry?.number || ""), Boolean(entry?.is_complete)]),
+            .map((entry) => [
+              String(entry?.number || ""),
+              {{
+                status: String(entry?.state_status || "").trim().toLowerCase(),
+                isComplete: Boolean(entry?.is_complete),
+              }},
+            ]),
         );
         document.querySelectorAll("[data-mfg-shipment-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
           const shipmentComplete = topfloorSectionsComplete(topfloorShipmentSectionsForKey(currentDocument(), viewKey));
           link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
-          link.classList.toggle("is-complete", shipmentComplete);
+          applyChipStatusClass(link, shipmentComplete ? "done" : "", shipmentComplete);
         }});
         document.querySelectorAll("[data-mfg-production-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
           const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
           link.classList.toggle("is-active", linkNumber === productionNumber);
-          if (completionByNumber.has(linkNumber)) {{
-            link.classList.toggle("is-complete", Boolean(completionByNumber.get(linkNumber)));
+          if (statusByNumber.has(linkNumber)) {{
+            const statusItem = statusByNumber.get(linkNumber) || {{}};
+            applyChipStatusClass(link, statusItem.status || "", Boolean(statusItem.isComplete));
           }}
         }});
       }};
@@ -3300,7 +3393,7 @@ def render_manufacturing_page(
         const closeDisabled = category.closeEnabled ? "" : " disabled";
         const boxLabel = boxId ? `Doboz: ${{escapeHtml(boxId)}}` : "Nincs doboz";
         const defaultDescription = String(category.boxDescription || category.defaultBoxDescription || "");
-        const isDoneCategory = topfloorSectionComplete(group);
+        const isDoneCategory = topfloorCategoryReadyToIssue(group);
         const selectedStorageBox = String(category.storageBoxName || "").trim();
         const issueDisabled = selectedStorageBox && selectedStorageBox !== "Válassz dobozt!" ? "" : " disabled";
         const storageOptions = topfloorStorageBoxTypes.map((item) => `
@@ -3355,9 +3448,11 @@ def render_manufacturing_page(
 
       const tabStateClassForRows = (rows) => {{
         if (!rows.length) return "";
-        if (rows.some((row) => !rowStateValue(row))) return "";
-        if (rows.every((row) => isGreenLikeState(rowStateValue(row)))) return " is-complete";
-        if (rows.some((row) => rowStateValue(row) === "red")) return " is-alert";
+        const states = rows.map((row) => rowStateValue(row));
+        if (states.some((state) => !state || state === "mixed")) return "";
+        if (states.some((state) => state === "red")) return " is-alert";
+        if (states.every((state) => state === "done")) return " is-done";
+        if (states.every((state) => isGreenLikeState(state))) return " is-complete";
         return "";
       }};
       const sectionTabStateClass = (section) => {{
@@ -3449,16 +3544,17 @@ def render_manufacturing_page(
         return sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
       }};
       const isTopfloorDoneState = (value) => /^\\d{{1,12}}$/.test(String(value || "").trim());
-      const topfloorSectionComplete = (section) => {{
+      const topfloorCategoryReadyToIssue = (section) => {{
         const category = section?.topfloorCategory || null;
         const rows = Array.isArray(section?.rows) ? section.rows : [];
         if (!category || !String(category.boxId || "").trim() || category.boxOpen || !rows.length) return false;
         return rows.every((row) => isTopfloorDoneState(rowStateValue(row)));
       }};
+      const topfloorSectionComplete = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued);
       const topfloorCategoryStateClass = (section) => {{
         const category = section?.topfloorCategory || null;
         if (!category || !String(category.boxId || "").trim()) return "";
-        if (topfloorSectionComplete(section)) return " is-topfloor-done";
+        if (topfloorCategoryReadyToIssue(section)) return " is-topfloor-done";
         if (category.boxOpen) return " is-topfloor-open";
         return " is-topfloor-boxed";
       }};
@@ -3466,7 +3562,7 @@ def render_manufacturing_page(
         const cleanSections = (Array.isArray(sections) ? sections : []).filter((section) => section?.topfloorCategory);
         return cleanSections.length > 0 && cleanSections.every((section) => topfloorSectionComplete(section));
       }};
-      const topfloorSectionsStateClass = (sections) => topfloorSectionsComplete(sections) ? " is-complete" : "";
+      const topfloorSectionsStateClass = (sections) => topfloorSectionsComplete(sections) ? " is-done" : "";
       const topfloorProductionViewKey = (productionId) => `topfloor-production::${{String(productionId || "").trim()}}`;
       const topfloorProductionIdFromViewKey = (key) => {{
         const text = String(key || "").trim();
@@ -3535,7 +3631,7 @@ def render_manufacturing_page(
         const sections = Array.isArray(document?.sections) ? document.sections : [];
         for (const section of sections) {{
           const category = section?.topfloorCategory || null;
-          if (!category || category.storageBoxIssued || !topfloorSectionComplete(section)) continue;
+          if (!category || category.storageBoxIssued || !topfloorCategoryReadyToIssue(section)) continue;
           return {{
             category,
             label: String(section?.label || "").trim(),

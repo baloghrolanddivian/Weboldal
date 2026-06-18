@@ -344,6 +344,115 @@ def _manufacturing_operation_state_keys(production_number: str, operation_key: s
         }
     return state_keys
 
+def _manufacturing_view_row_state(row: dict, view_state: dict[str, str], production_number: str) -> str:
+    """Return the visible row state used for header/chip status."""
+    row_production_number = _manufacturing_normalize_number(row.get("production_number", "") or production_number)
+
+    def row_state_key() -> str:
+        return str(row.get("state_key", "")).strip() or str(row.get("row_id", "")).strip()
+
+    def row_storage_key() -> str:
+        return str(row.get("state_storage_key", "")).strip() or str(row.get("row_id", "")).strip()
+
+    def grouped_quantity() -> int:
+        try:
+            return max(1, int(float(row.get("meValue") or row.get("quantity") or 0)) or 1)
+        except (TypeError, ValueError):
+            return 1
+
+    def child_unit_row_id(index: int) -> str:
+        return f"{str(row.get('row_id', '')).strip()}__child_unit_{index + 1}"
+
+    def child_unit_storage_key(index: int) -> str:
+        parent_storage_key = row_storage_key()
+        if is_structured_manufacturing_state_key(parent_storage_key):
+            return re.sub(r"::\d+$", f"::{index + 1}", parent_storage_key)
+        return child_unit_row_id(index)
+
+    def child_unit_state_key(index: int) -> str:
+        storage_key = child_unit_storage_key(index)
+        if is_structured_manufacturing_state_key(storage_key):
+            return storage_key
+        return _manufacturing_state_key(row_production_number, storage_key)
+
+    def child_unit_state(index: int, parent_state: str, has_explicit_unit_state: bool) -> str:
+        if parent_state == "done":
+            return "done"
+        unit_key = child_unit_state_key(index)
+        if unit_key in view_state:
+            return str(view_state.get(unit_key, "")).strip().lower()
+        legacy_unit_key = _manufacturing_state_key(row_production_number, child_unit_row_id(index))
+        if legacy_unit_key in view_state:
+            return str(view_state.get(legacy_unit_key, "")).strip().lower()
+        return "" if has_explicit_unit_state else parent_state
+
+    if (
+        str(row.get("columnLayout", "")).strip() in {"pantolo", "front-standard"}
+        and not bool(row.get("isPantoloUnit"))
+        and grouped_quantity() > 1
+    ):
+        parent_state = str(view_state.get(row_state_key(), "")).strip().lower()
+        unit_count = grouped_quantity()
+        has_explicit_unit_state = any(
+            child_unit_state_key(index) in view_state
+            or _manufacturing_state_key(row_production_number, child_unit_row_id(index)) in view_state
+            for index in range(unit_count)
+        )
+        states = [child_unit_state(index, parent_state, has_explicit_unit_state) for index in range(unit_count)]
+        if all(not state for state in states):
+            return ""
+        if all(state == "red" for state in states):
+            return "red"
+        if all(state == "done" for state in states):
+            return "done"
+        if all(state in {"green", "done"} for state in states):
+            return "green" if "green" in states else "done"
+        return "mixed"
+
+    if bool(row.get("isPantoloUnit")):
+        explicit_state = str(view_state.get(row_state_key(), "")).strip().lower()
+        return explicit_state or str(row.get("inheritedState", "")).strip().lower()
+
+    source_row_ids = [
+        source_id if "::" in source_id or not row_production_number else _manufacturing_state_key(row_production_number, source_id)
+        for source_id in [
+            str(source_id).strip()
+            for source_id in row.get("sourceRowIds", [])
+            if str(source_id).strip()
+        ]
+    ] if isinstance(row.get("sourceRowIds"), list) else []
+    if source_row_ids:
+        source_states = [
+            str(view_state.get(source_id, "")).strip().lower()
+            for source_id in source_row_ids
+            if str(view_state.get(source_id, "")).strip()
+        ]
+        if not source_states:
+            return ""
+        if all(state == source_states[0] for state in source_states):
+            return source_states[0]
+        if all(state in {"green", "done"} for state in source_states):
+            return "green" if "green" in source_states else "done"
+        return "mixed"
+
+    state_key = row_state_key()
+    if not state_key:
+        return ""
+    return str(view_state.get(state_key, "")).strip().lower()
+
+def _manufacturing_document_row_states(document: dict | None, view_state: dict[str, str], production_number: str) -> tuple[str, ...]:
+    """Return visible states for rows in a manufacturing document."""
+    if not isinstance(document, dict):
+        return tuple()
+    row_states: list[str] = []
+    for section in document.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for row in section.get("rows", []):
+            if isinstance(row, dict):
+                row_states.append(_manufacturing_view_row_state(row, view_state, production_number))
+    return tuple(row_states)
+
 def _manufacturing_state_key(production_number: str, row_id: str) -> str:
     """Provide manufacturing state key behavior."""
     normalized_number = _manufacturing_normalize_number(production_number)
@@ -416,7 +525,8 @@ def _manufacturing_row_state_view_key(production_number: str, row: dict) -> str:
 def _manufacturing_legacy_state_prefixes_for_source(source_file: object) -> tuple[str, ...]:
     """Return legacy operation prefixes that used to persist this XML source."""
     source_stem = _manufacturing_xml_source_stem(source_file)
-    folded_stem = re.sub(r"[^a-z0-9]+", "_", source_stem.strip().lower()).strip("_")
+    ascii_stem = unicodedata.normalize("NFKD", source_stem).encode("ascii", "ignore").decode("ascii")
+    folded_stem = re.sub(r"[^a-z0-9]+", "_", ascii_stem.strip().lower()).strip("_")
     aliases: list[str] = []
     if folded_stem:
         aliases.append(folded_stem)
@@ -559,9 +669,13 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
             _manufacturing_state_key(normalized_number, row_id) if row_id else "",
         ]
         for candidate_key in candidate_keys:
-            clean_state = str(raw_state.get(candidate_key, "") or "").strip().lower()
+            clean_value = str(raw_state.get(candidate_key, "") or "").strip()
+            clean_state = clean_value.lower()
             if clean_state in {"green", "red", "done"}:
                 selection_state[state_key] = clean_state
+                break
+            if is_structured_manufacturing_state_key(state_key) and re.fullmatch(r"\d{1,12}", clean_value):
+                selection_state[state_key] = clean_value
                 break
 
 def _manufacturing_row_with_context(row: dict, production_number: str, detail_suffix: str = "") -> dict:
@@ -741,6 +855,9 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
     if not isinstance(topfloor_document, dict):
         return []
     entries: list[dict[str, object]] = []
+    sections = topfloor_document.get("sections", [])
+    if not isinstance(sections, list):
+        sections = []
     shipment_views = topfloor_document.get("topfloorShipmentViews", [])
     if not isinstance(shipment_views, list):
         shipment_views = []
@@ -754,6 +871,18 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
         if not shipment_id:
             continue
         shipment_label = str(view.get("label", "") or "").strip() or "Nagyautó"
+        shipment_categories = [
+            section.get("topfloorCategory", {})
+            for section in sections
+            if (
+                isinstance(section, dict)
+                and isinstance(section.get("topfloorCategory"), dict)
+                and str(section["topfloorCategory"].get("shipmentID", "")).strip() == shipment_id
+            )
+        ]
+        shipment_complete = bool(shipment_categories) and all(
+            bool(category.get("storageBoxIssued")) for category in shipment_categories
+        )
         entries.append(
             {
                 "kind": "shipment",
@@ -761,7 +890,8 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
                 "date_label": shipment_label,
                 "view_key": view_key,
                 "is_active": not entries,
-                "is_complete": False,
+                "is_complete": shipment_complete,
+                "state_status": "done" if shipment_complete else "plain",
             }
         )
     return entries
@@ -1023,45 +1153,59 @@ def manufacturing_module_payload(
         message = f"{combined_prefix} {message}".strip() if message else combined_prefix
         success = False
 
-    def is_complete_production(entry_number: str, operation_key: str) -> bool:
-        """Return whether is complete production is true."""
+    def production_state_status(entry_number: str, operation_key: str) -> str:
+        """Return toolbar status: plain, red, green, or done."""
         operation_filter = _manufacturing_normalize_operation(operation_key)
         if not operation_filter:
-            return False
+            return "plain"
         normalized_number = _manufacturing_normalize_number(entry_number)
         if not normalized_number:
-            return False
+            return "plain"
         try:
-            required_state_keys = _manufacturing_operation_state_keys(normalized_number, operation_filter)
             saved_state = load_selection_state(runtime_dir(), normalized_number)
             raw_bundle = _load_manufacturing_bundle_cached(normalized_number)
-            _view_bundle, view_state = _manufacturing_view_bundle(
+            view_bundle, view_state = _manufacturing_view_bundle(
                 raw_bundle,
                 normalized_number,
                 saved_state,
                 include_all_red_view=False,
             )
+            target_document = next(
+                (
+                    document
+                    for document in view_bundle.get("documents", [])
+                    if isinstance(document, dict) and str(document.get("key", "")).strip() == operation_filter
+                ),
+                None,
+            )
+            state_values = _manufacturing_document_row_states(target_document, view_state, normalized_number)
         except Exception:
-            return False
-        if not required_state_keys:
-            return False
-        for row_state_key in required_state_keys:
-            state_value = str(view_state.get(row_state_key, "")).strip().lower()
-            if state_value not in {"green", "done"}:
-                return False
-        return True
+            return "plain"
+        if not state_values:
+            return "plain"
+        if any(state_value not in {"red", "green", "done"} for state_value in state_values):
+            return "plain"
+        if any(state_value == "red" for state_value in state_values):
+            return "red"
+        if all(state_value == "done" for state_value in state_values):
+            return "done"
+        if all(state_value in {"green", "done"} for state_value in state_values):
+            return "green"
+        return "plain"
+
+    def production_entry_with_status(entry: dict) -> dict:
+        production_status = production_state_status(str(entry.get("number", "")), selected_operation)
+        return {
+            **dict(entry),
+            "state_status": production_status,
+            "is_complete": production_status in {"green", "done"},
+        }
 
     if selected_operation == "topfloor":
-        recent_productions = [{**dict(entry), "is_complete": False} for entry in recent_productions]
+        recent_productions = [{**dict(entry), "is_complete": False, "state_status": "plain"} for entry in recent_productions]
         selected_number = ""
     else:
-        recent_productions = [
-            {
-                **dict(entry),
-                "is_complete": is_complete_production(str(entry.get("number", "")), selected_operation),
-            }
-            for entry in recent_productions
-        ]
+        recent_productions = [production_entry_with_status(dict(entry)) for entry in recent_productions]
 
     bundle: dict | None = None
     selection_state: dict[str, str] = {}
