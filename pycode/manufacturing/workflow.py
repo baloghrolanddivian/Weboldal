@@ -440,17 +440,81 @@ def _manufacturing_view_row_state(row: dict, view_state: dict[str, str], product
         return ""
     return str(view_state.get(state_key, "")).strip().lower()
 
-def _manufacturing_document_row_states(document: dict | None, view_state: dict[str, str], production_number: str) -> tuple[str, ...]:
-    """Return visible states for rows in a manufacturing document."""
+def _manufacturing_all_tab_section_groups(document: dict | None) -> tuple[tuple[dict, ...], ...]:
+    """Return the section source used by the operation's Összes tab."""
     if not isinstance(document, dict):
         return tuple()
+    document_key = str(document.get("key", "")).strip()
+    if document_key == "korpusz_osszekeszites":
+        groups: list[tuple[dict, ...]] = []
+        for special_view_key in ("korpusz-osszekeszito", "korpusz-alkatresz-kesz"):
+            special_view = next(
+                (
+                    view
+                    for view in document.get("specialViews", [])
+                    if isinstance(view, dict) and str(view.get("key", "")).strip() == special_view_key
+                ),
+                None,
+            )
+            if isinstance(special_view, dict):
+                groups.append(tuple(section for section in special_view.get("sections", []) if isinstance(section, dict)))
+        return tuple(groups)
+    if document_key == "cnc_furas":
+        sections: list[dict] = []
+        for special_view in document.get("specialViews", []):
+            if not isinstance(special_view, dict):
+                continue
+            sections.extend(section for section in special_view.get("sections", []) if isinstance(section, dict))
+        return (tuple(sections),)
+    return (tuple(section for section in document.get("sections", []) if isinstance(section, dict)),)
+
+def _manufacturing_status_from_row_states(row_states: tuple[str, ...]) -> str:
+    """Return an Osszes-style status from visible row states."""
+    if not row_states:
+        return "plain"
+    if any(state_value not in {"red", "green", "done"} for state_value in row_states):
+        return "plain"
+    if any(state_value == "red" for state_value in row_states):
+        return "red"
+    if all(state_value == "done" for state_value in row_states):
+        return "done"
+    if all(state_value in {"green", "done"} for state_value in row_states):
+        return "green"
+    return "plain"
+
+def _manufacturing_combine_all_tab_statuses(statuses: tuple[str, ...]) -> str:
+    """Combine multiple Osszes statuses represented by one chip."""
+    clean_statuses = tuple(str(status or "").strip().lower() for status in statuses)
+    if not clean_statuses or any(status not in {"red", "green", "done"} for status in clean_statuses):
+        return "plain"
+    if any(status == "red" for status in clean_statuses):
+        return "red"
+    if all(status == "done" for status in clean_statuses):
+        return "done"
+    if all(status in {"green", "done"} for status in clean_statuses):
+        return "green"
+    return "plain"
+
+def _manufacturing_document_all_tab_status(document: dict | None, view_state: dict[str, str], production_number: str) -> str:
+    """Return the combined Osszes status represented by one production chip."""
+    group_statuses: list[str] = []
+    for sections in _manufacturing_all_tab_section_groups(document):
+        row_states: list[str] = []
+        for section in sections:
+            for row in section.get("rows", []):
+                if isinstance(row, dict):
+                    row_states.append(_manufacturing_view_row_state(row, view_state, production_number))
+        group_statuses.append(_manufacturing_status_from_row_states(tuple(row_states)))
+    return _manufacturing_combine_all_tab_statuses(tuple(group_statuses))
+
+def _manufacturing_document_row_states(document: dict | None, view_state: dict[str, str], production_number: str) -> tuple[str, ...]:
+    """Return the visible row states used by the operation's Összes tab."""
     row_states: list[str] = []
-    for section in document.get("sections", []):
-        if not isinstance(section, dict):
-            continue
-        for row in section.get("rows", []):
-            if isinstance(row, dict):
-                row_states.append(_manufacturing_view_row_state(row, view_state, production_number))
+    for sections in _manufacturing_all_tab_section_groups(document):
+        for section in sections:
+            for row in section.get("rows", []):
+                if isinstance(row, dict):
+                    row_states.append(_manufacturing_view_row_state(row, view_state, production_number))
     return tuple(row_states)
 
 def _manufacturing_state_key(production_number: str, row_id: str) -> str:
@@ -1178,20 +1242,9 @@ def manufacturing_module_payload(
                 ),
                 None,
             )
-            state_values = _manufacturing_document_row_states(target_document, view_state, normalized_number)
+            return _manufacturing_document_all_tab_status(target_document, view_state, normalized_number)
         except Exception:
             return "plain"
-        if not state_values:
-            return "plain"
-        if any(state_value not in {"red", "green", "done"} for state_value in state_values):
-            return "plain"
-        if any(state_value == "red" for state_value in state_values):
-            return "red"
-        if all(state_value == "done" for state_value in state_values):
-            return "done"
-        if all(state_value in {"green", "done"} for state_value in state_values):
-            return "green"
-        return "plain"
 
     def production_entry_with_status(entry: dict) -> dict:
         production_status = production_state_status(str(entry.get("number", "")), selected_operation)
