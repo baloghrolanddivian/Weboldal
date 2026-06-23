@@ -2664,15 +2664,25 @@ def render_manufacturing_page(
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
           const shipmentComplete = topfloorSectionsComplete(topfloorShipmentSectionsForKey(currentDocument(), viewKey));
           link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
-          applyChipStatusClass(link, shipmentComplete ? "done" : "", shipmentComplete);
+          const allTabStatus = viewKey === currentTopfloorShipmentKey ? currentAllTabStateStatus() : "";
+          applyChipStatusClass(link, allTabStatus || (shipmentComplete ? "done" : ""), shipmentComplete);
         }});
         document.querySelectorAll("[data-mfg-production-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
           const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
-          link.classList.toggle("is-active", linkNumber === productionNumber);
+          const isActiveProduction = linkNumber === productionNumber;
+          link.classList.toggle("is-active", isActiveProduction);
           if (statusByNumber.has(linkNumber)) {{
             const statusItem = statusByNumber.get(linkNumber) || {{}};
-            applyChipStatusClass(link, statusItem.status || "", Boolean(statusItem.isComplete));
+            const cachedStatus = isActiveProduction ? currentAllTabStateStatus() : cachedProductionAllTabStateStatus(linkNumber);
+            const nextStatus = cachedStatus !== null ? cachedStatus : (statusItem.status || "");
+            applyChipStatusClass(
+              link,
+              nextStatus,
+              cachedStatus !== null ? ["green", "done"].includes(nextStatus) : Boolean(statusItem.isComplete),
+            );
+          }} else if (isActiveProduction) {{
+            applyChipStatusClass(link, currentAllTabStateStatus(), false);
           }}
         }});
       }};
@@ -3566,6 +3576,70 @@ def render_manufacturing_page(
         return cleanSections.length > 0 && cleanSections.every((section) => topfloorSectionComplete(section));
       }};
       const topfloorSectionsStateClass = (sections) => topfloorSectionsComplete(sections) ? " is-done" : "";
+      const statusFromTabStateClass = (stateClass) => {{
+        const text = String(stateClass || "");
+        if (text.includes("is-done")) return "done";
+        if (text.includes("is-alert")) return "red";
+        if (text.includes("is-complete")) return "green";
+        return "";
+      }};
+      const combineAllTabStatuses = (statuses) => {{
+        const cleanStatuses = (Array.isArray(statuses) ? statuses : [])
+          .map((status) => String(status || "").trim().toLowerCase());
+        if (!cleanStatuses.length || cleanStatuses.some((status) => !["red", "green", "done"].includes(status))) return "";
+        if (cleanStatuses.some((status) => status === "red")) return "red";
+        if (cleanStatuses.every((status) => status === "done")) return "done";
+        if (cleanStatuses.every((status) => status === "green" || status === "done")) return "green";
+        return "";
+      }};
+      const allTabStateStatusForDocument = (document, shipmentKey = currentTopfloorShipmentKey) => {{
+        if (!document) return "";
+        if (String(document?.key || "") === "topfloor") {{
+          return combineAllTabStatuses([
+            statusFromTabStateClass(topfloorSectionsStateClass(shipmentKey ? topfloorShipmentSectionsForKey(document, shipmentKey) : topfloorShipmentSections(document))),
+          ]);
+        }}
+        const mainKorpuszViews = korpuszMainViews(document);
+        if (mainKorpuszViews.length) {{
+          return combineAllTabStatuses(
+            ["korpusz-osszekeszito", "korpusz-alkatresz-kesz"]
+              .map((viewKey) => specialViewForKey(document, viewKey))
+              .filter(Boolean)
+              .map((view) => {{
+                const sections = orderedSectionsForTabs(Array.isArray(view?.sections) ? view.sections : []);
+                return statusFromTabStateClass(tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])));
+              }})
+          );
+        }}
+        const overviewSections = overviewSectionsForDocument(document, true);
+        return combineAllTabStatuses([
+          statusFromTabStateClass(tabStateClassForRows(overviewSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []))),
+        ]);
+      }};
+      const currentAllTabStateStatus = () => allTabStateStatusForDocument(currentDocument(), currentTopfloorShipmentKey);
+      const cachedProductionAllTabStateStatus = (targetProductionNumber) => {{
+        const normalizedProductionNumber = String(targetProductionNumber || "").trim();
+        if (!normalizedProductionNumber || !currentDocKey) return null;
+        const cachedPayload = productionPayloadCache.get(productionCacheKey(currentDocKey, normalizedProductionNumber));
+        if (!cachedPayload || !Array.isArray(cachedPayload.documents) || !cachedPayload.documents.length) return null;
+        const previousDocuments = documents;
+        const previousSelectionState = selectionState;
+        const previousProductionNumber = productionNumber;
+        const previousDocKey = currentDocKey;
+        try {{
+          documents = cachedPayload.documents;
+          selectionState = Object.assign({{}}, cachedPayload.selectionState || {{}});
+          productionNumber = String(cachedPayload.productionNumber || normalizedProductionNumber);
+          currentDocKey = String(cachedPayload.currentDocumentKey || previousDocKey);
+          const cachedDocument = documents.find((document) => document?.key === currentDocKey) || documents[0] || null;
+          return allTabStateStatusForDocument(cachedDocument, "");
+        }} finally {{
+          documents = previousDocuments;
+          selectionState = previousSelectionState;
+          productionNumber = previousProductionNumber;
+          currentDocKey = previousDocKey;
+        }}
+      }};
       const topfloorProductionViewKey = (productionId) => `topfloor-production::${{String(productionId || "").trim()}}`;
       const topfloorProductionIdFromViewKey = (key) => {{
         const text = String(key || "").trim();
