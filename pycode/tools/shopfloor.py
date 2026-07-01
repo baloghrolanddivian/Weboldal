@@ -152,14 +152,14 @@ def report_con_ready(
     context = ssl._create_unverified_context()
 
     def endpoint_url(endpoint_name: str) -> str:
-        """Provide endpoint url behavior."""
+        """Build the validatescan/processscan URL for this CON."""
         return (
             f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{checkpoint_id}"
             f"/tabs/{tab_id}/{endpoint_name}/{con_text}?connectionId={quoted_connection_id}"
         )
 
     def submit(endpoint_name: str, data: bytes) -> tuple[int, str]:
-        """Provide submit behavior."""
+        """POST one scan request and return status/body, including HTTP errors."""
         req = urllib.request.Request(endpoint_url(endpoint_name), method="POST", data=data, headers=headers)
         try:
             with urllib.request.urlopen(req, context=context, timeout=20) as response:
@@ -376,14 +376,14 @@ def issue_topfloor_storage_box(
 
 
 def _shopfloor_auth_header(username: str = SHOPFLOOR_USERNAME, password: str = SHOPFLOOR_PASSWORD) -> str:
-    """Provide shopfloor auth header behavior."""
+    """Return the Basic auth header for Shopfloor API calls."""
     auth_raw = f"{username}:{password}"
     auth_b64 = base64.b64encode(auth_raw.encode("utf-8", errors="ignore")).decode("ascii", errors="ignore")
     return f"Basic {auth_b64}"
 
 
 def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
-    """Provide shopfloor negotiate connection id behavior."""
+    """Open a SignalR-style Shopfloor session and return its connection id."""
     encoded_auth = urllib.parse.quote(auth_header, safe="")
     negotiate_url = f"{SHOPFLOOR_BASE_URL}/api/hubs/mainhub/negotiate?authorize={encoded_auth}&negotiateVersion=1"
     req = urllib.request.Request(negotiate_url, method="POST")
@@ -397,7 +397,7 @@ def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
 
 
 def _shopfloor_process_payload(con_id: int, validate_data: object | None = None) -> bytes:
-    """Provide shopfloor process payload behavior."""
+    """Build the JSON processscan body for a CON id."""
     payload = dict(SHOPFLOOR_PROCESS_PAYLOAD)
     payload["conId"] = con_id
     if validate_data is not None:
@@ -406,7 +406,7 @@ def _shopfloor_process_payload(con_id: int, validate_data: object | None = None)
 
 
 def _shopfloor_extract_validate_data(response_body: str) -> object | None:
-    """Provide shopfloor extract validate data behavior."""
+    """Extract validateData from a validatescan response body."""
     try:
         payload = json.loads(response_body or "null")
     except json.JSONDecodeError:
@@ -784,7 +784,7 @@ def _topfloor_require_no_other_open_box(category_key: str) -> None:
 
 
 def _shopfloor_ready_endpoint_config(ready_endpoint: str, use_assembly_validate: bool) -> tuple[int, int, bool]:
-    """Provide shopfloor ready endpoint config behavior."""
+    """Return checkpoint, tab, and validation mode for a ready endpoint key."""
     endpoint_key = str(ready_endpoint or "").strip().lower()
     if use_assembly_validate or endpoint_key == "assembly":
         return SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID, SHOPFLOOR_ASSEMBLY_TAB_ID, True

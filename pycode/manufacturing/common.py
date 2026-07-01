@@ -107,7 +107,7 @@ def has_usable_manufacturing_xml(folder: Path, operation: str = "") -> bool:
     return any(name in MANUFACTURING_XML_SOURCE_NAMES for name in xml_names)
 
 def _entries_cache_signature() -> tuple[tuple[str, int], ...]:
-    """Provide entries cache signature behavior."""
+    """Return a compact signature for recent numeric production folders."""
     if not MANUFACTURING_ROOT.exists():
         return tuple()
     entries: list[tuple[str, int]] = []
@@ -142,7 +142,7 @@ def _production_date_cache_signature(folder: Path) -> tuple[tuple[str, int, int]
 
 
 def _production_date_label_cached(folder: Path) -> str:
-    """Provide production date label cached behavior."""
+    """Return the production date label using a per-folder signature cache."""
     signature = _production_date_cache_signature(folder)
     with MANUFACTURING_ENTRIES_CACHE_LOCK:
         cached = MANUFACTURING_DATE_LABEL_CACHE.get(str(folder))
@@ -155,7 +155,12 @@ def _production_date_label_cached(folder: Path) -> str:
 
 
 def available_production_entries(limit: int = 60, ready_only: bool = False, operation: str = "") -> list[dict[str, str]]:
-    """Provide available production entries behavior."""
+    """Return recent production folders suitable for the operation picker.
+
+    When ready_only is true, folders must contain the XML group required by the
+    requested operation. Results are cached briefly because every page load asks
+    for the same recent list several times.
+    """
     operation_key = str(operation or "").strip().lower()
     cache_key = (int(limit), bool(ready_only), operation_key)
     with MANUFACTURING_ENTRIES_CACHE_LOCK:
@@ -202,7 +207,7 @@ def available_production_entries(limit: int = 60, ready_only: bool = False, oper
 
 
 def _production_date_label(folder: Path) -> str:
-    """Provide production date label behavior."""
+    """Return the label shown on production chips, preferring XML prdProdDate."""
     xml_date_label = _production_prd_prod_date_label(folder)
     if xml_date_label:
         return xml_date_label
@@ -256,7 +261,7 @@ def _production_prd_prod_date_label(folder: Path) -> str:
 
 
 def available_production_numbers(limit: int = 60, ready_only: bool = False, operation: str = "") -> list[str]:
-    """Provide available production numbers behavior."""
+    """Return only the numeric production ids from available entries."""
     return [
         str(item.get("number", ""))
         for item in available_production_entries(limit=limit, ready_only=ready_only, operation=operation)
@@ -265,13 +270,13 @@ def available_production_numbers(limit: int = 60, ready_only: bool = False, oper
 
 
 def latest_production_number(operation: str = "") -> str:
-    """Provide latest production number behavior."""
+    """Return the newest usable production number for an operation."""
     numbers = available_production_numbers(limit=1, ready_only=True, operation=operation)
     return numbers[0] if numbers else ""
 
 
 def production_folder(production_number: str) -> Path:
-    """Provide production folder behavior."""
+    """Return the source folder for a production number."""
     return MANUFACTURING_ROOT / production_number.strip()
 
 
@@ -289,14 +294,14 @@ def load_production_bundle(production_number: str) -> dict:
 
 
 def selection_state_path(runtime_root: Path, production_number: str) -> Path:
-    """Provide selection state path behavior."""
+    """Return the row-state JSON path, creating the production runtime folder."""
     target_dir = runtime_root / production_number
     target_dir.mkdir(parents=True, exist_ok=True)
     return target_dir / "state.json"
 
 
 def load_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
-    """Load load selection state data."""
+    """Load persisted row state, filtering unsupported keys and values."""
     path = selection_state_path(runtime_root, production_number)
     if not path.exists():
         return {}
@@ -318,7 +323,12 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
 
 
 def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
-    """Save save selection state data."""
+    """Persist a row state while preserving non-state metadata records.
+
+    Empty, none, and clear remove the row state. Green/red/done are ordinary
+    states; numeric values are accepted only for structured XML state keys so
+    Topfloor can store the assigned box/con id.
+    """
     path = selection_state_path(runtime_root, production_number)
     try:
         raw_payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -344,14 +354,14 @@ def save_selection_state(runtime_root: Path, production_number: str, row_id: str
 
 
 def partial_quantity_state_path(runtime_root: Path, production_number: str) -> Path:
-    """Provide partial quantity state path behavior."""
+    """Return the partial-quantity JSON path for a production."""
     target_dir = runtime_root / production_number
     target_dir.mkdir(parents=True, exist_ok=True)
     return target_dir / "partial-qty.json"
 
 
 def load_partial_quantity_state(runtime_root: Path, production_number: str) -> dict[str, str]:
-    """Load load partial quantity state data."""
+    """Load saved partial quantities for split/partial reporting rows."""
     path = partial_quantity_state_path(runtime_root, production_number)
     if not path.exists():
         return {}
@@ -370,7 +380,7 @@ def load_partial_quantity_state(runtime_root: Path, production_number: str) -> d
 
 
 def save_partial_quantity_state(runtime_root: Path, production_number: str, key: str, value: str) -> dict[str, str]:
-    """Save save partial quantity state data."""
+    """Save or clear one partial-quantity value and return the new state map."""
     current = load_partial_quantity_state(runtime_root, production_number)
     normalized_key = str(key or "").strip()
     normalized_value = str(value or "").strip()

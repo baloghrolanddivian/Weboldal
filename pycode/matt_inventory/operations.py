@@ -18,7 +18,7 @@ from .page import render_matt_inventory_form
 
 
 def process_matt_inventory_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, bytes]:
-    """Provide process matt inventory upload behavior."""
+    """Validate Matt inventory uploads, build reports, and persist artifacts."""
     price_file = files.get("price_file")
     stock_file = files.get("stock_file")
 
@@ -100,7 +100,7 @@ def process_matt_inventory_upload(files: dict[str, tuple[str, bytes]]) -> tuple[
 
 
 def matt_inventory_alert_download_payload() -> tuple[bytes, str, str] | None:
-    """Provide matt inventory alert download payload behavior."""
+    """Return the generated threshold workbook download payload if it exists."""
     path = alert_workbook_path()
     if not path.exists():
         return None

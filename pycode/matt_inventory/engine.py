@@ -61,7 +61,7 @@ ODS_TABLE_NS = {
 
 @dataclass(slots=True)
 class MattInventoryGroup:
-    """Represent MattInventoryGroup data used by this package."""
+    """Aggregated Matt front stock value for one model/color family."""
     family: str
     color: str
     quantity: Decimal
@@ -71,18 +71,18 @@ class MattInventoryGroup:
 
     @property
     def label(self) -> str:
-        """Provide label behavior."""
+        """Return the display label used in summary cards and tables."""
         return f"{self.family} {self.color}".strip()
 
     @property
     def average_cost(self) -> Decimal:
-        """Provide average cost behavior."""
+        """Return weighted average material cost for the grouped quantity."""
         if self.quantity <= 0:
             return Decimal("0")
         return (self.total_value / self.quantity).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     def to_dict(self) -> dict:
-        """Provide to dict behavior."""
+        """Serialize the group to JSON-safe values."""
         return {
             "family": self.family,
             "color": self.color,
@@ -94,7 +94,7 @@ class MattInventoryGroup:
 
     @classmethod
     def from_dict(cls, payload: dict) -> "MattInventoryGroup":
-        """Provide from dict behavior."""
+        """Rebuild a group from persisted JSON values."""
         return cls(
             family=str(payload.get("family", "")).strip(),
             color=str(payload.get("color", "")).strip(),
@@ -107,7 +107,7 @@ class MattInventoryGroup:
 
 @dataclass(slots=True)
 class MattPriceInfo:
-    """Represent MattPriceInfo data used by this package."""
+    """Price and threshold values loaded from the fixed price workbook."""
     cost: Decimal
     storage_limit: Decimal
     safety_stock: Decimal
@@ -115,7 +115,7 @@ class MattPriceInfo:
 
 @dataclass(slots=True)
 class MattInventoryReport:
-    """Represent MattInventoryReport data used by this package."""
+    """Persisted Matt inventory report with totals and threshold counts."""
     generated_at: str
     price_source_name: str
     stock_source_name: str
@@ -128,7 +128,7 @@ class MattInventoryReport:
     storage_exceeded_count: int
 
     def to_dict(self) -> dict:
-        """Provide to dict behavior."""
+        """Serialize the report to JSON-safe values."""
         return {
             "generated_at": self.generated_at,
             "price_source_name": self.price_source_name,
@@ -144,7 +144,7 @@ class MattInventoryReport:
 
     @classmethod
     def from_dict(cls, payload: dict) -> "MattInventoryReport":
-        """Provide from dict behavior."""
+        """Rebuild a report from persisted JSON values."""
         groups = [MattInventoryGroup.from_dict(item) for item in payload.get("groups", []) if isinstance(item, dict)]
         return cls(
             generated_at=str(payload.get("generated_at", "")).strip(),
@@ -161,7 +161,7 @@ class MattInventoryReport:
 
 
 def load_report_from_path(path: Path) -> MattInventoryReport | None:
-    """Load load report from path data."""
+    """Load the latest Matt inventory report, returning None on missing/bad JSON."""
     if not path.exists():
         return None
     try:
@@ -174,7 +174,7 @@ def load_report_from_path(path: Path) -> MattInventoryReport | None:
 
 
 def save_report_to_path(path: Path, report: MattInventoryReport) -> None:
-    """Save save report to path data."""
+    """Persist the latest Matt inventory report as formatted JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -186,7 +186,7 @@ def build_matt_inventory_report(
     stock_name: str,
     stock_bytes: bytes,
 ) -> MattInventoryReport:
-    """Build build matt inventory report data."""
+    """Build the grouped Matt stock value report from price and stock files."""
     price_map = _read_price_map(price_name, price_bytes)
     stock_rows = _read_stock_rows(stock_name, stock_bytes)
     family_code_map = _derive_family_code_map(stock_rows)
@@ -274,7 +274,7 @@ def build_matt_inventory_alert_workbook(
     stock_name: str,
     stock_bytes: bytes,
 ) -> bytes:
-    """Build build matt inventory alert workbook data."""
+    """Build the Excel workbook listing rows above safety/storage thresholds."""
     if Workbook is None:
         raise RuntimeError("Az Excel riport készítéséhez hiányzik az openpyxl csomag.")
 
@@ -340,7 +340,7 @@ def build_matt_inventory_alert_workbook(
 
 
 def write_runtime_upload(path: Path, file_name: str, payload: bytes) -> Path:
-    """Write write runtime upload data."""
+    """Store an uploaded source file next to the runtime metadata path."""
     path.parent.mkdir(parents=True, exist_ok=True)
     suffix = Path(file_name).suffix.lower() or ".xlsx"
     stored_path = path.with_suffix(suffix)
@@ -349,19 +349,19 @@ def write_runtime_upload(path: Path, file_name: str, payload: bytes) -> Path:
 
 
 def file_name_allowed(file_name: str) -> bool:
-    """Provide file name allowed behavior."""
+    """Return whether a Matt inventory upload has a supported extension."""
     return Path(file_name).suffix.lower() in MATT_INVENTORY_ALLOWED_EXTENSIONS
 
 
 def read_bytes_if_exists(path: Path) -> bytes | None:
-    """Read read bytes if exists data."""
+    """Read file bytes when the path exists, otherwise return None."""
     if not path.exists():
         return None
     return path.read_bytes()
 
 
 def _read_price_map(file_name: str, payload: bytes) -> dict[str, MattPriceInfo]:
-    """Read read price map data."""
+    """Read part-number prices and stock thresholds from a source file."""
     rows = _read_rows(file_name, payload)
     if not rows:
         raise ValueError("A fix ártábla üres.")
@@ -397,7 +397,7 @@ def _read_price_map(file_name: str, payload: bytes) -> dict[str, MattPriceInfo]:
 
 
 def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
-    """Read read stock rows data."""
+    """Read daily Matt stock rows from XLSX/XLSM/CSV source data."""
     rows = _read_rows(file_name, payload)
     if not rows:
         raise ValueError("A napi készletfájl üres.")
@@ -438,7 +438,7 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
 
 
 def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
-    """Read read rows data."""
+    """Read tabular rows from supported Excel or CSV payloads."""
     suffix = Path(file_name).suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
         if load_workbook is None:
@@ -455,7 +455,7 @@ def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
 
 
 def _decode_csv_bytes(payload: bytes) -> str:
-    """Provide decode csv bytes behavior."""
+    """Decode CSV bytes using the encodings seen in exports."""
     for encoding in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
         try:
             return payload.decode(encoding)
@@ -465,12 +465,12 @@ def _decode_csv_bytes(payload: bytes) -> str:
 
 
 def _build_header_map(header_row: list[object]) -> dict[int, str]:
-    """Build build header map data."""
+    """Map column indexes to normalized header text."""
     return {index: _normalize_header(value) for index, value in enumerate(header_row)}
 
 
 def _find_header_index(header_map: dict[int, str], terms: tuple[str, ...]) -> int | None:
-    """Provide find header index behavior."""
+    """Find the first column whose normalized header contains all terms."""
     for index, normalized in header_map.items():
         if all(term in normalized for term in terms):
             return index
@@ -478,18 +478,18 @@ def _find_header_index(header_map: dict[int, str], terms: tuple[str, ...]) -> in
 
 
 def _normalize_header(value: object) -> str:
-    """Normalize normalize header values."""
+    """Normalize a worksheet header for tolerant column matching."""
     text = _fold_text(str(value or ""))
     return re.sub(r"[^a-z0-9]+", "", text)
 
 
 def _normalize_part_number(value: object) -> str:
-    """Normalize normalize part number values."""
+    """Normalize part numbers used as inventory lookup keys."""
     return str(value or "").strip().upper()
 
 
 def _decimal_from_value(value: object) -> Decimal:
-    """Provide decimal from value behavior."""
+    """Parse Excel/CSV numeric values with Hungarian decimal separators."""
     if isinstance(value, Decimal):
         return value
     if value in (None, ""):
@@ -515,12 +515,12 @@ def _decimal_from_value(value: object) -> Decimal:
 
 
 def _money_round(value: Decimal) -> Decimal:
-    """Provide money round behavior."""
+    """Round a Decimal to two money decimals."""
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _decimal_to_string(value: Decimal) -> str:
-    """Provide decimal to string behavior."""
+    """Serialize a rounded Decimal without unnecessary trailing zeroes."""
     normalized = _money_round(value)
     text = format(normalized, "f")
     if "." in text:
@@ -529,13 +529,13 @@ def _decimal_to_string(value: Decimal) -> str:
 
 
 def _family_code_from_part(part_number: str) -> str:
-    """Provide family code from part behavior."""
+    """Extract the family code segment from a Matt part number."""
     parts = [part for part in part_number.split("_") if part]
     return parts[1] if len(parts) > 1 else ""
 
 
 def _lookup_price(part_number: str, price_map: dict[str, MattPriceInfo]) -> MattPriceInfo | None:
-    """Provide lookup price behavior."""
+    """Find price data using the part number and known alias variants."""
     for alias in _price_aliases(part_number):
         unit_cost = price_map.get(alias)
         if unit_cost is not None and unit_cost.cost > 0:
@@ -544,7 +544,7 @@ def _lookup_price(part_number: str, price_map: dict[str, MattPriceInfo]) -> Matt
 
 
 def _price_aliases(part_number: str) -> list[str]:
-    """Provide price aliases behavior."""
+    """Return equivalent part-number forms used across price/stock exports."""
     clean_part = _normalize_part_number(part_number)
     candidates = [clean_part]
     if clean_part.startswith("NFAU_"):
@@ -567,7 +567,7 @@ def _price_aliases(part_number: str) -> list[str]:
 
 
 def _derive_family_code_map(stock_rows: list[dict]) -> dict[str, str]:
-    """Provide derive family code map behavior."""
+    """Infer display family names for coded Matt part-number families."""
     candidates: dict[str, Counter] = defaultdict(Counter)
     for row in stock_rows:
         family_code = str(row.get("family_code", "")).strip()
@@ -583,7 +583,7 @@ def _derive_family_code_map(stock_rows: list[dict]) -> dict[str, str]:
 
 
 def _family_display_name(family_code: str, description: str, color: str, code_map: dict[str, str]) -> str:
-    """Provide family display name behavior."""
+    """Return the best display family name from code-map or description text."""
     direct = code_map.get(family_code)
     if direct:
         return direct
@@ -598,7 +598,7 @@ def _family_display_name(family_code: str, description: str, color: str, code_ma
 
 
 def _family_candidate_from_description(description: str, color: str) -> str:
-    """Provide family candidate from description behavior."""
+    """Extract a likely model/family word from an item description."""
     working = str(description or "").strip()
     if not working:
         return ""
@@ -627,7 +627,7 @@ def _family_candidate_from_description(description: str, color: str) -> str:
 
 
 def _clean_family_name(value: str) -> str:
-    """Provide clean family name behavior."""
+    """Normalize whitespace and capitalization for a family name."""
     clean_value = re.sub(r"\s+", " ", str(value or "")).strip(" .-_")
     if not clean_value:
         return ""
@@ -635,7 +635,7 @@ def _clean_family_name(value: str) -> str:
 
 
 def _normalize_color_name(value: str) -> str:
-    """Normalize normalize color name values."""
+    """Normalize color names before grouping inventory rows."""
     color = str(value or "").strip()
     if not color or _fold_text(color) == "nincs":
         return "Ismeretlen szín"
@@ -652,7 +652,7 @@ def _normalize_color_name(value: str) -> str:
 
 
 def _populate_alert_sheet(sheet, rows: list[dict], title: str) -> None:
-    """Provide populate alert sheet behavior."""
+    """Fill one threshold-alert worksheet with headers, rows, and styling."""
     title_fill = PatternFill(fill_type="solid", fgColor="0F172A")
     title_font = Font(color="FFFFFF", bold=True, size=12)
     header_fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
@@ -728,7 +728,7 @@ def _populate_alert_sheet(sheet, rows: list[dict], title: str) -> None:
 
 
 def _load_element_map() -> dict[str, list[str]]:
-    """Load load element map data."""
+    """Load the optional front-size to element-name map from Downloads."""
     source_path = _latest_element_map_source()
     if source_path is None:
         return {}
@@ -739,7 +739,7 @@ def _load_element_map() -> dict[str, list[str]]:
 
 
 def _latest_element_map_source() -> Path | None:
-    """Provide latest element map source behavior."""
+    """Return the newest matching element-map ODS file from Downloads."""
     downloads_dir = Path.home() / "Downloads"
     candidates: list[Path] = []
     for pattern in ("Elem fogyás 2025*.ods", "Elem fogyas 2025*.ods"):
@@ -750,7 +750,7 @@ def _latest_element_map_source() -> Path | None:
 
 
 def _read_element_map_from_ods(path: Path) -> dict[str, list[str]]:
-    """Read read element map from ods data."""
+    """Read the Meret table from an ODS element-map workbook."""
     with zipfile.ZipFile(path) as archive:
         root = ET.fromstring(archive.read("content.xml"))
 
@@ -781,7 +781,7 @@ def _read_element_map_from_ods(path: Path) -> dict[str, list[str]]:
 
 
 def _ods_row_values(row) -> list[str]:
-    """Provide ods row values behavior."""
+    """Return cell text values from an ODS row, expanding repeated cells."""
     values: list[str] = []
     repeat_attr = f"{{{ODS_TABLE_NS['table']}}}number-columns-repeated"
     for cell in row.findall("table:table-cell", ODS_TABLE_NS):
@@ -809,7 +809,7 @@ def _extract_front_size(description: str, part_number: str) -> str:
 
 
 def _normalize_front_size(value: str) -> str:
-    """Normalize normalize front size values."""
+    """Normalize a front size value to WIDTHxHEIGHT form."""
     clean_value = re.sub(r"\s+", "", str(value or "")).lower()
     match = re.match(r"^(\d{2,4})x(\d{2,4})$", clean_value)
     if not match:
@@ -818,7 +818,7 @@ def _normalize_front_size(value: str) -> str:
 
 
 def _excel_column_name(index: int) -> str:
-    """Provide excel column name behavior."""
+    """Convert a one-based column index to an Excel column name."""
     result = ""
     current = int(index)
     while current > 0:
@@ -828,6 +828,6 @@ def _excel_column_name(index: int) -> str:
 
 
 def _fold_text(value: str) -> str:
-    """Provide fold text behavior."""
+    """Return accent-insensitive, casefolded text for matching."""
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(char for char in normalized if not unicodedata.combining(char)).casefold().strip()

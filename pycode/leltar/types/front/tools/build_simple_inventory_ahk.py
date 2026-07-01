@@ -16,12 +16,12 @@ OUTPUT_ROOT = REPO_ROOT / "runtime" / "front-leltar" / "ahs-riport"
 
 
 def _normalize_header(value: object) -> str:
-    """Normalize normalize header values."""
+    """Normalize a worksheet header for tolerant column matching."""
     return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
 
 
 def _parse_quantity(value: object) -> str:
-    """Parse parse quantity input."""
+    """Parse a quantity into the text value sent by AutoHotkey."""
     if value in (None, ""):
         return ""
     if isinstance(value, bool):
@@ -39,7 +39,7 @@ def _parse_quantity(value: object) -> str:
 
 
 def _find_columns(sheet) -> tuple[int, int]:
-    """Provide find columns behavior."""
+    """Find part-number and quantity columns in a workbook."""
     headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     normalized = [_normalize_header(value) for value in headers]
     part_index = 0
@@ -55,7 +55,7 @@ def _find_columns(sheet) -> tuple[int, int]:
 
 
 def _load_count_map(source_path: Path) -> dict[str, str]:
-    """Load load count map data."""
+    """Load counted quantities keyed by normalized part number."""
     workbook = load_workbook(source_path, read_only=True, data_only=True)
     sheet = workbook[workbook.sheetnames[0]]
     part_index, qty_index = _find_columns(sheet)
@@ -71,7 +71,7 @@ def _load_count_map(source_path: Path) -> dict[str, str]:
 
 
 def _build_ahk_script(values_file_name: str) -> str:
-    """Build build ahk script data."""
+    """Build the AutoHotkey script that pastes inventory quantities."""
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
 Persistent
@@ -127,7 +127,7 @@ Esc::
 
 
 def build_package(source_path: Path, output_dir: Path, counts_path: Path | None = None) -> dict[str, Path | int]:
-    """Build build package data."""
+    """Build the workbook, values file, and AutoHotkey import artifacts."""
     workbook = load_workbook(source_path, read_only=True, data_only=True)
     sheet = workbook[workbook.sheetnames[0]]
     part_index, qty_index = _find_columns(sheet)
@@ -208,7 +208,7 @@ def build_package(source_path: Path, output_dir: Path, counts_path: Path | None 
 
 
 def main() -> None:
-    """Provide main behavior."""
+    """Command-line entry point for the simple inventory package builder."""
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("--counts", type=Path, default=None)

@@ -8,7 +8,7 @@ import urllib.parse
 
 
 def _json_script_payload(payload: object) -> str:
-    """Provide json script payload behavior."""
+    """Serialize JSON safely for embedding inside a script tag."""
     return json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
 
 
@@ -32,7 +32,7 @@ def render_manufacturing_page(
     message: str = "",
     success: bool = False,
 ) -> bytes:
-    """Render render manufacturing page output."""
+    """Render the manufacturing papers single-page application shell."""
     documents = bundle.get("documents", [])
     selected_operation_key = str(selected_operation or "").strip()
     active_document = next(
