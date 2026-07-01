@@ -45,9 +45,11 @@ from manufacturing import (
     _manufacturing_query_params,
     _manufacturing_ready_endpoint_key,
     _manufacturing_selection_state_payload,
+    _manufacturing_topfloor_aggregate_bundle,
     _manufacturing_view_bundle,
     _prime_manufacturing_cache_async,
     _prime_manufacturing_cache_worker,
+    available_production_numbers,
     configure_manufacturing,
     load_partial_quantity_state,
     load_selection_state,
@@ -5731,6 +5733,128 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.respond_json(200, {"ok": True, "action": action, "box": result})
         return True
 
+    def topfloor_box_restriction_error(self, action: str, category_key: str) -> str:
+        """Return the server-side Topfloor box restriction error, if any."""
+        document, selection_state = self.current_topfloor_document_state(category_key)
+        sections = [section for section in document.get("sections", []) if isinstance(section, dict)]
+        target_section = self.find_topfloor_category_section(sections, category_key)
+        if target_section is None:
+            return "Az Anyagraktár kategória nem található az aktuális XML adatokban."
+
+        if action != "issue-storage-box":
+            done_section = self.find_topfloor_unissued_done_section(sections, selection_state)
+            if done_section is not None:
+                return self.topfloor_section_restriction_message(
+                    done_section,
+                    "Van lezárt, de még ki nem adott Anyagraktár doboz. Add ki ezt a dobozt, mielőtt másik dobozműveletet indítasz.",
+                )
+
+        if action in {"create", "open", "reprint-label"}:
+            open_section = self.find_topfloor_open_section(sections, category_key)
+            if open_section is not None:
+                return self.topfloor_section_restriction_message(
+                    open_section,
+                    "Már van nyitott Anyagraktár doboz. Zárd le ezt, mielőtt másikat nyitsz.",
+                )
+
+        if action == "issue-storage-box" and not self.topfloor_section_ready_to_issue(target_section, selection_state):
+            return "Ezt az Anyagraktár dobozt még nem lehet kiadni: legyen lezárva, és minden sora legyen dobozba rakva."
+        return ""
+
+    def current_topfloor_document_state(self, category_key: str) -> tuple[dict, dict[str, str]]:
+        """Build the current Topfloor document and row state for box guards."""
+        production_numbers = available_production_numbers(limit=60, ready_only=True, operation="topfloor")
+        category_parts = str(category_key or "").split("::")
+        category_production = _manufacturing_normalize_number(category_parts[1] if len(category_parts) > 1 else "")
+        if category_production and category_production not in production_numbers:
+            production_numbers.insert(0, category_production)
+        bundle, selection_state, _partial_quantity_state = _manufacturing_topfloor_aggregate_bundle(production_numbers)
+        document = next(
+            (
+                item
+                for item in bundle.get("documents", [])
+                if isinstance(item, dict) and str(item.get("key", "")).strip() == "topfloor"
+            ),
+            {},
+        )
+        if not isinstance(document, dict) or not document.get("sections"):
+            raise RuntimeError("Az Anyagraktár XML adatok nem tölthetők be az ellenőrzéshez.")
+        return document, selection_state
+
+    def find_topfloor_category_section(self, sections: list[dict], category_key: str) -> dict | None:
+        """Find the Topfloor section for a category key or its legacy key."""
+        clean_key = str(category_key or "").strip()
+        legacy_key = "::".join(clean_key.split("::")[:3]) if len(clean_key.split("::")) >= 4 else clean_key
+        for section in sections:
+            category = section.get("topfloorCategory") if isinstance(section, dict) else None
+            if not isinstance(category, dict):
+                continue
+            category_keys = {
+                str(category.get("categoryKey", "")).strip(),
+                str(category.get("boxCategoryKey", "")).strip(),
+                str(category.get("legacyBoxCategoryKey", "")).strip(),
+            }
+            if clean_key in category_keys or legacy_key in category_keys:
+                return section
+        return None
+
+    def find_topfloor_open_section(self, sections: list[dict], category_key: str) -> dict | None:
+        """Return any open Topfloor section other than the submitted category."""
+        clean_key = str(category_key or "").strip()
+        for section in sections:
+            category = section.get("topfloorCategory") if isinstance(section, dict) else None
+            if not isinstance(category, dict) or not bool(category.get("boxOpen")):
+                continue
+            if str(category.get("categoryKey", "")).strip() == clean_key:
+                continue
+            return section
+        return None
+
+    def find_topfloor_unissued_done_section(self, sections: list[dict], selection_state: dict[str, str]) -> dict | None:
+        """Return the first closed, loaded, unissued Topfloor category."""
+        for section in sections:
+            category = section.get("topfloorCategory") if isinstance(section, dict) else None
+            if not isinstance(category, dict) or bool(category.get("storageBoxIssued")):
+                continue
+            if self.topfloor_section_ready_to_issue(section, selection_state):
+                return section
+        return None
+
+    def topfloor_section_ready_to_issue(self, section: dict, selection_state: dict[str, str]) -> bool:
+        """Return whether every row in a closed Topfloor category has a box id."""
+        category = section.get("topfloorCategory") if isinstance(section, dict) else None
+        rows = section.get("rows", []) if isinstance(section, dict) else []
+        if not isinstance(category, dict) or not str(category.get("boxId", "")).strip() or bool(category.get("boxOpen")):
+            return False
+        if not isinstance(rows, list) or not rows:
+            return False
+        row_dicts = [row for row in rows if isinstance(row, dict)]
+        return bool(row_dicts) and all(self.topfloor_row_done_state(row, selection_state) for row in row_dicts)
+
+    def topfloor_row_done_state(self, row: dict, selection_state: dict[str, str]) -> bool:
+        """Return whether a Topfloor row state is a numeric box id."""
+        candidate_keys = (
+            str(row.get("state_key", "")).strip(),
+            str(row.get("state_storage_key", "")).strip(),
+            str(row.get("row_id", "")).strip(),
+        )
+        state = next((str(selection_state.get(key, "")).strip() for key in candidate_keys if key and selection_state.get(key)), "")
+        return bool(re.fullmatch(r"\d{1,12}", state))
+
+    def topfloor_section_restriction_message(self, section: dict, prefix: str) -> str:
+        """Return a user-facing Topfloor restriction message with box details."""
+        category = section.get("topfloorCategory") if isinstance(section, dict) else {}
+        if not isinstance(category, dict):
+            category = {}
+        details = [
+            prefix,
+            f"Szállítmány: {str(category.get('shipmentID', '')).strip()}",
+            f"Doboz: {str(category.get('boxId', '')).strip()}",
+            f"Kategória: {str(section.get('label', '')).strip()}",
+            f"Leírás: {str(category.get('boxDescription', '') or category.get('defaultBoxDescription', '')).strip()}",
+        ]
+        return " ".join(item for item in details if not item.endswith(": "))
+
     def handle_topfloor_box_close_action(self, action: str, category_key: str, payload: dict) -> None:
         """Close a Topfloor box and persist each row as loaded or failed."""
         shipment_id = _manufacturing_normalize_number(payload.get("shipment_id", ""))
@@ -5956,6 +6080,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 return
 
             try:
+                restriction_error = self.topfloor_box_restriction_error(action, category_key)
+                if restriction_error:
+                    self.respond_json(409, {"ok": False, "error": restriction_error})
+                    return
                 if self.handle_topfloor_box_simple_action(action, category_key, payload):
                     return
                 self.handle_topfloor_box_close_action(action, category_key, payload)
