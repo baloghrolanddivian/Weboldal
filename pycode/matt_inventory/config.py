@@ -12,39 +12,39 @@ _layout_renderer: Callable[..., bytes] | None = None
 
 
 def configure_matt_inventory(runtime_dir: Path, layout_renderer: Callable[..., bytes]) -> None:
-    """Configure configure matt inventory runtime settings."""
+    """Set Matt inventory runtime storage and the shared layout renderer."""
     global _runtime_dir, _layout_renderer
     _runtime_dir = runtime_dir
     _layout_renderer = layout_renderer
 
 
 def runtime_dir() -> Path:
-    """Provide runtime dir behavior."""
+    """Return the configured Matt inventory runtime folder."""
     return _runtime_dir
 
 
 def report_path() -> Path:
-    """Provide report path behavior."""
+    """Return the persisted latest Matt inventory report path."""
     return _runtime_dir / "latest-report.json"
 
 
 def price_meta_path() -> Path:
-    """Provide price meta path behavior."""
+    """Return metadata for the most recent uploaded price workbook."""
     return _runtime_dir / "latest-price.json"
 
 
 def stock_meta_path() -> Path:
-    """Provide stock meta path behavior."""
+    """Return metadata for the most recent uploaded stock workbook."""
     return _runtime_dir / "latest-stock.json"
 
 
 def alert_workbook_path() -> Path:
-    """Provide alert workbook path behavior."""
+    """Return the generated Matt stock alert workbook path."""
     return _runtime_dir / "matt-keszlet-riport.xlsx"
 
 
 def render_layout(**kwargs: object) -> bytes:
-    """Render render layout output."""
+    """Render a Matt inventory page through the configured app layout."""
     if _layout_renderer is None:
         raise RuntimeError("Matt inventory layout renderer is not configured.")
     return _layout_renderer(**kwargs)

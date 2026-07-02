@@ -10,7 +10,7 @@ from .engine import read_bytes_if_exists
 
 
 def read_meta(path: Path) -> dict:
-    """Read read meta data."""
+    """Read a runtime metadata JSON object, returning empty dict on failure."""
     if not path.exists():
         return {}
     try:
@@ -21,12 +21,12 @@ def read_meta(path: Path) -> dict:
 
 
 def write_meta(path: Path, payload: dict) -> None:
-    """Write write meta data."""
+    """Persist a runtime metadata JSON object."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def _matt_inventory_saved_price_payload() -> tuple[str, bytes] | None:
-    """Provide matt inventory saved price payload behavior."""
+    """Return the saved price upload name and bytes if available."""
     meta = read_meta(price_meta_path())
     stored_name = str(meta.get("stored_name", "")).strip()
     original_name = str(meta.get("original_name", "")).strip() or stored_name
@@ -38,12 +38,12 @@ def _matt_inventory_saved_price_payload() -> tuple[str, bytes] | None:
     return original_name, payload
 
 def _matt_inventory_saved_price_name() -> str:
-    """Provide matt inventory saved price name behavior."""
+    """Return the original filename for the saved price upload."""
     meta = read_meta(price_meta_path())
     return str(meta.get("original_name", "")).strip()
 
 def _matt_inventory_saved_stock_name() -> str:
-    """Provide matt inventory saved stock name behavior."""
+    """Return the original filename for the saved stock upload."""
     meta = read_meta(stock_meta_path())
     return str(meta.get("original_name", "")).strip()
 

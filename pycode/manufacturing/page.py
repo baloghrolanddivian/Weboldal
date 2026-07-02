@@ -8,7 +8,7 @@ import urllib.parse
 
 
 def _json_script_payload(payload: object) -> str:
-    """Provide json script payload behavior."""
+    """Serialize JSON safely for embedding inside a script tag."""
     return json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
 
 
@@ -32,7 +32,7 @@ def render_manufacturing_page(
     message: str = "",
     success: bool = False,
 ) -> bytes:
-    """Render render manufacturing page output."""
+    """Render the manufacturing papers single-page application shell."""
     documents = bundle.get("documents", [])
     selected_operation_key = str(selected_operation or "").strip()
     active_document = next(
@@ -3716,6 +3716,17 @@ def render_manufacturing_page(
         }}
         return null;
       }};
+      const topfloorGuardBoxPayload = (box) => {{
+        const category = box?.category || null;
+        if (!category) return null;
+        return {{
+          category_key: String(category.categoryKey || "").trim(),
+          shipment_id: String(category.shipmentID || "").trim(),
+          box_id: String(category.boxId || "").trim(),
+          label: String(box?.label || category.categoryKey || "").trim(),
+          description: String(category.boxDescription || category.defaultBoxDescription || "").trim(),
+        }};
+      }};
       const warnTopfloorUnissuedDoneBox = (doneBox) => {{
         const category = doneBox?.category || {{}};
         const boxId = String(category.boxId || "").trim();
@@ -4983,8 +4994,15 @@ def render_manufacturing_page(
         const group = groups.find((item) => String(item?.topfloorCategory?.categoryKey || "") === categoryKey);
         if (!group) return;
         const category = group.topfloorCategory || {{}};
+        const unissuedDoneBox = topfloorUnissuedDoneBoxCategory(document);
+        const openBox = topfloorOpenBoxCategory(document, categoryKey);
+        const topfloorGuard = {{
+          target_exists: true,
+          target_ready_to_issue: topfloorCategoryReadyToIssue(group),
+          unissued_done_box: topfloorGuardBoxPayload(unissuedDoneBox),
+          open_box: topfloorGuardBoxPayload(openBox),
+        }};
         if (action !== "issue-storage-box") {{
-          const unissuedDoneBox = topfloorUnissuedDoneBoxCategory(document);
           if (unissuedDoneBox) {{
             await warnTopfloorUnissuedDoneBox(unissuedDoneBox);
             setStatus("Van lezárt, de még ki nem adott Anyagraktár doboz.", "is-error");
@@ -4992,7 +5010,6 @@ def render_manufacturing_page(
           }}
         }}
         if (["create", "open", "reprint-label"].includes(action)) {{
-          const openBox = topfloorOpenBoxCategory(document, categoryKey);
           if (openBox) {{
             await warnTopfloorOpenBox(openBox);
             setStatus("Már van nyitott Anyagraktár doboz.", "is-error");
@@ -5025,7 +5042,11 @@ def render_manufacturing_page(
         }}
         button.disabled = true;
         setStatus("Anyagraktár doboz művelet folyamatban...");
+        const topfloorDebugStartedAt = performance.now();
+        const topfloorDebugLabel = `[topfloor-box] ${{action}} ${{categoryKey}}`;
+        console.log(`${{topfloorDebugLabel}} client checks done, entries=${{entries.length}}`);
         try {{
+          const topfloorPostStartedAt = performance.now();
           const response = await fetch(topfloorBoxRoute, {{
             method: "POST",
             headers: {{ "Content-Type": "application/json" }},
@@ -5038,15 +5059,19 @@ def render_manufacturing_page(
               buyer_id: String(category.buyerID || "").trim(),
               con_description: conDescription,
               box_type: selectedBoxType,
+              guard: topfloorGuard,
               entries,
             }}),
           }});
+          console.log(`${{topfloorDebugLabel}} post took ${{((performance.now() - topfloorPostStartedAt) / 1000).toFixed(3)}}s status=${{response.status}}`);
           const result = await response.json().catch(() => ({{}}));
           if (!response.ok || !result.ok) {{
             throw new Error(result.error || "Az Anyagraktár doboz művelet nem sikerült.");
           }}
           productionPayloadCache.delete(productionCacheKey(currentDocKey, productionNumber));
+          const topfloorRefreshStartedAt = performance.now();
           const refreshed = await fetchProductionPayload(productionNumber, currentDocKey);
+          console.log(`${{topfloorDebugLabel}} refresh took ${{((performance.now() - topfloorRefreshStartedAt) / 1000).toFixed(3)}}s`);
           documents = Array.isArray(refreshed.documents) ? refreshed.documents : documents;
           selectionState = Object.assign({{}}, refreshed.selectionState || selectionState || {{}});
           setStatus("Anyagraktár doboz művelet kész.", "is-success");
@@ -5054,6 +5079,8 @@ def render_manufacturing_page(
         }} catch (error) {{
           setStatus(error instanceof Error ? error.message : "Az Anyagraktár doboz művelet nem sikerült.", "is-error");
           renderAll();
+        }} finally {{
+          console.log(`${{topfloorDebugLabel}} total took ${{((performance.now() - topfloorDebugStartedAt) / 1000).toFixed(3)}}s`);
         }}
       }});
 

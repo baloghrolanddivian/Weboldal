@@ -18,19 +18,19 @@ def _format_eu_number(value: float, decimals: int = 2) -> str:
     return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
 
 def _matt_inventory_format_money(value: Decimal | float | int) -> str:
-    """Provide matt inventory format money behavior."""
+    """Format a value as a whole-forint amount for the report UI."""
     number = float(value or 0)
     return f"{_format_eu_number(number, 0)} Ft"
 
 def _matt_inventory_format_quantity(value: Decimal | float | int) -> str:
-    """Provide matt inventory format quantity behavior."""
+    """Format a stock quantity with db suffix and Hungarian decimals."""
     number = float(value or 0)
     if abs(number - round(number)) < 1e-9:
         return f"{int(round(number))} db"
     return f"{_format_eu_number(number, 2)} db"
 
 def _matt_inventory_format_generated_at(value: str) -> str:
-    """Provide matt inventory format generated at behavior."""
+    """Format the persisted ISO timestamp for display."""
     clean_value = str(value or "").strip()
     if not clean_value:
         return ""
@@ -41,7 +41,7 @@ def _matt_inventory_format_generated_at(value: str) -> str:
     return parsed.strftime("%Y.%m.%d. %H:%M")
 
 def render_matt_inventory_form(message: str = "", success: bool = False) -> bytes:
-    """Render render matt inventory form output."""
+    """Render the Matt inventory upload/report page."""
     notice_html = ""
     if message:
         extra_class = " success" if success else ""

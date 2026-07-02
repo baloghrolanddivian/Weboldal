@@ -11,7 +11,7 @@ COMMON_SCRIPT_TAG = '<script src="/script.js"></script>'
 
 
 def render_form(message: str = "") -> bytes:
-    """Render render form output."""
+    """Render the invoice translator upload form."""
     msg_html = f'<div class="alert">{html.escape(message)}</div>' if message else ""
     page = f"""<!doctype html>
 <html lang="hu">

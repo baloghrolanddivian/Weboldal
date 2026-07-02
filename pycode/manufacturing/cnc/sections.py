@@ -5,20 +5,20 @@ from __future__ import annotations
 from ..workflow import *
 
 def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str, str]:
-    """Provide manufacturing cnc sections behavior."""
+    """Build CNC/Fiókelő documents, special views, and source labels."""
     raw_sections, _ = _manufacturing_document_sections(bundle, production_number, ("cnc", "fiokelo_furas"))
     using_xml_cnc_source = False
     using_xml_fiokelo_source = False
 
     def folded(value: object) -> str:
-        """Provide folded behavior."""
+        """Return lowercase accent-folded text for matching."""
         text = str(value or "").strip().lower()
         for source, target in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ö", "o"), ("ő", "o"), ("ú", "u"), ("ü", "u"), ("ű", "u"), ("õ", "o"), ("û", "u")):
             text = text.replace(source, target)
         return text
 
     def clean_text(value: object) -> str:
-        """Provide clean text behavior."""
+        """Clean text and repair known mojibake variants."""
         return (
             str(value or "")
             .strip()
@@ -29,7 +29,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
 
     def cnc_xml_source_sections() -> tuple[list[dict], bool]:
-        """Provide cnc xml source sections behavior."""
+        """Read CNC.xml rows into lower/upper CNC source sections."""
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return [], False
@@ -51,21 +51,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return [], True
 
         def local_name(tag: object) -> str:
-            """Provide local name behavior."""
+            """Return an XML tag name without namespace."""
             return str(tag or "").rsplit("}", 1)[-1].strip()
 
         def folded_ascii(value: object) -> str:
-            """Provide folded ascii behavior."""
+            """Return lowercase ASCII-folded text for XML matching."""
             text = unicodedata.normalize("NFKD", clean_text(value))
             text = "".join(char for char in text if not unicodedata.combining(char))
             return re.sub(r"\s+", " ", text).strip().lower()
 
         def tag_key(tag: object) -> str:
-            """Provide tag key behavior."""
+            """Return a compact normalized XML field key."""
             return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
 
         def whole_number(value: object) -> str:
-            """Provide whole number behavior."""
+            """Parse a numeric XML value and return it as an integer string."""
             text = clean_text(value).replace(",", ".")
             if not text:
                 return ""
@@ -81,7 +81,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     return ""
 
         def quantity_value(value: object) -> int:
-            """Provide quantity value behavior."""
+            """Parse an XML quantity, defaulting to one."""
             number_text = whole_number(value)
             if not number_text:
                 return 1
@@ -91,7 +91,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 return 1
 
         def drawer_drill_value(value: object) -> str:
-            """Provide drawer drill value behavior."""
+            """Map compact drawer-drilling XML codes to display labels."""
             code = re.sub(r"[^a-z0-9]+", "", folded_ascii(value)).upper()
             if code == "N":
                 return "Nincs"
@@ -102,7 +102,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return ""
 
         def con_fields(con_element: object) -> dict[str, str]:
-            """Provide con fields behavior."""
+            """Collect direct child values from one CON XML element."""
             fields: dict[str, str] = {}
             for child in list(con_element):
                 key = tag_key(getattr(child, "tag", ""))
@@ -111,7 +111,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return fields
 
         def field_value(fields: dict[str, str], *names: str) -> str:
-            """Provide field value behavior."""
+            """Return the first non-empty value for possible XML field names."""
             for name in names:
                 value = fields.get(tag_key(name), "")
                 if value:
@@ -194,7 +194,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return sections, True
 
     def fiokelo_xml_source_sections() -> tuple[list[dict], bool]:
-        """Provide fiokelo XML source sections behavior."""
+        """Read Fiokelo_furas.xml rows into Fiókelő source sections."""
         folder_text = str(bundle.get("folder", "") or "").strip()
         if not folder_text:
             return [], False
@@ -216,21 +216,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return [], True
 
         def local_name(tag: object) -> str:
-            """Provide local name behavior."""
+            """Return an XML tag name without namespace."""
             return str(tag or "").rsplit("}", 1)[-1].strip()
 
         def folded_ascii(value: object) -> str:
-            """Provide folded ascii behavior."""
+            """Return lowercase ASCII-folded text for XML matching."""
             text = unicodedata.normalize("NFKD", clean_text(value))
             text = "".join(char for char in text if not unicodedata.combining(char))
             return re.sub(r"\s+", " ", text).strip().lower()
 
         def tag_key(tag: object) -> str:
-            """Provide tag key behavior."""
+            """Return a compact normalized XML field key."""
             return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
 
         def whole_number(value: object) -> str:
-            """Provide whole number behavior."""
+            """Parse a numeric XML value and return it as an integer string."""
             text = clean_text(value).replace(",", ".")
             if not text:
                 return ""
@@ -246,7 +246,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     return ""
 
         def quantity_value(value: object) -> int:
-            """Provide quantity value behavior."""
+            """Parse a positive XML quantity, defaulting to one."""
             number_text = whole_number(value)
             if not number_text:
                 return 1
@@ -256,7 +256,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 return 1
 
         def con_fields(con_element: object) -> dict[str, str]:
-            """Provide con fields behavior."""
+            """Collect direct child values from one CON XML element."""
             fields: dict[str, str] = {}
             for child in list(con_element):
                 key = tag_key(getattr(child, "tag", ""))
@@ -265,7 +265,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return fields
 
         def field_value(fields: dict[str, str], *names: str) -> str:
-            """Provide field value behavior."""
+            """Return the first non-empty value for possible XML field names."""
             for name in names:
                 value = fields.get(tag_key(name), "")
                 if value:
@@ -361,12 +361,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     )
 
     def size_parts(size_label: object) -> tuple[int, ...]:
-        """Provide size parts behavior."""
+        """Return numeric size components for sorting/grouping."""
         parts = [int(part.strip()) for part in re.split(r"[xX]", str(size_label or "")) if part.strip().isdigit()]
         return tuple(parts or [9999, 9999, 9999])
 
     def canonical_side_type(value: object) -> str:
-        """Provide canonical side type behavior."""
+        """Normalize lower-cabinet side type text to canonical labels."""
         text = clean_text(value)
         folded_text = re.sub(r"\s+", " ", folded(text)).strip()
         if not folded_text:
@@ -406,11 +406,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text
 
     def normalize_side_type(value: object) -> str:
-        """Normalize normalize side type values."""
+        """Normalize side-type text used by CNC grouping rules."""
         return re.sub(r"\s+", " ", folded(canonical_side_type(value))).strip()
 
     def cnc_display_name(name: object) -> str:
-        """Provide cnc display name behavior."""
+        """Normalize CNC row names for consistent grouping and display."""
         text = clean_text(name)
         folded_text = folded(text)
         if "hatlap also" in folded_text or "tlap als" in folded_text:
@@ -438,7 +438,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text or "Tétel"
 
     def parse_lower_detail(detail: object) -> tuple[str, str, str, str]:
-        """Parse parse lower detail input."""
+        """Parse lower cabinet detail text into detail, color, and side hints."""
         text = clean_text(detail)
         if not text:
             return "", "", "", ""
@@ -518,7 +518,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
 
     def split_lower_color_and_side_v2(color: object, side_type: object) -> tuple[str, str]:
-        """Provide split lower color and side v2 behavior."""
+        """Split lower-row color text from side and hardware hints."""
         color_text = clean_text(color)
         side_text = clean_text(side_type)
         if not color_text:
@@ -540,7 +540,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return color_text, side_text
 
     def parse_upper_detail(detail: object) -> tuple[str, str]:
-        """Parse parse upper detail input."""
+        """Parse upper cabinet detail text into display and side hints."""
         text = clean_text(detail)
         if not text:
             return "", ""
@@ -562,7 +562,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text, ""
 
     def split_upper_color_and_side(color: object, side_type: object) -> tuple[str, str]:
-        """Provide split upper color and side behavior."""
+        """Split upper-row color text from side type hints."""
         color_text = clean_text(color)
         side_text = clean_text(side_type)
         patterns = [
@@ -598,7 +598,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return stripped_color or color_text, detected_side
 
     def parse_upper_detail_v2(detail: object) -> tuple[str, str]:
-        """Parse parse upper detail v2 input."""
+        """Parse upper cabinet detail text with extended side rules."""
         text = clean_text(detail)
         if not text:
             return "", ""
@@ -623,7 +623,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text, ""
 
     def split_upper_color_and_side_v2(color: object, side_type: object) -> tuple[str, str]:
-        """Provide split upper color and side v2 behavior."""
+        """Split upper-row color text using extended side type rules."""
         color_text = clean_text(color)
         side_text = clean_text(side_type)
         patterns = [
@@ -697,7 +697,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return embedded_rows
 
     def clean_upper_detail_for_display(detail: object, side_type: object, hardware_type: object) -> str:
-        """Provide clean upper detail for display behavior."""
+        """Remove grouping-only tokens from upper row detail text."""
         text = clean_text(detail)
         if not text:
             return ""
@@ -730,7 +730,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text
 
     def upper_quantity_hint_from_detail(detail: object, edge: object, side_type: object, hardware_type: object) -> int:
-        """Provide upper quantity hint from detail behavior."""
+        """Infer an upper-row quantity hint from detail text."""
         text = clean_text(detail)
         edge_text = clean_text(edge)
         side_text = clean_text(side_type)
@@ -773,7 +773,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return max(candidates) if candidates else 0
 
     def upper_sarok_quantity_hint(detail: object, edge: object) -> int:
-        """Provide upper sarok quantity hint behavior."""
+        """Infer corner upper quantity hints from size and detail text."""
         text = clean_text(detail)
         edge_text = clean_text(edge)
         if not text or not edge_text:
@@ -816,7 +816,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
 
     def build_lower_rows(source_sections: list[dict]) -> list[dict]:
-        """Build build lower rows data."""
+        """Build normalized lower-cabinet CNC rows from source rows."""
         merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
         for section in source_sections:
             for raw_row in section.get("rows", []):
@@ -898,7 +898,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return list(merged.values())
 
     def upper_source_group(section_label: object) -> str:
-        """Provide upper source group behavior."""
+        """Classify an upper row into its source grouping bucket."""
         text = clean_text(section_label)
         folded_text = folded(text)
         if "1-es" in folded_text:
@@ -908,7 +908,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return text or "egyeb"
 
     def build_expected_upper_excenter_counts() -> dict[tuple[str, str, str, str, str, str, str], int]:
-        """Build build expected upper excenter counts data."""
+        """Return expected excenter counts for upper cabinet grouping."""
         return {}
 
         expected: dict[tuple[str, str, str, str, str, str, str], int] = {}
@@ -971,10 +971,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return expected
 
     def build_upper_rows(source_sections: list[dict]) -> list[dict]:
-        """Build build upper rows data."""
+        """Build normalized upper-cabinet CNC rows from source rows."""
         merged: dict[tuple[str, str, str, str, str, str, str], dict] = {}
         def add_upper_row(parsed_row: dict, raw_row: dict | None = None) -> None:
-            """Provide add upper row behavior."""
+            """Append one normalized upper row to the target collection."""
             source_group = clean_text(parsed_row.get("sourceGroup"))
             name = clean_text(parsed_row.get("name"))
             source_name = clean_text(parsed_row.get("source_name"))
@@ -1108,7 +1108,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return list(merged.values())
 
     def build_front_rows(source_sections: list[dict]) -> list[dict]:
-        """Build build front rows data."""
+        """Build front-drilling rows from Fiokelo source rows."""
         palette = ("blue", "violet", "amber", "cyan", "slate", "orange", "rose", "lime", "teal")
         explicit_model_tones = {
             "anna": "blue",
@@ -1125,7 +1125,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         invalid_model_tokens = {"", "-", "nincs", "front", "frontos", "furva", "fura", "fio", "fiok"}
 
         def fiokelo_group_label(section_label: object) -> str:
-            """Provide fiokelo group label behavior."""
+            """Return the visible Fiokelo group label for a row."""
             text = clean_text(section_label)
             folded_text = folded(text)
             if re.search(r"\b1-es\b", folded_text):
@@ -1135,7 +1135,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return text or "Egyéb"
 
         def fiokelo_model_label(detail: object) -> str:
-            """Provide fiokelo model label behavior."""
+            """Return the normalized Fiokelo model label."""
             text = clean_text(detail)
             if not text:
                 return "Ismeretlen modell"
@@ -1145,7 +1145,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return first_token or prefix or "Ismeretlen modell"
 
         def parse_fiokelo_detail(detail: object) -> tuple[str, str, str, str]:
-            """Parse parse fiokelo detail input."""
+            """Parse Fiokelo detail text into model, color, size, and hint parts."""
             text = clean_text(detail)
             if not text:
                 return "-", "-", "-", "-"
@@ -1213,7 +1213,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             )
 
         def fiokelo_model_tone(model_label: object) -> str:
-            """Provide fiokelo model tone behavior."""
+            """Return model tone or color classification used for grouping."""
             token = folded(model_label)
             if not token:
                 return "slate"
@@ -1223,7 +1223,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             return palette[sum(ord(char) for char in token) % len(palette)]
 
         def normalized_color_key(value: object) -> str:
-            """Provide normalized color key behavior."""
+            """Return an accent-insensitive color grouping key."""
             return re.sub(r"[^a-z0-9]+", " ", folded(clean_text(value))).strip()
 
         color_fallback_map = {
@@ -1246,7 +1246,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         parsed_rows: list[dict] = []
 
         def split_model_color_token(value: object) -> tuple[str, str]:
-            """Provide split model color token behavior."""
+            """Split a model/color token into model and color parts."""
             text = clean_text(value)
             if not text:
                 return "", ""
@@ -1427,13 +1427,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     lower_box_sections: list[dict] = []
 
     def clone_row(row: dict, **updates: object) -> dict:
-        """Provide clone row behavior."""
+        """Return a shallow copy of a row with optional overrides."""
         cloned = dict(row)
         cloned.update(updates)
         return cloned
 
     def add_lower_section(label: str, rows: list[dict], key_suffix: str, *, hide_side_type: bool = False) -> None:
-        """Provide add lower section behavior."""
+        """Append a lower-cabinet section when it has rows."""
         if not rows:
             return
         lower_box_sections.append(
@@ -1447,13 +1447,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
 
     def hide_lower_subtitles(rows: list[dict]) -> None:
-        """Provide hide lower subtitles behavior."""
+        """Mark lower-section rows to hide repeated subtitle text."""
         for row in rows:
             if isinstance(row, dict):
                 row["hideSubtitle"] = True
 
     def set_kinga_anna_subtitles(rows: list[dict]) -> None:
-        """Provide set kinga anna subtitles behavior."""
+        """Set compact subtitles for Kinga and Anna grouped rows."""
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -1465,7 +1465,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             row.pop("hideSubtitle", None)
 
     def aggregate_lower_rows(rows: list[dict], group_fields: tuple[str, ...], *, hide_subtitle: bool = False) -> list[dict]:
-        """Provide aggregate lower rows behavior."""
+        """Aggregate lower-cabinet rows by display-relevant fields."""
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
             group_key = tuple(clean_text(row.get(field)) for field in group_fields)
@@ -1534,7 +1534,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return aggregated_rows
 
     def aggregate_kinga_anna_fiokos_rows(rows: list[dict]) -> list[dict]:
-        """Provide aggregate kinga anna fiokos rows behavior."""
+        """Aggregate Kinga and Anna drawer rows into display groups."""
         mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
         grouped: dict[tuple[str, str, str, str, str, str], dict] = {}
         output_rows: list[dict] = []
@@ -1651,7 +1651,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
 
     def build_raw_normal_also_box_rows() -> list[dict]:
-        """Build build raw normal also box rows data."""
+        """Collect raw normal lower-box rows before aggregation."""
         return []
 
         def is_boundary(token: str) -> bool:
@@ -1750,7 +1750,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_kinga_anna_box_rows() -> list[dict]:
-        """Build build raw kinga anna box rows data."""
+        """Collect raw Kinga and Anna box rows before aggregation."""
         return []
 
         def is_boundary(token: str) -> bool:
@@ -1857,7 +1857,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_boxos_box_rows() -> list[dict]:
-        """Build build raw boxos box rows data."""
+        """Collect raw Boxos box rows before aggregation."""
         if using_xml_cnc_source:
             return []
         alkatresz_sections, _ = _manufacturing_document_sections(
@@ -1921,7 +1921,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_boxos_teleszkop_rows() -> list[dict]:
-        """Build build raw boxos teleszkop rows data."""
+        """Collect raw Boxos telescopic rows before aggregation."""
         alkatresz_sections, _ = _manufacturing_document_sections(
             bundle,
             production_number,
@@ -1973,7 +1973,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_egyebek_box_rows() -> list[dict]:
-        """Build build raw egyebek box rows data."""
+        """Collect raw miscellaneous box rows before aggregation."""
         return []
 
         def is_boundary(token: str) -> bool:
@@ -2098,7 +2098,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return raw_rows
 
     def build_raw_takarolap_rows() -> list[dict]:
-        """Build build raw takarolap rows data."""
+        """Collect raw cover-panel rows before aggregation."""
         return []
 
         def is_boundary(token: str) -> bool:
@@ -2475,7 +2475,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_lower_section("AS takarósávok", box6_rows, "box6")
 
     def upper_combined_text(row: dict) -> str:
-        """Provide upper combined text behavior."""
+        """Return combined upper-row text used for classification."""
         return " ".join(
             [
                 folded(row.get("name")),
@@ -2503,7 +2503,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
 
     def upper_felnyilo_type_sort_value(row: dict) -> str:
-        """Provide upper felnyilo type sort value behavior."""
+        """Return the sort rank for felnyilo upper types."""
         combined = upper_combined_text(row)
         side_type = folded(row.get("side_type"))
         hardware_type = folded(row.get("hardware_type"))
@@ -2550,7 +2550,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return clean_text(row.get("size")).startswith("360 x ")
 
     def aggregate_upper_rows(rows: list[dict]) -> list[dict]:
-        """Provide aggregate upper rows behavior."""
+        """Aggregate upper-cabinet rows by display-relevant fields."""
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
             group_key = (
@@ -2604,7 +2604,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return list(grouped.values())
 
     def sort_upper_rows(rows: list[dict], mode: str) -> list[dict]:
-        """Provide sort upper rows behavior."""
+        """Sort upper rows by type, size, color, and source order."""
         if mode == "normal":
             rows.sort(
                 key=lambda row: (
@@ -2671,7 +2671,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     upper_sections = []
 
     def add_upper_section(label: str, rows: list[dict], key_suffix: str, sort_mode: str) -> None:
-        """Provide add upper section behavior."""
+        """Append an upper-cabinet section when it has rows."""
         if not rows:
             return
         section_rows = sort_upper_rows(aggregate_upper_rows(rows), sort_mode)
@@ -2695,7 +2695,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
 
     def upper_source_group(row: dict) -> str:
-        """Provide upper source group behavior."""
+        """Classify an upper row into its output section group."""
         return clean_text(row.get("sourceGroup"))
 
     def is_upper_zille_target(row: dict) -> bool:
@@ -2736,7 +2736,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         return clean_text(row.get("size")).startswith("360 x 330")
 
     def upper_row_id(row: dict) -> str:
-        """Provide upper row id behavior."""
+        """Build a stable row id for an upper-cabinet row."""
         return str(row.get("row_id", "")).strip()
 
     non_fvz_upper_rows = [row for row in upper_rows if not is_fvz_row(row)]

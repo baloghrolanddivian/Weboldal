@@ -79,10 +79,16 @@ def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]
         sections = _topfloor_category_sections(shipment_id, shipment_rows, box_registry)
         if not sections:
             continue
+        visible_rows = [
+            row
+            for section in sections
+            for row in (section.get("rows", []) if isinstance(section, dict) else [])
+            if isinstance(row, dict)
+        ]
         shipment_views.append(
             {
                 "key": f"shipment::{shipment_id}",
-                "label": _topfloor_shipment_buyer_label(shipment_rows),
+                "label": _topfloor_shipment_buyer_label(visible_rows),
                 "count": sum(len(section.get("rows", [])) for section in sections),
             }
         )
@@ -225,6 +231,8 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
         meta = category_meta[group_key]
         box_category_key = meta["boxCategoryKey"]
         box = box_registry.get(box_category_key) or box_registry.get(meta["legacyBoxCategoryKey"], {})
+        if bool(box.get("storageBoxIssued")):
+            continue
         section_rows = [_topfloor_view_row(row, group_key) for row in category_rows]
         sections.append(
             {

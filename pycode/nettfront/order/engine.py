@@ -44,9 +44,7 @@ SUGGESTION_HEADERS = [
 
 @dataclass
 class NettfrontOrderRow:
-    """Represent NettfrontOrderRow data used by the NettFront workflows.
-
-    This class is part of the pydoc-documented NettFront order suggestion workflow."""
+    """One stock row enriched with calculated NettFront order quantity."""
     row_id: str
     part_number: str
     description: str
@@ -65,9 +63,7 @@ class NettfrontOrderRow:
 
 @dataclass
 class NettfrontOrderBuildResult:
-    """Represent NettfrontOrderBuildResult data used by the NettFront workflows.
-
-    This class is part of the pydoc-documented NettFront order suggestion workflow."""
+    """Order suggestion rows plus counters from the stock-building pipeline."""
     rows: list[NettfrontOrderRow]
     merged_variant_count: int
     filtered_stock_count: int
