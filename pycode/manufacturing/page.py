@@ -2477,6 +2477,25 @@ def render_manufacturing_page(
       const choiceModalNode = document.getElementById("mfg-choice-modal");
       const confirmModalNode = document.getElementById("mfg-confirm-modal");
       if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !layoutToggleNode || !choiceModalNode || !confirmModalNode) return;
+      const shopfloorLoadPrefix = "[shopfloor-load]";
+      const shopfloorSeconds = (startedAt) => ((performance.now() - startedAt) / 1000).toFixed(3);
+      const shopfloorLog = (message, data = null) => {{
+        if (data === null || data === undefined) console.log(`${{shopfloorLoadPrefix}} ${{message}}`);
+        else console.log(`${{shopfloorLoadPrefix}} ${{message}}`, data);
+      }};
+      const shopfloorPayloadStats = (nextPayload) => {{
+        const nextDocuments = Array.isArray(nextPayload?.documents) ? nextPayload.documents : [];
+        const firstDocument = nextDocuments[0] || {{}};
+        const sections = Array.isArray(firstDocument.sections) ? firstDocument.sections : [];
+        return {{
+          operation: String(nextPayload?.currentDocumentKey || firstDocument.key || ""),
+          production: String(nextPayload?.productionNumber || ""),
+          documents: nextDocuments.length,
+          sections: sections.length,
+          rows: sections.reduce((sum, section) => sum + (Array.isArray(section?.rows) ? section.rows.length : 0), 0),
+          recentProductions: Array.isArray(nextPayload?.recentProductions) ? nextPayload.recentProductions.length : 0,
+        }};
+      }};
 
       let payload = {{}};
       try {{
@@ -2583,15 +2602,24 @@ def render_manufacturing_page(
       const fetchProductionPayload = async (targetProductionNumber, operationKey = currentDocKey) => {{
         const cacheKey = productionCacheKey(operationKey, targetProductionNumber);
         const cached = productionPayloadCache.get(cacheKey);
-        if (cached) return cached;
-        const response = await fetch(productionDataUrl(targetProductionNumber, operationKey).toString(), {{
+        const startedAt = performance.now();
+        if (cached) {{
+          shopfloorLog(`payload cache hit operation=${{operationKey || "-"}} production=${{targetProductionNumber || "-"}} took=${{shopfloorSeconds(startedAt)}}s`, shopfloorPayloadStats(cached));
+          return cached;
+        }}
+        const url = productionDataUrl(targetProductionNumber, operationKey);
+        shopfloorLog(`payload fetch start operation=${{operationKey || "-"}} production=${{targetProductionNumber || "-"}} url=${{url.pathname + url.search}}`);
+        const response = await fetch(url.toString(), {{
           headers: {{ "Accept": "application/json" }},
         }});
+        const fetchSeconds = shopfloorSeconds(startedAt);
         const result = await response.json().catch(() => ({{}}));
         if (!response.ok || !result.ok) {{
+          shopfloorLog(`payload fetch failed operation=${{operationKey || "-"}} production=${{targetProductionNumber || "-"}} status=${{response.status}} took=${{fetchSeconds}}s`);
           throw new Error(result.error || "A gyártás betöltése nem sikerült.");
         }}
         cacheProductionPayload(result);
+        shopfloorLog(`payload fetch done operation=${{operationKey || "-"}} production=${{targetProductionNumber || "-"}} status=${{response.status}} took=${{fetchSeconds}}s`, shopfloorPayloadStats(result));
         return result;
       }};
       const chipHref = (targetProductionNumber, operationKey = currentDocKey) => {{
@@ -2698,8 +2726,10 @@ def render_manufacturing_page(
         }}
       }};
       const applyProductionPayload = (nextPayload) => {{
+        const applyStartedAt = performance.now();
         const nextDocuments = Array.isArray(nextPayload?.documents) ? nextPayload.documents : [];
         if (!nextDocuments.length) throw new Error("A gyártáshoz nincs megjeleníthető adat.");
+        shopfloorLog("apply payload start", shopfloorPayloadStats(nextPayload));
         payload = Object.assign({{}}, payload, nextPayload);
         documents = nextDocuments;
         selectionState = Object.assign({{}}, nextPayload.selectionState || {{}});
@@ -2721,11 +2751,14 @@ def render_manufacturing_page(
         syncUrlForDocument();
         refreshOperationHeader();
         updateProductionChipState(nextPayload.recentProductions);
+        const renderStartedAt = performance.now();
         renderAll();
+        shopfloorLog(`render after apply took=${{shopfloorSeconds(renderStartedAt)}}s`);
         if (pendingWriteCount()) {{
           setStatus(pendingStatusText(), "is-error");
           void flushPendingWrites();
         }}
+        shopfloorLog(`apply payload done took=${{shopfloorSeconds(applyStartedAt)}}s`, shopfloorPayloadStats(nextPayload));
       }};
       if (Array.isArray(payload.productionClientCache)) {{
         for (const cachedPayload of payload.productionClientCache) {{
@@ -2735,18 +2768,22 @@ def render_manufacturing_page(
       cacheProductionPayload(payload);
       const refreshProductionClientCache = async () => {{
         if (!currentDocKey) return;
+        const refreshStartedAt = performance.now();
         const isTopfloor = String(currentDocKey || "").trim() === "topfloor";
         if (!isTopfloor && !productionNumber) return;
         const refreshProductionNumber = isTopfloor ? "" : productionNumber;
+        shopfloorLog(`cache refresh start operation=${{currentDocKey || "-"}} production=${{refreshProductionNumber || "-"}}`);
         if (cacheRefreshButtonNode) cacheRefreshButtonNode.classList.add("is-loading");
         setStatus("Gyártási lista frissítése...");
         try {{
           await flushPendingWrites();
           const url = productionDataUrl(refreshProductionNumber, currentDocKey);
           url.searchParams.set("refresh_cache", "1");
+          const fetchStartedAt = performance.now();
           const response = await fetch(url.toString(), {{
             headers: {{ "Accept": "application/json" }},
           }});
+          shopfloorLog(`cache refresh fetch took=${{shopfloorSeconds(fetchStartedAt)}}s status=${{response.status}}`);
           const result = await response.json().catch(() => ({{}}));
           if (!response.ok || !result.ok) {{
             throw new Error(result.error || "A gyorsítótár frissítése nem sikerült.");
@@ -2759,8 +2796,10 @@ def render_manufacturing_page(
           cacheProductionPayload(result);
           renderProductionChips(result.recentProductions);
           applyProductionPayload(result);
+          shopfloorLog(`cache refresh done operation=${{currentDocKey || "-"}} took=${{shopfloorSeconds(refreshStartedAt)}}s`, shopfloorPayloadStats(result));
           setStatus("Gyorsítótár frissítve.", "is-success");
         }} catch (error) {{
+          shopfloorLog(`cache refresh failed operation=${{currentDocKey || "-"}} took=${{shopfloorSeconds(refreshStartedAt)}}s`, error);
           setStatus(error instanceof Error ? error.message : "A gyorsítótár frissítése nem sikerült.", "is-error");
         }} finally {{
           if (cacheRefreshButtonNode) cacheRefreshButtonNode.classList.remove("is-loading");
@@ -4847,14 +4886,17 @@ def render_manufacturing_page(
         const shipmentLink = event.target.closest("[data-mfg-shipment-link]");
         if (shipmentLink instanceof HTMLElement) {{
           event.preventDefault();
+          const shipmentStartedAt = performance.now();
           const nextViewKey = String(shipmentLink.getAttribute("data-view-key") || "").trim();
           const document = currentDocument();
           if (String(document?.key || "") !== "topfloor" || !topfloorShipmentViewForKey(document, nextViewKey)) return;
+          shopfloorLog(`shipment view start view=${{nextViewKey || "-"}}`);
           currentTopfloorShipmentKey = nextViewKey;
           currentViewKey = "all";
           currentSubcategoryKey = "all";
           secondaryViewKey = "";
           renderAll();
+          shopfloorLog(`shipment view done view=${{nextViewKey || "-"}} took=${{shopfloorSeconds(shipmentStartedAt)}}s`);
           return;
         }}
         const link = event.target.closest("[data-mfg-production-link]");
@@ -4862,13 +4904,17 @@ def render_manufacturing_page(
         const targetProductionNumber = String(link.getAttribute("data-production-number") || "").trim();
         event.preventDefault();
         if (!targetProductionNumber || targetProductionNumber === productionNumber || !currentDocKey) return;
+        const switchStartedAt = performance.now();
+        shopfloorLog(`production switch start operation=${{currentDocKey || "-"}} from=${{productionNumber || "-"}} to=${{targetProductionNumber || "-"}}`);
         storeCurrentProductionPayload();
         setStatus("Gyártás betöltése...");
         try {{
           await flushPendingWrites();
           const nextPayload = await fetchProductionPayload(targetProductionNumber, currentDocKey);
           applyProductionPayload(nextPayload);
+          shopfloorLog(`production switch done operation=${{currentDocKey || "-"}} to=${{targetProductionNumber || "-"}} took=${{shopfloorSeconds(switchStartedAt)}}s`);
         }} catch (error) {{
+          shopfloorLog(`production switch failed operation=${{currentDocKey || "-"}} to=${{targetProductionNumber || "-"}} took=${{shopfloorSeconds(switchStartedAt)}}s`, error);
           setStatus(error instanceof Error ? error.message : "A gyártás betöltése nem sikerült.", "is-error");
           const href = String(link.getAttribute("href") || "");
           if (href) window.location.href = href;
@@ -5333,7 +5379,10 @@ def render_manufacturing_page(
       }}
       window.addEventListener("scroll", schedulePantoloSectionHeaders, {{ passive: true }});
       window.addEventListener("resize", schedulePantoloSectionHeaders);
+      const initialRenderStartedAt = performance.now();
+      shopfloorLog("initial render start", shopfloorPayloadStats(payload));
       renderAll();
+      shopfloorLog(`initial render done took=${{shopfloorSeconds(initialRenderStartedAt)}}s`, shopfloorPayloadStats(payload));
     }})();
   </script>
   <script src="/script.js"></script>

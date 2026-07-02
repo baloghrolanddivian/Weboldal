@@ -340,6 +340,7 @@ def _manufacturing_operation_state_keys(production_number: str, operation_key: s
         normalized_number,
         {},
         include_all_red_view=False,
+        operation_filter=normalized_operation,
     )
     target_document: dict | None = next(
         (
@@ -1052,13 +1053,192 @@ def _manufacturing_view_bundle(
     current_selection_state: dict[str, str],
     *,
     include_all_red_view: bool = True,
+    operation_filter: str = "",
 ) -> tuple[dict, dict[str, str]]:
-    """Build the full operation document bundle and client state payload.
+    """Build operation document bundle and client state payload.
 
     Operation-specific section builders produce their own row shapes. This
-    function assembles them into the shared document schema, adds fallback
-    placeholder documents, and hydrates current state through legacy aliases.
+    function assembles them into the shared document schema and hydrates
+    current state through legacy aliases. When operation_filter is set, only
+    that operation is built so opening one module does not parse every module.
     """
+    current_number = _manufacturing_normalize_number(production_number)
+    documents: list[dict] = []
+    selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
+    target_operation = _manufacturing_normalize_operation(operation_filter)
+
+    def finalize_filtered_documents(filtered_documents: list[dict]) -> tuple[dict, dict[str, str]]:
+        existing_keys = {str(document.get("key", "")).strip() for document in filtered_documents}
+        if target_operation and target_operation not in existing_keys:
+            operation_label = next(
+                (label for operation_key, label in MANUFACTURING_OPERATION_DEFINITIONS if operation_key == target_operation),
+                target_operation,
+            )
+            filtered_documents.append(_manufacturing_placeholder_document(target_operation, operation_label))
+        _manufacturing_apply_row_state_aliases(filtered_documents, current_number, current_selection_state, selection_state_payload)
+        return (
+            {
+                "production_number": current_number,
+                "folder": str(raw_bundle.get("folder", "")),
+                "documents": filtered_documents,
+            },
+            selection_state_payload,
+        )
+
+    if target_operation == "korpusz_osszekeszites":
+        from .korpusz.sections import (
+            _manufacturing_alkatresz_kesz_xml_sections,
+            _manufacturing_korpusz_sections,
+            _manufacturing_osszekeszito_xml_sections,
+        )
+
+        korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
+        korpusz_osszekeszito_sections, korpusz_osszekeszito_count, korpusz_osszekeszito_xml_available = _manufacturing_osszekeszito_xml_sections(raw_bundle, current_number)
+        korpusz_osszekeszito_source_type = "XML" if korpusz_osszekeszito_xml_available else "Nincs XML"
+        korpusz_alkatresz_sections, korpusz_alkatresz_count, korpusz_alkatresz_xml_available = _manufacturing_alkatresz_kesz_xml_sections(raw_bundle, current_number)
+        korpusz_alkatresz_source_type = "XML" if korpusz_alkatresz_xml_available else "Nincs XML"
+        if include_all_red_view:
+            all_red_view, all_red_selection_state = _manufacturing_all_red_special_view(current_number)
+            selection_state_payload.update(all_red_selection_state)
+        else:
+            all_red_view = {
+                "key": "all-productions-red",
+                "label": "\u00d6sszes gy\u00e1rt\u00e1s \u00f6sszes piros eleme",
+                "count": 0,
+                "sections": [],
+            }
+        return finalize_filtered_documents(
+            [
+                {
+                    "key": "korpusz_osszekeszites",
+                    "label": "Korpusz \u00f6sszek\u00e9sz\u00edt\u00e9s",
+                    "sourceType": korpusz_osszekeszito_source_type,
+                    "sourceLabel": f"Beolvasva: {korpusz_osszekeszito_source_type}, {korpusz_alkatresz_source_type}",
+                    "file_name": "",
+                    "sections": korpusz_sections,
+                    "row_count": korpusz_row_count,
+                    "placeholderMessage": "Ehhez az opci\u00f3hoz m\u00e9g nincs megjelen\u00edthet\u0151 sor.",
+                    "specialViews": [
+                        {
+                            "key": "korpusz-osszekeszito",
+                            "label": "\u00d6sszek\u00e9sz\u00edt\u0151",
+                            "count": korpusz_osszekeszito_count,
+                            "sections": korpusz_osszekeszito_sections,
+                        },
+                        {
+                            "key": "korpusz-alkatresz-kesz",
+                            "label": "Alkatr\u00e9sz k\u00e9sz",
+                            "count": korpusz_alkatresz_count,
+                            "sections": korpusz_alkatresz_sections,
+                        },
+                        all_red_view,
+                    ],
+                    "hideBarcodeColumn": True,
+                }
+            ]
+        )
+
+    if target_operation == "front_osszekeszites":
+        from .front.sections import _manufacturing_front_sections
+
+        front_sections, front_row_count = _manufacturing_front_sections(raw_bundle, current_number)
+        front_source_type = "Nincs XML"
+        front_folder = Path(str(raw_bundle.get("folder", "") or "").strip())
+        front_xml_path = front_folder / "Front_osszekeszito.xml"
+        if front_xml_path.is_file():
+            front_source_type = "XML"
+        else:
+            try:
+                if any(path.is_file() and path.name.lower() == "front_osszekeszito.xml" for path in front_folder.iterdir()):
+                    front_source_type = "XML"
+            except OSError:
+                pass
+        front_folias_sections = [dict(section) for section in front_sections if "\u00b7 F\u00f3li\u00e1s" in str(section.get("label", ""))]
+        front_butorlapos_sections = [dict(section) for section in front_sections if "\u00b7 B\u00fatorlapos" in str(section.get("label", ""))]
+        return finalize_filtered_documents(
+            [
+                {
+                    "key": "front_osszekeszites",
+                    "label": "Front \u00f6sszek\u00e9sz\u00edt\u00e9s",
+                    "sourceType": front_source_type,
+                    "sourceLabel": f"Beolvasva: {front_source_type}",
+                    "file_name": "",
+                    "sections": front_sections,
+                    "row_count": front_row_count,
+                    "placeholderMessage": "Ehhez az opci\u00f3hoz m\u00e9g nincs megjelen\u00edthet\u0151 sor.",
+                    "specialViews": [
+                        {
+                            "key": "front-folias",
+                            "label": "F\u00f3li\u00e1s",
+                            "count": sum(len(section.get("rows", [])) for section in front_folias_sections),
+                            "sections": front_folias_sections,
+                        },
+                        {
+                            "key": "front-butorlapos",
+                            "label": "B\u00fatorlapos",
+                            "count": sum(len(section.get("rows", [])) for section in front_butorlapos_sections),
+                            "sections": front_butorlapos_sections,
+                        },
+                    ],
+                    "allowSplit": False,
+                    "singleColumnOverview": True,
+                }
+            ]
+        )
+
+    if target_operation == "cnc_furas":
+        from .cnc.sections import _manufacturing_cnc_sections
+
+        cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, cnc_source_label = _manufacturing_cnc_sections(raw_bundle, current_number)
+        return finalize_filtered_documents(
+            [
+                {
+                    "key": "cnc_furas",
+                    "label": "CNC f\u00far\u00e1s",
+                    "sourceType": cnc_source_type,
+                    "sourceLabel": cnc_source_label,
+                    "file_name": "",
+                    "sections": cnc_sections,
+                    "row_count": cnc_row_count,
+                    "placeholderMessage": "Ehhez az opci\u00f3hoz m\u00e9g nincs megjelen\u00edthet\u0151 sor.",
+                    "specialViews": cnc_special_views,
+                    "hideBarcodeColumn": True,
+                    "allowSplit": False,
+                    "singleColumnOverview": True,
+                }
+            ]
+        )
+
+    if target_operation == "pantolas":
+        from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
+
+        pantolo_sections, pantolo_row_count = _manufacturing_pantolo_sections(raw_bundle, current_number)
+        _, _, pantolo_xml_available = _manufacturing_pantolo_xml_sections(raw_bundle, current_number)
+        pantolo_source_type = "XML" if pantolo_xml_available else "Nincs XML"
+        return finalize_filtered_documents(
+            [
+                {
+                    "key": "pantolas",
+                    "label": "P\u00e1ntol\u00e1s",
+                    "sourceType": pantolo_source_type,
+                    "sourceLabel": f"Beolvasva: {pantolo_source_type}",
+                    "file_name": "",
+                    "sections": pantolo_sections,
+                    "row_count": pantolo_row_count,
+                    "placeholderMessage": "A kiv\u00e1lasztott gy\u00e1rt\u00e1sban nem tal\u00e1ltam haszn\u00e1lhat\u00f3 P\u00e1ntol\u00f3 sort.",
+                    "specialViews": [],
+                    "hideBarcodeColumn": True,
+                    "allowSplit": False,
+                    "singleColumnOverview": True,
+                }
+            ]
+        )
+
+    if target_operation == "topfloor":
+        from .topfloor.sections import _manufacturing_topfloor_document
+
+        return finalize_filtered_documents([_manufacturing_topfloor_document(raw_bundle, current_number)])
+
     from .cnc.sections import _manufacturing_cnc_sections
     from .front.sections import _manufacturing_front_sections
     from .korpusz.sections import (
@@ -1068,10 +1248,6 @@ def _manufacturing_view_bundle(
     )
     from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
     from .topfloor.sections import _manufacturing_topfloor_document
-
-    current_number = _manufacturing_normalize_number(production_number)
-    documents: list[dict] = []
-    selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
 
     korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
     korpusz_osszekeszito_sections, korpusz_osszekeszito_count, korpusz_osszekeszito_xml_available = _manufacturing_osszekeszito_xml_sections(raw_bundle, current_number)
@@ -1275,6 +1451,7 @@ def manufacturing_module_payload(
                 normalized_number,
                 saved_state,
                 include_all_red_view=False,
+                operation_filter=operation_filter,
             )
             target_document = next(
                 (
@@ -1331,6 +1508,7 @@ def manufacturing_module_payload(
                 selected_number,
                 current_selection_state,
                 include_all_red_view=True,
+                operation_filter=selected_operation,
             )
         except Exception as exc:
             combined_message = f"A gyártási papírok betöltése nem sikerült: {exc}"
@@ -1364,6 +1542,7 @@ def manufacturing_module_payload(
                         cache_number,
                         cache_saved_state,
                         include_all_red_view=True,
+                        operation_filter=selected_operation,
                     )
                 production_client_cache.append(
                     manufacturing_client_payload(
