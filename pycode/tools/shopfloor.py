@@ -35,11 +35,7 @@ TOPFLOOR_STORAGE_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_STORAGE_CHECKPOINT_ID",
 TOPFLOOR_STORAGE_TAB_ID = int(os.getenv("TOPFLOOR_STORAGE_TAB_ID", "228"))
 TOPFLOOR_BOX_CTS_ID = int(os.getenv("TOPFLOOR_BOX_CTS_ID", "24"))
 TOPFLOOR_RUNTIME_DIR = Path(os.getenv("TOPFLOOR_RUNTIME_DIR", "runtime/gyartasi-papirok/topfloor"))
-SHOPFLOOR_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("SHOPFLOOR_MAX_CONCURRENT_REQUESTS", "1")))
-SHOPFLOOR_MIN_REQUEST_INTERVAL_SECONDS = max(
-    0.0,
-    float(os.getenv("SHOPFLOOR_MIN_REQUEST_INTERVAL_SECONDS", "0.25")),
-)
+SHOPFLOOR_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("SHOPFLOOR_MAX_CONCURRENT_REQUESTS", "3")))
 SHOPFLOOR_PROCESS_PAYLOAD = {
     "allowAnonymousInventory": False,
     "cdsmId": 4,
@@ -65,21 +61,19 @@ SHOPFLOOR_PROCESS_PAYLOAD = {
 }
 
 _SHOPFLOOR_REQUEST_SEMAPHORE = threading.BoundedSemaphore(SHOPFLOOR_MAX_CONCURRENT_REQUESTS)
-_SHOPFLOOR_REQUEST_LOCK = threading.Lock()
-_SHOPFLOOR_LAST_REQUEST_AT = 0.0
+
+
+def _shopfloor_log_timing(label: str, elapsed_seconds: float, *, status: int | str = "") -> None:
+    """Write one console timing line for Insight/Shopfloor debugging."""
+    status_text = f" status={status}" if status != "" else ""
+    print(f"[shopfloor] {label}{status_text} took {elapsed_seconds:.3f}s", flush=True)
 
 
 @contextmanager
 def _shopfloor_request_slot():
-    """Serialize and pace Insight/Shopfloor requests so user bursts stay bounded."""
-    global _SHOPFLOOR_LAST_REQUEST_AT
+    """Bound concurrent Insight/Shopfloor requests so user bursts stay controlled."""
     _SHOPFLOOR_REQUEST_SEMAPHORE.acquire()
     try:
-        with _SHOPFLOOR_REQUEST_LOCK:
-            wait_seconds = SHOPFLOOR_MIN_REQUEST_INTERVAL_SECONDS - (time.monotonic() - _SHOPFLOOR_LAST_REQUEST_AT)
-            if wait_seconds > 0:
-                time.sleep(wait_seconds)
-            _SHOPFLOOR_LAST_REQUEST_AT = time.monotonic()
         yield
     finally:
         _SHOPFLOOR_REQUEST_SEMAPHORE.release()
@@ -100,19 +94,34 @@ class ShopfloorApiClient:
         auth_header = _shopfloor_auth_header(*_shopfloor_ready_endpoint_credentials(ready_endpoint))
         return cls(auth_header, _shopfloor_negotiate_connection_id(auth_header))
 
-    def post_json_url(self, url: str, payload: object | None = None, *, timeout: int = 20) -> tuple[int, str]:
+    def post_json_url(
+        self,
+        url: str,
+        payload: object | None = None,
+        *,
+        timeout: int = 20,
+        timing_label: str = "post-json",
+    ) -> tuple[int, str]:
         """POST JSON to a Shopfloor URL and return status and body."""
         headers = {"Authorization": self.auth_header, "Content-Type": "application/json"}
         data = json.dumps({} if payload is None else payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(url, method="POST", data=data, headers=headers)
+        started_at = time.perf_counter()
         try:
             with _shopfloor_request_slot():
                 with urllib.request.urlopen(req, context=self.context, timeout=timeout) as response:
                     body = response.read().decode("utf-8", errors="ignore")
-                    return int(response.getcode() or 0), body
+                    status_code = int(response.getcode() or 0)
+                    _shopfloor_log_timing(timing_label, time.perf_counter() - started_at, status=status_code)
+                    return status_code, body
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="ignore")
-            return int(exc.code or 0), body
+            status_code = int(exc.code or 0)
+            _shopfloor_log_timing(timing_label, time.perf_counter() - started_at, status=status_code)
+            return status_code, body
+        except Exception:
+            _shopfloor_log_timing(timing_label, time.perf_counter() - started_at, status="error")
+            raise
 
     def run_procedure(
         self,
@@ -133,7 +142,8 @@ class ShopfloorApiClient:
             f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{int(checkpoint_id)}"
             f"/tabs/{int(tab_id)}/runprocedure/{int(procedure_id)}?{query}"
         )
-        return self.post_json_url(url, payload)
+        label = f"runprocedure cpt={int(checkpoint_id)} tab={int(tab_id)} proc={int(procedure_id)}"
+        return self.post_json_url(url, payload, timing_label=label)
 
     def scan_endpoint(
         self,
@@ -149,7 +159,8 @@ class ShopfloorApiClient:
             f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{int(checkpoint_id)}"
             f"/tabs/{int(tab_id)}/{endpoint_name}/{quoted_scan}?connectionId={self.quoted_connection_id}"
         )
-        return self.post_json_url(url, payload)
+        label = f"{endpoint_name} cpt={int(checkpoint_id)} tab={int(tab_id)} scan={str(scan_text or '').strip()}"
+        return self.post_json_url(url, payload, timing_label=label)
 
 
 def extract_con_code(value: object) -> str:
@@ -414,9 +425,16 @@ def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
     negotiate_url = f"{SHOPFLOOR_BASE_URL}/api/hubs/mainhub/negotiate?authorize={encoded_auth}&negotiateVersion=1"
     req = urllib.request.Request(negotiate_url, method="POST")
     context = ssl._create_unverified_context()
-    with _shopfloor_request_slot():
-        with urllib.request.urlopen(req, context=context, timeout=15) as response:
-            payload = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
+    started_at = time.perf_counter()
+    try:
+        with _shopfloor_request_slot():
+            with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                body = response.read().decode("utf-8", errors="ignore")
+                _shopfloor_log_timing("negotiate connectionId", time.perf_counter() - started_at, status=int(response.getcode() or 0))
+                payload = json.loads(body or "{}")
+    except Exception:
+        _shopfloor_log_timing("negotiate connectionId", time.perf_counter() - started_at, status="error")
+        raise
     connection_id = str(payload.get("connectionId", "")).strip()
     if not connection_id:
         raise RuntimeError("A shopfloor negotiate válaszban nincs connectionId.")
@@ -757,20 +775,27 @@ def _save_topfloor_state_box(category_key: str, box: dict[str, object]) -> None:
 
 def _load_topfloor_categories() -> dict[str, dict]:
     """Load Topfloor category-to-box assignments."""
+    started_at = time.perf_counter()
     result: dict[str, dict] = {}
     for state_path in sorted(TOPFLOOR_RUNTIME_DIR.glob("*/state.json")):
         shipment_id = state_path.parent.name
         result.update(_load_topfloor_state_boxes(shipment_id))
+    print(
+        f"[topfloor-state] load categories count={len(result)} took {time.perf_counter() - started_at:.3f}s",
+        flush=True,
+    )
     return result
 
 
 def _save_topfloor_category_box(category_key: str, box: dict[str, object], *, open_state: bool) -> None:
     """Save one Topfloor category assignment."""
+    started_at = time.perf_counter()
     clean_key = str(category_key or "").strip()
     if not clean_key:
         raise ValueError("Hiányzik a Topfloor kategória azonosító.")
     box_payload = _topfloor_box_payload(box)
-    existing = _load_topfloor_categories().get(clean_key) or _load_topfloor_categories().get(_topfloor_legacy_category_key(clean_key)) or {}
+    categories = _load_topfloor_categories()
+    existing = categories.get(clean_key) or categories.get(_topfloor_legacy_category_key(clean_key)) or {}
     extra_payload = {
         str(key): value
         for key, value in {**dict(existing), **dict(box)}.items()
@@ -784,6 +809,10 @@ def _save_topfloor_category_box(category_key: str, box: dict[str, object], *, op
         "ctsId": int(box_payload["ctsId"]),
         "open": bool(open_state),
     })
+    print(
+        f"[topfloor-state] save category={clean_key} open={bool(open_state)} took {time.perf_counter() - started_at:.3f}s",
+        flush=True,
+    )
 
 
 def _topfloor_category_box(category_key: str) -> dict[str, object]:

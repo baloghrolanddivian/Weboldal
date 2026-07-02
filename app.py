@@ -49,7 +49,6 @@ from manufacturing import (
     _manufacturing_view_bundle,
     _prime_manufacturing_cache_async,
     _prime_manufacturing_cache_worker,
-    available_production_numbers,
     configure_manufacturing,
     load_partial_quantity_state,
     load_selection_state,
@@ -5734,16 +5733,46 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.respond_json(200, {"ok": True, "action": action, "box": result})
         return True
 
-    def topfloor_box_restriction_error(self, action: str, category_key: str) -> str:
+    def topfloor_box_restriction_error(self, action: str, category_key: str, payload: dict | None = None) -> str:
         """Return the server-side Topfloor box restriction error, if any."""
+        payload = payload if isinstance(payload, dict) else {}
+        guard = payload.get("guard")
+        if isinstance(guard, dict):
+            if not bool(guard.get("target_exists")):
+                return "Az Anyagraktár kategória nem található az aktuális oldalon."
+            if action != "issue-storage-box" and isinstance(guard.get("unissued_done_box"), dict):
+                return self.topfloor_guard_restriction_message(
+                    guard.get("unissued_done_box", {}),
+                    "Van lezárt, de még ki nem adott Anyagraktár doboz. Add ki ezt a dobozt, mielőtt másik dobozműveletet indítasz.",
+                )
+            if action in {"create", "open", "reprint-label"} and isinstance(guard.get("open_box"), dict):
+                return self.topfloor_guard_restriction_message(
+                    guard.get("open_box", {}),
+                    "Már van nyitott Anyagraktár doboz. Zárd le ezt, mielőtt másikat nyitsz.",
+                )
+            if action == "issue-storage-box" and not bool(guard.get("target_ready_to_issue")):
+                return "Ezt az Anyagraktár dobozt még nem lehet kiadni: legyen lezárva, és minden sora legyen dobozba rakva."
+            print(f"[topfloor-box] restriction-state action={action} category={category_key} source=client-runtime took 0.000s", flush=True)
+            return ""
+
+        started_at = time.perf_counter()
         document, selection_state = self.current_topfloor_document_state(category_key)
         sections = [section for section in document.get("sections", []) if isinstance(section, dict)]
         target_section = self.find_topfloor_category_section(sections, category_key)
+        print(
+            f"[topfloor-box] restriction-state action={action} category={category_key} sections={len(sections)} took {time.perf_counter() - started_at:.3f}s",
+            flush=True,
+        )
         if target_section is None:
             return "Az Anyagraktár kategória nem található az aktuális XML adatokban."
 
         if action != "issue-storage-box":
+            done_started_at = time.perf_counter()
             done_section = self.find_topfloor_unissued_done_section(sections, selection_state)
+            print(
+                f"[topfloor-box] restriction-unissued-scan action={action} category={category_key} took {time.perf_counter() - done_started_at:.3f}s",
+                flush=True,
+            )
             if done_section is not None:
                 return self.topfloor_section_restriction_message(
                     done_section,
@@ -5751,7 +5780,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 )
 
         if action in {"create", "open", "reprint-label"}:
+            open_started_at = time.perf_counter()
             open_section = self.find_topfloor_open_section(sections, category_key)
+            print(
+                f"[topfloor-box] restriction-open-scan action={action} category={category_key} took {time.perf_counter() - open_started_at:.3f}s",
+                flush=True,
+            )
             if open_section is not None:
                 return self.topfloor_section_restriction_message(
                     open_section,
@@ -5762,14 +5796,35 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return "Ezt az Anyagraktár dobozt még nem lehet kiadni: legyen lezárva, és minden sora legyen dobozba rakva."
         return ""
 
+    def topfloor_guard_restriction_message(self, box: dict, prefix: str) -> str:
+        """Return a user-facing Topfloor restriction message from client runtime guard data."""
+        details = [
+            prefix,
+            f"Szállítmány: {str(box.get('shipment_id', '')).strip()}",
+            f"Doboz: {str(box.get('box_id', '')).strip()}",
+            f"Kategória: {str(box.get('label', '') or box.get('category_key', '')).strip()}",
+            f"Leírás: {str(box.get('description', '')).strip()}",
+        ]
+        return " ".join(item for item in details if not item.endswith(": "))
+
     def current_topfloor_document_state(self, category_key: str) -> tuple[dict, dict[str, str]]:
         """Build the current Topfloor document and row state for box guards."""
-        production_numbers = available_production_numbers(limit=60, ready_only=True, operation="topfloor")
+        started_at = time.perf_counter()
         category_parts = str(category_key or "").split("::")
         category_production = _manufacturing_normalize_number(category_parts[1] if len(category_parts) > 1 else "")
-        if category_production and category_production not in production_numbers:
-            production_numbers.insert(0, category_production)
+        if not category_production:
+            raise RuntimeError("Az Anyagraktár kategória nem tartalmaz gyártási számot.")
+        production_numbers = [category_production]
+        print(
+            f"[topfloor-box] current-state production={category_production} took {time.perf_counter() - started_at:.3f}s",
+            flush=True,
+        )
+        aggregate_started_at = time.perf_counter()
         bundle, selection_state, _partial_quantity_state = _manufacturing_topfloor_aggregate_bundle(production_numbers)
+        print(
+            f"[topfloor-box] current-state aggregate productions={len(production_numbers)} took {time.perf_counter() - aggregate_started_at:.3f}s",
+            flush=True,
+        )
         document = next(
             (
                 item
@@ -5780,6 +5835,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         )
         if not isinstance(document, dict) or not document.get("sections"):
             raise RuntimeError("Az Anyagraktár XML adatok nem tölthetők be az ellenőrzéshez.")
+        print(
+            f"[topfloor-box] current-state total category={category_key} took {time.perf_counter() - started_at:.3f}s",
+            flush=True,
+        )
         return document, selection_state
 
     def find_topfloor_category_section(self, sections: list[dict], category_key: str) -> dict | None:
@@ -6063,6 +6122,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
         if path == MANUFACTURING_TOPFLOOR_BOX_ROUTE:
+            request_started_at = time.perf_counter()
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
             try:
@@ -6073,17 +6133,27 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             action = str(payload.get("action", "")).strip().lower()
             category_key = str(payload.get("category_key", "")).strip()
+            log_status = "ok"
             if not category_key:
                 self.respond_json(400, {"ok": False, "error": "Hiányzik az Anyagraktár kategória azonosító."})
+                print(
+                    f"[topfloor-box] action={action or '-'} category=- status=400 took {time.perf_counter() - request_started_at:.3f}s",
+                    flush=True,
+                )
                 return
             if action not in {"create", "open", "close", "reprint-label", "issue-storage-box"}:
                 self.respond_json(400, {"ok": False, "error": "Érvénytelen Anyagraktár doboz művelet."})
+                print(
+                    f"[topfloor-box] action={action or '-'} category={category_key} status=400 took {time.perf_counter() - request_started_at:.3f}s",
+                    flush=True,
+                )
                 return
 
             try:
-                restriction_error = self.topfloor_box_restriction_error(action, category_key)
+                restriction_error = self.topfloor_box_restriction_error(action, category_key, payload)
                 if restriction_error:
                     self.respond_json(409, {"ok": False, "error": restriction_error})
+                    log_status = "409"
                     return
                 if self.handle_topfloor_box_simple_action(action, category_key, payload):
                     return
@@ -6091,7 +6161,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 return
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"Az Anyagraktár doboz művelet nem sikerült: {exc}"})
+                log_status = "500"
                 return
+            finally:
+                print(
+                    f"[topfloor-box] action={action} category={category_key} status={log_status} took {time.perf_counter() - request_started_at:.3f}s",
+                    flush=True,
+                )
 
         if path == MANUFACTURING_REPORT_READY_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
