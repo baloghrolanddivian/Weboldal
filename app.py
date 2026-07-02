@@ -222,6 +222,7 @@ from tools.login import (
     user_from_cookie,
 )
 from tools.shopfloor import extract_con_code as _extract_con_code
+from tools.shopfloor import ShopfloorApiClient as _ShopfloorApiClient
 from tools.shopfloor import report_con_ready as _shopfloor_report_con_ready
 from tools.shopfloor import (
     create_closed_topfloor_category_box as _topfloor_create_category_box,
@@ -381,7 +382,7 @@ def _login_notice_html(raw_path: str) -> str:
     query = urllib.parse.parse_qs(urllib.parse.urlsplit(raw_path).query)
     status = str(query.get("login", [""])[0] or "")
     if status == "too_long":
-        text = f"A jelszo legfeljebb {MAX_PASSWORD_LENGTH} karakter lehet."
+        text = "Hibas jelszo."
     elif status == "failed":
         text = "Hibas jelszo."
     elif status == "ok":
@@ -6160,12 +6161,18 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             )
             failures: list[dict[str, str | int]] = []
             success_targets: set[tuple[str, str]] = set()
+            shopfloor_clients: dict[str, _ShopfloorApiClient] = {}
             for code, ready_endpoint in scan_targets:
                 fallback_endpoint = "validatescan+processscan" if ready_endpoint in {"assembly", "front"} else "processscan"
                 try:
+                    client = shopfloor_clients.get(ready_endpoint)
+                    if client is None:
+                        client = _ShopfloorApiClient.for_endpoint(ready_endpoint)
+                        shopfloor_clients[ready_endpoint] = client
                     status_code, response_body, endpoint_name = _shopfloor_report_con_ready(
                         code,
                         ready_endpoint=ready_endpoint,
+                        client=client,
                     )
                 except Exception as exc:
                     failures.append(

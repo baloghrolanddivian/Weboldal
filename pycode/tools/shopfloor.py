@@ -7,9 +7,12 @@ import json
 import os
 import re
 import ssl
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
@@ -32,6 +35,11 @@ TOPFLOOR_STORAGE_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_STORAGE_CHECKPOINT_ID",
 TOPFLOOR_STORAGE_TAB_ID = int(os.getenv("TOPFLOOR_STORAGE_TAB_ID", "228"))
 TOPFLOOR_BOX_CTS_ID = int(os.getenv("TOPFLOOR_BOX_CTS_ID", "24"))
 TOPFLOOR_RUNTIME_DIR = Path(os.getenv("TOPFLOOR_RUNTIME_DIR", "runtime/gyartasi-papirok/topfloor"))
+SHOPFLOOR_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("SHOPFLOOR_MAX_CONCURRENT_REQUESTS", "1")))
+SHOPFLOOR_MIN_REQUEST_INTERVAL_SECONDS = max(
+    0.0,
+    float(os.getenv("SHOPFLOOR_MIN_REQUEST_INTERVAL_SECONDS", "0.25")),
+)
 SHOPFLOOR_PROCESS_PAYLOAD = {
     "allowAnonymousInventory": False,
     "cdsmId": 4,
@@ -56,6 +64,26 @@ SHOPFLOOR_PROCESS_PAYLOAD = {
     "validateData": None,
 }
 
+_SHOPFLOOR_REQUEST_SEMAPHORE = threading.BoundedSemaphore(SHOPFLOOR_MAX_CONCURRENT_REQUESTS)
+_SHOPFLOOR_REQUEST_LOCK = threading.Lock()
+_SHOPFLOOR_LAST_REQUEST_AT = 0.0
+
+
+@contextmanager
+def _shopfloor_request_slot():
+    """Serialize and pace Insight/Shopfloor requests so user bursts stay bounded."""
+    global _SHOPFLOOR_LAST_REQUEST_AT
+    _SHOPFLOOR_REQUEST_SEMAPHORE.acquire()
+    try:
+        with _SHOPFLOOR_REQUEST_LOCK:
+            wait_seconds = SHOPFLOOR_MIN_REQUEST_INTERVAL_SECONDS - (time.monotonic() - _SHOPFLOOR_LAST_REQUEST_AT)
+            if wait_seconds > 0:
+                time.sleep(wait_seconds)
+            _SHOPFLOOR_LAST_REQUEST_AT = time.monotonic()
+        yield
+    finally:
+        _SHOPFLOOR_REQUEST_SEMAPHORE.release()
+
 
 class ShopfloorApiClient:
     """Small authenticated Shopfloor API client for multi-step workflows."""
@@ -78,9 +106,10 @@ class ShopfloorApiClient:
         data = json.dumps({} if payload is None else payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(url, method="POST", data=data, headers=headers)
         try:
-            with urllib.request.urlopen(req, context=self.context, timeout=timeout) as response:
-                body = response.read().decode("utf-8", errors="ignore")
-                return int(response.getcode() or 0), body
+            with _shopfloor_request_slot():
+                with urllib.request.urlopen(req, context=self.context, timeout=timeout) as response:
+                    body = response.read().decode("utf-8", errors="ignore")
+                    return int(response.getcode() or 0), body
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="ignore")
             return int(exc.code or 0), body
@@ -135,6 +164,7 @@ def report_con_ready(
     *,
     use_assembly_validate: bool = False,
     ready_endpoint: str = "default",
+    client: ShopfloorApiClient | None = None,
 ) -> tuple[int, str, str]:
     """Report a CON as ready through the configured Shopfloor endpoint."""
     con_text = str(con_code or "").strip().upper()
@@ -144,41 +174,37 @@ def report_con_ready(
     con_id = int(match.group(1))
 
     checkpoint_id, tab_id, requires_validate = _shopfloor_ready_endpoint_config(ready_endpoint, use_assembly_validate)
-    auth_header = _shopfloor_auth_header(*_shopfloor_ready_endpoint_credentials(ready_endpoint))
-    connection_id = _shopfloor_negotiate_connection_id(auth_header)
-    quoted_connection_id = urllib.parse.quote(connection_id, safe="")
+    client = client or ShopfloorApiClient.for_endpoint(ready_endpoint)
     request_body = _shopfloor_process_payload(con_id)
-    headers = {"Authorization": auth_header, "Content-Type": "application/json"}
-    context = ssl._create_unverified_context()
-
-    def endpoint_url(endpoint_name: str) -> str:
-        """Build the validatescan/processscan URL for this CON."""
-        return (
-            f"{SHOPFLOOR_BASE_URL}/api/shopfloor/checkpoints/{checkpoint_id}"
-            f"/tabs/{tab_id}/{endpoint_name}/{con_text}?connectionId={quoted_connection_id}"
-        )
-
-    def submit(endpoint_name: str, data: bytes) -> tuple[int, str]:
-        """POST one scan request and return status/body, including HTTP errors."""
-        req = urllib.request.Request(endpoint_url(endpoint_name), method="POST", data=data, headers=headers)
-        try:
-            with urllib.request.urlopen(req, context=context, timeout=20) as response:
-                body = response.read().decode("utf-8", errors="ignore")
-                return int(response.getcode() or 0), body
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="ignore")
-            return int(exc.code or 0), body
 
     if requires_validate:
-        validate_status_code, validate_response_body = submit("validatescan", request_body)
+        validate_status_code, validate_response_body = client.scan_endpoint(
+            checkpoint_id,
+            tab_id,
+            "validatescan",
+            con_text,
+            json.loads(request_body.decode("utf-8")),
+        )
         if not 200 <= int(validate_status_code) < 300:
             return validate_status_code, validate_response_body, "validatescan"
         validate_data = _shopfloor_extract_validate_data(validate_response_body)
         process_body = _shopfloor_process_payload(con_id, validate_data)
-        process_status_code, process_response_body = submit("processscan", process_body)
+        process_status_code, process_response_body = client.scan_endpoint(
+            checkpoint_id,
+            tab_id,
+            "processscan",
+            con_text,
+            json.loads(process_body.decode("utf-8")),
+        )
         return process_status_code, process_response_body, "processscan"
 
-    status_code, response_body = submit("processscan", request_body)
+    status_code, response_body = client.scan_endpoint(
+        checkpoint_id,
+        tab_id,
+        "processscan",
+        con_text,
+        json.loads(request_body.decode("utf-8")),
+    )
     return status_code, response_body, "processscan"
 
 
@@ -388,8 +414,9 @@ def _shopfloor_negotiate_connection_id(auth_header: str) -> str:
     negotiate_url = f"{SHOPFLOOR_BASE_URL}/api/hubs/mainhub/negotiate?authorize={encoded_auth}&negotiateVersion=1"
     req = urllib.request.Request(negotiate_url, method="POST")
     context = ssl._create_unverified_context()
-    with urllib.request.urlopen(req, context=context, timeout=15) as response:
-        payload = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
+    with _shopfloor_request_slot():
+        with urllib.request.urlopen(req, context=context, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
     connection_id = str(payload.get("connectionId", "")).strip()
     if not connection_id:
         raise RuntimeError("A shopfloor negotiate válaszban nincs connectionId.")
