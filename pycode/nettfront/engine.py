@@ -89,9 +89,7 @@ MOJIBAKE_FIXES = {
 
 @dataclass
 class ProcurementArtifacts:
-    """Represent ProcurementArtifacts data used by the NettFront workflows.
-
-    This class is part of the pydoc-documented shared NettFront workflow layer."""
+    """Generated files from invoice-to-procurement processing."""
     invoice_rows: list[dict[str, str]]
     invoice_csv: bytes
     procurement_csv: bytes
@@ -100,9 +98,7 @@ class ProcurementArtifacts:
 
 @dataclass
 class CompareArtifacts:
-    """Represent CompareArtifacts data used by the NettFront workflows.
-
-    This class is part of the pydoc-documented shared NettFront workflow layer."""
+    """Generated files from invoice/order comparison processing."""
     invoice_rows: list[dict[str, str]]
     invoice_csv: bytes
     compare_workbook: bytes
@@ -111,9 +107,7 @@ class CompareArtifacts:
 
 @dataclass
 class NettfrontArtifacts:
-    """Represent NettfrontArtifacts data used by the NettFront workflows.
-
-    This class is part of the pydoc-documented shared NettFront workflow layer."""
+    """Combined NettFront processing outputs for legacy shared workflow."""
     invoice_rows: list[dict[str, str]]
     invoice_csv: bytes
     procurement_csv: bytes

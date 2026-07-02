@@ -27,19 +27,19 @@ FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = REPO_ROOT / "data" / "nettfront-alkatres
 
 
 def file_name_allowed(file_name: str) -> bool:
-    """Provide file name allowed behavior."""
+    """Return whether a front inventory upload has a supported extension."""
     return Path(file_name or "").suffix.lower() in FRONT_INVENTORY_ALLOWED_EXTENSIONS
 
 
 def read_bytes_if_exists(path: Path) -> bytes | None:
-    """Read read bytes if exists data."""
+    """Read file bytes when the path exists, otherwise return None."""
     if not path.exists():
         return None
     return path.read_bytes()
 
 
 def write_runtime_upload(base_path: Path, file_name: str, payload: bytes) -> Path:
-    """Write write runtime upload data."""
+    """Store an uploaded front inventory source file beside its metadata path."""
     suffix = Path(file_name or "").suffix.lower() or ".bin"
     target_path = base_path.with_suffix(suffix)
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -48,7 +48,7 @@ def write_runtime_upload(base_path: Path, file_name: str, payload: bytes) -> Pat
 
 
 def load_session_from_path(path: Path) -> dict | None:
-    """Load load session from path data."""
+    """Load and repair a persisted front inventory session if possible."""
     if not path.exists():
         return None
     try:
@@ -63,13 +63,13 @@ def load_session_from_path(path: Path) -> dict | None:
 
 
 def save_session_to_path(path: Path, payload: dict) -> None:
-    """Save save session to path data."""
+    """Persist a front inventory session as formatted JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
-    """Build build front inventory session data."""
+    """Create a new front inventory counting session from an uploaded file."""
     serial_sizes = _load_serial_sizes()
     stock_rows = _read_stock_rows(file_name, payload, serial_sizes)
 
@@ -95,7 +95,7 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
 
 
 def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "add") -> tuple[bool, str]:
-    """Provide update row input behavior."""
+    """Apply an add/subtract count entry to one active front row."""
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott frontsort nem találom."
@@ -127,7 +127,7 @@ def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "ad
 
 
 def summarize_missing_inputs(session: dict) -> dict:
-    """Provide summarize missing inputs behavior."""
+    """Return missing count totals grouped by front inventory category."""
     if str(session.get("phase")) == "finalized":
         return {"total_missing": 0, "categories": [], "rows": []}
 
@@ -162,7 +162,7 @@ def summarize_missing_inputs(session: dict) -> dict:
 
 
 def _set_worker_alert(session: dict, title: str, message: str) -> None:
-    """Provide set worker alert behavior."""
+    """Attach a short-lived alert message for worker tablets."""
     session["worker_alert"] = {
         "id": datetime.now().isoformat(timespec="seconds"),
         "title": str(title or "").strip(),
@@ -171,7 +171,7 @@ def _set_worker_alert(session: dict, title: str, message: str) -> None:
 
 
 def build_inventory_check_workbook(session: dict, mode: str = "check", treat_missing_as_zero: bool = False) -> tuple[bytes | None, str, int]:
-    """Build build inventory check workbook data."""
+    """Build the Excel workbook for a check round or final count export."""
     if Workbook is None:
         return None, "", 0
 
@@ -233,7 +233,7 @@ def build_inventory_check_workbook(session: dict, mode: str = "check", treat_mis
 
 
 def build_front_inventory_insight_artifacts(session: dict) -> dict[str, object]:
-    """Build build front inventory insight artifacts data."""
+    """Fill the inSight template and generate the companion AutoHotkey script."""
     if load_workbook is None:
         raise RuntimeError("Az inSight Excel generalasahoz hianyzik az openpyxl csomag.")
 
@@ -287,7 +287,7 @@ def build_front_inventory_insight_artifacts(session: dict) -> dict[str, object]:
 
 
 def run_inventory_check(session: dict, allow_missing: bool = False) -> tuple[bool, str]:
-    """Provide run inventory check behavior."""
+    """Advance the front inventory through first/second check phases."""
     if str(session.get("phase")) == "finalized":
         return False, "A leltár már le van zárva."
 
@@ -365,7 +365,7 @@ def run_inventory_check(session: dict, allow_missing: bool = False) -> tuple[boo
 
 
 def finalize_inventory(session: dict, allow_missing: bool = False) -> tuple[bool, str]:
-    """Provide finalize inventory behavior."""
+    """Finalize unresolved rows and close the front inventory session."""
     if str(session.get("phase")) == "finalized":
         return False, "A leltar mar le van zarva."
 
@@ -397,13 +397,13 @@ def finalize_inventory(session: dict, allow_missing: bool = False) -> tuple[bool
 
 
 def _clear_all_pending_inputs(session: dict) -> None:
-    """Provide clear all pending inputs behavior."""
+    """Clear temporary count-entry fields from all rows."""
     for row in session.get("rows", []):
         row["input_qty"] = ""
 
 
 def _build_export_row(row: dict, phase: int, mode: str, treat_missing_as_zero: bool) -> dict:
-    """Build build export row data."""
+    """Return the normalized row shape used by check/finalize workbooks."""
     current_input = _row_input_value(row)
     if current_input is None and treat_missing_as_zero and str(row.get("status", "")) != "resolved":
         current_input = 0
@@ -433,7 +433,7 @@ def _build_export_row(row: dict, phase: int, mode: str, treat_missing_as_zero: b
 
 
 def _final_effective_qty(row: dict) -> int:
-    """Provide final effective qty behavior."""
+    """Return the best final quantity recorded for a front row."""
     for key in ("resolved_qty", "final_check_qty", "second_check_qty", "first_check_qty"):
         parsed = _parse_non_negative_int(row.get(key))
         if parsed is not None:
@@ -442,7 +442,7 @@ def _final_effective_qty(row: dict) -> int:
 
 
 def _front_inventory_final_count_map(session: dict) -> dict[str, int]:
-    """Provide front inventory final count map behavior."""
+    """Return final counted quantities keyed by normalized part number."""
     final_counts: dict[str, int] = {}
     for row in session.get("rows", []):
         if not isinstance(row, dict) or not _is_visible_inventory_row(row):
@@ -455,7 +455,7 @@ def _front_inventory_final_count_map(session: dict) -> dict[str, int]:
 
 
 def _resolve_front_inventory_insight_template_path() -> Path | None:
-    """Provide resolve front inventory insight template path behavior."""
+    """Return the override or default inSight template path if present."""
     for candidate in (FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH, FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH):
         if candidate.exists():
             return candidate
@@ -463,7 +463,7 @@ def _resolve_front_inventory_insight_template_path() -> Path | None:
 
 
 def _front_inventory_insight_columns(sheet) -> tuple[int, int]:
-    """Provide front inventory insight columns behavior."""
+    """Find part-number and quantity columns in the inSight template sheet."""
     header_values = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     header_map = _build_header_map(header_values)
     part_index = (
@@ -485,7 +485,7 @@ def _front_inventory_insight_columns(sheet) -> tuple[int, int]:
 
 
 def _build_front_inventory_insight_ahk_script(quantities: list[int]) -> str:
-    """Build build front inventory insight ahk script data."""
+    """Build the AutoHotkey script that pastes final quantities into inSight."""
     values_text = "\n".join(str(max(0, int(quantity or 0))) for quantity in quantities)
     return f"""; AutoHotkey v2.0+
 #SingleInstance Force
@@ -542,7 +542,7 @@ Esc::
 
 
 def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None:
-    """Provide fill finalize workbook behavior."""
+    """Populate final-count, comparison, and round-detail workbook sheets."""
     summary_sheet = workbook.active
     summary_sheet.title = "Vegleges darabszamok"
     summary_sheet.append(["Alkatresz szam", "Darabszam"])
@@ -578,7 +578,7 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
 
 
 def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default") -> dict:
-    """Build build front inventory view model data."""
+    """Build the browser view model for front counting categories and rows."""
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
     for row in source_rows:
@@ -648,7 +648,7 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
 
 
 def _finalized_rows(session: dict) -> list[dict]:
-    """Provide finalized rows behavior."""
+    """Return resolved rows in the shape used by finalized inventory views."""
     rows = []
     for row in session.get("rows", []):
         if not _is_visible_inventory_row(row):
@@ -676,7 +676,7 @@ def _finalized_rows(session: dict) -> list[dict]:
 
 
 def _active_rows_for_phase(session: dict, phase: int) -> list[dict]:
-    """Provide active rows for phase behavior."""
+    """Return visible unresolved rows assigned to the requested check phase."""
     if str(session.get("phase")) == "finalized":
         return []
     rows = []
@@ -692,7 +692,7 @@ def _active_rows_for_phase(session: dict, phase: int) -> list[dict]:
 
 
 def _find_row(session: dict, row_id: str) -> dict | None:
-    """Provide find row behavior."""
+    """Find a front inventory row by case-insensitive row id."""
     target = str(row_id or "").strip().upper()
     for row in session.get("rows", []):
         if str(row.get("row_id", "")).strip().upper() == target:
@@ -701,12 +701,12 @@ def _find_row(session: dict, row_id: str) -> dict | None:
 
 
 def _touch_session(session: dict) -> None:
-    """Provide touch session behavior."""
+    """Update the session modification timestamp."""
     session["updated_at"] = datetime.now().isoformat(timespec="seconds")
 
 
 def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | None = None) -> list[dict]:
-    """Read read stock rows data."""
+    """Read front inventory stock rows from supported tabular source files."""
     rows = _read_rows(file_name, payload)
     if not rows:
         raise ValueError("A front készletfájl üres.")
@@ -785,7 +785,7 @@ def _is_inventory_excluded_flag(value: object) -> bool:
 
 
 def _load_serial_sizes() -> set[str]:
-    """Load load serial sizes data."""
+    """Load known standard front sizes from data files."""
     result: set[str] = set()
     for path, field_name in (
         (SERIAL_SIZES_DATA_PATH, "sizes"),
@@ -803,7 +803,7 @@ def _load_serial_sizes() -> set[str]:
 
 
 def _repair_session(session: dict, session_path: Path | None = None) -> bool:
-    """Provide repair session behavior."""
+    """Backfill derived fields in older persisted front inventory sessions."""
     changed = False
     serial_sizes = _load_serial_sizes()
     serial_size_list = sorted(serial_sizes, key=_size_sort_key)
@@ -844,7 +844,7 @@ def _repair_session(session: dict, session_path: Path | None = None) -> bool:
 
 
 def _merge_saved_stock_rows(session: dict, session_path: Path | None, serial_sizes: set[str]) -> bool:
-    """Provide merge saved stock rows behavior."""
+    """Add new rows from the saved stock upload into an older session."""
     if session_path is None:
         return False
     stock_path = _find_saved_stock_upload_path(session_path.parent)
@@ -874,7 +874,7 @@ def _merge_saved_stock_rows(session: dict, session_path: Path | None, serial_siz
 
 
 def _find_saved_stock_upload_path(runtime_dir: Path) -> Path | None:
-    """Provide find saved stock upload path behavior."""
+    """Return the saved latest-stock upload path for a front runtime folder."""
     for candidate in sorted(runtime_dir.glob("latest-stock.*")):
         if candidate.suffix.lower() in FRONT_INVENTORY_ALLOWED_EXTENSIONS:
             return candidate
@@ -882,7 +882,7 @@ def _find_saved_stock_upload_path(runtime_dir: Path) -> Path | None:
 
 
 def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
-    """Build build inventory session row data."""
+    """Convert a parsed stock item into the persisted session row shape."""
     description = str(item.get("description", "")).strip()
     part_number = str(item.get("part_number", "")).strip()
     model = str(item.get("model", "")).strip() or _extract_model_value(description, part_number)
@@ -915,7 +915,7 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
 
 
 def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
-    """Read read rows data."""
+    """Read raw rows from supported Excel or CSV front inventory uploads."""
     suffix = Path(file_name or "").suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
         if load_workbook is None:
@@ -930,7 +930,7 @@ def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
 
 
 def _decode_csv_bytes(payload: bytes) -> str:
-    """Provide decode csv bytes behavior."""
+    """Decode CSV bytes using the encodings seen in stock exports."""
     for encoding in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
         try:
             return payload.decode(encoding)
@@ -940,12 +940,12 @@ def _decode_csv_bytes(payload: bytes) -> str:
 
 
 def _build_header_map(header_row: list[object]) -> dict[int, str]:
-    """Build build header map data."""
+    """Map source column indexes to normalized header text."""
     return {index: _normalize_header(value) for index, value in enumerate(header_row)}
 
 
 def _find_header_index(header_map: dict[int, str], terms: tuple[str, ...]) -> int | None:
-    """Provide find header index behavior."""
+    """Find the first column whose normalized header contains all terms."""
     for index, normalized in header_map.items():
         if all(term in normalized for term in terms):
             return index
@@ -953,17 +953,17 @@ def _find_header_index(header_map: dict[int, str], terms: tuple[str, ...]) -> in
 
 
 def _normalize_header(value: object) -> str:
-    """Normalize normalize header values."""
+    """Normalize a worksheet header for tolerant column matching."""
     return re.sub(r"[^a-z0-9]+", "", _fold_text(value))
 
 
 def _normalize_part_number(value: object) -> str:
-    """Normalize normalize part number values."""
+    """Normalize part numbers used as inventory lookup keys."""
     return str(value or "").strip().upper()
 
 
 def _parse_non_negative_int(value: object) -> int | None:
-    """Parse parse non negative int input."""
+    """Parse a non-negative integer from count input."""
     if value in (None, ""):
         return None
     text = str(value).strip().replace(" ", "")
@@ -1037,7 +1037,7 @@ def _extract_model_value(description: object, part_number: object = "") -> str:
 
 
 def _compose_color_label(model: str, color: str) -> str:
-    """Provide compose color label behavior."""
+    """Combine model and color without repeating the model prefix."""
     clean_model = str(model or "").strip()
     clean_color = str(color or "").strip()
     if clean_model and clean_color and not _fold_text(clean_color).startswith(_fold_text(clean_model)):
@@ -1046,7 +1046,7 @@ def _compose_color_label(model: str, color: str) -> str:
 
 
 def _inventory_color_label(model: str, color: str, is_serial: bool) -> str:
-    """Provide inventory color label behavior."""
+    """Return the display color label for serial and custom rows."""
     clean_color = str(color or "").strip()
     if not is_serial:
         return clean_color
@@ -1054,7 +1054,7 @@ def _inventory_color_label(model: str, color: str, is_serial: bool) -> str:
 
 
 def _normalize_inventory_row_color(model: str, color: str, description: str = "") -> str:
-    """Normalize normalize inventory row color values."""
+    """Normalize a row color using explicit color first, then description fallback."""
     clean_color = _cleanup_inventory_color_text(color)
     if not clean_color:
         clean_color = _cleanup_inventory_color_text(_extract_color_value(description, ""))
@@ -1069,7 +1069,7 @@ def _normalize_inventory_row_color(model: str, color: str, description: str = ""
 
 
 def _cleanup_inventory_color_text(value: object) -> str:
-    """Provide cleanup inventory color text behavior."""
+    """Remove category and dimension noise from raw color text."""
     text = str(value or "").strip()
     if not text:
         return ""
@@ -1081,7 +1081,7 @@ def _cleanup_inventory_color_text(value: object) -> str:
 
 
 def _normalized_inventory_color(value: object) -> str:
-    """Normalize normalized inventory color values."""
+    """Return a folded color key suitable for exclusion checks."""
     normalized = _fold_text(value).replace(".", " ").replace("-", " ").replace("_", " ")
     return re.sub(r"\s+", " ", normalized).strip()
 
@@ -1124,14 +1124,14 @@ def _is_visible_inventory_row(row: dict) -> bool:
 
 
 def _normalize_inventory_sort_mode(value: object) -> str:
-    """Normalize normalize inventory sort mode values."""
+    """Normalize requested front inventory sort mode to an allowed value."""
     clean = str(value or "").strip().lower()
     allowed = {"default", "color", "color_desc", "description", "description_desc", "count", "count_desc"}
     return clean if clean in allowed else "default"
 
 
 def _inventory_sort_key(row: dict, mode: str, finalized: bool) -> tuple:
-    """Provide inventory sort key behavior."""
+    """Return the active sort tuple for one inventory row."""
     if mode == "description":
         return (_fold_text(row.get("description", "")), _fold_text(row.get("color_label", row.get("color", ""))), str(row.get("part_number", "")))
     if mode == "count":
@@ -1145,7 +1145,7 @@ def _inventory_sort_key(row: dict, mode: str, finalized: bool) -> tuple:
 
 
 def _normalize_front_size(value: object) -> str:
-    """Normalize normalize front size values."""
+    """Normalize a front size value to WIDTHxHEIGHT form."""
     clean_value = re.sub(r"\s+", "", str(value or "")).lower()
     match = re.match(r"^(\d{2,4})x(\d{2,4})$", clean_value)
     if not match:
@@ -1154,7 +1154,7 @@ def _normalize_front_size(value: object) -> str:
 
 
 def _size_sort_key(value: str) -> tuple[int, int, str]:
-    """Provide size sort key behavior."""
+    """Sort size labels numerically before unknown text labels."""
     match = re.match(r"^(\d{2,4})x(\d{2,4})$", str(value or "").strip().lower())
     if not match:
         return (9999, 9999, str(value or ""))
@@ -1162,7 +1162,7 @@ def _size_sort_key(value: str) -> tuple[int, int, str]:
 
 
 def _inventory_category_key(size: str, is_serial: bool, is_glass: bool, special_category: str = "") -> str:
-    """Provide inventory category key behavior."""
+    """Return the category bucket for size, glass, custom, or special fronts."""
     special = str(special_category or "").strip()
     clean_size = str(size or "").strip()
     if special == "Üveges" and clean_size:
@@ -1175,7 +1175,7 @@ def _inventory_category_key(size: str, is_serial: bool, is_glass: bool, special_
 
 
 def _inventory_category_sort_key(value: str) -> tuple[int, int, int, str]:
-    """Provide inventory category sort key behavior."""
+    """Sort front categories by special type first, then numeric size."""
     clean_value = str(value or "").strip()
     special_order = {"Íves": 1, "Üveges": 2, "Blende": 3}
     if clean_value in special_order:
@@ -1193,7 +1193,7 @@ def _inventory_category_sort_key(value: str) -> tuple[int, int, int, str]:
 
 
 def _inventory_special_category(part_number: object, description: object) -> str:
-    """Provide inventory special category behavior."""
+    """Detect special front categories from part number and description."""
     part = str(part_number or "").strip().upper()
     folded_description = _fold_text(description)
     if "blende" in folded_description or part.startswith("NFAB"):
@@ -1215,29 +1215,29 @@ def _is_glass_front(part_number: object, description: object = "") -> bool:
 
 
 def _row_category_sort_key(row: dict) -> tuple[int, tuple[int, int, str] | tuple[int, int, str], str]:
-    """Provide row category sort key behavior."""
+    """Return category-first ordering for visible front rows."""
     if row.get("is_serial"):
         return (0, _inventory_category_sort_key(str(row.get("category", ""))), str(row.get("part_number", "")))
     return (1, (9999, 9999, "egyedi"), str(row.get("part_number", "")))
 
 
 def _row_sort_key(row: dict) -> tuple[int, tuple[int, int, str], str]:
-    """Provide row sort key behavior."""
+    """Return the default ordering tuple for a front inventory row."""
     return _row_category_sort_key(row)
 
 
 def _row_input_value(row: dict) -> int | None:
-    """Provide row input value behavior."""
+    """Parse the editable counted quantity stored on a row."""
     return _parse_non_negative_int(row.get("input_qty"))
 
 
 def _excel_cell_int(value: object) -> int | str:
-    """Provide excel cell int behavior."""
+    """Return an integer Excel cell value, or blank for invalid input."""
     parsed = _parse_non_negative_int(value)
     return parsed if parsed is not None else ""
 
 
 def _fold_text(value: object) -> str:
-    """Provide fold text behavior."""
+    """Return accent-insensitive, casefolded text for matching."""
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(char for char in normalized if not unicodedata.combining(char)).casefold().strip()

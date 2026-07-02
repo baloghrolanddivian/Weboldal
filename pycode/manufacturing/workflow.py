@@ -79,13 +79,13 @@ MANUFACTURING_SOURCE_LABELS = {
 }
 
 def _manufacturing_query_params(raw_path: str) -> dict[str, str]:
-    """Provide manufacturing query params behavior."""
+    """Return the last value for each manufacturing query-string parameter."""
     parsed = urllib.parse.urlparse(raw_path)
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     return {key: values[-1].strip() for key, values in query.items() if values}
 
 def _manufacturing_normalize_number(value: object) -> str:
-    """Provide manufacturing normalize number behavior."""
+    """Return only the numeric digits from a production/shipment identifier."""
     return re.sub(r"[^0-9]", "", str(value or ""))
 
 
@@ -118,7 +118,7 @@ def _topfloor_storage_box_types() -> list[dict[str, object]]:
     return result or [dict(item) for item in TOPFLOOR_BOX_TYPES_FALLBACK]
 
 def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) -> str:
-    """Provide manufacturing signature key behavior."""
+    """Return a stable cache key for the parser version and folder signature."""
     payload = json.dumps(
         {"schema": MANUFACTURING_BUNDLE_SCHEMA_VERSION, "signature": list(signature)},
         ensure_ascii=False,
@@ -127,11 +127,11 @@ def _manufacturing_signature_key(signature: tuple[tuple[str, int, int], ...]) ->
     return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()
 
 def _manufacturing_disk_cache_path(production_number: str) -> Path:
-    """Provide manufacturing disk cache path behavior."""
+    """Return the disk-cache JSON path for a normalized production number."""
     return bundle_disk_cache_dir() / f"{production_number}.json"
 
 def _read_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...]) -> dict | None:
-    """Read read manufacturing disk cache data."""
+    """Read a disk-cached bundle only when its signature still matches."""
     cache_path = _manufacturing_disk_cache_path(production_number)
     if not cache_path.exists():
         return None
@@ -145,7 +145,7 @@ def _read_manufacturing_disk_cache(production_number: str, signature: tuple[tupl
     return bundle if isinstance(bundle, dict) else None
 
 def _read_manufacturing_stale_disk_cache(production_number: str) -> dict | None:
-    """Read read manufacturing stale disk cache data."""
+    """Read any disk-cached bundle for fallback after source loading fails."""
     cache_path = _manufacturing_disk_cache_path(production_number)
     if not cache_path.exists():
         return None
@@ -157,7 +157,7 @@ def _read_manufacturing_stale_disk_cache(production_number: str) -> dict | None:
     return bundle if isinstance(bundle, dict) else None
 
 def _write_manufacturing_disk_cache(production_number: str, signature: tuple[tuple[str, int, int], ...], bundle: dict) -> None:
-    """Write write manufacturing disk cache data."""
+    """Persist a parsed bundle to disk, ignoring cache-write failures."""
     try:
         bundle_disk_cache_dir().mkdir(parents=True, exist_ok=True)
         cache_path = _manufacturing_disk_cache_path(production_number)
@@ -170,7 +170,12 @@ def _write_manufacturing_disk_cache(production_number: str, signature: tuple[tup
         return
 
 def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[tuple[str, int, int], ...]]:
-    """Provide manufacturing bundle signature behavior."""
+    """Return the normalized number and source-folder file signature.
+
+    The signature includes file name, mtime, and size for every direct file in
+    the production folder. It is cached briefly because the same request path
+    can ask for status, payload, and client cache data in quick succession.
+    """
     normalized = _manufacturing_normalize_number(production_number)
     if not normalized:
         return "", tuple()
@@ -200,7 +205,12 @@ def _manufacturing_bundle_signature(production_number: str) -> tuple[str, tuple[
     return normalized, signature
 
 def _load_manufacturing_bundle_cached(production_number: str) -> dict:
-    """Load load manufacturing bundle cached data."""
+    """Load a production bundle through memory cache, disk cache, then source.
+
+    Fresh signatures prefer parsed bundles from memory or disk. If the source
+    folder cannot be loaded, a stale disk bundle is allowed so the UI can still
+    show the latest known parsed data instead of failing hard.
+    """
     normalized = _manufacturing_normalize_number(production_number)
     if not normalized:
         raise FileNotFoundError("Adj meg egy érvényes gyártási számot.")
@@ -262,7 +272,12 @@ def _load_manufacturing_bundle_cached(production_number: str) -> dict:
     return dict(bundle)
 
 def _manufacturing_collect_document_state_keys(document: dict) -> tuple[str, ...]:
-    """Provide manufacturing collect document state keys behavior."""
+    """Collect row state keys that decide whether an operation is complete.
+
+    Single-column overview documents use their special-view rows as the source
+    of truth. Grouped rows with sourceRowIds contribute those source keys rather
+    than the synthetic group row id.
+    """
     sections_for_completion: list[dict] = []
     if bool(document.get("singleColumnOverview")):
         for special_view in document.get("specialViews", []):
@@ -299,7 +314,7 @@ def _manufacturing_collect_document_state_keys(document: dict) -> tuple[str, ...
     return tuple(sorted(set(row_state_keys)))
 
 def _manufacturing_operation_state_keys(production_number: str, operation_key: str) -> tuple[str, ...]:
-    """Provide manufacturing operation state keys behavior."""
+    """Return cached completion-relevant state keys for one operation."""
     normalized_number = _manufacturing_normalize_number(production_number)
     normalized_operation = _manufacturing_normalize_operation(operation_key)
     if not normalized_number or not normalized_operation:
@@ -518,12 +533,12 @@ def _manufacturing_document_row_states(document: dict | None, view_state: dict[s
     return tuple(row_states)
 
 def _manufacturing_state_key(production_number: str, row_id: str) -> str:
-    """Provide manufacturing state key behavior."""
+    """Prefix a local row id with the normalized production number."""
     normalized_number = _manufacturing_normalize_number(production_number)
     return f"{normalized_number}::{str(row_id or '').strip()}"
 
 def _manufacturing_normalize_con_code(value: object) -> str:
-    """Provide manufacturing normalize con code behavior."""
+    """Extract a canonical CON-prefixed barcode from arbitrary text."""
     text = str(value or "").strip().upper()
     match = re.search(r"\bCON\D*?(\d{6,})\b", text)
     if match:
@@ -532,7 +547,7 @@ def _manufacturing_normalize_con_code(value: object) -> str:
     return f"CON{match.group(1)}" if match else ""
 
 def _manufacturing_row_con_code(row: dict) -> str:
-    """Provide manufacturing row con code behavior."""
+    """Return the row barcode/con code from known row payload fields."""
     return _manufacturing_normalize_con_code(row.get("Barcode") or row.get("barcode") or row.get("code", ""))
 
 def _manufacturing_xml_source_stem(source_file: object) -> str:
@@ -550,7 +565,12 @@ def _manufacturing_xml_state_fields(
     prd_id: object = "",
     con_id: object = "",
 ) -> dict:
-    """Provide manufacturing xml state fields behavior."""
+    """Return XML identity fields used for stable row state persistence.
+
+    When production id, XML source, and barcode are available, the returned
+    state keys use source_file::production::CONcode::childId. This keeps state
+    stable when display labels or synthetic row ids change.
+    """
     con_code = _manufacturing_normalize_con_code(con_id) or _manufacturing_normalize_con_code(barcode)
     normalized_child_id = re.sub(r"[^0-9]", "", str(child_id if child_id is not None else "").strip()) or "0"
     source_stem = _manufacturing_xml_source_stem(source_file)
@@ -567,7 +587,11 @@ def _manufacturing_xml_state_fields(
     return fields
 
 def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> str:
-    """Provide manufacturing row state storage key behavior."""
+    """Return the key used when saving row state to runtime JSON.
+
+    XML-backed rows save under their structured XML identity. Older or manually
+    built rows fall back to row_id for compatibility.
+    """
     normalized_number = _manufacturing_normalize_number(production_number)
     row_id = str(row.get("row_id", "") or "").strip()
     document_key = str(row.get("doc_key", "") or "").strip()
@@ -581,7 +605,7 @@ def _manufacturing_row_state_storage_key(production_number: str, row: dict) -> s
     return row_id
 
 def _manufacturing_row_state_view_key(production_number: str, row: dict) -> str:
-    """Provide manufacturing row state view key behavior."""
+    """Return the key used by the browser state map for this row."""
     storage_key = _manufacturing_row_state_storage_key(production_number, row)
     row_id = str(row.get("row_id", "") or "").strip()
     return storage_key if "::" in storage_key else _manufacturing_state_key(production_number, row_id)
@@ -645,13 +669,17 @@ def _manufacturing_legacy_state_keys_for_row(row: dict, storage_key: str) -> tup
     return tuple(result)
 
 def _manufacturing_normalize_operation(value: object) -> str:
-    """Provide manufacturing normalize operation behavior."""
+    """Return a supported operation key from user input, or an empty string."""
     normalized = str(value or "").strip().lower()
     allowed_keys = {key for key, _label in MANUFACTURING_OPERATION_DEFINITIONS}
     return normalized if normalized in allowed_keys else ""
 
 def _manufacturing_selection_state_payload(production_number: str, raw_state: dict[str, str]) -> dict[str, str]:
-    """Provide manufacturing selection state payload behavior."""
+    """Convert persisted row state to the client-visible state-key mapping.
+
+    Normal states are green/red/done. Topfloor rows may also store a numeric
+    box/con id against a structured source_file::shipment::barcode::child key.
+    """
     normalized_number = _manufacturing_normalize_number(production_number)
     result: dict[str, str] = {}
     for row_id, state in raw_state.items():
@@ -669,7 +697,7 @@ def _manufacturing_selection_state_payload(production_number: str, raw_state: di
 
 
 def _manufacturing_load_existing_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
-    """Load selection state without creating runtime folders."""
+    """Load persisted row state without creating a missing runtime folder."""
     normalized_number = _manufacturing_normalize_number(production_number)
     if not normalized_number:
         return {}
@@ -717,7 +745,11 @@ def _manufacturing_document_state_rows(documents: list[dict]) -> list[dict]:
     return rows
 
 def _manufacturing_apply_row_state_aliases(documents: list[dict], production_number: str, raw_state: dict[str, str], selection_state: dict[str, str]) -> None:
-    """Provide manufacturing apply row state aliases behavior."""
+    """Copy legacy row-id state onto current structured state keys.
+
+    Older saves can be keyed by row_id, production::row_id, or a structured key
+    without child id. The UI should only receive the current row state_key.
+    """
     normalized_number = _manufacturing_normalize_number(production_number)
     for row in _manufacturing_document_state_rows(documents):
         state_key = str(row.get("state_key", "") or "").strip()
@@ -743,7 +775,7 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
                 break
 
 def _manufacturing_row_with_context(row: dict, production_number: str, detail_suffix: str = "") -> dict:
-    """Provide manufacturing row with context behavior."""
+    """Return a row annotated with production-specific display and state keys."""
     row_payload = dict(row)
     detail_text = str(row_payload.get("detail", "")).strip()
     if detail_suffix:
@@ -754,22 +786,22 @@ def _manufacturing_row_with_context(row: dict, production_number: str, detail_su
     return row_payload
 
 def _manufacturing_local_slug(value: str) -> str:
-    """Provide manufacturing local slug behavior."""
+    """Return an ASCII-ish section slug, falling back to szakasz."""
     cleaned = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower())
     cleaned = cleaned.strip("-")
     return cleaned or "szakasz"
 
 def _manufacturing_is_virtual_unit_row_id(value: object) -> bool:
-    """Provide manufacturing is virtual unit row id behavior."""
+    """Return whether a row id belongs to a generated quantity/unit child."""
     text = str(value or "")
     return "__child_unit_" in text or "__pantolo_unit_" in text
 
 def _manufacturing_uses_assembly_ready_endpoint(category_key: object) -> bool:
-    """Provide manufacturing uses assembly ready endpoint behavior."""
+    """Return whether a category reports ready state to the assembly endpoint."""
     return str(category_key or "").strip() == "korpusz-osszekeszito"
 
 def _manufacturing_ready_endpoint_key(document_key: object, category_key: object) -> str:
-    """Provide manufacturing ready endpoint key behavior."""
+    """Map a UI document/category pair to the Shopfloor ready endpoint key."""
     clean_document_key = str(document_key or "").strip()
     clean_category_key = str(category_key or "").strip().lower().replace("_", "-")
     if clean_document_key == "topfloor":
@@ -785,7 +817,7 @@ def _manufacturing_ready_endpoint_key(document_key: object, category_key: object
     return "default"
 
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
-    """Provide manufacturing document sections behavior."""
+    """Flatten selected source documents into generic manufacturing sections."""
     sections: list[dict] = []
     row_count = 0
     for document in bundle.get("documents", []):
@@ -821,7 +853,7 @@ def _manufacturing_document_sections(bundle: dict, production_number: str, allow
     return sections, row_count
 
 def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
-    """Provide manufacturing red state numbers behavior."""
+    """Return production numbers that currently have at least one red row."""
     numbers: list[str] = []
     for path in sorted(runtime_root.glob("*/state.json"), key=lambda item: item.parent.name, reverse=True):
         number = _manufacturing_normalize_number(path.parent.name)
@@ -833,7 +865,12 @@ def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
     return numbers
 
 def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict[str, str]]:
-    """Provide manufacturing all red special view behavior."""
+    """Build the Korpusz special view containing red rows across productions.
+
+    The returned selection-state payload includes the persisted red states for
+    those rows so the special view can be rendered without loading each source
+    production separately in the browser.
+    """
     from .cnc.sections import _manufacturing_cnc_sections
     from .front.sections import _manufacturing_front_sections
     from .korpusz.sections import _manufacturing_korpusz_sections
@@ -894,7 +931,7 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
     )
 
 def _manufacturing_placeholder_document(key: str, label: str) -> dict:
-    """Provide manufacturing placeholder document behavior."""
+    """Return an empty document for an operation without implemented rows."""
     return {
         "key": key,
         "label": label,
@@ -1016,7 +1053,12 @@ def _manufacturing_view_bundle(
     *,
     include_all_red_view: bool = True,
 ) -> tuple[dict, dict[str, str]]:
-    """Provide manufacturing view bundle behavior."""
+    """Build the full operation document bundle and client state payload.
+
+    Operation-specific section builders produce their own row shapes. This
+    function assembles them into the shared document schema, adds fallback
+    placeholder documents, and hydrates current state through legacy aliases.
+    """
     from .cnc.sections import _manufacturing_cnc_sections
     from .front.sections import _manufacturing_front_sections
     from .korpusz.sections import (
@@ -1410,7 +1452,7 @@ def render_manufacturing_module(
     message: str = "",
     success: bool = False,
 ) -> bytes:
-    """Render render manufacturing module output."""
+    """Render the manufacturing HTML page for the selected operation."""
     payload = manufacturing_module_payload(
         production_number=production_number,
         operation=operation,
@@ -1438,7 +1480,7 @@ def render_manufacturing_module(
     )
 
 def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, limit: int = 10) -> None:
-    """Provide prime manufacturing cache worker behavior."""
+    """Warm bundle, view, and operation-state-key caches in the background."""
     try:
         entries_by_number: dict[str, dict[str, str]] = {}
         for operation_key, _operation_label in MANUFACTURING_OPERATION_DEFINITIONS:
@@ -1475,7 +1517,7 @@ def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, lim
         pass
 
 def _prime_manufacturing_cache_async() -> None:
-    """Provide prime manufacturing cache async behavior."""
+    """Start asynchronous manufacturing cache priming."""
     threading.Thread(
         target=_prime_manufacturing_cache_worker,
         kwargs={"include_all_red_view": True, "limit": 10},

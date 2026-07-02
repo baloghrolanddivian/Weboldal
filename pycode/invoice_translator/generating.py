@@ -24,7 +24,7 @@ from .reading import (
 
 
 def _to_invoice_data(parsed: InvoiceData | dict[str, str]) -> InvoiceData:
-    """Provide to invoice data behavior."""
+    """Coerce legacy parsed dictionaries into the InvoiceData dataclass."""
     if isinstance(parsed, InvoiceData):
         return parsed
 
@@ -43,12 +43,12 @@ def _to_invoice_data(parsed: InvoiceData | dict[str, str]) -> InvoiceData:
 
 
 def _html_text(value: str) -> str:
-    """Provide html text behavior."""
+    """Escape an invoice value after applying the no-data placeholder."""
     return html.escape(_value_or_default(value))
 
 
 def _html_party(lines: list[str], mark_bank_values: bool = False) -> str:
-    """Provide html party behavior."""
+    """Render a supplier/buyer address block as escaped HTML lines."""
     if not lines:
         return html.escape(NO_DATA)
     html_lines: list[str] = []
@@ -64,12 +64,12 @@ def _html_party(lines: list[str], mark_bank_values: bool = False) -> str:
 
 
 def _html_table_rows(rows: list[tuple[str, str]]) -> str:
-    """Provide html table rows behavior."""
+    """Render label/value rows for the printable invoice summary tables."""
     return "".join(f"<tr><th>{html.escape(label)}</th><td>{_html_text(value)}</td></tr>" for label, value in rows)
 
 
 def _non_empty_rows(rows: list[tuple[str, str]], keep_labels: set[str] | None = None) -> list[tuple[str, str]]:
-    """Provide non empty rows behavior."""
+    """Drop blank table rows unless their labels are explicitly required."""
     if keep_labels is None:
         keep_labels = set()
     filtered: list[tuple[str, str]] = []
@@ -83,7 +83,7 @@ def _non_empty_rows(rows: list[tuple[str, str]], keep_labels: set[str] | None = 
 
 
 def _split_vehicle_plates(raw_value: str) -> tuple[str, str]:
-    """Provide split vehicle plates behavior."""
+    """Split truck and trailer plate values from common supplier formats."""
     cleaned = _clean_spaces(raw_value)
     if not cleaned:
         return "", ""
@@ -163,7 +163,7 @@ def _sum_item_net_values(items: list[InvoiceItem]) -> str:
 
 
 def _detect_product_type(description: str, article_code: str = "", invoice_profile: str = "") -> str:
-    """Provide detect product type behavior."""
+    """Classify an invoice item into the Hungarian product-type label."""
     normalized_description = _fix_hungarian_mojibake(_clean_spaces(description)).upper()
     normalized_code = _fix_hungarian_mojibake(_clean_spaces(article_code)).upper()
     normalized_profile = _fix_hungarian_mojibake(_clean_spaces(invoice_profile)).lower()
@@ -218,7 +218,7 @@ def _detect_product_type(description: str, article_code: str = "", invoice_profi
 
 
 def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> str:
-    """Render render invoice item row output."""
+    """Render one normalized invoice item row for the printable table."""
     product_type = _detect_product_type(item.description, item.article_code, invoice_profile=invoice_profile)
     if _is_kastamonu_credit_profile(invoice_profile):
         return (
@@ -263,7 +263,7 @@ def _render_invoice_item_row(item: InvoiceItem, invoice_profile: str = "") -> st
 
 
 def _render_invoice_total_row(data: InvoiceData) -> str:
-    """Render render invoice total row output."""
+    """Render the calculated item-net total row with profile-specific colspan."""
     total_value = _item_value_or_default(_sum_item_net_values(data.items))
     if _is_kastamonu_credit_profile(data.invoice_profile):
         colspan = "7"
@@ -280,7 +280,7 @@ def _render_invoice_total_row(data: InvoiceData) -> str:
 
 
 def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename: str = "") -> bytes:
-    """Provide create printable html behavior."""
+    """Create the printable translated invoice HTML document."""
     data = _to_invoice_data(parsed)
     truck_plate, trailer_plate = _split_vehicle_plates(data.truck_number)
     vehicle_plates = ""
@@ -919,7 +919,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
     return page.encode("utf-8")
 
 def build_invoice_response(file_name: str, file_data: bytes) -> tuple[int, bytes, str, dict[str, str]]:
-    """Build build invoice response data."""
+    """Parse an uploaded PDF and return the HTTP response payload tuple."""
     chunks = split_pdf_by_invoice(file_data)
     chunk = chunks[0]
     parsed = parse_invoice_data(chunk.text)

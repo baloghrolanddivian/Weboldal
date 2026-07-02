@@ -10,16 +10,16 @@ _runtime_dir = REPO_ROOT / "runtime" / "gyartasi-papirok"
 
 
 def configure_manufacturing(runtime_dir: Path) -> None:
-    """Configure configure manufacturing runtime settings."""
+    """Set the runtime folder used for manufacturing state and caches."""
     global _runtime_dir
     _runtime_dir = runtime_dir
 
 
 def runtime_dir() -> Path:
-    """Provide runtime dir behavior."""
+    """Return the configured manufacturing runtime folder."""
     return _runtime_dir
 
 
 def bundle_disk_cache_dir() -> Path:
-    """Provide bundle disk cache dir behavior."""
+    """Return the folder used for parsed manufacturing bundle cache files."""
     return _runtime_dir / "bundle-cache"
