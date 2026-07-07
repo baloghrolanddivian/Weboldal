@@ -5713,7 +5713,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if not con_description:
                 # TODO: Keep this only as a fallback; the UI sends the editable XML-derived default.
                 con_description = " ".join(part for part in (buyer, location, date.today().isoformat()) if part)
-            result = _topfloor_create_category_box(category_key, con_description=con_description)
+            result = _topfloor_create_category_box(
+                category_key,
+                con_description=con_description,
+                created_by=str(payload.get("created_by", "")).strip(),
+            )
         elif action == "open":
             result = _topfloor_open_category_box(category_key, con_description=con_description)
         elif action == "reprint-label":
