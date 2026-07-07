@@ -89,11 +89,22 @@ def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]
             {
                 "key": f"shipment::{shipment_id}",
                 "label": _topfloor_shipment_buyer_label(visible_rows),
-                "count": sum(len(section.get("rows", [])) for section in sections),
+                "count": len(sections),
             }
         )
         row_count += sum(len(section.get("rows", [])) for section in sections)
         all_sections.extend(sections)
+
+    source_label = f"{len(all_sections)} doboz" if all_sections else source_label
+    if all_sections:
+        shipment_views.insert(
+            0,
+            {
+                "key": "shipment::__all__",
+                "label": "\u00d6sszes",
+                "count": len(all_sections),
+            },
+        )
 
     return {
         "key": TOPFLOOR_OPERATION_KEY,
@@ -231,8 +242,6 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
         meta = category_meta[group_key]
         box_category_key = meta["boxCategoryKey"]
         box = box_registry.get(box_category_key) or box_registry.get(meta["legacyBoxCategoryKey"], {})
-        if bool(box.get("storageBoxIssued")):
-            continue
         section_rows = [_topfloor_view_row(row, group_key) for row in category_rows]
         sections.append(
             {
@@ -244,6 +253,7 @@ def _topfloor_category_sections(shipment_id: str, rows: list[dict[str, str]], bo
                     "categoryKey": box_category_key,
                     "groupKey": group_key,
                     "boxId": str(box.get("conId", "") or ""),
+                    "boxCreatedBy": str(box.get("createdBy", "") or "Err404").strip() or "Err404",
                     "boxDescription": str(box.get("conDescription", "") or ""),
                     "boxOpen": bool(box.get("open")),
                     "storageBoxIssued": bool(box.get("storageBoxIssued")),
