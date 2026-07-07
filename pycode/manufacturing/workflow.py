@@ -972,23 +972,34 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
         shipment_id = view_key.split("::", 1)[1].strip()
         if not shipment_id:
             continue
+        is_all_shipments_view = shipment_id == "__all__"
         shipment_label = str(view.get("label", "") or "").strip() or "Nagyautó"
+        try:
+            category_count = max(0, int(view.get("count", 0) or 0))
+        except (TypeError, ValueError):
+            category_count = 0
         shipment_categories = [
             section.get("topfloorCategory", {})
             for section in sections
             if (
                 isinstance(section, dict)
                 and isinstance(section.get("topfloorCategory"), dict)
-                and str(section["topfloorCategory"].get("shipmentID", "")).strip() == shipment_id
+                and (
+                    is_all_shipments_view
+                    or str(section["topfloorCategory"].get("shipmentID", "")).strip() == shipment_id
+                )
             )
         ]
         shipment_complete = bool(shipment_categories) and all(
             bool(category.get("storageBoxIssued")) for category in shipment_categories
         )
+        issued_count = sum(1 for category in shipment_categories if bool(category.get("storageBoxIssued")))
         entries.append(
             {
                 "kind": "shipment",
-                "number": shipment_id,
+                "number": "Összes" if is_all_shipments_view else shipment_id,
+                "count": category_count,
+                "issued_count": issued_count,
                 "date_label": shipment_label,
                 "view_key": view_key,
                 "is_active": not entries,
@@ -1029,6 +1040,7 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
             if isinstance(view, dict)
         ]
         if view_key.startswith("shipment::") and view_key.split("::", 1)[1].strip()
+        and view_key.split("::", 1)[1].strip() != "__all__"
     ]
     selection_state: dict[str, str] = {}
     partial_quantity_state: dict[str, str] = {}

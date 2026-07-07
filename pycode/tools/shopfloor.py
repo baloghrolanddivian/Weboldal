@@ -230,6 +230,7 @@ def create_closed_topfloor_category_box(
     category_key: str,
     *,
     con_description: str = "",
+    created_by: str = "",
     client: ShopfloorApiClient | None = None,
 ) -> dict[str, object]:
     """Create, close, and assign a Topfloor box to a category."""
@@ -237,6 +238,7 @@ def create_closed_topfloor_category_box(
     client = client or ShopfloorApiClient.for_endpoint("topfloor_boxing")
     box = create_topfloor_box(con_description=con_description, client=client)
     closed = close_topfloor_box_with_items(box, (), con_description=con_description, client=client)
+    closed = {**dict(closed), "createdBy": str(created_by or "").strip() or "Err404"}
     _save_topfloor_category_box(category_key, closed, open_state=False)
     return closed
 
