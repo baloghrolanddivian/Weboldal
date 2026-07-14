@@ -18,6 +18,59 @@
   --content-width: min(1120px, calc(100vw - 40px));
 }
 
+body.hr-theme {
+  --bg: #220b1c;
+  --bg-soft: #3a102d;
+  --panel: rgba(54, 13, 42, 0.84);
+  --panel-strong: rgba(62, 16, 47, 0.95);
+  --panel-soft: rgba(255, 220, 241, 0.07);
+  --border: rgba(255, 151, 207, 0.3);
+  --line: rgba(255, 175, 218, 0.2);
+  --text: #fff4fb;
+  --muted: #e7b8d2;
+  --accent: #ff72ba;
+  --accent-strong: #f23d91;
+  --accent-warm: #ffc1e0;
+  --shadow: 0 28px 70px rgba(20, 0, 14, 0.42);
+  background:
+    radial-gradient(circle at top left, rgba(255, 114, 186, 0.23), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 193, 224, 0.2), transparent 22%),
+    linear-gradient(180deg, #220b1c 0%, #2d0d25 42%, #3a102d 100%);
+  background-color: #2d0d25;
+}
+
+body.hr-theme .site,
+body.hr-theme .module-shell {
+  background: transparent;
+}
+
+body.hr-theme .topbar {
+  background: rgba(62, 16, 47, 0.76);
+  box-shadow: 0 28px 70px rgba(20, 0, 14, 0.28);
+}
+
+body.hr-theme .site-shell::after {
+  background: radial-gradient(
+    420px circle at var(--pointer-x, 50%) var(--pointer-y, 22%),
+    rgba(255, 114, 186, 0.18),
+    transparent 60%
+  );
+}
+
+body.hr-theme .ambient-one {
+  background: rgba(255, 114, 186, 0.22);
+}
+
+body.hr-theme .ambient-two {
+  background: rgba(255, 193, 224, 0.18);
+}
+
+body.hr-theme .grid-overlay {
+  background-image:
+    linear-gradient(rgba(255, 114, 186, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 114, 186, 0.06) 1px, transparent 1px);
+}
+
 * {
   box-sizing: border-box;
 }

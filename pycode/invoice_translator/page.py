@@ -8,6 +8,18 @@ import html
 APP_ROUTE = "/apps/szamla-magyarito"
 GENERATE_ROUTE = f"{APP_ROUTE}/generate"
 COMMON_SCRIPT_TAG = '<script src="/script.js"></script>'
+INVOICE_THEME_LINK = '<link rel="stylesheet" href="/styles.css" />'
+INVOICE_HR_THEME_STYLE = '''<style>
+body.hr-theme { --bg: #220b1c; --bg-soft: #3a102d; --panel: rgba(54,13,42,.84); --panel-strong: rgba(62,16,47,.95); --border: rgba(255,151,207,.3); --line: rgba(255,175,218,.2); --text: #fff4fb; --muted: #e7b8d2; --accent: #ff72ba; --accent-strong: #f23d91; --accent-warm: #ffc1e0; --shadow: 0 28px 70px rgba(20,0,14,.42); background: linear-gradient(180deg,#220b1c 0%,#2d0d25 42%,#3a102d 100%) !important; }
+body.hr-theme .site { background: transparent; }
+body.hr-theme .site::before { background-image: linear-gradient(rgba(255,114,186,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,114,186,.06) 1px,transparent 1px); }
+body.hr-theme .topbar { background: rgba(62,16,47,.76); }
+body.hr-theme .hero-card, body.hr-theme .upload-card { background: linear-gradient(180deg,var(--panel),var(--panel-strong)); }
+body.hr-theme .hero-card::before, body.hr-theme .upload-card::before { background: linear-gradient(120deg,rgba(255,114,186,.14),transparent 34%),linear-gradient(180deg,transparent,rgba(255,193,224,.08)); }
+body.hr-theme .upload-surface, body.hr-theme .support-pill { background: rgba(255,220,241,.07); }
+body.hr-theme .upload-rail { background: linear-gradient(90deg,rgba(255,114,186,.6),rgba(255,193,224,.55)); }
+body.hr-theme .visual-arrow, body.hr-theme .upload-badge { background: var(--accent-warm); }
+</style>'''
 
 
 def render_form(message: str = "") -> bytes:
@@ -18,6 +30,7 @@ def render_form(message: str = "") -> bytes:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  {INVOICE_THEME_LINK}
   <title>Divian-HUB | Számla magyarító</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -563,6 +576,7 @@ def render_form(message: str = "") -> bytes:
       }}
     }}
   </style>
+  {INVOICE_HR_THEME_STYLE}
 </head>
 <body>
   <div class="site">
