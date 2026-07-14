@@ -269,8 +269,17 @@ WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_m
 APP_VERSION = "2.1.2"
 STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer"})
 HR_THEME_USER_ID = "hriroda"
-def apply_hr_theme(body: bytes, user) -> bytes:
-    if user is not None and user.user_id == HR_THEME_USER_ID:
+ADMIN_THEME_CLASS = b"admin-theme"
+ADMIN_THEME_CLASS_SUFFIX = b" admin-theme"
+
+def apply_user_theme(body: bytes, user) -> bytes:
+    """Add the per-user visual theme class to an HTML response body."""
+    theme_class = None
+    if user is not None and user.is_admin:
+        theme_class = ADMIN_THEME_CLASS
+    elif user is not None and user.user_id == HR_THEME_USER_ID:
+        theme_class = b"hr-theme"
+    if theme_class is not None:
         body_match = re.search(br"<body([^>]*)>", body, flags=re.IGNORECASE)
         if not body_match:
             return body
@@ -279,13 +288,34 @@ def apply_hr_theme(body: bytes, user) -> bytes:
         if class_match:
             quote = class_match.group(1)[:1]
             existing_classes = class_match.group(1)[1:-1]
-            if re.search(br"(?:^|\s)hr-theme(?:\s|$)", existing_classes):
+            if re.search(br"(?:^|\s)" + re.escape(theme_class) + br"(?:\s|$)", existing_classes):
                 return body
-            classes = existing_classes + b" hr-theme"
+            classes = existing_classes + b" " + theme_class
             replacement = attributes[:class_match.start(1)] + quote + classes + quote + attributes[class_match.end(1):]
             return body[:body_match.start(1)] + replacement + body[body_match.end(1):]
-        return body[:body_match.end(1)] + b' class="hr-theme"' + body[body_match.end(1):]
+        return body[:body_match.end(1)] + b' class="' + theme_class + b'"' + body[body_match.end(1):]
     return body
+
+
+def apply_hr_theme(body: bytes, user) -> bytes:
+    """Backward-compatible HR-only theme helper for HR render paths."""
+    if user is not None and user.user_id == HR_THEME_USER_ID:
+        return apply_user_theme(body, user)
+    return body
+
+
+class _ThemedResponseWriter:
+    """Apply the current user's theme to HTML at the final response boundary."""
+
+    def __init__(self, raw_writer, user):
+        self._raw_writer = raw_writer
+        self._user = user
+
+    def write(self, body):
+        self._raw_writer.write(apply_user_theme(body, self._user))
+
+    def __getattr__(self, name):
+        return getattr(self._raw_writer, name)
 
 
 NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
@@ -2830,6 +2860,7 @@ def render_material_inventory_form(
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
   <style>
     :root {{ --text:#0f172a; --muted:#64748b; --line:#d8e0ea; --accent:#0c8d57; --accent2:#12a566; --bg:#eef3f7; }}
     * {{ box-sizing:border-box; }}
@@ -5175,6 +5206,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
     def send_header(self, keyword: str, value: str) -> None:
         if keyword.lower() == "content-type" and "text/html" in value.lower():
             self._uses_platform_font = True
+            self._theme_is_html_response = True
+        if keyword.lower() == "content-length" and getattr(self, "_theme_is_html_response", False):
+            user = getattr(self, "_theme_user", None)
+            if user is not None and user.is_admin:
+                value = str(int(value) + len(ADMIN_THEME_CLASS_SUFFIX))
         super().send_header(keyword, value)
 
     def end_headers(self) -> None:
@@ -5204,6 +5240,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Route authenticated GET requests to pages, JSON data, or downloads."""
+        self._theme_user = self.current_user()
+        self.wfile = _ThemedResponseWriter(self.wfile, self._theme_user)
         path = _normalize_path(self.path)
         if path == DEV_RELOAD_ROUTE:
             self.respond_dev_reload_stream()
@@ -6039,6 +6077,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Route authenticated POST requests for uploads, state, and actions."""
+        self._theme_user = self.current_user()
+        self.wfile = _ThemedResponseWriter(self.wfile, self._theme_user)
         path = _normalize_path(self.path)
         if path == LOGIN_ROUTE:
             self.handle_login()

@@ -20,6 +20,35 @@ body.hr-theme .upload-surface, body.hr-theme .support-pill { background: rgba(25
 body.hr-theme .upload-rail { background: linear-gradient(90deg,rgba(243,138,184,.72),rgba(255,198,220,.7)); }
 body.hr-theme .visual-arrow, body.hr-theme .upload-badge { background: var(--accent-warm); }
 </style>'''
+INVOICE_ADMIN_THEME_STYLE = '''<style>
+body.admin-theme {
+  --bg: #120b08; --bg-soft: #21130e; --panel: rgba(29,19,15,.9); --panel-strong: rgba(37,22,16,.97);
+  --border: rgba(255,123,48,.3); --line: rgba(255,123,48,.18); --text: #fff1e8; --muted: #c8a99b;
+  --accent: #ff7138; --accent-strong: #d93616; --accent-warm: #ffb347;
+  background: linear-gradient(180deg,#120b08 0%,#1b100c 44%,#28150e 100%) !important;
+}
+body.admin-theme .site { background: transparent; }
+body.admin-theme .site::before {
+  background-image: linear-gradient(rgba(255,113,56,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,113,56,.08) 1px,transparent 1px);
+}
+body.admin-theme .topbar { background: rgba(24,14,10,.86); }
+body.admin-theme .hero-card, body.admin-theme .upload-card { background: linear-gradient(180deg,var(--panel),var(--panel-strong)); }
+body.admin-theme .hero-card::before, body.admin-theme .upload-card::before {
+  background: linear-gradient(120deg,rgba(255,113,56,.2),transparent 34%),linear-gradient(180deg,transparent,rgba(255,179,71,.08));
+}
+body.admin-theme .brand-mark { box-shadow: 0 0 0 8px rgba(255,113,56,.1), 0 0 28px rgba(255,113,56,.24); }
+body.admin-theme .button, body.admin-theme .primary-button, body.admin-theme .nav-cta {
+  box-shadow: 0 12px 26px rgba(217,54,22,.25);
+}
+body.admin-theme .visual-doc::before { background: linear-gradient(90deg,rgba(255,113,56,.72),rgba(255,179,71,.58)); }
+body.admin-theme .visual-doc { border-color: rgba(255,123,48,.34); }
+body.admin-theme .visual-arrow { border-color: rgba(255,123,48,.28); background: linear-gradient(90deg,rgba(255,113,56,.18),rgba(255,179,71,.16)); }
+body.admin-theme .upload-surface, body.admin-theme .support-pill { background: rgba(255,113,56,.08); }
+body.admin-theme .upload-badge { box-shadow: 0 16px 34px rgba(217,54,22,.24); }
+body.admin-theme .upload-rail { background: transparent; }
+body.admin-theme .upload-rail span { background: rgba(48,20,10,.42); }
+body.admin-theme .upload-rail i { background: linear-gradient(90deg,var(--accent),var(--accent-warm)); }
+</style>'''
 
 
 def render_form(message: str = "") -> bytes:
@@ -577,6 +606,7 @@ def render_form(message: str = "") -> bytes:
     }}
   </style>
   {INVOICE_HR_THEME_STYLE}
+  {INVOICE_ADMIN_THEME_STYLE}
 </head>
 <body>
   <div class="site">
