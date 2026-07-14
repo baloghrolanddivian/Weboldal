@@ -37,9 +37,28 @@ body.hr-theme {
     radial-gradient(circle at top right, rgba(255, 224, 235, 0.84), transparent 27%),
     linear-gradient(180deg, #fffaf6 0%, #fff0f5 46%, #ffe4ed 100%);
   background-color: #fff6f4;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
-body.hr-theme .site,
+html:has(body.hr-theme) {
+  background: #fff6f4;
+}
+
+body.hr-theme .site-shell,
+body.hr-theme .site {
+  display: flow-root;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(255, 177, 210, 0.58), transparent 29%),
+    radial-gradient(circle at top right, rgba(255, 224, 235, 0.84), transparent 27%),
+    linear-gradient(180deg, #fffaf6 0%, #fff0f5 46%, #ffe4ed 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
 body.hr-theme .module-shell {
   background: transparent;
 }

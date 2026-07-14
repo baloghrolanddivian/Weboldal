@@ -267,7 +267,7 @@ WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", 
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
 APP_VERSION = "2.1.2"
-STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer", "hriroda"})
+STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer"})
 HR_THEME_USER_ID = "hriroda"
 def apply_hr_theme(body: bytes, user) -> bytes:
     if user is not None and user.user_id == HR_THEME_USER_ID:
