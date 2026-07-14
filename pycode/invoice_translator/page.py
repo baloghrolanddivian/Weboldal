@@ -10,14 +10,14 @@ GENERATE_ROUTE = f"{APP_ROUTE}/generate"
 COMMON_SCRIPT_TAG = '<script src="/script.js"></script>'
 INVOICE_THEME_LINK = '<link rel="stylesheet" href="/styles.css" />'
 INVOICE_HR_THEME_STYLE = '''<style>
-body.hr-theme { --bg: #220b1c; --bg-soft: #3a102d; --panel: rgba(54,13,42,.84); --panel-strong: rgba(62,16,47,.95); --border: rgba(255,151,207,.3); --line: rgba(255,175,218,.2); --text: #fff4fb; --muted: #e7b8d2; --accent: #ff72ba; --accent-strong: #f23d91; --accent-warm: #ffc1e0; --shadow: 0 28px 70px rgba(20,0,14,.42); background: linear-gradient(180deg,#220b1c 0%,#2d0d25 42%,#3a102d 100%) !important; }
+body.hr-theme { --bg: #fff8f4; --bg-soft: #ffe9f1; --panel: rgba(255,255,255,.9); --panel-strong: rgba(255,244,248,.98); --border: rgba(235,151,188,.5); --line: rgba(222,139,177,.28); --text: #4c1834; --muted: #8d5c74; --accent: #f38ab8; --accent-strong: #e85d9d; --accent-warm: #ffc6dc; --shadow: 0 24px 58px rgba(157,74,113,.16); background: linear-gradient(180deg,#fffaf6 0%,#fff0f5 46%,#ffe4ed 100%) !important; }
 body.hr-theme .site { background: transparent; }
-body.hr-theme .site::before { background-image: linear-gradient(rgba(255,114,186,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,114,186,.06) 1px,transparent 1px); }
-body.hr-theme .topbar { background: rgba(62,16,47,.76); }
+body.hr-theme .site::before { background-image: linear-gradient(rgba(230,147,183,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(230,147,183,.12) 1px,transparent 1px); }
+body.hr-theme .topbar { background: rgba(255,252,250,.82); }
 body.hr-theme .hero-card, body.hr-theme .upload-card { background: linear-gradient(180deg,var(--panel),var(--panel-strong)); }
-body.hr-theme .hero-card::before, body.hr-theme .upload-card::before { background: linear-gradient(120deg,rgba(255,114,186,.14),transparent 34%),linear-gradient(180deg,transparent,rgba(255,193,224,.08)); }
-body.hr-theme .upload-surface, body.hr-theme .support-pill { background: rgba(255,220,241,.07); }
-body.hr-theme .upload-rail { background: linear-gradient(90deg,rgba(255,114,186,.6),rgba(255,193,224,.55)); }
+body.hr-theme .hero-card::before, body.hr-theme .upload-card::before { background: linear-gradient(120deg,rgba(255,180,213,.28),transparent 34%),linear-gradient(180deg,transparent,rgba(255,225,237,.2)); }
+body.hr-theme .upload-surface, body.hr-theme .support-pill { background: rgba(255,230,240,.6); }
+body.hr-theme .upload-rail { background: linear-gradient(90deg,rgba(243,138,184,.72),rgba(255,198,220,.7)); }
 body.hr-theme .visual-arrow, body.hr-theme .upload-badge { background: var(--accent-warm); }
 </style>'''
 

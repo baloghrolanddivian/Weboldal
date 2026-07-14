@@ -12,6 +12,8 @@ CONFIRM_ROUTE = f"{APP_ROUTE}/confirm"
 COMMON = '<link rel="stylesheet" href="/styles.css" /><script src="/script.js"></script><style>.hr-field option,.hr-table option{background:#09131c;color:#f3fbff}.hr-field select,.hr-table select{color-scheme:dark}.hr-table{min-width:3900px}.hr-table th{white-space:nowrap;min-width:180px}.hr-table td{min-width:180px}.hr-table input,.hr-table select{min-width:170px;min-height:42px;font-size:.92rem;line-height:1.35}.hr-table input[type=checkbox]{width:20px;min-width:20px;min-height:20px}.hr-table td:first-child{min-width:110px}.hr-table td:nth-child(2){min-width:220px}</style>'
 HR_UI = '''<style>
 .hr-panel { overflow: visible; }
+.hr-field option, .hr-table option { background: #fff8f4; color: #4c1834; }
+.hr-field select, .hr-table select { color-scheme: light; }
 .hr-actions .button { min-width: 230px; cursor: pointer; }
 .hr-back-button { min-width: 0 !important; min-height: 38px !important; padding: 0 16px !important; font-size: .82rem; }
 .hr-actions .primary-button { background: linear-gradient(135deg, var(--accent-warm), var(--accent)); color: #041017; font-weight: 800; box-shadow: 0 12px 28px rgba(67, 222, 207, .18); }
@@ -41,7 +43,7 @@ HR_UI = '''<style>
 .hr-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
 .hr-hero-visual { display: grid; place-items: center; min-height: 230px; }
 .hr-doc-stack { position: relative; width: 190px; height: 190px; transform: rotate(-5deg); }
-.hr-doc { position: absolute; width: 122px; height: 164px; padding: 18px 14px; border: 1px solid var(--border); border-radius: 20px; background: linear-gradient(160deg, rgba(255,193,224,.22), rgba(62,16,47,.9)); box-shadow: var(--shadow); }
+.hr-doc { position: absolute; width: 122px; height: 164px; padding: 18px 14px; border: 1px solid var(--border); border-radius: 20px; background: linear-gradient(160deg, rgba(255,255,255,.94), rgba(255,210,228,.78)); box-shadow: var(--shadow); }
 .hr-doc::before { content: ''; display: block; height: 10px; margin-bottom: 20px; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-warm)); }
 .hr-doc::after { content: ''; display: block; height: 1px; margin: 15px 0; background: var(--line); box-shadow: 0 18px var(--line), 0 36px var(--line), 0 54px var(--line); }
 .hr-doc:first-child { left: 0; top: 18px; transform: rotate(-8deg); }
