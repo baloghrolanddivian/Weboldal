@@ -2763,6 +2763,7 @@ def render_manufacturing_page(
           if (!(link instanceof HTMLElement)) return;
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
           const shipmentComplete = topfloorSectionsComplete(topfloorShipmentSectionsForKey(currentDocument(), viewKey, {{ includeIssued: true }}));
+          link.hidden = !topfloorShowIssued && !topfloorShipmentKeyIsAll(viewKey) && shipmentComplete;
           link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
           const allTabStatus = viewKey === currentTopfloorShipmentKey ? currentAllTabStateStatus() : "";
           applyChipStatusClass(link, allTabStatus || (shipmentComplete ? "done" : ""), shipmentComplete);
@@ -4676,6 +4677,14 @@ def render_manufacturing_page(
         if (String(document?.key || "") === "topfloor") {{
           if (!topfloorShipmentViewForKey(document, currentTopfloorShipmentKey)) {{
             currentTopfloorShipmentKey = firstTopfloorShipmentViewKey();
+          }}
+          if (
+            !topfloorShowIssued
+            && !topfloorShipmentKeyIsAll(currentTopfloorShipmentKey)
+            && topfloorSectionsComplete(topfloorShipmentSectionsForKey(document, currentTopfloorShipmentKey, {{ includeIssued: true }}))
+          ) {{
+            currentTopfloorShipmentKey = topfloorAllShipmentsKey;
+            currentViewKey = "all";
           }}
           const productionTabs = topfloorProductionTabs(topfloorShipmentSections(document));
           const validKeys = new Set(["all", "plain", "green", "red", ...productionTabs.map((item) => item.key)]);
