@@ -117,7 +117,7 @@ def render_review(people: list[dict[str, str]], bosses: dict[str, dict[str, str]
     headers = '<th>Kiválasztás</th>' + ''.join(f'<th>{html.escape(label)}</th>' for _, label in (*HR_COLUMNS, *EXTRA_COLUMNS))
     rows = []
     for i, person in enumerate(people):
-        cells = f'<td><input type="checkbox" name="p_{i}_selected" value="1" checked aria-label="{html.escape(person.get("name", "sor"), quote=True)} kiválasztása"></td>' + ''.join(f'<td><input name="p_{i}_{key}" value="{html.escape(person.get(key, ""), quote=True)}"></td>' for key, _ in HR_COLUMNS)
+        cells = f'<td><input type="checkbox" name="p_{i}_selected" value="1" aria-label="{html.escape(person.get("name", "sor"), quote=True)} kiválasztása"></td>' + ''.join(f'<td><input name="p_{i}_{key}" value="{html.escape(person.get(key, ""), quote=True)}"></td>' for key, _ in HR_COLUMNS)
         extra_cells = f'''<td><select name="p_{i}_workplace"><option>6724 Szeged, Trafó köz 3.</option><option>6724 Szeged, Bakay Nándor utca 52.</option></select></td>
 <td><select name="p_{i}_boss">{''.join(f'<option value="{html.escape(name, quote=True)}">{html.escape(name)}</option>' for name in bosses)}</select></td>
 <td><select name="p_{i}_workbreak"><option>30 perc</option><option>60 perc</option></select></td>
