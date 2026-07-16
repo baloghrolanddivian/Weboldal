@@ -2664,13 +2664,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "rack1-other":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
                     0 if "fuf" in upper_combined_text(row) or "f\u00fcf" in upper_combined_text(row) else 1,
                     0 if "fzn" in upper_combined_text(row) else 1,
                     0 if is_upper_595(row) else 1,
                     0 if is_upper_680(row) else 1,
                     0 if is_upper_360(row) else 1,
                     size_parts(row.get("size")),
-                    clean_text(row.get("color")),
                     clean_text(row.get("hardware_type")),
                 )
             )
@@ -2784,6 +2784,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     fuf_or_fzn_rows = [row for row in non_fvz_upper_rows if is_upper_fuf_or_fzn(row)]
     fuf_or_fzn_ids = {upper_row_id(row) for row in fuf_or_fzn_rows}
     zille_rows = [row for row in non_fvz_upper_rows if is_upper_zille_target(row) and upper_row_id(row) not in fuf_or_fzn_ids]
+    rack1_box360_rows = [row for row in rack1_source_rows if is_upper_360x330(row)]
+    rack1_box360_ids = {upper_row_id(row) for row in rack1_box360_rows}
+    rack2_box360_rows = [row for row in rack2_source_rows if is_upper_360x330(row)]
+    rack2_box360_ids = {upper_row_id(row) for row in rack2_box360_rows}
 
     rack1_box1_rows = [
         row
@@ -2792,6 +2796,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         and not is_upper_sarok(row)
         and not is_upper_fuf_or_fzn(row)
         and not is_upper_mart(row)
+        and upper_row_id(row) not in rack1_box360_ids
     ]
     rack1_box1_ids = {upper_row_id(row) for row in rack1_box1_rows}
     rack1_box2_rows = [
@@ -2801,6 +2806,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         and not is_upper_sarok(row)
         and not is_upper_fuf_or_fzn(row)
         and not is_upper_mart(row)
+        and upper_row_id(row) not in rack1_box360_ids
     ]
     rack1_box2_ids = {upper_row_id(row) for row in rack1_box2_rows}
     rack1_box3_rows = [
@@ -2810,6 +2816,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         and not is_upper_sarok(row)
     ]
     for row in fuf_or_fzn_rows:
+        if row not in rack1_box3_rows:
+            rack1_box3_rows.append(row)
+    for row in rack1_box360_rows:
         if row not in rack1_box3_rows:
             rack1_box3_rows.append(row)
     rack1_box3_ids = {upper_row_id(row) for row in rack1_box3_rows}
@@ -2861,10 +2870,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     rack2_box3_ids = {upper_row_id(row) for row in rack2_box3_rows}
-    rack1_box360_rows: list[dict] = []
-    rack2_box360_rows = [row for row in rack2_source_rows if is_upper_360x330(row)]
-    rack1_box360_ids = {upper_row_id(row) for row in rack1_box360_rows}
-    rack2_box360_ids = {upper_row_id(row) for row in rack2_box360_rows}
     rack2_box4_rows = [
         row for row in non_fvz_upper_rows
         if (
@@ -2927,28 +2932,28 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if str(row.get("row_id", "")) and str(row.get("row_id", "")) not in upper_assigned_ids
     ]
 
-    add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
-    add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
-    add_upper_section("1-es raklap · Fenekek", rack1_fenek_rows, "rack1-fenek", "rack1-other")
-    add_upper_section("1-es raklap · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
-    add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
-    add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
-    add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
-    add_upper_section("2-es raklap · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
-    add_upper_section("2-es raklap · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
+    add_upper_section("2-es konyha · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
+    add_upper_section("2-es konyha · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("2-es konyha · Fenekek", rack1_fenek_rows, "rack1-fenek", "rack1-other")
+    add_upper_section("2-es konyha · EFT / 360 / 680 / Egyéb", rack1_box3_rows, "rack1-box3", "rack1-other")
+    add_upper_section("1-es konyha · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
+    add_upper_section("1-es konyha · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("1-es konyha · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
+    add_upper_section("1-es konyha · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
+    add_upper_section("1-es konyha · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
     upper_sections = []
-    add_upper_section("1-es raklap · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
-    add_upper_section("1-es raklap · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
-    add_upper_section("1-es raklap · Fenekek", rack1_fenek_rows, "rack1-fenek", "rack1-other")
-    add_upper_section("1-es raklap · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
-    add_upper_section("2-es raklap · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
-    add_upper_section("2-es raklap · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
-    add_upper_section("2-es raklap · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
-    add_upper_section("2-es raklap · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
-    add_upper_section("2-es raklap · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
+    add_upper_section("2-es konyha · Normál és FNY", rack1_box1_rows, "rack1-box1", "normal")
+    add_upper_section("2-es konyha · EF60 / F2A / Felnyíló / FFM", rack1_box2_rows, "rack1-box2", "felnyilo")
+    add_upper_section("2-es konyha · Fenekek", rack1_fenek_rows, "rack1-fenek", "rack1-other")
+    add_upper_section("2-es konyha · Minden más 2-es konyha", rack1_box3_rows, "rack1-box3", "rack1-other")
+    add_upper_section("1-es konyha · Normál és FNY", rack2_box1_rows, "rack2-box1", "normal")
+    add_upper_section("1-es konyha · EF60 / F2A / Felnyíló / FFM", rack2_box2_rows, "rack2-box2", "felnyilo")
+    add_upper_section("1-es konyha · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
+    add_upper_section("1-es konyha · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
+    add_upper_section("1-es konyha · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
