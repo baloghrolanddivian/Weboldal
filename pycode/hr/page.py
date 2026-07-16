@@ -21,12 +21,29 @@ HR_UI = '''<style>
 .hr-upload input[type=file] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-soft); color: var(--text); }
 .hr-upload input[type=file]::file-selector-button { margin-right: 12px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 999px; background: linear-gradient(135deg, var(--accent-warm), var(--accent)); color: #041017; font-weight: 800; cursor: pointer; }
 .hr-table-scroll { width: 100%; overflow-x: auto; overflow-y: visible; border: 1px solid var(--border); border-radius: 14px; scrollbar-color: var(--accent) var(--panel-soft); }
-.hr-table th:first-child, .hr-table td:first-child { width: 68px !important; min-width: 68px !important; max-width: 68px !important; padding-left: 12px; padding-right: 8px; }
+.hr-table th:first-child, .hr-table td:first-child { width: 52px !important; min-width: 52px !important; max-width: 52px !important; padding-left: 12px; padding-right: 8px; }
 .hr-table input[type=checkbox] { appearance: none; -webkit-appearance: none; display: grid; place-content: center; width: 20px !important; min-width: 20px !important; max-width: 20px; height: 20px; min-height: 20px !important; max-height: 20px; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: rgba(255,255,255,.06); cursor: pointer; }
 .hr-table input[type=checkbox]::before { content: ''; width: 10px; height: 10px; transform: scale(0); clip-path: polygon(14% 44%, 0 59%, 39% 100%, 100% 16%, 84% 0, 37% 62%); background: #041017; transition: transform 120ms ease; }
 .hr-table input[type=checkbox]:checked { border-color: var(--accent-warm); background: linear-gradient(135deg, var(--accent-warm), var(--accent)); }
 .hr-table input[type=checkbox]:checked::before { transform: scale(1); }
 .hr-table input[type=checkbox]:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
+.hr-table tbody tr.hr-row-selected td { background: rgba(255, 192, 225, 0.24); }
+.hr-table tbody tr.hr-row-selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.hr-table tbody tr:has(input[type=checkbox]:checked) td { background: rgba(255, 192, 225, 0.24); }
+.hr-table tbody tr:has(input[type=checkbox]:checked) td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.hr-multiselect { position: relative; min-width: 210px; }
+.hr-multiselect-toggle { width: 100%; min-height: 42px; padding: 8px 34px 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,.05); color: var(--text); text-align: left; cursor: pointer; }
+.hr-multiselect-toggle::after { content: '⌄'; position: absolute; right: 11px; top: 8px; color: var(--accent); font-size: 1.2rem; }
+.hr-multiselect-menu, .hr-single-select-menu { position: fixed; z-index: 100; display: none; width: max-content; min-width: 270px; max-width: 340px; max-height: 260px; padding: 8px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); box-shadow: var(--shadow); }
+.hr-multiselect-menu.is-floating, .hr-single-select-menu.is-floating { display: grid; gap: 2px; }
+.hr-multiselect-option { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 8px; color: var(--text); cursor: pointer; white-space: nowrap; }
+.hr-multiselect-option:hover { background: var(--panel-soft); }
+.hr-multiselect-option input[type=checkbox] { flex: 0 0 auto; }
+.hr-single-select { position: relative; min-width: 190px; }
+.hr-single-select-toggle { width: 100%; min-height: 42px; padding: 8px 34px 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,.05); color: var(--text); text-align: left; cursor: pointer; }
+.hr-single-select-toggle::after { content: '⌄'; position: absolute; right: 11px; top: 8px; color: var(--accent); font-size: 1.2rem; }
+.hr-single-select-option { display: block; width: 100%; padding: 8px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; white-space: nowrap; }
+.hr-single-select-option:hover { background: var(--panel-soft); }
 .hr-table-scroll::-webkit-scrollbar, .hr-table-scrollbar::-webkit-scrollbar { height: 12px; }
 .hr-table-scroll::-webkit-scrollbar-track, .hr-table-scrollbar::-webkit-scrollbar-track { background: var(--panel-soft); border-radius: 999px; }
 .hr-table-scroll::-webkit-scrollbar-thumb, .hr-table-scrollbar::-webkit-scrollbar-thumb { background: linear-gradient(90deg, var(--accent), var(--accent-warm)); border: 2px solid var(--panel); border-radius: 999px; }
@@ -74,22 +91,57 @@ document.addEventListener('DOMContentLoaded', function () {
   form.querySelectorAll('tbody tr').forEach(function (row) {
     var checkbox = row.querySelector('input[type=checkbox]');
     var fields = row.querySelectorAll('input:not([type=checkbox]), select');
-    function syncRequired() { fields.forEach(function (field) { field.required = checkbox.checked; }); }
+    function syncRequired() { fields.forEach(function (field) { field.required = checkbox.checked; }); row.classList.toggle('hr-row-selected', checkbox.checked); }
     checkbox.addEventListener('change', syncRequired); syncRequired();
+  });
+  function closeMenus() { document.querySelectorAll('.hr-multiselect-menu.is-floating, .hr-single-select-menu.is-floating').forEach(function (menu) { menu.classList.remove('is-floating'); }); }
+  function openMenu(toggle, menu) { closeMenus(); var rect = toggle.getBoundingClientRect(); menu.style.left = rect.left + 'px'; menu.style.top = (rect.bottom + 6) + 'px'; menu.style.minWidth = rect.width + 'px'; menu.classList.add('is-floating'); }
+  form.querySelectorAll('[data-instruction-people]').forEach(function (picker) {
+    var target = form.querySelector('input[name="' + picker.dataset.instructionTarget + '"]');
+    var toggle = picker.querySelector('.hr-multiselect-toggle');
+    var menu = picker.querySelector('.hr-multiselect-menu');
+    var choices = picker.querySelectorAll('input[type=checkbox]');
+    function syncPeople() {
+      var selected = Array.from(choices).filter(function (choice) { return choice.checked; }).map(function (choice) { return choice.value; });
+      target.value = selected.join(', ');
+      toggle.textContent = selected.length ? selected.join(', ') : 'Válassz személyeket';
+    }
+    toggle.addEventListener('click', function (event) { event.stopPropagation(); if (menu.classList.contains('is-floating')) closeMenus(); else openMenu(toggle, menu); });
+    menu.addEventListener('click', function (event) { event.stopPropagation(); });
+    choices.forEach(function (choice) { choice.addEventListener('change', syncPeople); });
+    syncPeople();
+  });
+  form.querySelectorAll('[data-single-select]').forEach(function (picker) {
+    var target = form.querySelector('input[name="' + picker.dataset.singleTarget + '"]');
+    var toggle = picker.querySelector('.hr-single-select-toggle');
+    var menu = picker.querySelector('.hr-single-select-menu');
+    toggle.addEventListener('click', function (event) { event.stopPropagation(); if (menu.classList.contains('is-floating')) closeMenus(); else openMenu(toggle, menu); });
+    menu.querySelectorAll('.hr-single-select-option').forEach(function (option) { option.addEventListener('click', function () { target.value = option.value; toggle.textContent = option.value; closeMenus(); }); });
+  });
+  document.addEventListener('click', function () { closeMenus(); });
+  form.addEventListener('submit', function (event) {
+    var missingPicker = Array.from(form.querySelectorAll('tbody tr')).find(function (row) { return row.querySelector('input[type=checkbox]').checked && !row.querySelector('[data-instruction-people] input[type=hidden]').value; });
+    if (missingPicker) { event.preventDefault(); var toggle = missingPicker.querySelector('.hr-multiselect-toggle'); openMenu(toggle, missingPicker.querySelector('.hr-multiselect-menu')); toggle.focus(); alert('Válassz legalább egy személyt a „Kitől kaphat utasítást?” mezőben.'); }
   });
 });
 </script>'''
 HR_COLUMNS = (
-    ("name", "Név"), ("vat", "Adóazonosító jel"), ("address", "Lakcím"), ("job", "Munkakör"),
-    ("birthname", "Születési név"), ("birthplace", "Születési hely"), ("birthday", "Születési idő"),
-    ("momname", "Anyja neve"), ("taj", "TAJ szám"), ("entry", "Belépés"), ("payment", "Havi bér"),
-    ("stayaddress", "Tartózkodási hely"), ("email", "E-mail"), ("phone", "Telefon"),
+    ("name", "Név"), ("birthname", "Születési név"), ("birthplace", "Születési hely"),
+    ("birthday", "Születési idő"), ("momname", "Anyja neve"), ("vat", "Adóazonosító jel"),
+    ("taj", "TAJ szám"), ("address", "Állandó lakcím"), ("stayaddress", "Tartózkodási hely"),
+    ("email", "E-mail cím"), ("phone", "Telefonszám"), ("job", "Munkakör"),
+    ("jobdescription", "Munkaköri leírás"), ("entry", "Belépés dátuma"), ("payment", "Munkabér"),
 )
 EXTRA_COLUMNS = (
-    ("workplace", "Munkahely"), ("boss", "Felettes"), ("workbreak", "Szünet"),
-    ("breaktype", "Szünet a munkaidő része"), ("orderfrom", "Utasítástól"),
-    ("orderfromname", "Utasítást adó személy"), ("qualification", "Végzettség"),
-    ("requirements", "Egyéb követelmények"), ("date", "Dátum"),
+    ("workplace", "Munkavégzés helye"), ("orderfromname", "Kitől kaphat utasítást?"),
+    ("boss", "Közvetlen felettes"), ("workbreak", "Munkaközi szünet"),
+    ("breaktype", "A szünet beleszámít a munkaidőbe?"),
+    ("qualification", "Legmagasabb végzettség"), ("requirements", "Egyéb követelmények"),
+)
+PERSON_OPTIONS = (
+    "Varga Zoltán", "Jambrik József", "Fekete János", "Szabó Szabolcs", "Bozsó Gábor",
+    "Papp-Gyenes Veronika", "Őri Balázs", "Szabó-Varga Dorina Lili", "Kovács Bertalan",
+    "Szabó Márk", "Bodó Tibor", "Stevanov György", "Matuz János",
 )
 
 
@@ -112,20 +164,40 @@ def render_form(message: str = "") -> bytes:
     return _layout(body)
 
 
+def _single_picker(index: int, key: str, options: tuple[str, ...] | list[str]) -> str:
+    """Render a themed single-value dropdown backed by a hidden form field."""
+    choices = tuple(options)
+    selected = choices[0] if choices else ""
+    menu = ''.join(
+        f'<button class="hr-single-select-option" type="button" value="{html.escape(value, quote=True)}">{html.escape(value)}</button>'
+        for value in choices
+    )
+    return (
+        f'<div class="hr-single-select" data-single-select data-single-target="p_{index}_{key}">'
+        f'<button class="hr-single-select-toggle" type="button">{html.escape(selected)}</button>'
+        f'<div class="hr-single-select-menu">{menu}</div>'
+        f'<input type="hidden" name="p_{index}_{key}" value="{html.escape(selected, quote=True)}"></div>'
+    )
+
+
 def render_review(people: list[dict[str, str]], bosses: dict[str, dict[str, str]], message: str = "") -> bytes:
     notice = f'<div class="alert">{html.escape(message)}</div>' if message else ""
-    headers = '<th>Kiválasztás</th>' + ''.join(f'<th>{html.escape(label)}</th>' for _, label in (*HR_COLUMNS, *EXTRA_COLUMNS))
+    headers = '<th aria-label="Kiválasztás"></th>' + ''.join(f'<th>{html.escape(label)}</th>' for _, label in (*HR_COLUMNS, *EXTRA_COLUMNS))
     rows = []
     for i, person in enumerate(people):
-        cells = f'<td><input type="checkbox" name="p_{i}_selected" value="1" aria-label="{html.escape(person.get("name", "sor"), quote=True)} kiválasztása"></td>' + ''.join(f'<td><input name="p_{i}_{key}" value="{html.escape(person.get(key, ""), quote=True)}"></td>' for key, _ in HR_COLUMNS)
-        extra_cells = f'''<td><select name="p_{i}_workplace"><option>6724 Szeged, Trafó köz 3.</option><option>6724 Szeged, Bakay Nándor utca 52.</option></select></td>
-<td><select name="p_{i}_boss">{''.join(f'<option value="{html.escape(name, quote=True)}">{html.escape(name)}</option>' for name in bosses)}</select></td>
-<td><select name="p_{i}_workbreak"><option>30 perc</option><option>60 perc</option></select></td>
-<td><select name="p_{i}_breaktype"><option>a munkaidő részét képezi</option><option>nem képezi a munkaidő részét</option></select></td>
-<td><select name="p_{i}_orderfrom"><option>a vezető</option><option>a részlegvezető</option></select></td>
-<td><input name="p_{i}_orderfromname"></td><td><input name="p_{i}_qualification"></td><td><input name="p_{i}_requirements"></td>
-<td><input type="date" name="p_{i}_date" value="{date.today().isoformat()}" required></td>'''
-        rows.append(f'<tr>{cells}{extra_cells}</tr>')
+        cells = ''.join(f'<td><input name="p_{i}_{key}" value="{html.escape(person.get(key, ""), quote=True)}"></td>' for key, _ in HR_COLUMNS)
+        workplace_picker = _single_picker(i, "workplace", ("6724 Szeged, Trafó köz 3.", "6724 Szeged, Bakay Nándor utca 52."))
+        boss_picker = _single_picker(i, "boss", list(bosses))
+        break_picker = _single_picker(i, "workbreak", ("30 perc", "60 perc"))
+        breaktype_picker = _single_picker(i, "breaktype", ("a munkaidő részét képezi", "nem képezi a munkaidő részét"))
+        extra_cells = f'''<td>{workplace_picker}</td>
+<td><div class="hr-multiselect" data-instruction-people data-instruction-target="p_{i}_orderfromname"><button class="hr-multiselect-toggle" type="button" aria-label="Kitől kaphat utasítást?"></button><div class="hr-multiselect-menu">{''.join(f'<label class="hr-multiselect-option"><input type="checkbox" value="{html.escape(name, quote=True)}">{html.escape(name)}</label>' for name in PERSON_OPTIONS)}</div><input type="hidden" name="p_{i}_orderfromname"></div></td>
+<td>{boss_picker}</td>
+<td>{break_picker}</td>
+<td>{breaktype_picker}</td>
+<td><input name="p_{i}_qualification"></td><td><input name="p_{i}_requirements"></td>'''
+        select_cell = f'<td><input type="checkbox" name="p_{i}_selected" value="1" aria-label="{html.escape(person.get("name", "sor"), quote=True)} kiválasztása"></td>'
+        rows.append(f'<tr>{select_cell}{cells}{extra_cells}</tr>')
     body = f'''<section class="hr-panel"><p class="eyebrow">Ellenőrzés szükséges</p><h1>Adatok áttekintése</h1>{notice}
 <p class="hr-note">Módosíthatod az Excelből beolvasott adatokat. A további HR-adatok is személyenként állíthatók be.</p>
 <form action="{CONFIRM_ROUTE}" method="post"><input type="hidden" name="row_count" value="{len(people)}">
