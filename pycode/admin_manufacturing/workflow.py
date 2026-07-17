@@ -28,8 +28,6 @@ from .common import (
     load_row_data,
     load_selection_state,
     production_folder,
-    save_partial_quantity_state,
-    save_selection_state,
 )
 from .page import render_manufacturing_page
 from .config import REPO_ROOT, bundle_disk_cache_dir, runtime_dir
@@ -81,15 +79,14 @@ MANUFACTURING_SOURCE_LABELS = {
 
 
 def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str = "") -> None:
-    """Overlay admin-authored display data without changing row state identity."""
+    """Overlay saved display-only row edits without changing state identities."""
     loaded: dict[tuple[str, str], dict[str, dict[str, str]]] = {}
     documents = bundle.get("documents", []) if isinstance(bundle, dict) else []
     for document in documents if isinstance(documents, list) else []:
         if not isinstance(document, dict):
             continue
         if str(document.get("key", "")).strip() == "cnc_furas":
-            # CNC applies overrides after XML categorization/sorting and before
-            # its final display-row merge.
+            # The admin CNC builder applies overrides after XML placement.
             continue
         is_topfloor = str(document.get("key", "")).strip() == "topfloor"
         override_root = runtime_dir() / "topfloor" if is_topfloor else runtime_dir()
@@ -1480,8 +1477,18 @@ def manufacturing_module_payload(
     message: str = "",
     success: bool = False,
     include_client_cache: bool = True,
+    route: str = MANUFACTURING_ROUTE,
 ) -> dict[str, object]:
     """Build the manufacturing module payload shared by HTML and JSON views."""
+    module_route = str(route or MANUFACTURING_ROUTE).rstrip("/")
+    data_route = f"{module_route}/data"
+    # This duplicated module is observational: it reads persisted state but
+    # deliberately exposes no browser mutation endpoints.
+    state_route = ""
+    partial_qty_route = ""
+    report_ready_route = ""
+    topfloor_box_route = ""
+    row_edit_route = f"{module_route}/row-data"
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
     lightweight_operation_picker = not bool(selected_operation)
@@ -1630,12 +1637,13 @@ def manufacturing_module_payload(
                 production_client_cache.append(
                     manufacturing_client_payload(
                         {
-                            "route": MANUFACTURING_ROUTE,
-                            "dataRoute": MANUFACTURING_DATA_ROUTE,
-                            "stateRoute": MANUFACTURING_STATE_ROUTE,
-                            "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
-                            "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
-                            "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+                            "route": module_route,
+                            "dataRoute": data_route,
+                            "stateRoute": state_route,
+                            "partialQtyRoute": partial_qty_route,
+                            "reportReadyRoute": report_ready_route,
+                            "topfloorBoxRoute": topfloor_box_route,
+                            "rowEditRoute": row_edit_route,
                             "topfloorStorageBoxTypes": topfloor_storage_box_types,
                             "productionNumber": cache_number,
                             "selectedOperation": selected_operation,
@@ -1652,12 +1660,13 @@ def manufacturing_module_payload(
                 continue
 
     return {
-        "route": MANUFACTURING_ROUTE,
-        "dataRoute": MANUFACTURING_DATA_ROUTE,
-        "stateRoute": MANUFACTURING_STATE_ROUTE,
-        "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
-        "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
-        "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+        "route": module_route,
+        "dataRoute": data_route,
+        "stateRoute": state_route,
+        "partialQtyRoute": partial_qty_route,
+        "reportReadyRoute": report_ready_route,
+        "topfloorBoxRoute": topfloor_box_route,
+        "rowEditRoute": row_edit_route,
         "topfloorStorageBoxTypes": topfloor_storage_box_types,
         "productionNumber": selected_number,
         "operations": operations,
@@ -1699,6 +1708,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        "rowEditRoute": str(module_payload.get("rowEditRoute", "")),
         "topfloorStorageBoxTypes": (
             module_payload.get("topfloorStorageBoxTypes", [])
             if isinstance(module_payload.get("topfloorStorageBoxTypes"), list)
@@ -1713,6 +1723,7 @@ def render_manufacturing_module(
     operation: str = "",
     message: str = "",
     success: bool = False,
+    route: str = MANUFACTURING_ROUTE,
 ) -> bytes:
     """Render the manufacturing HTML page for the selected operation."""
     payload = manufacturing_module_payload(
@@ -1720,6 +1731,7 @@ def render_manufacturing_module(
         operation=operation,
         message=message,
         success=success,
+        route=route,
     )
     return render_manufacturing_page(
         route=str(payload.get("route", MANUFACTURING_ROUTE)),
@@ -1728,6 +1740,7 @@ def render_manufacturing_module(
         partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         topfloor_box_route=str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        row_edit_route=str(payload.get("rowEditRoute", "")),
         topfloor_storage_box_types=payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
         selected_number=str(payload.get("productionNumber", "")),
         operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],

@@ -1483,8 +1483,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 continue
             item = dict(row)
             item["hideSubtitle"] = hide_subtitle
-            item["_postOverrideMergeFields"] = list(group_fields)
-            item["_postOverrideMergeKind"] = "lower-box"
             unmerged_rows.append(item)
         return unmerged_rows
 
@@ -1557,19 +1555,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def aggregate_kinga_anna_fiokos_rows(rows: list[dict]) -> list[dict]:
         """Aggregate Kinga and Anna drawer rows into display groups."""
-        unmerged_rows: list[dict] = []
-        mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            item = dict(row)
-            if normalize_side_type(item.get("side_type")) in mergeable_side_types:
-                item["_postOverrideMergeFields"] = [
-                    "name", "size", "color", "edge", "drawer_drill", "hardware_type"
-                ]
-                item["_postOverrideMergeKind"] = "kinga-anna"
-            unmerged_rows.append(item)
-        return unmerged_rows
+        return [dict(row) for row in rows if isinstance(row, dict)]
 
         mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
         grouped: dict[tuple[str, str, str, str, str, str], dict] = {}
@@ -2614,17 +2600,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def aggregate_upper_rows(rows: list[dict]) -> list[dict]:
         """Aggregate upper-cabinet rows by display-relevant fields."""
-        unmerged_rows: list[dict] = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            item = dict(row)
-            item["_postOverrideMergeFields"] = [
-                "name", "size", "color", "hardware_type", "side_type", "edge"
-            ]
-            item["_postOverrideMergeKind"] = "upper-box"
-            unmerged_rows.append(item)
-        return unmerged_rows
+        return [dict(row) for row in rows if isinstance(row, dict)]
 
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
@@ -3072,154 +3048,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "sections": front_sections,
         },
     ]
-
-    # Preserve the XML-derived category and row order above. Only now overlay
-    # admin row data, then merge rows by their final displayed values.
-    saved_row_data = load_row_data(runtime_dir(), _manufacturing_normalize_number(production_number))
-    normalized_saved_row_data = {str(key).casefold(): fields for key, fields in saved_row_data.items()}
-
-    def apply_saved_row_data(row: dict) -> dict:
-        item = dict(row)
-        row_keys = [
-            str(item.get("state_storage_key", "") or "").strip(),
-            str(item.get("row_id", "") or "").strip(),
-            *(
-                [str(value or "").strip() for value in item.get("sourceRowIds", []) if str(value or "").strip()]
-                if isinstance(item.get("sourceRowIds"), list)
-                else []
-            ),
-        ]
-        for row_key in dict.fromkeys(key for key in row_keys if key):
-            candidates = [row_key]
-            if row_key.endswith("::0"):
-                candidates.append(row_key[:-3])
-            elif row_key.count("::") >= 2:
-                candidates.append(f"{row_key}::0")
-            fields = next(
-                (
-                    saved_row_data.get(candidate) or normalized_saved_row_data.get(candidate.casefold())
-                    for candidate in candidates
-                    if saved_row_data.get(candidate) or normalized_saved_row_data.get(candidate.casefold())
-                ),
-                None,
-            )
-            if not fields:
-                continue
-            original_fields = item.setdefault("_rowDataOriginal", {})
-            edited_fields = set(item.get("_rowDataEditedFields", []))
-            for field, value in fields.items():
-                original_value = original_fields.get(field, item.get(field, ""))
-                original_fields.setdefault(field, original_value)
-                item[field] = value
-                if str(value) != str(original_value):
-                    edited_fields.add(field)
-                else:
-                    edited_fields.discard(field)
-            item["_rowDataEditedFields"] = sorted(edited_fields)
-        return item
-
-    def row_source_ids(row: dict) -> list[str]:
-        values = row.get("sourceRowIds", []) if isinstance(row.get("sourceRowIds"), list) else []
-        result = [str(value or "").strip() for value in values if str(value or "").strip()]
-        fallback = str(row.get("state_storage_key", "") or row.get("row_id", "")).strip()
-        if fallback and fallback not in result:
-            result.append(fallback)
-        return result
-
-    def merge_rows_after_overrides(rows: list[dict], column_layout: str) -> list[dict]:
-        display_fields_by_layout = {
-            "cnc-lower": ("name", "size", "color", "drawer_drill", "side_type", "hardware_type", "edge"),
-            "cnc-upper": ("name", "size", "color", "hardware_type", "side_type", "edge"),
-        }
-        display_fields = display_fields_by_layout.get(column_layout)
-        prepared = [apply_saved_row_data(row) for row in rows if isinstance(row, dict)]
-        if not display_fields:
-            return prepared
-        merged_rows: dict[tuple[str, ...], dict] = {}
-        output: list[dict] = []
-        for row in prepared:
-            configured_fields = row.get("_postOverrideMergeFields")
-            merge_fields = (
-                tuple(str(field) for field in configured_fields)
-                if isinstance(configured_fields, list) and configured_fields
-                else display_fields
-            )
-            merge_kind = str(row.get("_postOverrideMergeKind", "") or "")
-            merge_key = (
-                merge_kind,
-                *tuple(str(row.get(field, "") or "").strip() for field in merge_fields),
-            )
-            existing = merged_rows.get(merge_key)
-            if existing is None:
-                row["sourceRowIds"] = row_source_ids(row)
-                row["_postOverrideMixedValues"] = {
-                    field: [str(row.get(field, "") or "").strip()]
-                    for field in display_fields
-                    if field not in merge_fields
-                }
-                merged_rows[merge_key] = row
-                output.append(row)
-                continue
-            existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
-            sources = list(existing.get("sourceRowIds", []))
-            for source_id in row_source_ids(row):
-                if source_id not in sources:
-                    sources.append(source_id)
-            existing["sourceRowIds"] = sources
-            existing_edited = set(existing.get("_rowDataEditedFields", []))
-            existing_edited.update(row.get("_rowDataEditedFields", []))
-            existing["_rowDataEditedFields"] = sorted(existing_edited)
-            if "detail" in row.get("_rowDataEditedFields", []):
-                existing["detail"] = row.get("detail", "")
-            existing_original = existing.setdefault("_rowDataOriginal", {})
-            for field, value in row.get("_rowDataOriginal", {}).items():
-                existing_original.setdefault(field, value)
-            mixed_values = existing.setdefault("_postOverrideMixedValues", {})
-            for field in display_fields:
-                if field in merge_fields:
-                    continue
-                values = mixed_values.setdefault(field, [])
-                value = str(row.get(field, "") or "").strip()
-                if value not in values:
-                    values.append(value)
-
-        for row in output:
-            mixed_values = row.pop("_postOverrideMixedValues", {})
-            if isinstance(mixed_values, dict):
-                for field, values in mixed_values.items():
-                    if isinstance(values, list) and len(values) > 1:
-                        row[field] = "Vegyes"
-            if row.get("_postOverrideMergeKind") == "kinga-anna":
-                row["side_type"] = "AF/AAF fi\u00f3kos"
-            row.pop("_postOverrideMergeFields", None)
-            row.pop("_postOverrideMergeKind", None)
-        return output
-
-    processed_sections: set[int] = set()
-    sections_to_process = [*main_sections]
-    for special_view in special_views:
-        sections_to_process.extend(
-            section
-            for section in special_view.get("sections", [])
-            if isinstance(section, dict)
-        )
-    for section in sections_to_process:
-        section_identity = id(section)
-        if section_identity in processed_sections:
-            continue
-        processed_sections.add(section_identity)
-        section["rows"] = merge_rows_after_overrides(
-            section.get("rows", []) if isinstance(section.get("rows"), list) else [],
-            str(section.get("columnLayout", "")).strip(),
-        )
-
-    row_count = sum(len(section.get("rows", [])) for section in main_sections)
-    for special_view in special_views:
-        special_view["count"] = sum(
-            len(section.get("rows", []))
-            for section in special_view.get("sections", [])
-            if isinstance(section, dict)
-        )
     if uncategorized_lower_rows:
         special_views.append(
             {
@@ -3238,18 +3066,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "hideTab": True,
             }
         )
+    from ..workflow import _manufacturing_apply_row_data_overrides
+
+    override_sections: list[dict] = []
+    seen_override_sections: set[int] = set()
+    for section in main_sections:
+        if id(section) not in seen_override_sections:
+            seen_override_sections.add(id(section))
+            override_sections.append(section)
     for special_view in special_views:
         for section in special_view.get("sections", []):
-            if not isinstance(section, dict) or id(section) in processed_sections:
-                continue
-            processed_sections.add(id(section))
-            section["rows"] = merge_rows_after_overrides(
-                section.get("rows", []) if isinstance(section.get("rows"), list) else [],
-                str(section.get("columnLayout", "")).strip(),
-            )
-        special_view["count"] = sum(
-            len(section.get("rows", []))
-            for section in special_view.get("sections", [])
-            if isinstance(section, dict)
-        )
+            if isinstance(section, dict) and id(section) not in seen_override_sections:
+                seen_override_sections.add(id(section))
+                override_sections.append(section)
+    _manufacturing_apply_row_data_overrides(
+        {"documents": [{"key": "cnc-admin-pre-state", "sections": override_sections}]},
+        production_number,
+    )
     return main_sections, row_count, special_views, cnc_source_type, cnc_source_label
