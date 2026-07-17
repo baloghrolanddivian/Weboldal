@@ -47,7 +47,13 @@ def _norm(value: object) -> str:
 
 
 def _date(value: str) -> str:
-    return str(value or "").strip()
+    raw = str(value or "").strip()
+    for fmt in ("%Y.%m.%d.", "%Y.%m.%d", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%Y.%m.%d")
+        except ValueError:
+            continue
+    return raw
 
 
 def _three_months(value: str) -> str:
@@ -155,6 +161,93 @@ def _replace_all(root: ET.Element, replacements: dict[str, str], text_tags: str)
             for candidate in parent.iter(f"{{{DOCX_NS}}}r"):
                 _use_poppins(candidate)
             for node in text_nodes[1:]: node.text = ""
+
+
+def _set_bold(run: ET.Element) -> None:
+    """Make a run bold while retaining its existing character formatting."""
+    props = run.find(f"{{{DOCX_NS}}}rPr")
+    if props is None:
+        props = ET.Element(f"{{{DOCX_NS}}}rPr")
+        run.insert(0, props)
+    bold = props.find(f"{{{DOCX_NS}}}b")
+    if bold is None:
+        bold = ET.SubElement(props, f"{{{DOCX_NS}}}b")
+    bold.set(f"{{{DOCX_NS}}}val", "1")
+
+
+def _replace_split_placeholder(
+    root: ET.Element,
+    old: str,
+    new: str,
+    text_tags: set[str],
+    *,
+    force_bold: bool = False,
+    paragraph_filter=None,
+    last_only: bool = False,
+) -> int:
+    """Replace a phrase split between Word runs without losing its run style.
+
+    Word often splits a highlighted placeholder (for example ``amely része a
+    munkaidőnek``) into several runs.  The generic replacement fallback must
+    then collapse it into the paragraph's first run, which can be unbolded.
+    This targeted helper keeps the replacement in the run where the
+    placeholder starts and clears only the remaining placeholder fragments.
+    """
+    paragraph_tag = f"{{{ODT_TEXT}}}p" if f"{{{ODT_TEXT}}}p" in text_tags else f"{{{DOCX_NS}}}p"
+    replaced = 0
+    for paragraph in root.iter(paragraph_tag):
+        paragraph_text = "".join(paragraph.itertext())
+        if paragraph_filter is not None and not paragraph_filter(paragraph_text):
+            continue
+        text_nodes = [node for node in paragraph.iter() if node.tag in text_tags]
+        if not text_nodes:
+            continue
+        combined = "".join(node.text or "" for node in text_nodes)
+        positions: list[int] = []
+        offset = 0
+        while True:
+            found = combined.find(old, offset)
+            if found < 0:
+                break
+            positions.append(found)
+            offset = found + len(old)
+        if last_only and positions:
+            positions = positions[-1:]
+        for start in reversed(positions):
+            end = start + len(old)
+            cursor = 0
+            start_index = end_index = None
+            start_offset = end_offset = 0
+            for index, node in enumerate(text_nodes):
+                node_text = node.text or ""
+                node_end = cursor + len(node_text)
+                if start_index is None and start < node_end:
+                    start_index, start_offset = index, start - cursor
+                if end <= node_end:
+                    end_index, end_offset = index, end - cursor
+                    break
+                cursor = node_end
+            if start_index is None or end_index is None:
+                continue
+            start_node = text_nodes[start_index]
+            end_node = text_nodes[end_index]
+            before = (start_node.text or "")[:start_offset]
+            after = (end_node.text or "")[end_offset:]
+            if start_node is end_node:
+                start_node.text = before + str(new) + after
+            else:
+                start_node.text = before + str(new)
+                for node in text_nodes[start_index + 1:end_index]:
+                    node.text = ""
+                end_node.text = after
+            if force_bold:
+                for run in paragraph.iter(f"{{{DOCX_NS}}}r"):
+                    if start_node in list(run):
+                        _set_bold(run)
+                        _use_poppins(run)
+                        break
+            replaced += 1
+    return replaced
 
 
 def _append_cell(cell: ET.Element, value: str, odt: bool = False) -> None:
@@ -348,6 +441,43 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
         replacements_to_apply = {
             key: value for key, value in replacements.items() if _norm(key) not in {_norm("NÉV"), _norm("NÉV:")}
         }
+
+    template_name = template.stem.casefold()
+    # These placeholders are intentionally bold in the templates, but Word
+    # stores several of them in multiple runs.  Replace them before the
+    # generic fallback so both choices keep the intended bold appearance.
+    if "munkaközi szünet" in template_name:
+        for placeholder, value in (
+            ("30 perc", replacements.get("30 perc", "")),
+            ("harminc perc", replacements.get("harminc perc", "")),
+            ("amely része a munkaidőnek", replacements.get("amely része a munkaidőnek", "")),
+        ):
+            _replace_split_placeholder(root, placeholder, value, text_tags, force_bold=True)
+            replacements_to_apply.pop(placeholder, None)
+
+    if "munkaszerződés" in template_name:
+        workplace_placeholder = "6724 Szeged, Trafó köz 3."
+        workplace_value = replacements.get(workplace_placeholder, "")
+        # In the work-location sentence the address is bold; the company
+        # address elsewhere in the contract is deliberately not.  Preserve
+        # that distinction for either selected workplace.
+        _replace_split_placeholder(
+            root,
+            workplace_placeholder,
+            workplace_value,
+            text_tags,
+            force_bold=True,
+            paragraph_filter=lambda text: "munkahelyen" in _norm(text),
+        )
+        _replace_split_placeholder(root, workplace_placeholder, workplace_value, text_tags)
+        replacements_to_apply.pop(workplace_placeholder, None)
+
+    if "munkaruha" in template_name:
+        # The first occurrence is the label ``Dátum:``, while only the second
+        # standalone placeholder after ``Szeged,`` belongs to the document.
+        _replace_split_placeholder(root, "Dátum", replacements.get("Dátum", ""), text_tags, last_only=True)
+        replacements_to_apply.pop("Dátum", None)
+
     _replace_all(root, replacements_to_apply, text_tags)
     _clean_colours(root, odt)
     entries[xml_name] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -368,9 +498,9 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
             person_extra = dict(extra[index]) if isinstance(extra, list) else (dict(extra) if isinstance(extra, dict) else {})
             boss = person_extra.get("boss", "")
             boss_data = person_extra.get("boss_data", {}) if isinstance(person_extra.get("boss_data"), dict) else {}
-            values = {**person, **person_extra, "date": _date(person_extra.get("date", "")), "bossphone": boss_data.get("phone", ""), "bossemail": boss_data.get("email", "")}
+            values = {**person, **person_extra, "date": _date(person.get("entry", "")), "bossphone": boss_data.get("phone", ""), "bossemail": boss_data.get("email", "")}
             values["birthplace+birthday"] = f"{person.get('birthplace', '')}, {person.get('birthday', '')}".strip(" ,")
-            values["orderfrom+orderfromname"] = f"{person_extra.get('orderfrom', '')} {person_extra.get('orderfromname', '')}".strip()
+            values["orderfrom+orderfromname"] = person_extra.get("orderfromname", "").strip()
             values["workbreak"] = person_extra.get("workbreak", "")
             values["breaktype"] = "amely része a munkaidőnek" if person_extra.get("breaktype") == "a munkaidő részét képezi" else "nem képezi a munkaidő részét"
             values["probation_end"] = _three_months(person.get("entry", ""))
@@ -408,7 +538,7 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
                 ".....@divian.hu": values["bossemail"], "30 perc": person_extra.get("workbreak", ""),
                 "harminc perc": written_break, "amely része a munkaidőnek": values["breaktype"],
                 "__PAYMENT_PLACEHOLDER__": f" {person.get('payment', '')},- Ft / hó",
-                "---": person.get("job", ""),
+                "---": person.get("jobdescription", ""),
                 "NÉV": person.get("name", ""),
                 "Adóazonosító jel: .": f"Adóazonosító jel: {person.get('vat', '')}",
                 "__SZABADSAG_VAT__": f"Adóazonosító jel: {person.get('vat', '')}",
