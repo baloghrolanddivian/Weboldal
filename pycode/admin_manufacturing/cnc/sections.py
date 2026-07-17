@@ -1483,8 +1483,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 continue
             item = dict(row)
             item["hideSubtitle"] = hide_subtitle
-            item["_postOverrideMergeFields"] = list(group_fields)
-            item["_postOverrideMergeKind"] = "lower-box"
             unmerged_rows.append(item)
         return unmerged_rows
 
@@ -1557,19 +1555,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def aggregate_kinga_anna_fiokos_rows(rows: list[dict]) -> list[dict]:
         """Aggregate Kinga and Anna drawer rows into display groups."""
-        unmerged_rows: list[dict] = []
-        mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            item = dict(row)
-            if normalize_side_type(item.get("side_type")) in mergeable_side_types:
-                item["_postOverrideMergeFields"] = [
-                    "name", "size", "color", "edge", "drawer_drill", "hardware_type"
-                ]
-                item["_postOverrideMergeKind"] = "kinga-anna"
-            unmerged_rows.append(item)
-        return unmerged_rows
+        return [dict(row) for row in rows if isinstance(row, dict)]
 
         mergeable_side_types = {"aaf fiokos ajtos", "af 1+2 fiokos"}
         grouped: dict[tuple[str, str, str, str, str, str], dict] = {}
@@ -1676,16 +1662,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     def is_boxos_teleszkop_row(row: dict) -> bool:
         """Return whether is boxos teleszkop row is true."""
         return is_boxos_target_row(row) and folded(row.get("drawer_drill")).startswith("teleszk")
-
-    def is_kinga_anna_teleszkop_row(row: dict) -> bool:
-        """Return whether a Kinga/Anna row uses telescopic rail drilling."""
-        return (
-            clean_text(row.get("size")) == "824 x 505 x 18"
-            and normalize_side_type(row.get("side_type")) in {"normals also", "aaf fiokos ajtos", "af 1+2 fiokos"}
-            and folded(row.get("drawer_drill")).startswith("teleszk")
-            and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
-            and not is_fvz_row(row)
-        )
 
     def is_box1_mergeable_boxos_teleszkop_row(row: dict) -> bool:
         """Return whether AF/AAF teleszkop rows should merge into the normal lower box."""
@@ -2327,19 +2303,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
     box2_source_rows = [
         row for row in lower_rows
-        if (is_boxos_box_hettich_row(row) or is_kinga_anna_teleszkop_row(row))
+        if is_boxos_box_hettich_row(row)
         and str(row.get("row_id", "")) not in box_avz_ids
     ]
-    kinga_anna_teleszkop_rows = [row for row in box2_source_rows if is_kinga_anna_teleszkop_row(row)]
-    boxos_source_rows = [row for row in box2_source_rows if not is_kinga_anna_teleszkop_row(row)]
-    raw_boxos_rows = build_raw_boxos_box_rows()
-    box2_display_rows = raw_boxos_rows or boxos_source_rows
+    box2_display_rows = build_raw_boxos_box_rows() or box2_source_rows
     box2_rows = aggregate_lower_rows(
         box2_display_rows,
         ("name", "size", "color", "drawer_drill", "side_type", "edge"),
-    )
-    box2_rows.extend(
-        aggregate_kinga_anna_fiokos_rows(kinga_anna_teleszkop_rows)
     )
     box2_ids = {str(row.get("row_id", "")) for row in box2_source_rows}
     box3_rows = [
@@ -2468,10 +2438,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     # Kinga/Anna: keep original source row order, no merge and no additional sorting.
     box4_rows.sort(
         key=lambda row: (
-            clean_text(row.get("color")),
             lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
             1 if "ar goly" in folded(row.get("side_type")) else 0,
             normalize_side_type(row.get("side_type")),
+            clean_text(row.get("color")),
             size_parts(row.get("size")),
             clean_text(row.get("name")),
         )
@@ -2630,17 +2600,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def aggregate_upper_rows(rows: list[dict]) -> list[dict]:
         """Aggregate upper-cabinet rows by display-relevant fields."""
-        unmerged_rows: list[dict] = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            item = dict(row)
-            item["_postOverrideMergeFields"] = [
-                "name", "size", "color", "hardware_type", "side_type", "edge"
-            ]
-            item["_postOverrideMergeKind"] = "upper-box"
-            unmerged_rows.append(item)
-        return unmerged_rows
+        return [dict(row) for row in rows if isinstance(row, dict)]
 
         grouped: dict[tuple[str, ...], dict] = {}
         for row in rows:
@@ -2679,7 +2639,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "detail": clean_text(row.get("detail")),
                     "columnLayout": "cnc-upper",
                     "markSizeBlack": bool(row.get("markSizeBlack")),
-                    "markSideTypeBlack": "fkf nutos tiplis" in folded(row.get("side_type")),
                     "sourceRowIds": source_row_ids,
                 }
             else:
@@ -2720,10 +2679,12 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "rack1-other":
             rows.sort(
                 key=lambda row: (
+                    clean_text(row.get("color")),
+                    0 if "fuf" in upper_combined_text(row) or "f\u00fcf" in upper_combined_text(row) else 1,
+                    0 if "fzn" in upper_combined_text(row) else 1,
                     0 if is_upper_595(row) else 1,
                     0 if is_upper_680(row) else 1,
                     0 if is_upper_360(row) else 1,
-                    clean_text(row.get("color")),
                     size_parts(row.get("size")),
                     clean_text(row.get("hardware_type")),
                 )
@@ -2731,8 +2692,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "rack2-other":
             rows.sort(
                 key=lambda row: (
-                    1 if is_upper_fuf_or_fzn(row) else 0,
-                    0 if "fuf" in upper_combined_text(row) or "füf" in upper_combined_text(row) else 1,
                     clean_text(row.get("color")),
                     0 if clean_text(row.get("size")).startswith("595 x ") else 1,
                     0 if is_upper_360_special(row) else 1,
@@ -2840,18 +2799,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     fuf_or_fzn_rows = [row for row in non_fvz_upper_rows if is_upper_fuf_or_fzn(row)]
     fuf_or_fzn_ids = {upper_row_id(row) for row in fuf_or_fzn_rows}
     zille_rows = [row for row in non_fvz_upper_rows if is_upper_zille_target(row) and upper_row_id(row) not in fuf_or_fzn_ids]
-    rack2_fenek_rows = [
-        row for row in rack2_source_rows
-        if upper_row_id(row) not in fuf_or_fzn_ids
-        and "fenek" in folded(row.get("name"))
-    ]
-    rack2_fenek_ids = {upper_row_id(row) for row in rack2_fenek_rows}
     rack1_box360_rows = [row for row in rack1_source_rows if is_upper_360x330(row)]
     rack1_box360_ids = {upper_row_id(row) for row in rack1_box360_rows}
-    rack2_box360_rows = [
-        row for row in rack2_source_rows
-        if is_upper_360x330(row) and upper_row_id(row) not in rack2_fenek_ids
-    ]
+    rack2_box360_rows = [row for row in rack2_source_rows if is_upper_360x330(row)]
     rack2_box360_ids = {upper_row_id(row) for row in rack2_box360_rows}
 
     rack1_box1_rows = [
@@ -2878,9 +2828,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         row for row in rack1_source_rows
         if upper_row_id(row) not in rack1_box1_ids
         and upper_row_id(row) not in rack1_box2_ids
-        and upper_row_id(row) not in fuf_or_fzn_ids
         and not is_upper_sarok(row)
     ]
+    for row in fuf_or_fzn_rows:
+        if row not in rack1_box3_rows:
+            rack1_box3_rows.append(row)
     for row in rack1_box360_rows:
         if row not in rack1_box3_rows:
             rack1_box3_rows.append(row)
@@ -2892,7 +2844,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_upper_normal_or_fny(row)
         and not is_upper_sarok(row)
         and not is_upper_fuf_or_fzn(row)
-        and upper_row_id(row) not in rack2_fenek_ids
     ]
     rack2_box1_ids = {upper_row_id(row) for row in rack2_box1_rows}
     rack2_box2_rows = [
@@ -2901,7 +2852,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_upper_felnyilo_group(row)
         and not is_upper_sarok(row)
         and not is_upper_fuf_or_fzn(row)
-        and upper_row_id(row) not in rack2_fenek_ids
     ]
     rack2_box2_ids = {upper_row_id(row) for row in rack2_box2_rows}
     rack2_primary_assigned_ids = {row_id for row_id in (rack2_box1_ids | rack2_box2_ids) if row_id}
@@ -2909,7 +2859,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         row for row in rack2_source_rows
         if upper_row_id(row) not in rack2_primary_assigned_ids
         and upper_row_id(row) not in fuf_or_fzn_ids
-        and upper_row_id(row) not in rack2_fenek_ids
         and not is_upper_360x330(row)
         and (not is_upper_sarok_bucket_size(row) or is_upper_360_fmf(row))
         and (
@@ -2923,26 +2872,22 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_upper_360_fmf(row) and not is_upper_360x330(row)
     ]
     for row in all_360_fmf_rows:
-        if upper_row_id(row) not in rack2_fenek_ids and row not in rack2_box3_rows:
+        if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     fkf_360_rows = [
         row for row in rack2_source_rows
         if is_upper_360_fkf(row) and not is_upper_sarok_bucket_size(row)
     ]
     for row in fkf_360_rows:
-        if upper_row_id(row) not in rack2_fenek_ids and row not in rack2_box3_rows:
-            rack2_box3_rows.append(row)
-    for row in zille_rows:
         if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
-    for row in fuf_or_fzn_rows:
+    for row in zille_rows:
         if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     rack2_box3_ids = {upper_row_id(row) for row in rack2_box3_rows}
     rack2_box4_rows = [
         row for row in non_fvz_upper_rows
-        if upper_row_id(row) not in rack2_fenek_ids
-        and (
+        if (
             ((is_upper_sarok(row) and not is_upper_360_fmf(row)) and not is_upper_360x330(row))
             or ((is_upper_sarok_bucket_size(row) and not is_upper_360_fmf(row)) and not is_upper_360x330(row))
             or (
@@ -2990,7 +2935,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             rack2_box1_rows,
             rack2_box2_rows,
             rack2_box360_rows,
-            rack2_fenek_rows,
             rack2_box3_rows,
             rack2_box4_rows,
             vegzaro_raklap_rows,
@@ -3012,7 +2956,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_upper_section("1-es konyha · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("1-es konyha · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("1-es konyha · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
-    add_upper_section("1-es konyha · Fenekek", rack2_fenek_rows, "rack2-fenek", "rack2-other")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
@@ -3026,7 +2969,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_upper_section("1-es konyha · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("1-es konyha · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("1-es konyha · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
-    add_upper_section("1-es konyha · Fenekek", rack2_fenek_rows, "rack2-fenek", "rack2-other")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
@@ -3106,154 +3048,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "sections": front_sections,
         },
     ]
-
-    # Preserve the XML-derived category and row order above. Only now overlay
-    # admin row data, then merge rows by their final displayed values.
-    saved_row_data = load_row_data(runtime_dir(), _manufacturing_normalize_number(production_number))
-    normalized_saved_row_data = {str(key).casefold(): fields for key, fields in saved_row_data.items()}
-
-    def apply_saved_row_data(row: dict) -> dict:
-        item = dict(row)
-        row_keys = [
-            str(item.get("state_storage_key", "") or "").strip(),
-            str(item.get("row_id", "") or "").strip(),
-            *(
-                [str(value or "").strip() for value in item.get("sourceRowIds", []) if str(value or "").strip()]
-                if isinstance(item.get("sourceRowIds"), list)
-                else []
-            ),
-        ]
-        for row_key in dict.fromkeys(key for key in row_keys if key):
-            candidates = [row_key]
-            if row_key.endswith("::0"):
-                candidates.append(row_key[:-3])
-            elif row_key.count("::") >= 2:
-                candidates.append(f"{row_key}::0")
-            fields = next(
-                (
-                    saved_row_data.get(candidate) or normalized_saved_row_data.get(candidate.casefold())
-                    for candidate in candidates
-                    if saved_row_data.get(candidate) or normalized_saved_row_data.get(candidate.casefold())
-                ),
-                None,
-            )
-            if not fields:
-                continue
-            original_fields = item.setdefault("_rowDataOriginal", {})
-            edited_fields = set(item.get("_rowDataEditedFields", []))
-            for field, value in fields.items():
-                original_value = original_fields.get(field, item.get(field, ""))
-                original_fields.setdefault(field, original_value)
-                item[field] = value
-                if str(value) != str(original_value):
-                    edited_fields.add(field)
-                else:
-                    edited_fields.discard(field)
-            item["_rowDataEditedFields"] = sorted(edited_fields)
-        return item
-
-    def row_source_ids(row: dict) -> list[str]:
-        values = row.get("sourceRowIds", []) if isinstance(row.get("sourceRowIds"), list) else []
-        result = [str(value or "").strip() for value in values if str(value or "").strip()]
-        fallback = str(row.get("state_storage_key", "") or row.get("row_id", "")).strip()
-        if fallback and fallback not in result:
-            result.append(fallback)
-        return result
-
-    def merge_rows_after_overrides(rows: list[dict], column_layout: str) -> list[dict]:
-        display_fields_by_layout = {
-            "cnc-lower": ("name", "size", "color", "drawer_drill", "side_type", "hardware_type", "edge"),
-            "cnc-upper": ("name", "size", "color", "hardware_type", "side_type", "edge"),
-        }
-        display_fields = display_fields_by_layout.get(column_layout)
-        prepared = [apply_saved_row_data(row) for row in rows if isinstance(row, dict)]
-        if not display_fields:
-            return prepared
-        merged_rows: dict[tuple[str, ...], dict] = {}
-        output: list[dict] = []
-        for row in prepared:
-            configured_fields = row.get("_postOverrideMergeFields")
-            merge_fields = (
-                tuple(str(field) for field in configured_fields)
-                if isinstance(configured_fields, list) and configured_fields
-                else display_fields
-            )
-            merge_kind = str(row.get("_postOverrideMergeKind", "") or "")
-            merge_key = (
-                merge_kind,
-                *tuple(str(row.get(field, "") or "").strip() for field in merge_fields),
-            )
-            existing = merged_rows.get(merge_key)
-            if existing is None:
-                row["sourceRowIds"] = row_source_ids(row)
-                row["_postOverrideMixedValues"] = {
-                    field: [str(row.get(field, "") or "").strip()]
-                    for field in display_fields
-                    if field not in merge_fields
-                }
-                merged_rows[merge_key] = row
-                output.append(row)
-                continue
-            existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
-            sources = list(existing.get("sourceRowIds", []))
-            for source_id in row_source_ids(row):
-                if source_id not in sources:
-                    sources.append(source_id)
-            existing["sourceRowIds"] = sources
-            existing_edited = set(existing.get("_rowDataEditedFields", []))
-            existing_edited.update(row.get("_rowDataEditedFields", []))
-            existing["_rowDataEditedFields"] = sorted(existing_edited)
-            if "detail" in row.get("_rowDataEditedFields", []):
-                existing["detail"] = row.get("detail", "")
-            existing_original = existing.setdefault("_rowDataOriginal", {})
-            for field, value in row.get("_rowDataOriginal", {}).items():
-                existing_original.setdefault(field, value)
-            mixed_values = existing.setdefault("_postOverrideMixedValues", {})
-            for field in display_fields:
-                if field in merge_fields:
-                    continue
-                values = mixed_values.setdefault(field, [])
-                value = str(row.get(field, "") or "").strip()
-                if value not in values:
-                    values.append(value)
-
-        for row in output:
-            mixed_values = row.pop("_postOverrideMixedValues", {})
-            if isinstance(mixed_values, dict):
-                for field, values in mixed_values.items():
-                    if isinstance(values, list) and len(values) > 1:
-                        row[field] = "Vegyes"
-            if row.get("_postOverrideMergeKind") == "kinga-anna":
-                row["side_type"] = "AF/AAF fi\u00f3kos"
-            row.pop("_postOverrideMergeFields", None)
-            row.pop("_postOverrideMergeKind", None)
-        return output
-
-    processed_sections: set[int] = set()
-    sections_to_process = [*main_sections]
-    for special_view in special_views:
-        sections_to_process.extend(
-            section
-            for section in special_view.get("sections", [])
-            if isinstance(section, dict)
-        )
-    for section in sections_to_process:
-        section_identity = id(section)
-        if section_identity in processed_sections:
-            continue
-        processed_sections.add(section_identity)
-        section["rows"] = merge_rows_after_overrides(
-            section.get("rows", []) if isinstance(section.get("rows"), list) else [],
-            str(section.get("columnLayout", "")).strip(),
-        )
-
-    row_count = sum(len(section.get("rows", [])) for section in main_sections)
-    for special_view in special_views:
-        special_view["count"] = sum(
-            len(section.get("rows", []))
-            for section in special_view.get("sections", [])
-            if isinstance(section, dict)
-        )
     if uncategorized_lower_rows:
         special_views.append(
             {
@@ -3272,18 +3066,21 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "hideTab": True,
             }
         )
+    from ..workflow import _manufacturing_apply_row_data_overrides
+
+    override_sections: list[dict] = []
+    seen_override_sections: set[int] = set()
+    for section in main_sections:
+        if id(section) not in seen_override_sections:
+            seen_override_sections.add(id(section))
+            override_sections.append(section)
     for special_view in special_views:
         for section in special_view.get("sections", []):
-            if not isinstance(section, dict) or id(section) in processed_sections:
-                continue
-            processed_sections.add(id(section))
-            section["rows"] = merge_rows_after_overrides(
-                section.get("rows", []) if isinstance(section.get("rows"), list) else [],
-                str(section.get("columnLayout", "")).strip(),
-            )
-        special_view["count"] = sum(
-            len(section.get("rows", []))
-            for section in special_view.get("sections", [])
-            if isinstance(section, dict)
-        )
+            if isinstance(section, dict) and id(section) not in seen_override_sections:
+                seen_override_sections.add(id(section))
+                override_sections.append(section)
+    _manufacturing_apply_row_data_overrides(
+        {"documents": [{"key": "cnc-admin-pre-state", "sections": override_sections}]},
+        production_number,
+    )
     return main_sections, row_count, special_views, cnc_source_type, cnc_source_label

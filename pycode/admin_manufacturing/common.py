@@ -294,10 +294,8 @@ def load_production_bundle(production_number: str) -> dict:
 
 
 def selection_state_path(runtime_root: Path, production_number: str) -> Path:
-    """Return the row-state JSON path, creating the production runtime folder."""
-    target_dir = runtime_root / production_number
-    target_dir.mkdir(parents=True, exist_ok=True)
-    return target_dir / "state.json"
+    """Return the existing row-state JSON path without changing the filesystem."""
+    return runtime_root / production_number / "state.json"
 
 
 def load_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
@@ -322,42 +320,9 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
     return result
 
 
-def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
-    """Persist a row state while preserving non-state metadata records.
-
-    Empty, none, and clear remove the row state. Green/red/done are ordinary
-    states; numeric values are accepted only for structured XML state keys so
-    Topfloor can store the assigned box/con id.
-    """
-    path = selection_state_path(runtime_root, production_number)
-    try:
-        raw_payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except Exception:
-        raw_payload = {}
-    if not isinstance(raw_payload, dict):
-        raw_payload = {}
-    metadata = {
-        str(key): value
-        for key, value in raw_payload.items()
-        if isinstance(value, (dict, list))
-    }
-    current = load_selection_state(runtime_root, production_number)
-    normalized_state = str(state or "").strip().lower()
-    if normalized_state in {"", "none", "clear"}:
-        current.pop(row_id, None)
-    elif normalized_state in {"green", "red", "done"}:
-        current[row_id] = normalized_state
-    elif is_structured_manufacturing_state_key(row_id) and re.fullmatch(r"\d{1,12}", normalized_state):
-        current[row_id] = normalized_state
-    path.write_text(json.dumps({**metadata, **current}, ensure_ascii=False, indent=2), encoding="utf-8")
-    return current
-
-
 def partial_quantity_state_path(runtime_root: Path, production_number: str) -> Path:
-    """Return the partial-quantity JSON path for a production."""
-    target_dir = runtime_root / production_number
-    target_dir.mkdir(parents=True, exist_ok=True)
-    return target_dir / "partial-qty.json"
+    """Return the existing partial-quantity JSON path without changing the filesystem."""
+    return runtime_root / production_number / "partial-qty.json"
 
 
 def load_partial_quantity_state(runtime_root: Path, production_number: str) -> dict[str, str]:
@@ -403,9 +368,14 @@ ROW_DATA_EDITABLE_FIELDS = frozenset({
 })
 
 
+def row_data_path(runtime_root: Path, production_number: str) -> Path:
+    """Return the row-data override file beside the production state file."""
+    return runtime_root / production_number / "row-data.json"
+
+
 def load_row_data(runtime_root: Path, production_number: str) -> dict[str, dict[str, str]]:
-    """Load display-field overrides stored beside manufacturing state."""
-    path = runtime_root / production_number / "row-data.json"
+    """Load safe display-field overrides keyed by the persisted row identity."""
+    path = row_data_path(runtime_root, production_number)
     if not path.exists():
         return {}
     try:
@@ -429,17 +399,31 @@ def load_row_data(runtime_root: Path, production_number: str) -> dict[str, dict[
     return result
 
 
-def save_partial_quantity_state(runtime_root: Path, production_number: str, key: str, value: str) -> dict[str, str]:
-    """Save or clear one partial-quantity value and return the new state map."""
-    current = load_partial_quantity_state(runtime_root, production_number)
-    normalized_key = str(key or "").strip()
-    normalized_value = str(value or "").strip()
-    if not normalized_key:
-        return current
-    if normalized_value:
-        current[normalized_key] = normalized_value
-    else:
-        current.pop(normalized_key, None)
-    path = partial_quantity_state_path(runtime_root, production_number)
+def save_row_data(
+    runtime_root: Path,
+    production_number: str,
+    row_key: str,
+    fields: dict[str, object],
+) -> dict[str, str]:
+    """Persist safe display overrides using the same row identity as state saving."""
+    clean_number = str(production_number or "").strip()
+    clean_row_key = str(row_key or "").strip()
+    if not clean_number or not clean_row_key:
+        raise ValueError("Hiányzik a gyártás/szállítmány vagy a sorazonosító.")
+    clean_fields = {
+        str(field): str(value or "").strip()[:500]
+        for field, value in fields.items()
+        if str(field) in ROW_DATA_EDITABLE_FIELDS
+    }
+    if not clean_fields:
+        raise ValueError("Nincs menthető soradat.")
+    target_dir = runtime_root / clean_number
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = row_data_path(runtime_root, clean_number)
+    current = load_row_data(runtime_root, clean_number)
+    merged_fields = {**current.get(clean_row_key, {}), **clean_fields}
+    current[clean_row_key] = merged_fields
     path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
-    return current
+    return dict(merged_fields)
+
+

@@ -20,6 +20,7 @@ def render_manufacturing_page(
     partial_qty_route: str,
     report_ready_route: str,
     topfloor_box_route: str = "",
+    row_edit_route: str = "",
     topfloor_storage_box_types: list[dict[str, object]] | None = None,
     selected_number: str,
     operations: list[dict[str, str]],
@@ -192,6 +193,7 @@ def render_manufacturing_page(
             "partialQtyRoute": partial_qty_route,
             "reportReadyRoute": report_ready_route,
             "topfloorBoxRoute": topfloor_box_route,
+            "rowEditRoute": row_edit_route,
             "topfloorStorageBoxTypes": topfloor_storage_box_types or [],
         }
     )
@@ -2250,6 +2252,33 @@ def render_manufacturing_page(
     .mfg-confirm-button.is-cancel {{
       background: #f8fafc;
     }}
+    .mfg-row-edit-form {{
+      display: grid;
+      gap: 14px;
+    }}
+    .mfg-row-edit-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
+      max-height: min(60vh, 560px);
+      overflow: auto;
+      padding: 2px;
+    }}
+    .mfg-row-edit-field {{
+      display: grid;
+      gap: 5px;
+      color: #334155;
+      font-size: 0.76rem;
+      font-weight: 800;
+    }}
+    .mfg-row-edit-field input {{
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: #fff;
+      color: #0f172a;
+    }}
     .mfg-row-barcode-wrap {{
       display: grid;
       gap: 2px;
@@ -2474,9 +2503,9 @@ def render_manufacturing_page(
         <input class="mfg-search-input" id="mfg-search-input" type="search" autocomplete="off" spellcheck="false" placeholder="Kereses..." />
       </div>
       <div class="mfg-status-row">
-        <div class="mfg-status" id="mfg-status">Érintés: zöld, majd piros, majd üres.</div>
+        <div class="mfg-status" id="mfg-status">Megfigyelési mód: az állapotok csak olvashatók.</div>
         <div class="mfg-status-actions">
-          <button class="mfg-report-button" id="mfg-report-ready" type="button">Készre jelentek</button>
+          <span id="mfg-report-ready" hidden></span>
           <button class="mfg-issued-toggle" id="mfg-issued-toggle" type="button" aria-pressed="false">Kiadottak mutatása</button>
           <div class="mfg-layout-toggle" id="mfg-layout-toggle" aria-label="Nézet mód">
             <button class="mfg-layout-button is-active" type="button" data-layout-mode="single" title="Egy kategória">▣</button>
@@ -2487,37 +2516,22 @@ def render_manufacturing_page(
       <div class="mfg-content" id="mfg-content"></div>
       <div class="mfg-scroll-rail" id="mfg-scroll-rail" aria-hidden="true"></div>
     </section>
-    <div class="mfg-choice-modal" id="mfg-choice-modal" hidden>
-      <div class="mfg-choice-card" role="dialog" aria-modal="true" aria-labelledby="mfg-choice-title">
-        <div class="mfg-choice-title" id="mfg-choice-title">Piros tétel áthelyezése</div>
-        <div class="mfg-choice-copy">Hova kerüljön a kijelölt piros tétel?</div>
-        <div class="mfg-choice-actions">
-          <button class="mfg-choice-button is-plain" type="button" data-choice-action="plain">Sima</button>
-          <button class="mfg-choice-button is-green" type="button" data-choice-action="green">Zöld</button>
-          <button class="mfg-choice-button is-red" type="button" data-choice-action="red" hidden>Piros</button>
-        </div>
+    <div class="mfg-confirm-modal" id="mfg-row-edit-modal" hidden>
+      <div class="mfg-confirm-card" role="dialog" aria-modal="true" aria-labelledby="mfg-row-edit-title">
+        <h3 class="mfg-confirm-title" id="mfg-row-edit-title">Sor adatainak módosítása</h3>
+        <p class="mfg-confirm-copy">A módosítás külön JSON-fájlba kerül; a sor állapotazonosítói nem változnak.</p>
+        <form class="mfg-row-edit-form" id="mfg-row-edit-form">
+          <div class="mfg-row-edit-grid" id="mfg-row-edit-fields"></div>
+          <div class="mfg-confirm-actions">
+            <button class="mfg-confirm-button is-cancel" id="mfg-row-edit-cancel" type="button">Mégse</button>
+            <button class="mfg-confirm-button is-confirm" type="submit">Mentés</button>
+          </div>
+        </form>
       </div>
     </div>
-    <div class="mfg-confirm-modal" id="mfg-creator-modal" hidden>
-      <div class="mfg-confirm-card" role="dialog" aria-modal="true" aria-labelledby="mfg-creator-title">
-        <h3 class="mfg-confirm-title" id="mfg-creator-title">Ki hozta létre a dobozt?</h3>
-        <p class="mfg-confirm-copy">Válaszd ki a doboz létrehozóját.</p>
-        <div class="mfg-confirm-actions">
-          <button class="mfg-confirm-button is-cancel" type="button" data-creator-action="Andi">Andi</button>
-          <button class="mfg-confirm-button is-confirm" type="button" data-creator-action="Ági">Ági</button>
-        </div>
-      </div>
-    </div>
-    <div class="mfg-confirm-modal" id="mfg-confirm-modal" hidden>
-      <div class="mfg-confirm-card" role="dialog" aria-modal="true" aria-labelledby="mfg-confirm-title">
-        <h3 class="mfg-confirm-title" id="mfg-confirm-title">Biztosan készre jelented a zöld tételeket?</h3>
-        <p class="mfg-confirm-copy">A sikeresen készre jelentett sorok sötétzöldre váltanak és többé nem módosíthatók.</p>
-        <div class="mfg-confirm-actions">
-          <button class="mfg-confirm-button is-cancel" type="button" data-confirm-action="cancel">Mégse</button>
-          <button class="mfg-confirm-button is-confirm" type="button" data-confirm-action="confirm">Igen, készre</button>
-        </div>
-      </div>
-    </div>
+    <div id="mfg-choice-modal" hidden></div>
+    <div id="mfg-creator-modal" hidden></div>
+    <div id="mfg-confirm-modal" hidden></div>
 
     <script type="application/json" id="manufacturing-data">{payload_json}</script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
@@ -2544,7 +2558,11 @@ def render_manufacturing_page(
       const choiceModalNode = document.getElementById("mfg-choice-modal");
       const creatorModalNode = document.getElementById("mfg-creator-modal");
       const confirmModalNode = document.getElementById("mfg-confirm-modal");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !issuedToggleNode || !layoutToggleNode || !choiceModalNode || !creatorModalNode || !confirmModalNode) return;
+      const rowEditModalNode = document.getElementById("mfg-row-edit-modal");
+      const rowEditFormNode = document.getElementById("mfg-row-edit-form");
+      const rowEditFieldsNode = document.getElementById("mfg-row-edit-fields");
+      const rowEditCancelNode = document.getElementById("mfg-row-edit-cancel");
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !issuedToggleNode || !layoutToggleNode || !choiceModalNode || !creatorModalNode || !confirmModalNode || !rowEditModalNode || !rowEditFormNode || !rowEditFieldsNode || !rowEditCancelNode) return;
       const shopfloorLoadPrefix = "[shopfloor-load]";
       const shopfloorSeconds = (startedAt) => ((performance.now() - startedAt) / 1000).toFixed(3);
       const shopfloorLog = (message, data = null) => {{
@@ -2580,6 +2598,7 @@ def render_manufacturing_page(
       const partialQtyRoute = String(payload.partialQtyRoute || "");
       const reportReadyRoute = String(payload.reportReadyRoute || "");
       const topfloorBoxRoute = String(payload.topfloorBoxRoute || "");
+      const rowEditRoute = String(payload.rowEditRoute || "");
       const pageRoute = String(payload.route || window.location.pathname || "");
       const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
       let productionNumber = String(payload.productionNumber || "");
@@ -3021,6 +3040,76 @@ def render_manufacturing_page(
         }}
         return null;
       }};
+      const rowEditFieldDefinitions = [
+        ["name", "Megnevezés"],
+        ["detail", "Részletek"],
+        ["model", "Modell"],
+        ["modelLabel", "Modell megnevezés"],
+        ["size", "Méret"],
+        ["color", "Szín"],
+        ["color23", "Szín 2/3"],
+        ["edge", "Él"],
+        ["drawer_drill", "Fiókelő fúrás"],
+        ["side_type", "Oldal típus"],
+        ["hardware_type", "Vasalat típus"],
+        ["netfrontColor", "NettFront szín"],
+        ["drillLabel", "Fúrás"],
+        ["drawerType", "Fiók típus"],
+        ["handleDrill", "Fogantyú furat"],
+        ["handleType", "Fogantyú típus"],
+        ["openingDir", "Nyitásirány"],
+        ["doorType", "Ajtó típus"],
+        ["pantType", "Pánt típus"],
+        ["frontTrait", "Front jellemző"],
+      ];
+      let activeRowEdit = null;
+      const findRowForEdit = (rowKey, targetProductionNumber) => {{
+        const cleanKey = String(rowKey || "");
+        const cleanProduction = String(targetProductionNumber || "");
+        for (const document of documents) {{
+          for (const section of (Array.isArray(document?.sections) ? document.sections : [])) {{
+            const found = (Array.isArray(section?.rows) ? section.rows : []).find((row) =>
+              rowStorageKey(row) === cleanKey && rowProductionNumber(row) === cleanProduction
+            );
+            if (found) return {{ row: found, documentKey: String(document?.key || "") }};
+          }}
+        }}
+        return null;
+      }};
+      const closeRowEditModal = () => {{
+        rowEditModalNode.hidden = true;
+        rowEditFieldsNode.innerHTML = "";
+        activeRowEdit = null;
+      }};
+      const openRowEditModal = (trigger) => {{
+        if (!rowEditRoute) return;
+        const rowKey = String(trigger.getAttribute("data-row-edit-key") || "").trim();
+        const targetProductionNumber = String(trigger.getAttribute("data-row-production") || productionNumber || "").trim();
+        const found = findRowForEdit(rowKey, targetProductionNumber);
+        if (!found) return;
+        const visibleFields = rowEditFieldDefinitions.filter(([field]) =>
+          field === "detail" || Object.prototype.hasOwnProperty.call(found.row, field)
+        );
+        if (!visibleFields.length) {{
+          setStatus("Ehhez a sorhoz nincs módosítható megjelenített adat.", "is-error");
+          return;
+        }}
+        activeRowEdit = {{
+          row: found.row,
+          rowKey,
+          productionNumber: targetProductionNumber,
+          documentKey: found.documentKey,
+        }};
+        rowEditFieldsNode.innerHTML = visibleFields.map(([field, label]) => `
+          <label class="mfg-row-edit-field">
+            <span>${{escapeHtml(label)}}</span>
+            <input type="text" maxlength="500" data-row-edit-field="${{escapeHtml(field)}}" value="${{escapeHtml(String(found.row[field] ?? ""))}}" />
+          </label>
+        `).join("");
+        rowEditModalNode.hidden = false;
+        const firstInput = rowEditFieldsNode.querySelector("input");
+        if (firstInput instanceof HTMLInputElement) firstInput.focus();
+      }};
       const pantoloHasExplicitUnitState = (row) => {{
         if (!isPantoloGroupedRow(row)) return false;
         for (let index = 0; index < pantoloQuantity(row); index += 1) {{
@@ -3176,15 +3265,7 @@ def render_manufacturing_page(
       let pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
       let isFlushingPendingWrites = false;
 
-      const readPendingWrites = () => {{
-        try {{
-          const value = window.localStorage.getItem(pendingWriteStorageKey);
-          const parsed = value ? JSON.parse(value) : [];
-          return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
-        }} catch (_error) {{
-          return [];
-        }}
-      }};
+      const readPendingWrites = () => [];
 
       const writePendingWrites = (writes) => {{
         try {{
@@ -3217,19 +3298,8 @@ def render_manufacturing_page(
         return id;
       }};
 
-      const postJson = async (route, body) => {{
-        const response = await fetch(route, {{
-          method: "POST",
-          headers: {{ "Content-Type": "application/json" }},
-          body: JSON.stringify(body || {{}}),
-        }});
-        const result = await response.json().catch(() => ({{}}));
-        if (!response.ok || !result.ok) {{
-          const error = new Error(result.error || "A ment\u00e9s nem siker\u00fclt.");
-          error.isPermanent = response.status >= 400 && response.status < 500;
-          throw error;
-        }}
-        return result;
+      const postJson = async () => {{
+        throw new Error("A megfigyelési modul nem módosíthat állapotot.");
       }};
 
       const applyPendingWriteToLocalState = (write) => {{
@@ -3310,14 +3380,9 @@ def render_manufacturing_page(
         }}
       }};
 
-      const queuePersistentWrite = (write) => {{
-        appendPendingWrite(write);
-        applyPendingWriteToLocalState(write);
-        void flushPendingWrites();
+      const queuePersistentWrite = () => {{
+        setStatus("Megfigyelési mód: az állapotok csak olvashatók.");
       }};
-
-      window.addEventListener("online", () => void flushPendingWrites());
-      window.addEventListener("focus", () => void flushPendingWrites());
       const normalizeSearchText = (value) =>
         String(value ?? "")
           .toLocaleLowerCase("hu-HU")
@@ -3536,44 +3601,20 @@ def render_manufacturing_page(
 
       const topfloorCategoryActionsMarkup = (group) => {{
         const category = group?.topfloorCategory || null;
-        if (!category || !topfloorBoxRoute) return "";
-        const categoryKey = String(category.categoryKey || "");
-        const boxId = String(category.boxId || "");
-        const boxCreatedBy = String(category.boxCreatedBy || "Err404").trim() || "Err404";
-        const createDisabled = category.createEnabled ? "" : " disabled";
-        const openDisabled = category.openEnabled ? "" : " disabled";
-        const closeDisabled = category.closeEnabled ? "" : " disabled";
-        const boxLabel = boxId ? `Doboz: ${{escapeHtml(boxId)}} · ${{escapeHtml(boxCreatedBy)}}` : "Nincs doboz";
-        const defaultDescription = String(category.boxDescription || category.defaultBoxDescription || "");
-        const isDoneCategory = topfloorCategoryReadyToIssue(group);
-        const selectedStorageBox = String(category.storageBoxName || "").trim();
-        const issueDisabled = selectedStorageBox && selectedStorageBox !== "Válassz dobozt!" ? "" : " disabled";
-        const storageOptions = topfloorStorageBoxTypes.map((item) => `
-          <option value="${{escapeHtml(item.name)}}" data-code="${{escapeHtml(item.code)}}" data-id="${{escapeHtml(String(item.id || 0))}}"${{item.name === selectedStorageBox ? " selected" : ""}}>${{escapeHtml(item.name)}}</option>
-        `).join("");
-        const doneActionMarkup = category.storageBoxIssued
-          ? `
-              <button class="mfg-topfloor-button" type="button" data-topfloor-action="reprint-label">Címke Újranyomtatása</button>
-              <span class="mfg-topfloor-issued">Kiadva</span>
-            `
-          : `
-              <button class="mfg-topfloor-button" type="button" data-topfloor-action="reprint-label">Címke Újranyomtatása</button>
-              <button class="mfg-topfloor-button" type="button" data-topfloor-action="issue-storage-box"${{issueDisabled}}>Doboz Kiadása</button>
-              <select class="mfg-topfloor-select" data-topfloor-box-type aria-label="Doboz típus">${{storageOptions}}</select>
-            `;
-        const regularActionMarkup = `
-          <button class="mfg-topfloor-button" type="button" data-topfloor-action="create"${{createDisabled}}>Doboz létrehozása</button>
-          <button class="mfg-topfloor-button" type="button" data-topfloor-action="open"${{openDisabled}}>Doboz nyitása</button>
-          <button class="mfg-topfloor-button" type="button" data-topfloor-action="close"${{closeDisabled}}>Doboz zárása</button>
-        `;
+        if (!category) return "";
+        const boxId = String(category.boxId || "").trim();
+        const boxCreatedBy = String(category.boxCreatedBy || "").trim();
+        const boxLabel = boxId
+          ? `Doboz: ${{escapeHtml(boxId)}}${{boxCreatedBy ? ` · ${{escapeHtml(boxCreatedBy)}}` : ""}}`
+          : "Nincs doboz";
+        const statusLabel = category.storageBoxIssued
+          ? "Kiadva"
+          : (category.boxOpen ? "Nyitott" : (boxId ? "Lezárt" : ""));
         return `
-          <div class="mfg-topfloor-actions" data-topfloor-category="${{escapeHtml(categoryKey)}}">
+          <div class="mfg-topfloor-actions">
             <div class="mfg-topfloor-box-row">
               <span class="mfg-section-count">${{boxLabel}}</span>
-              <input class="mfg-topfloor-description" type="text" value="${{escapeHtml(defaultDescription)}}" data-topfloor-description aria-label="Doboz leírás" />
-            </div>
-            <div class="mfg-topfloor-button-row">
-              ${{category.storageBoxIssued || isDoneCategory ? doneActionMarkup : regularActionMarkup}}
+              ${{statusLabel ? `<span class="mfg-topfloor-issued">${{statusLabel}}</span>` : ""}}
             </div>
           </div>
         `;
@@ -4371,7 +4412,7 @@ def render_manufacturing_page(
             const partialValue = showPartialColumn && rowState === "red" ? String(partialQuantityState[partialKey] || "") : "";
             const partialMarkup = showPartialColumn
               ? (rowState === "red"
-                  ? `<div class="mfg-row-partial"><input class="mfg-row-partial-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" value="${{escapeHtml(partialValue)}}" placeholder="db" data-partial-input data-partial-key="${{escapeHtml(partialKey)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" /></div>`
+                  ? `<div class="mfg-row-partial"><span>${{escapeHtml(partialValue || "-")}}</span></div>`
                   : `<div class="mfg-row-partial-empty"></div>`)
               : "";
             const detailText = row.detail || "";
@@ -4396,11 +4437,8 @@ def render_manufacturing_page(
               ? `<span class="is-pill-black">${{displayRowField(row, "drawerType")}}</span>`
               : `<span>${{displayRowField(row, "drawerType")}}</span>`;
             const cncUpperSizeMarkup = row.markSizeBlack
-              ? `<span class="is-pill-black">${{escapeHtml(row.size || "Méret nélkül")}}</span>`
-              : `<span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>`;
-            const cncUpperSideTypeMarkup = row.markSideTypeBlack
-              ? `<span class="is-pill-black">${{escapeHtml(row.side_type || "-")}}</span>`
-              : `<span>${{escapeHtml(row.side_type || "-")}}</span>`;
+              ? `<span class="is-pill-black">${{displayRowField(row, "size", "Méret nélkül")}}</span>`
+              : `<span class="is-size">${{displayRowField(row, "size", "Méret nélkül")}}</span>`;
             const pantoloNormalizeMarkText = (value) =>
               String(value || "")
                 .trim()
@@ -4514,14 +4552,14 @@ def render_manufacturing_page(
                   const unitPartialMarkup = showPartialColumn ? `<div class="mfg-row-partial-empty"></div>` : "";
                   const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
                   return `
-                    <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-state-storage-key="${{escapeHtml(rowStorageKey(unitRow))}}" data-source-row-ids="">
+                    <div class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}">
                       ${{groupedQuantityCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
-                    </button>
+                    </div>
                   `;
                 }}).join("")
               : "";
             return `
-              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" type="button"${{topfloorRowsLocked ? " disabled" : ""}} data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-state-storage-key="${{escapeHtml(rowStorageKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
+              <div class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" data-row-edit data-row-edit-key="${{escapeHtml(rowStorageKey(row))}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
@@ -4544,10 +4582,10 @@ def render_manufacturing_page(
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta">${{cncUpperSizeMarkup}}</div>
-                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
-                          <div class="mfg-row-meta">${{cncUpperSideTypeMarkup}}</div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{displayRowField(row, "color", "Szín nélkül")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{displayRowField(row, "side_type")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{displayRowField(row, "hardware_type")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{displayRowField(row, "edge")}}</span></div>
                           <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                           ${{partialMarkup}}
                         `
@@ -4613,7 +4651,7 @@ def render_manufacturing_page(
                               }}
                             `
                 }}
-              </button>
+              </div>
               ${{pantoloChildRowsMarkup}}
             `;
           }}).join("");
@@ -5316,6 +5354,12 @@ def render_manufacturing_page(
           renderAll();
           return;
         }}
+        const editTrigger = event.target.closest("[data-row-edit]");
+        if (editTrigger instanceof HTMLElement) {{
+          event.preventDefault();
+          openRowEditModal(editTrigger);
+          return;
+        }}
         const row = event.target.closest("[data-mfg-row]");
         if (!(row instanceof HTMLElement)) return;
         const rowId = row.getAttribute("data-row-id") || "";
@@ -5373,6 +5417,62 @@ def render_manufacturing_page(
         const issueButton = categoryNode?.querySelector('[data-topfloor-action="issue-storage-box"]');
         if (issueButton instanceof HTMLButtonElement) {{
           issueButton.disabled = String(select.value || "").trim() === "Válassz dobozt!";
+        }}
+      }});
+
+      rowEditCancelNode.addEventListener("click", closeRowEditModal);
+      rowEditModalNode.addEventListener("click", (event) => {{
+        if (event.target === rowEditModalNode) closeRowEditModal();
+      }});
+      rowEditFormNode.addEventListener("submit", async (event) => {{
+        event.preventDefault();
+        if (!activeRowEdit || !rowEditRoute) return;
+        const fields = {{}};
+        Array.from(rowEditFieldsNode.querySelectorAll("[data-row-edit-field]")).forEach((input) => {{
+          if (!(input instanceof HTMLInputElement)) return;
+          const field = String(input.getAttribute("data-row-edit-field") || "").trim();
+          if (field) fields[field] = String(input.value || "").trim();
+        }});
+        const submitButton = rowEditFormNode.querySelector('button[type="submit"]');
+        if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+        setStatus("Soradat mentése...");
+        try {{
+          const response = await fetch(rowEditRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              production_number: activeRowEdit.productionNumber,
+              document_key: activeRowEdit.documentKey,
+              row_key: activeRowEdit.rowKey,
+              fields,
+            }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "A soradat mentése nem sikerült.");
+          }}
+          const savedFields = result.fields || fields;
+          const originalFields = activeRowEdit.row._rowDataOriginal || {{}};
+          const editedFields = new Set(activeRowEdit.row._rowDataEditedFields || []);
+          Object.keys(savedFields).forEach((field) => {{
+            const originalValue = Object.prototype.hasOwnProperty.call(originalFields, field)
+              ? originalFields[field]
+              : (activeRowEdit.row[field] ?? "");
+            originalFields[field] = originalValue;
+            if (String(savedFields[field] ?? "") !== String(originalValue ?? "")) editedFields.add(field);
+            else editedFields.delete(field);
+          }});
+          activeRowEdit.row._rowDataOriginal = originalFields;
+          activeRowEdit.row._rowDataEditedFields = Array.from(editedFields).sort();
+          Object.assign(activeRowEdit.row, savedFields);
+          productionPayloadCache.clear();
+          closeRowEditModal();
+          renderAll();
+          setStatus("Soradat mentve.", "is-success");
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "A soradat mentése nem sikerült.", "is-error");
+        }} finally {{
+          if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
         }}
       }});
 

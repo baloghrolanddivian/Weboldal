@@ -1,0 +1,12 @@
+﻿"""Route constants for the manufacturing papers workflow."""
+
+from __future__ import annotations
+
+MANUFACTURING_ROUTE = "/apps/admin-gyartasi-papirok"
+MANUFACTURING_DATA_ROUTE = f"{MANUFACTURING_ROUTE}/data"
+MANUFACTURING_ROW_DATA_ROUTE = f"{MANUFACTURING_ROUTE}/row-data"
+MANUFACTURING_STATE_ROUTE = f"{MANUFACTURING_ROUTE}/state"
+MANUFACTURING_PARTIAL_QTY_ROUTE = f"{MANUFACTURING_ROUTE}/partial-qty"
+MANUFACTURING_REPORT_READY_ROUTE = f"{MANUFACTURING_ROUTE}/report-ready"
+MANUFACTURING_TOPFLOOR_BOX_ROUTE = f"{MANUFACTURING_ROUTE}/topfloor-box"
+
