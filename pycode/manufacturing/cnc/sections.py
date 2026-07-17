@@ -1677,6 +1677,16 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         """Return whether is boxos teleszkop row is true."""
         return is_boxos_target_row(row) and folded(row.get("drawer_drill")).startswith("teleszk")
 
+    def is_kinga_anna_teleszkop_row(row: dict) -> bool:
+        """Return whether a Kinga/Anna row uses telescopic rail drilling."""
+        return (
+            clean_text(row.get("size")) == "824 x 505 x 18"
+            and normalize_side_type(row.get("side_type")) in {"normals also", "aaf fiokos ajtos", "af 1+2 fiokos"}
+            and folded(row.get("drawer_drill")).startswith("teleszk")
+            and not is_kamra_row(row.get("name", ""), row.get("color", ""), row.get("side_type", ""))
+            and not is_fvz_row(row)
+        )
+
     def is_box1_mergeable_boxos_teleszkop_row(row: dict) -> bool:
         """Return whether AF/AAF teleszkop rows should merge into the normal lower box."""
         return (
@@ -2317,13 +2327,19 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
     box2_source_rows = [
         row for row in lower_rows
-        if is_boxos_box_hettich_row(row)
+        if (is_boxos_box_hettich_row(row) or is_kinga_anna_teleszkop_row(row))
         and str(row.get("row_id", "")) not in box_avz_ids
     ]
-    box2_display_rows = build_raw_boxos_box_rows() or box2_source_rows
+    kinga_anna_teleszkop_rows = [row for row in box2_source_rows if is_kinga_anna_teleszkop_row(row)]
+    boxos_source_rows = [row for row in box2_source_rows if not is_kinga_anna_teleszkop_row(row)]
+    raw_boxos_rows = build_raw_boxos_box_rows()
+    box2_display_rows = raw_boxos_rows or boxos_source_rows
     box2_rows = aggregate_lower_rows(
         box2_display_rows,
         ("name", "size", "color", "drawer_drill", "side_type", "edge"),
+    )
+    box2_rows.extend(
+        aggregate_kinga_anna_fiokos_rows(kinga_anna_teleszkop_rows)
     )
     box2_ids = {str(row.get("row_id", "")) for row in box2_source_rows}
     box3_rows = [
@@ -2452,10 +2468,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     # Kinga/Anna: keep original source row order, no merge and no additional sorting.
     box4_rows.sort(
         key=lambda row: (
+            clean_text(row.get("color")),
             lower_box_order.get(normalize_side_type(row.get("side_type")), 99),
             1 if "ar goly" in folded(row.get("side_type")) else 0,
             normalize_side_type(row.get("side_type")),
-            clean_text(row.get("color")),
             size_parts(row.get("size")),
             clean_text(row.get("name")),
         )
@@ -2663,6 +2679,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                     "detail": clean_text(row.get("detail")),
                     "columnLayout": "cnc-upper",
                     "markSizeBlack": bool(row.get("markSizeBlack")),
+                    "markSideTypeBlack": "fkf nutos tiplis" in folded(row.get("side_type")),
                     "sourceRowIds": source_row_ids,
                 }
             else:
@@ -2703,12 +2720,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "rack1-other":
             rows.sort(
                 key=lambda row: (
-                    clean_text(row.get("color")),
-                    0 if "fuf" in upper_combined_text(row) or "f\u00fcf" in upper_combined_text(row) else 1,
-                    0 if "fzn" in upper_combined_text(row) else 1,
                     0 if is_upper_595(row) else 1,
                     0 if is_upper_680(row) else 1,
                     0 if is_upper_360(row) else 1,
+                    clean_text(row.get("color")),
                     size_parts(row.get("size")),
                     clean_text(row.get("hardware_type")),
                 )
@@ -2716,6 +2731,8 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "rack2-other":
             rows.sort(
                 key=lambda row: (
+                    1 if is_upper_fuf_or_fzn(row) else 0,
+                    0 if "fuf" in upper_combined_text(row) or "füf" in upper_combined_text(row) else 1,
                     clean_text(row.get("color")),
                     0 if clean_text(row.get("size")).startswith("595 x ") else 1,
                     0 if is_upper_360_special(row) else 1,
@@ -2823,9 +2840,18 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     fuf_or_fzn_rows = [row for row in non_fvz_upper_rows if is_upper_fuf_or_fzn(row)]
     fuf_or_fzn_ids = {upper_row_id(row) for row in fuf_or_fzn_rows}
     zille_rows = [row for row in non_fvz_upper_rows if is_upper_zille_target(row) and upper_row_id(row) not in fuf_or_fzn_ids]
+    rack2_fenek_rows = [
+        row for row in rack2_source_rows
+        if upper_row_id(row) not in fuf_or_fzn_ids
+        and "fenek" in folded(row.get("name"))
+    ]
+    rack2_fenek_ids = {upper_row_id(row) for row in rack2_fenek_rows}
     rack1_box360_rows = [row for row in rack1_source_rows if is_upper_360x330(row)]
     rack1_box360_ids = {upper_row_id(row) for row in rack1_box360_rows}
-    rack2_box360_rows = [row for row in rack2_source_rows if is_upper_360x330(row)]
+    rack2_box360_rows = [
+        row for row in rack2_source_rows
+        if is_upper_360x330(row) and upper_row_id(row) not in rack2_fenek_ids
+    ]
     rack2_box360_ids = {upper_row_id(row) for row in rack2_box360_rows}
 
     rack1_box1_rows = [
@@ -2852,11 +2878,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         row for row in rack1_source_rows
         if upper_row_id(row) not in rack1_box1_ids
         and upper_row_id(row) not in rack1_box2_ids
+        and upper_row_id(row) not in fuf_or_fzn_ids
         and not is_upper_sarok(row)
     ]
-    for row in fuf_or_fzn_rows:
-        if row not in rack1_box3_rows:
-            rack1_box3_rows.append(row)
     for row in rack1_box360_rows:
         if row not in rack1_box3_rows:
             rack1_box3_rows.append(row)
@@ -2868,6 +2892,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_upper_normal_or_fny(row)
         and not is_upper_sarok(row)
         and not is_upper_fuf_or_fzn(row)
+        and upper_row_id(row) not in rack2_fenek_ids
     ]
     rack2_box1_ids = {upper_row_id(row) for row in rack2_box1_rows}
     rack2_box2_rows = [
@@ -2876,6 +2901,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_upper_felnyilo_group(row)
         and not is_upper_sarok(row)
         and not is_upper_fuf_or_fzn(row)
+        and upper_row_id(row) not in rack2_fenek_ids
     ]
     rack2_box2_ids = {upper_row_id(row) for row in rack2_box2_rows}
     rack2_primary_assigned_ids = {row_id for row_id in (rack2_box1_ids | rack2_box2_ids) if row_id}
@@ -2883,6 +2909,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         row for row in rack2_source_rows
         if upper_row_id(row) not in rack2_primary_assigned_ids
         and upper_row_id(row) not in fuf_or_fzn_ids
+        and upper_row_id(row) not in rack2_fenek_ids
         and not is_upper_360x330(row)
         and (not is_upper_sarok_bucket_size(row) or is_upper_360_fmf(row))
         and (
@@ -2896,22 +2923,26 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         if is_upper_360_fmf(row) and not is_upper_360x330(row)
     ]
     for row in all_360_fmf_rows:
-        if row not in rack2_box3_rows:
+        if upper_row_id(row) not in rack2_fenek_ids and row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     fkf_360_rows = [
         row for row in rack2_source_rows
         if is_upper_360_fkf(row) and not is_upper_sarok_bucket_size(row)
     ]
     for row in fkf_360_rows:
-        if row not in rack2_box3_rows:
+        if upper_row_id(row) not in rack2_fenek_ids and row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     for row in zille_rows:
+        if row not in rack2_box3_rows:
+            rack2_box3_rows.append(row)
+    for row in fuf_or_fzn_rows:
         if row not in rack2_box3_rows:
             rack2_box3_rows.append(row)
     rack2_box3_ids = {upper_row_id(row) for row in rack2_box3_rows}
     rack2_box4_rows = [
         row for row in non_fvz_upper_rows
-        if (
+        if upper_row_id(row) not in rack2_fenek_ids
+        and (
             ((is_upper_sarok(row) and not is_upper_360_fmf(row)) and not is_upper_360x330(row))
             or ((is_upper_sarok_bucket_size(row) and not is_upper_360_fmf(row)) and not is_upper_360x330(row))
             or (
@@ -2959,6 +2990,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             rack2_box1_rows,
             rack2_box2_rows,
             rack2_box360_rows,
+            rack2_fenek_rows,
             rack2_box3_rows,
             rack2_box4_rows,
             vegzaro_raklap_rows,
@@ -2980,6 +3012,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_upper_section("1-es konyha · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("1-es konyha · EFT / 360 / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("1-es konyha · Sarok", rack2_box4_rows, "rack2-box4", "sarok")
+    add_upper_section("1-es konyha · Fenekek", rack2_fenek_rows, "rack2-fenek", "rack2-other")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
@@ -2993,6 +3026,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
     add_upper_section("1-es konyha · 360-as elemek", rack2_box360_rows, "rack2-box360", "default")
     add_upper_section("1-es konyha · 595 / 360 FMF / 680 / Zille", rack2_box3_rows, "rack2-box3", "rack2-other")
     add_upper_section("1-es konyha · Sarok és maradék", rack2_box4_rows, "rack2-box4", "sarok")
+    add_upper_section("1-es konyha · Fenekek", rack2_fenek_rows, "rack2-fenek", "rack2-other")
     add_upper_section("Teszt · Nem besorolt", upper_unassigned_rows, "upper-unassigned", "default")
     add_upper_section("Végzáró raklap", vegzaro_raklap_rows, "vegzaro-raklap", "default")
 
