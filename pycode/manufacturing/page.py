@@ -4375,6 +4375,9 @@ def render_manufacturing_page(
             const cncUpperSizeMarkup = row.markSizeBlack
               ? `<span class="is-pill-black">${{escapeHtml(row.size || "Méret nélkül")}}</span>`
               : `<span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>`;
+            const cncUpperSideTypeMarkup = row.markSideTypeBlack
+              ? `<span class="is-pill-black">${{escapeHtml(row.side_type || "-")}}</span>`
+              : `<span>${{escapeHtml(row.side_type || "-")}}</span>`;
             const pantoloNormalizeMarkText = (value) =>
               String(value || "")
                 .trim()
@@ -4519,7 +4522,7 @@ def render_manufacturing_page(
                           </div>
                           <div class="mfg-row-meta">${{cncUpperSizeMarkup}}</div>
                           <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.side_type || "-")}}</span></div>
+                          <div class="mfg-row-meta">${{cncUpperSideTypeMarkup}}</div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
                           <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
                           <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
