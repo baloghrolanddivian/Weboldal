@@ -267,8 +267,9 @@ WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", 
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
 APP_VERSION = "2.1.5"
-STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer"})
+STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer", "gyartas-vezerlo"})
 HR_THEME_USER_ID = "hriroda"
+PRODUCTION_CONTROLLER_THEME_USER_ID = "gyartas-vezerlo"
 ADMIN_THEME_CLASS = b"admin-theme"
 ADMIN_THEME_CLASS_SUFFIX = b" admin-theme"
 
@@ -279,6 +280,8 @@ def apply_user_theme(body: bytes, user) -> bytes:
         theme_class = ADMIN_THEME_CLASS
     elif user is not None and user.user_id == HR_THEME_USER_ID:
         theme_class = b"hr-theme"
+    elif user is not None and user.user_id == PRODUCTION_CONTROLLER_THEME_USER_ID:
+        theme_class = b"production-controller-theme"
     if theme_class is not None:
         body_match = re.search(br"<body([^>]*)>", body, flags=re.IGNORECASE)
         if not body_match:
@@ -473,6 +476,8 @@ def render_home_page(user: AuthUser, raw_path: str = "/") -> bytes:
     page = (BASE_DIR / "index.html").read_text(encoding="utf-8")
     if user.user_id == HR_THEME_USER_ID:
         page = page.replace('<body>', '<body class="hr-theme">', 1)
+    elif user.user_id == PRODUCTION_CONTROLLER_THEME_USER_ID:
+        page = page.replace('<body>', '<body class="production-controller-theme">', 1)
     page = _filter_home_module_cards(page, user)
     page = page.replace("{{APP_VERSION}}", html.escape(APP_VERSION), 1)
     page = page.replace("</header>", _login_form_html(user, raw_path) + "\n      </header>", 1)
