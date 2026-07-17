@@ -200,6 +200,16 @@ from invoice_translator import (
     extract_invoice_upload,
     render_form,
 )
+from hr import (
+    APP_ROUTE as HR_APP_ROUTE,
+    CONFIRM_ROUTE as HR_CONFIRM_ROUTE,
+    HR_ACCESS_USER_IDS,
+    HR_COLUMNS as HR_DATA_COLUMNS,
+    build_hr_documents,
+    read_people,
+    render_form as render_hr_form,
+    render_review as render_hr_review,
+)
 from tools.dev_reload import dev_reload_token, run_dev_supervisor
 from tools.datetime_format import format_hungarian_timestamp as _front_inventory_format_timestamp
 from tools.html_helpers import json_script_payload as _json_script_payload
@@ -256,7 +266,56 @@ DEV_EVENT_HEARTBEAT_SECONDS = 10
 WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", ".csv"}
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
-APP_VERSION = "2.1.4"
+APP_VERSION = "2.1.5"
+STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer"})
+HR_THEME_USER_ID = "hriroda"
+ADMIN_THEME_CLASS = b"admin-theme"
+ADMIN_THEME_CLASS_SUFFIX = b" admin-theme"
+
+def apply_user_theme(body: bytes, user) -> bytes:
+    """Add the per-user visual theme class to an HTML response body."""
+    theme_class = None
+    if user is not None and user.is_admin:
+        theme_class = ADMIN_THEME_CLASS
+    elif user is not None and user.user_id == HR_THEME_USER_ID:
+        theme_class = b"hr-theme"
+    if theme_class is not None:
+        body_match = re.search(br"<body([^>]*)>", body, flags=re.IGNORECASE)
+        if not body_match:
+            return body
+        attributes = body_match.group(1)
+        class_match = re.search(br'\sclass=("[^"]*"|\'[^\']*\')', attributes, flags=re.IGNORECASE)
+        if class_match:
+            quote = class_match.group(1)[:1]
+            existing_classes = class_match.group(1)[1:-1]
+            if re.search(br"(?:^|\s)" + re.escape(theme_class) + br"(?:\s|$)", existing_classes):
+                return body
+            classes = existing_classes + b" " + theme_class
+            replacement = attributes[:class_match.start(1)] + quote + classes + quote + attributes[class_match.end(1):]
+            return body[:body_match.start(1)] + replacement + body[body_match.end(1):]
+        return body[:body_match.end(1)] + b' class="' + theme_class + b'"' + body[body_match.end(1):]
+    return body
+
+
+def apply_hr_theme(body: bytes, user) -> bytes:
+    """Backward-compatible HR-only theme helper for HR render paths."""
+    if user is not None and user.user_id == HR_THEME_USER_ID:
+        return apply_user_theme(body, user)
+    return body
+
+
+class _ThemedResponseWriter:
+    """Apply the current user's theme to HTML at the final response boundary."""
+
+    def __init__(self, raw_writer, user):
+        self._raw_writer = raw_writer
+        self._user = user
+
+    def write(self, body):
+        self._raw_writer.write(apply_user_theme(body, self._user))
+
+    def __getattr__(self, name):
+        return getattr(self._raw_writer, name)
 
 
 NETTFRONT_ROUTE = "/apps/nettfront-olvaso"
@@ -302,21 +361,23 @@ SEMIFINISHED_FRONT_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RU
 
 
 AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
-    (APP_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
-    (GENERATE_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
-    (MANUFACTURING_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
-    (MANUFACTURING_DATA_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
-    (MANUFACTURING_STATE_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
-    (MANUFACTURING_PARTIAL_QTY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
-    (MANUFACTURING_REPORT_READY_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
-    (MANUFACTURING_TOPFLOOR_BOX_ROUTE, MANUFACTURING_ACCESS_USER_IDS),
-    (PRODUCTION_INVENTORY_GROUP_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
-    (FRONT_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
-    (FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
-    (FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
-    (FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
-    (FRONT_INVENTORY_ALERT_CLEAR_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
-    (FRONT_INVENTORY_MISSING_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (APP_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (GENERATE_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (HR_APP_ROUTE, HR_ACCESS_USER_IDS),
+    (HR_CONFIRM_ROUTE, HR_ACCESS_USER_IDS),
+    (MANUFACTURING_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_DATA_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_STATE_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_PARTIAL_QTY_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_REPORT_READY_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_TOPFLOOR_BOX_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (PRODUCTION_INVENTORY_GROUP_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_WORKER_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_LEGACY_WORKER_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_STATE_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_PRESENCE_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_ALERT_CLEAR_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_MISSING_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
@@ -410,6 +471,8 @@ def _login_form_html(user: AuthUser, raw_path: str) -> str:
 def render_home_page(user: AuthUser, raw_path: str = "/") -> bytes:
     """Render the home page with only the modules available to the user."""
     page = (BASE_DIR / "index.html").read_text(encoding="utf-8")
+    if user.user_id == HR_THEME_USER_ID:
+        page = page.replace('<body>', '<body class="hr-theme">', 1)
     page = _filter_home_module_cards(page, user)
     page = page.replace("{{APP_VERSION}}", html.escape(APP_VERSION), 1)
     page = page.replace("</header>", _login_form_html(user, raw_path) + "\n      </header>", 1)
@@ -2797,6 +2860,7 @@ def render_material_inventory_form(
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
   <style>
     :root {{ --text:#0f172a; --muted:#64748b; --line:#d8e0ea; --accent:#0c8d57; --accent2:#12a566; --bg:#eef3f7; }}
     * {{ box-sizing:border-box; }}
@@ -5138,6 +5202,22 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 
 class InvoiceHandler(BaseHTTPRequestHandler):
     """Main HTTP router for Divian-HUB pages, APIs, and downloads."""
+
+    def send_header(self, keyword: str, value: str) -> None:
+        if keyword.lower() == "content-type" and "text/html" in value.lower():
+            self._uses_platform_font = True
+            self._theme_is_html_response = True
+        if keyword.lower() == "content-length" and getattr(self, "_theme_is_html_response", False):
+            user = getattr(self, "_theme_user", None)
+            if user is not None and user.is_admin:
+                value = str(int(value) + len(ADMIN_THEME_CLASS_SUFFIX))
+        super().send_header(keyword, value)
+
+    def end_headers(self) -> None:
+        if getattr(self, "_uses_platform_font", False):
+            super().send_header("Link", '</platform-font.css>; rel=stylesheet')
+        super().end_headers()
+
     def current_user(self) -> AuthUser:
         """Return the user represented by the signed client cookie."""
         return user_from_cookie(LOGIN_DB_PATH, self.headers.get("Cookie"))
@@ -5160,6 +5240,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Route authenticated GET requests to pages, JSON data, or downloads."""
+        self._theme_user = self.current_user()
+        self.wfile = _ThemedResponseWriter(self.wfile, self._theme_user)
         path = _normalize_path(self.path)
         if path == DEV_RELOAD_ROUTE:
             self.respond_dev_reload_stream()
@@ -5180,6 +5262,16 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
         if path == APP_ROUTE:
             body = render_form()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == HR_APP_ROUTE:
+            body = apply_hr_theme(render_hr_form(), self.current_user())
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -5985,6 +6077,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Route authenticated POST requests for uploads, state, and actions."""
+        self._theme_user = self.current_user()
+        self.wfile = _ThemedResponseWriter(self.wfile, self._theme_user)
         path = _normalize_path(self.path)
         if path == LOGIN_ROUTE:
             self.handle_login()
@@ -7129,6 +7223,71 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == HR_APP_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            files = _extract_uploaded_files(self.headers, raw_body)
+            upload = files.get("people_file")
+            if upload is None:
+                self.respond_hr_form("Hiányzik az Excel fájl.")
+                return
+            _name, file_data = upload
+            try:
+                people = read_people(file_data)
+                bosses = json.loads((DATA_DIR / "HR-files" / "bosses.json").read_text(encoding="utf-8"))
+                body = apply_hr_theme(render_hr_review(people, bosses), self.current_user())
+            except Exception as exc:
+                self.respond_hr_form(f"Az Excel beolvasása nem sikerült: {exc}")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == HR_CONFIRM_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                count = int(form_data.get("row_count", "0"))
+                selected_indices = [index for index in range(count) if form_data.get(f"p_{index}_selected") == "1"]
+                if not selected_indices:
+                    raise ValueError("Legalább egy személyt válassz ki a dokumentumgeneráláshoz.")
+                people = [{key: str(form_data.get(f"p_{index}_{key}", "")) for key in HR_DATA_COLUMNS} for index in selected_indices]
+                required_person_keys = (*HR_DATA_COLUMNS, "jobdescription")
+                for row_number, person in zip(selected_indices, people):
+                    person["jobdescription"] = str(form_data.get(f"p_{row_number}_jobdescription", ""))
+                    missing = [key for key in required_person_keys if not person.get(key, "").strip()]
+                    if missing:
+                        raise ValueError(f"A(z) {row_number + 1}. kiválasztott sorban minden személyes mezőt ki kell tölteni.")
+                bosses = json.loads((DATA_DIR / "HR-files" / "bosses.json").read_text(encoding="utf-8"))
+                extra_keys = ("workplace", "boss", "workbreak", "breaktype", "orderfromname", "qualification", "requirements")
+                extras = []
+                for index in selected_indices:
+                    person_extra = {key: str(form_data.get(f"p_{index}_{key}", "")) for key in extra_keys}
+                    missing_extra = [key for key in extra_keys if not person_extra.get(key, "").strip()]
+                    if missing_extra:
+                        raise ValueError(f"A(z) {index + 1}. kiválasztott sorban minden további mezőt ki kell tölteni.")
+                    person_boss = person_extra.get("boss", "")
+                    if person_boss not in bosses:
+                        raise ValueError(f"Érvénytelen felettes a(z) {index + 1}. személynél.")
+                    person_extra["boss_data"] = bosses[person_boss]
+                    extras.append(person_extra)
+                payload, download_name = build_hr_documents(people, extras, DATA_DIR / "HR-files")
+            except Exception as exc:
+                self.respond_hr_form(f"A dokumentumok generálása nem sikerült: {exc}", status=400)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{urllib.parse.quote(download_name)}")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
         if path != GENERATE_ROUTE:
             self.send_error(404)
             return
@@ -7163,6 +7322,15 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         body = render_form(message)
         self.send_response(400)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def respond_hr_form(self, message: str, status: int = 400):
+        body = apply_hr_theme(render_hr_form(message), self.current_user())
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

@@ -16,6 +16,7 @@ from pathlib import Path
 
 DEFAULT_USER_ID = "manufacturer"
 ADMIN_USER_ID = "admin"
+HR_USER_ID = "hriroda"
 AUTH_COOKIE_NAME = "divian_hub_login"
 MAX_PASSWORD_LENGTH = 15
 COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
@@ -81,6 +82,17 @@ def ensure_login_database(path: Path) -> None:
                 is_admin = 1
             """,
             (ADMIN_USER_ID, "admin", password_hash("4lb4TRO5S2")),
+        )
+        conn.execute(
+            """
+            INSERT INTO users (user_id, display_name, password_hash, is_admin)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT(user_id) DO UPDATE SET
+                display_name = excluded.display_name,
+                password_hash = excluded.password_hash,
+                is_admin = 0
+            """,
+            (HR_USER_ID, "HR iroda", password_hash("M4nd4l0r1An")),
         )
         existing_secret = conn.execute("SELECT value FROM settings WHERE key = ?", ("cookie_secret",)).fetchone()
         if existing_secret is None:
