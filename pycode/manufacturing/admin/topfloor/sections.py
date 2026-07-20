@@ -1,6 +1,7 @@
-"""Default-view import surface for the shared Topfloor builders."""
+"""Admin-view import surface for the shared Topfloor builders."""
 
-from ..base.topfloor_sections import (
+# Admin adapter for the shared Topfloor builders.
+from manufacturing.base.topfloor_sections import (
     _manufacturing_topfloor_document,
     _manufacturing_topfloor_document_from_bundles,
 )

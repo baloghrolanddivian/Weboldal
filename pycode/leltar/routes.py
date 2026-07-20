@@ -1,7 +1,7 @@
 """Route constants for the admin and production inventory modules."""
 
-ADMIN_INVENTORY_ACCESS_USER_IDS = frozenset()
-PRODUCTION_INVENTORY_ACCESS_USER_IDS = frozenset({"manufacturer"})
+ADMIN_INVENTORY_ACCESS_USER_IDS = frozenset({"gyartas-vezerlo"})
+PRODUCTION_INVENTORY_ACCESS_USER_IDS = frozenset({"manufacturer", "gyartas-vezerlo"})
 
 ADMIN_INVENTORY_GROUP_ROUTE = "/apps/admin-leltar"
 PRODUCTION_INVENTORY_GROUP_ROUTE = "/apps/gyartas-leltar"
