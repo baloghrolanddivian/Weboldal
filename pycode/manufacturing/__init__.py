@@ -17,6 +17,7 @@ from .common import (
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
+    MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
@@ -45,6 +46,7 @@ from .workflow import (
 )
 
 __all__ = [
+    "MANUFACTURING_ADMIN_REVISION_ROUTE",
     "MANUFACTURING_DATA_ROUTE",
     "MANUFACTURING_OPERATION_DEFINITIONS",
     "MANUFACTURING_PARTIAL_QTY_ROUTE",

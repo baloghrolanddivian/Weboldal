@@ -8,7 +8,7 @@ import re
 import threading
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 
@@ -427,6 +427,35 @@ def load_row_data(runtime_root: Path, production_number: str) -> dict[str, dict[
         if fields:
             result[clean_key] = fields
     return result
+
+
+def load_shipment_date(runtime_root: Path, shipment_id: str) -> str:
+    """Load a Topfloor shipment date stored beside the shipment state."""
+    clean_shipment_id = str(shipment_id or "").strip()
+    if not clean_shipment_id:
+        return ""
+    path = runtime_root / clean_shipment_id / "shipment-date.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        value = str(payload.get("shipment_date", "") if isinstance(payload, dict) else "").strip()
+        date.fromisoformat(value)
+        return value
+    except Exception:
+        return ""
+
+
+def load_admin_change_revision(runtime_root: Path) -> str:
+    """Load the revision bumped by an Admin Manufacturing display edit."""
+    path = runtime_root / "admin-change.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return str(payload.get("revision", "") if isinstance(payload, dict) else "").strip()
+    except Exception:
+        return ""
 
 
 def save_partial_quantity_state(runtime_root: Path, production_number: str, key: str, value: str) -> dict[str, str]:

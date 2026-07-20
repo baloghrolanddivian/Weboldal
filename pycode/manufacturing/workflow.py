@@ -23,9 +23,11 @@ from .common import (
     available_production_numbers,
     is_structured_manufacturing_state_key,
     latest_production_number,
+    load_admin_change_revision,
     load_partial_quantity_state,
     load_production_bundle,
     load_row_data,
+    load_shipment_date,
     load_selection_state,
     production_folder,
     save_partial_quantity_state,
@@ -34,6 +36,7 @@ from .common import (
 from .page import render_manufacturing_page
 from .config import REPO_ROOT, bundle_disk_cache_dir, runtime_dir
 from .routes import (
+    MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
@@ -1041,6 +1044,7 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
         if not shipment_id:
             continue
         is_all_shipments_view = shipment_id == "__all__"
+        shipment_date = "" if is_all_shipments_view else load_shipment_date(runtime_dir() / "topfloor", shipment_id)
         shipment_label = str(view.get("label", "") or "").strip() or "Nagyautó"
         try:
             category_count = max(0, int(view.get("count", 0) or 0))
@@ -1069,6 +1073,7 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
                 "count": category_count,
                 "issued_count": issued_count,
                 "date_label": shipment_label,
+                "shipment_date": shipment_date,
                 "view_key": view_key,
                 "is_active": not entries,
                 "is_complete": shipment_complete,
@@ -1636,6 +1641,8 @@ def manufacturing_module_payload(
                             "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
                             "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
                             "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+                            "adminRevisionRoute": MANUFACTURING_ADMIN_REVISION_ROUTE,
+                            "adminChangeRevision": load_admin_change_revision(runtime_dir()),
                             "topfloorStorageBoxTypes": topfloor_storage_box_types,
                             "productionNumber": cache_number,
                             "selectedOperation": selected_operation,
@@ -1658,6 +1665,8 @@ def manufacturing_module_payload(
         "partialQtyRoute": MANUFACTURING_PARTIAL_QTY_ROUTE,
         "reportReadyRoute": MANUFACTURING_REPORT_READY_ROUTE,
         "topfloorBoxRoute": MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+        "adminRevisionRoute": MANUFACTURING_ADMIN_REVISION_ROUTE,
+        "adminChangeRevision": load_admin_change_revision(runtime_dir()),
         "topfloorStorageBoxTypes": topfloor_storage_box_types,
         "productionNumber": selected_number,
         "operations": operations,
@@ -1699,6 +1708,8 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        "adminRevisionRoute": str(module_payload.get("adminRevisionRoute", MANUFACTURING_ADMIN_REVISION_ROUTE)),
+        "adminChangeRevision": str(module_payload.get("adminChangeRevision", "")),
         "topfloorStorageBoxTypes": (
             module_payload.get("topfloorStorageBoxTypes", [])
             if isinstance(module_payload.get("topfloorStorageBoxTypes"), list)
@@ -1728,6 +1739,8 @@ def render_manufacturing_module(
         partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         topfloor_box_route=str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        admin_revision_route=str(payload.get("adminRevisionRoute", MANUFACTURING_ADMIN_REVISION_ROUTE)),
+        admin_change_revision=str(payload.get("adminChangeRevision", "")),
         topfloor_storage_box_types=payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
         selected_number=str(payload.get("productionNumber", "")),
         operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],

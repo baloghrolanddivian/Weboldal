@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - Windows-only optional import
 
 from manufacturing import (
     MANUFACTURING_ACCESS_USER_IDS,
+    MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_OPERATION_DEFINITIONS,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
@@ -62,13 +63,17 @@ from manufacturing import (
 from admin_manufacturing import (
     MANUFACTURING_DATA_ROUTE as ADMIN_MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_ROW_DATA_ROUTE as ADMIN_MANUFACTURING_ROW_DATA_ROUTE,
+    MANUFACTURING_SHIPMENT_DATE_ROUTE as ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE,
     MANUFACTURING_ROUTE as ADMIN_MANUFACTURING_ROUTE,
     configure_manufacturing as configure_admin_manufacturing,
     manufacturing_client_payload as admin_manufacturing_client_payload,
     manufacturing_module_payload as admin_manufacturing_module_payload,
+    load_admin_change_revision as load_admin_manufacturing_change_revision,
     render_manufacturing_module as render_admin_manufacturing_module,
     runtime_dir as admin_manufacturing_runtime_dir,
     save_row_data as save_admin_manufacturing_row_data,
+    save_shipment_date as save_admin_manufacturing_shipment_date,
+    signal_admin_change as signal_admin_manufacturing_change,
 )
 from matt_inventory import (
     MATT_INVENTORY_ACCESS_USER_IDS,
@@ -383,6 +388,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (HR_CONFIRM_ROUTE, HR_ACCESS_USER_IDS),
     (MANUFACTURING_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_DATA_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_ADMIN_REVISION_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_STATE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_PARTIAL_QTY_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_REPORT_READY_ROUTE, STANDARD_ACCESS_USER_IDS),
@@ -5285,6 +5291,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         if self.reject_unauthorized_module():
             return
 
+        if path == MANUFACTURING_ADMIN_REVISION_ROUTE:
+            revision = load_admin_manufacturing_change_revision(admin_manufacturing_runtime_dir())
+            self.respond_json(200, {"ok": True, "revision": revision})
+            return
+
         if path == APP_ROUTE:
             body = render_form()
             self.send_response(200)
@@ -6115,6 +6126,47 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         if self.reject_unauthorized_module():
             return
 
+        if path == ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            shipment_id = _manufacturing_normalize_number(payload.get("shipment_id", ""))
+            shipment_date = str(payload.get("shipment_date", "") or "").strip()
+            if not shipment_id:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a szállítmány azonosítója."})
+                return
+            try:
+                saved_date = save_admin_manufacturing_shipment_date(
+                    admin_manufacturing_runtime_dir() / "topfloor",
+                    shipment_id,
+                    shipment_date,
+                )
+                admin_change_revision = signal_admin_manufacturing_change(
+                    admin_manufacturing_runtime_dir(),
+                    kind="shipment-date",
+                    target=shipment_id,
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A szállítási dátum mentése nem sikerült: {exc}"})
+                return
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "shipment_id": shipment_id,
+                    "shipment_date": saved_date,
+                    "admin_change_revision": admin_change_revision,
+                },
+            )
+            return
+
         if path == ADMIN_MANUFACTURING_ROW_DATA_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
@@ -6140,6 +6192,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     row_key,
                     fields,
                 )
+                admin_change_revision = signal_admin_manufacturing_change(
+                    admin_manufacturing_runtime_dir(),
+                    kind="row-data",
+                    target=production_number,
+                )
             except ValueError as exc:
                 self.respond_json(400, {"ok": False, "error": str(exc)})
                 return
@@ -6153,6 +6210,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "production_number": production_number,
                     "row_key": row_key,
                     "fields": saved_fields,
+                    "admin_change_revision": admin_change_revision,
                 },
             )
             return

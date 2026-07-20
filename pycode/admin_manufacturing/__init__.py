@@ -8,12 +8,16 @@ from .common import (
     available_production_entries,
     available_production_numbers,
     latest_production_number,
+    load_admin_change_revision,
     load_partial_quantity_state,
     load_production_bundle,
     load_row_data,
+    load_shipment_date,
     load_selection_state,
     production_folder,
     save_row_data,
+    save_shipment_date,
+    signal_admin_change,
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
@@ -21,6 +25,7 @@ from .routes import (
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROW_DATA_ROUTE,
+    MANUFACTURING_SHIPMENT_DATE_ROUTE,
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
     MANUFACTURING_TOPFLOOR_BOX_ROUTE,
@@ -52,6 +57,7 @@ __all__ = [
     "MANUFACTURING_PRIME_SYNC_ON_START",
     "MANUFACTURING_REPORT_READY_ROUTE",
     "MANUFACTURING_ROW_DATA_ROUTE",
+    "MANUFACTURING_SHIPMENT_DATE_ROUTE",
     "MANUFACTURING_ROUTE",
     "MANUFACTURING_STATE_ROUTE",
     "MANUFACTURING_TOPFLOOR_BOX_ROUTE",
@@ -72,9 +78,11 @@ __all__ = [
     "available_production_numbers",
     "configure_manufacturing",
     "latest_production_number",
+    "load_admin_change_revision",
     "load_partial_quantity_state",
     "load_production_bundle",
     "load_row_data",
+    "load_shipment_date",
     "load_selection_state",
     "manufacturing_client_payload",
     "manufacturing_module_payload",
@@ -82,5 +90,7 @@ __all__ = [
     "render_manufacturing_module",
     "runtime_dir",
     "save_row_data",
+    "save_shipment_date",
+    "signal_admin_change",
 ]
 

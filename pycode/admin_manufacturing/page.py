@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import urllib.parse
+from datetime import date
 
 
 def _json_script_payload(payload: object) -> str:
@@ -21,6 +22,9 @@ def render_manufacturing_page(
     report_ready_route: str,
     topfloor_box_route: str = "",
     row_edit_route: str = "",
+    shipment_date_route: str = "",
+    admin_revision_route: str = "",
+    admin_change_revision: str = "",
     topfloor_storage_box_types: list[dict[str, object]] | None = None,
     selected_number: str,
     operations: list[dict[str, str]],
@@ -101,6 +105,28 @@ def render_manufacturing_page(
             return " is-complete"
         return ""
 
+    def chip_shipment_date(entry: dict) -> str:
+        if str(entry.get("kind", "")) != "shipment" or str(entry.get("view_key", "")) == "shipment::__all__":
+            return ""
+        value = str(entry.get("shipment_date", "") or "").strip()
+        try:
+            date.fromisoformat(value)
+        except ValueError:
+            return ""
+        return value
+
+    def chip_date_class(entry: dict) -> str:
+        value = chip_shipment_date(entry)
+        if not value:
+            return ""
+        days = (date.fromisoformat(value) - date.today()).days
+        tone = "red" if days <= 0 else ("orange" if days <= 7 else "yellow")
+        return f" has-shipment-date is-date-{tone}"
+
+    def chip_shipment_date_html(entry: dict) -> str:
+        value = chip_shipment_date(entry)
+        return f'<span class="mfg-chip-shipment-date">{html.escape(value)}</span>' if value else ""
+
     def chip_number_text(entry: dict) -> str:
         entry_number = str(entry.get("number", ""))
         if str(entry.get("kind", "")) != "shipment":
@@ -122,11 +148,12 @@ def render_manufacturing_page(
 
     recent_chips_html = "".join(
         (
-            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}" '
+            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}{chip_date_class(entry)}" '
             f'href="{chip_href(entry)}" '
             f"{chip_attrs(entry)}>"
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
             f'<span class="mfg-chip-number">{html.escape(chip_number_text(entry))}</span>'
+            f'{chip_shipment_date_html(entry)}'
             f"</a>"
         )
         for entry in recent_productions
@@ -170,7 +197,13 @@ def render_manufacturing_page(
           <strong id="mfg-operation-title">{html.escape(str(active_document.get("label", "")))}</strong>
           <span class="mfg-operation-source" id="mfg-operation-source"{"" if active_source_label else " hidden"}>{html.escape(active_source_label)}</span>
         </div>
-        <a class="mfg-picker-back" href="{picker_href}">Másik művelet</a>
+        <div class="mfg-operation-header-actions">
+          <label class="mfg-shipment-date-control" id="mfg-shipment-date-control" hidden>
+            <span>Szállítás dátuma</span>
+            <input id="mfg-shipment-date-input" type="date" aria-label="Szállítás dátuma" />
+          </label>
+          <a class="mfg-picker-back" href="{picker_href}">Másik művelet</a>
+        </div>
       </section>
         """
         if active_document is not None
@@ -194,6 +227,9 @@ def render_manufacturing_page(
             "reportReadyRoute": report_ready_route,
             "topfloorBoxRoute": topfloor_box_route,
             "rowEditRoute": row_edit_route,
+            "shipmentDateRoute": shipment_date_route,
+            "adminRevisionRoute": admin_revision_route,
+            "adminChangeRevision": admin_change_revision,
             "topfloorStorageBoxTypes": topfloor_storage_box_types or [],
         }
     )
@@ -213,11 +249,11 @@ def render_manufacturing_page(
   <style>
     :root {{
       color-scheme: light;
-      --mfg-bg: #f3f5f7;
+      --mfg-bg: #e7edf5;
       --mfg-panel: #ffffff;
-      --mfg-panel-soft: #f8fafc;
-      --mfg-line: #d7dde4;
-      --mfg-line-strong: #c5ced8;
+      --mfg-panel-soft: #f6f8fc;
+      --mfg-line: #cbd5e1;
+      --mfg-line-strong: #aebdce;
       --mfg-text: #121417;
       --mfg-muted: #5f6975;
       --mfg-shadow: 0 18px 40px rgba(17, 24, 39, 0.08);
@@ -238,7 +274,9 @@ def render_manufacturing_page(
     html, body {{
       margin: 0;
       min-height: 100%;
-      background: var(--mfg-bg);
+      background:
+        radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.09), transparent 32rem),
+        linear-gradient(135deg, #f1f5fb 0%, var(--mfg-bg) 55%, #dce5f0 100%);
       color: var(--mfg-text);
       font-family: "Manrope", sans-serif;
       overflow-x: hidden;
@@ -272,7 +310,7 @@ def render_manufacturing_page(
       display: none;
       touch-action: pan-y;
       background:
-        linear-gradient(90deg, rgba(243, 245, 247, 0), rgba(243, 245, 247, 0.96) 34%),
+        linear-gradient(90deg, rgba(231, 237, 245, 0), rgba(231, 237, 245, 0.96) 34%),
         repeating-linear-gradient(
           180deg,
           rgba(17, 24, 39, 0.16) 0,
@@ -456,6 +494,45 @@ def render_manufacturing_page(
       margin-top: 4px;
       font-size: 1rem;
       font-weight: 800;
+    }}
+    .mfg-operation-header-actions {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .mfg-shipment-date-control {{
+      min-height: 40px;
+      padding: 4px 6px 4px 12px;
+      border: 1px solid #d5a520;
+      border-radius: 999px;
+      background: #fff8d6;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .mfg-shipment-date-control[hidden] {{
+      display: none;
+    }}
+    .mfg-shipment-date-control span {{
+      color: #6b5100;
+      font-size: 0.72rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }}
+    .mfg-shipment-date-control input {{
+      min-height: 30px;
+      padding: 0 8px;
+      border: 1px solid rgba(107, 81, 0, 0.24);
+      border-radius: 999px;
+      background: #ffffff;
+      color: #111827;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 800;
+    }}
+    .mfg-shipment-date-control.is-saving {{
+      opacity: 0.62;
+      pointer-events: none;
     }}
     .mfg-operation-source {{
       display: block;
@@ -678,6 +755,45 @@ def render_manufacturing_page(
     }}
     .mfg-chip-link.is-active .mfg-chip-number {{
       color: #4b5563;
+    }}
+    .mfg-chip-link.has-shipment-date {{
+      min-height: 52px;
+      border-radius: 18px;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }}
+    .mfg-chip-link.is-date-yellow {{
+      border-color: #e5bd36;
+      background: #fff3b0;
+      color: #624a00;
+    }}
+    .mfg-chip-link.is-date-orange {{
+      border-color: #ed8b2d;
+      background: #ffd5a3;
+      color: #7a3300;
+    }}
+    .mfg-chip-link.is-date-red {{
+      border-color: #dc2626;
+      background: #fecaca;
+      color: #991b1b;
+    }}
+    .mfg-chip-link.is-date-yellow .mfg-chip-number,
+    .mfg-chip-link.is-date-yellow .mfg-chip-shipment-date {{
+      color: #624a00;
+    }}
+    .mfg-chip-link.is-date-orange .mfg-chip-number,
+    .mfg-chip-link.is-date-orange .mfg-chip-shipment-date {{
+      color: #7a3300;
+    }}
+    .mfg-chip-link.is-date-red .mfg-chip-number,
+    .mfg-chip-link.is-date-red .mfg-chip-shipment-date {{
+      color: #991b1b;
+    }}
+    .mfg-chip-shipment-date {{
+      margin-top: 2px;
+      font-size: 0.61rem;
+      line-height: 1;
+      font-weight: 800;
     }}
     .mfg-stats {{
       display: grid;
@@ -2552,6 +2668,8 @@ def render_manufacturing_page(
       const statusNode = document.getElementById("mfg-status");
       const operationTitleNode = document.getElementById("mfg-operation-title");
       const operationSourceNode = document.getElementById("mfg-operation-source");
+      const shipmentDateControlNode = document.getElementById("mfg-shipment-date-control");
+      const shipmentDateInputNode = document.getElementById("mfg-shipment-date-input");
       const reportReadyButtonNode = document.getElementById("mfg-report-ready");
       const issuedToggleNode = document.getElementById("mfg-issued-toggle");
       const layoutToggleNode = document.getElementById("mfg-layout-toggle");
@@ -2562,7 +2680,7 @@ def render_manufacturing_page(
       const rowEditFormNode = document.getElementById("mfg-row-edit-form");
       const rowEditFieldsNode = document.getElementById("mfg-row-edit-fields");
       const rowEditCancelNode = document.getElementById("mfg-row-edit-cancel");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !issuedToggleNode || !layoutToggleNode || !choiceModalNode || !creatorModalNode || !confirmModalNode || !rowEditModalNode || !rowEditFormNode || !rowEditFieldsNode || !rowEditCancelNode) return;
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !issuedToggleNode || !layoutToggleNode || !choiceModalNode || !creatorModalNode || !confirmModalNode || !rowEditModalNode || !rowEditFormNode || !rowEditFieldsNode || !rowEditCancelNode || !shipmentDateControlNode || !shipmentDateInputNode) return;
       const shopfloorLoadPrefix = "[shopfloor-load]";
       const shopfloorSeconds = (startedAt) => ((performance.now() - startedAt) / 1000).toFixed(3);
       const shopfloorLog = (message, data = null) => {{
@@ -2599,6 +2717,10 @@ def render_manufacturing_page(
       const reportReadyRoute = String(payload.reportReadyRoute || "");
       const topfloorBoxRoute = String(payload.topfloorBoxRoute || "");
       const rowEditRoute = String(payload.rowEditRoute || "");
+      const shipmentDateRoute = String(payload.shipmentDateRoute || "");
+      const adminRevisionRoute = String(payload.adminRevisionRoute || "");
+      let adminChangeRevision = String(payload.adminChangeRevision || "");
+      let adminRevisionRefreshInFlight = false;
       const pageRoute = String(payload.route || window.location.pathname || "");
       const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
       let productionNumber = String(payload.productionNumber || "");
@@ -2638,6 +2760,21 @@ def render_manufacturing_page(
         return text.startsWith("shipment::") ? text.slice("shipment::".length).trim() : "";
       }};
       const topfloorShipmentKeyIsAll = (key) => String(key || "").trim() === topfloorAllShipmentsKey;
+      const currentShipmentEntry = () => {{
+        const entries = Array.isArray(payload.recentProductions) ? payload.recentProductions : [];
+        return entries.find((entry) => String(entry?.view_key || "") === String(currentTopfloorShipmentKey || "")) || null;
+      }};
+      const syncShipmentDateControl = () => {{
+        const shipmentId = topfloorShipmentIdFromKey(currentTopfloorShipmentKey);
+        const isTopfloorDateEditor = String(currentDocKey || "") === "topfloor" && Boolean(shipmentDateRoute);
+        const canEdit = isTopfloorDateEditor
+          && Boolean(shipmentId)
+          && !topfloorShipmentKeyIsAll(currentTopfloorShipmentKey);
+        shipmentDateControlNode.hidden = !isTopfloorDateEditor;
+        shipmentDateInputNode.disabled = !canEdit;
+        shipmentDateControlNode.title = canEdit ? "" : "Válassz egy szállítmányt a dátum beállításához.";
+        shipmentDateInputNode.value = canEdit ? String(currentShipmentEntry()?.shipment_date || "") : "";
+      }};
 
       const syncUrlForDocument = () => {{
         try {{
@@ -2736,6 +2873,29 @@ def render_manufacturing_page(
         const statusClass = chipStatusClass(status, isComplete);
         if (statusClass) link.classList.add(statusClass);
       }};
+      const shipmentDateTone = (value) => {{
+        const cleanValue = String(value || "").trim();
+        if (!/^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(cleanValue)) return "";
+        const target = new Date(`${{cleanValue}}T00:00:00`);
+        if (Number.isNaN(target.getTime())) return "";
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.round((target.getTime() - today.getTime()) / 86400000);
+        return days <= 0 ? "red" : (days <= 7 ? "orange" : "yellow");
+      }};
+      const applyChipShipmentDate = (link, value) => {{
+        if (!(link instanceof HTMLElement)) return;
+        link.classList.remove("has-shipment-date", "is-date-yellow", "is-date-orange", "is-date-red");
+        link.querySelector(".mfg-chip-shipment-date")?.remove();
+        const cleanValue = String(value || "").trim();
+        const tone = shipmentDateTone(cleanValue);
+        if (!tone) return;
+        link.classList.add("has-shipment-date", `is-date-${{tone}}`);
+        const shipmentDateNode = document.createElement("span");
+        shipmentDateNode.className = "mfg-chip-shipment-date";
+        shipmentDateNode.textContent = cleanValue;
+        link.append(shipmentDateNode);
+      }};
       const renderProductionChips = (recentProductions = []) => {{
         if (!chipRowNode) return;
         chipRowNode.replaceChildren();
@@ -2771,6 +2931,9 @@ def render_manufacturing_page(
             ? (entryViewKey === topfloorAllShipmentsKey ? ratioText : `${{entryNumber}} · ${{ratioText}}`)
             : entryNumber;
           link.append(dateNode, numberNode);
+          if (entryKind === "shipment" && entryViewKey !== topfloorAllShipmentsKey) {{
+            applyChipShipmentDate(link, entry?.shipment_date || "");
+          }}
           chipRowNode.append(link);
         }}
         updateProductionChipState(recentProductions);
@@ -2872,6 +3035,75 @@ def render_manufacturing_page(
         }}
       }}
       cacheProductionPayload(payload);
+      const forceRefreshForAdminChange = async (nextRevision) => {{
+        if (adminRevisionRefreshInFlight || !currentDocKey) return;
+        adminRevisionRefreshInFlight = true;
+        const preservedView = {{
+          currentViewKey,
+          currentSubcategoryKey,
+          secondaryViewKey,
+          currentTopfloorShipmentKey,
+          topfloorShowIssued,
+          layoutMode,
+          activeSearchText,
+          scrollState: captureScrollState(),
+        }};
+        try {{
+          await flushPendingWrites();
+          const isTopfloor = String(currentDocKey || "") === "topfloor";
+          const url = productionDataUrl(isTopfloor ? "" : productionNumber, currentDocKey);
+          url.searchParams.set("admin_revision", String(nextRevision || ""));
+          const response = await fetch(url.toString(), {{
+            cache: "no-store",
+            headers: {{ "Accept": "application/json" }},
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "Az admin módosítás betöltése nem sikerült.");
+          }}
+          productionPayloadCache.clear();
+          cacheProductionPayload(result);
+          applyProductionPayload(result);
+          currentViewKey = preservedView.currentViewKey;
+          currentSubcategoryKey = preservedView.currentSubcategoryKey;
+          secondaryViewKey = preservedView.secondaryViewKey;
+          currentTopfloorShipmentKey = preservedView.currentTopfloorShipmentKey;
+          topfloorShowIssued = preservedView.topfloorShowIssued;
+          layoutMode = preservedView.layoutMode;
+          activeSearchText = preservedView.activeSearchText;
+          searchInputNode.value = preservedView.activeSearchText;
+          renderProductionChips(result.recentProductions);
+          renderAll(preservedView.scrollState);
+          adminChangeRevision = String(nextRevision || "");
+          setStatus("Admin módosítás automatikusan betöltve.", "is-success");
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "Az admin módosítás betöltése nem sikerült.", "is-error");
+        }} finally {{
+          adminRevisionRefreshInFlight = false;
+        }}
+      }};
+      const pollAdminChangeRevision = async () => {{
+        if (!adminRevisionRoute || adminRevisionRefreshInFlight) return;
+        try {{
+          const url = new URL(adminRevisionRoute, window.location.origin);
+          url.searchParams.set("_", String(Date.now()));
+          const response = await fetch(url.toString(), {{
+            cache: "no-store",
+            headers: {{ "Accept": "application/json" }},
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) return;
+          const nextRevision = String(result.revision || "");
+          if (!nextRevision || nextRevision === adminChangeRevision) return;
+          await forceRefreshForAdminChange(nextRevision);
+        }} catch (_error) {{
+        }}
+      }};
+      window.setInterval(() => void pollAdminChangeRevision(), 10000);
+      document.addEventListener("visibilitychange", () => {{
+        if (!document.hidden) void pollAdminChangeRevision();
+      }});
+
       const refreshProductionClientCache = async () => {{
         if (!currentDocKey) return;
         const refreshStartedAt = performance.now();
@@ -3063,18 +3295,47 @@ def render_manufacturing_page(
         ["frontTrait", "Front jellemző"],
       ];
       let activeRowEdit = null;
-      const findRowForEdit = (rowKey, targetProductionNumber) => {{
-        const cleanKey = String(rowKey || "");
-        const cleanProduction = String(targetProductionNumber || "");
-        for (const document of documents) {{
-          for (const section of (Array.isArray(document?.sections) ? document.sections : [])) {{
-            const found = (Array.isArray(section?.rows) ? section.rows : []).find((row) =>
-              rowStorageKey(row) === cleanKey && rowProductionNumber(row) === cleanProduction
-            );
-            if (found) return {{ row: found, documentKey: String(document?.key || "") }};
+      const editableSectionsForDocument = (document) => {{
+        const sections = Array.isArray(document?.sections) ? [...document.sections] : [];
+        for (const viewCollection of [document?.specialViews, document?.topfloorShipmentViews]) {{
+          for (const view of (Array.isArray(viewCollection) ? viewCollection : [])) {{
+            if (Array.isArray(view?.sections)) sections.push(...view.sections);
           }}
         }}
-        return null;
+        return Array.from(new Set(sections));
+      }};
+      const matchingEditableRows = (rowKey, targetProductionNumber) => {{
+        const cleanKey = String(rowKey || "");
+        const cleanProduction = String(targetProductionNumber || "");
+        const matches = [];
+        for (const document of documents) {{
+          for (const section of editableSectionsForDocument(document)) {{
+            for (const row of (Array.isArray(section?.rows) ? section.rows : [])) {{
+              if (rowStorageKey(row) === cleanKey && rowProductionNumber(row) === cleanProduction) {{
+                matches.push({{ row, documentKey: String(document?.key || "") }});
+              }}
+            }}
+          }}
+        }}
+        return matches;
+      }};
+      const findRowForEdit = (rowKey, targetProductionNumber) => {{
+        return matchingEditableRows(rowKey, targetProductionNumber)[0] || null;
+      }};
+      const applySavedFieldsToRow = (row, savedFields) => {{
+        const originalFields = row._rowDataOriginal || {{}};
+        const editedFields = new Set(row._rowDataEditedFields || []);
+        Object.keys(savedFields).forEach((field) => {{
+          const originalValue = Object.prototype.hasOwnProperty.call(originalFields, field)
+            ? originalFields[field]
+            : (row[field] ?? "");
+          originalFields[field] = originalValue;
+          if (String(savedFields[field] ?? "") !== String(originalValue ?? "")) editedFields.add(field);
+          else editedFields.delete(field);
+        }});
+        row._rowDataOriginal = originalFields;
+        row._rowDataEditedFields = Array.from(editedFields).sort();
+        Object.assign(row, savedFields);
       }};
       const closeRowEditModal = () => {{
         rowEditModalNode.hidden = true;
@@ -4439,6 +4700,9 @@ def render_manufacturing_page(
             const cncUpperSizeMarkup = row.markSizeBlack
               ? `<span class="is-pill-black">${{displayRowField(row, "size", "Méret nélkül")}}</span>`
               : `<span class="is-size">${{displayRowField(row, "size", "Méret nélkül")}}</span>`;
+            const cncUpperSideTypeMarkup = row.markSideTypeBlack
+              ? `<span class="is-pill-black">${{displayRowField(row, "side_type")}}</span>`
+              : `<span>${{displayRowField(row, "side_type")}}</span>`;
             const pantoloNormalizeMarkText = (value) =>
               String(value || "")
                 .trim()
@@ -4583,7 +4847,7 @@ def render_manufacturing_page(
                           </div>
                           <div class="mfg-row-meta">${{cncUpperSizeMarkup}}</div>
                           <div class="mfg-row-meta"><span class="is-color">${{displayRowField(row, "color", "Szín nélkül")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{displayRowField(row, "side_type")}}</span></div>
+                          <div class="mfg-row-meta">${{cncUpperSideTypeMarkup}}</div>
                           <div class="mfg-row-meta"><span>${{displayRowField(row, "hardware_type")}}</span></div>
                           <div class="mfg-row-meta"><span>${{displayRowField(row, "edge")}}</span></div>
                           <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
@@ -4757,6 +5021,7 @@ def render_manufacturing_page(
           }}
         }}
         refreshOperationHeader();
+        syncShipmentDateControl();
         if (String(document?.key || "") !== "topfloor" && documentUsesSingleColumnOverview(document) && !isSpecialViewKey(currentViewKey, document)) {{
           currentViewKey = "all";
           secondaryViewKey = "";
@@ -5420,6 +5685,48 @@ def render_manufacturing_page(
         }}
       }});
 
+      shipmentDateInputNode.addEventListener("change", async () => {{
+        const shipmentId = topfloorShipmentIdFromKey(currentTopfloorShipmentKey);
+        if (!shipmentDateRoute || !shipmentId || topfloorShipmentKeyIsAll(currentTopfloorShipmentKey)) return;
+        const entry = currentShipmentEntry();
+        const previousValue = String(entry?.shipment_date || "");
+        const requestedValue = String(shipmentDateInputNode.value || "").trim();
+        shipmentDateControlNode.classList.add("is-saving");
+        shipmentDateInputNode.disabled = true;
+        setStatus("Szállítási dátum mentése...");
+        try {{
+          const response = await fetch(shipmentDateRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              shipment_id: shipmentId,
+              shipment_date: requestedValue,
+            }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "A szállítási dátum mentése nem sikerült.");
+          }}
+          const savedValue = String(result.shipment_date || "");
+          adminChangeRevision = String(result.admin_change_revision || adminChangeRevision);
+          if (entry) entry.shipment_date = savedValue;
+          document.querySelectorAll("[data-mfg-shipment-link]").forEach((link) => {{
+            if (!(link instanceof HTMLElement)) return;
+            if (String(link.getAttribute("data-view-key") || "") === String(currentTopfloorShipmentKey || "")) {{
+              applyChipShipmentDate(link, savedValue);
+            }}
+          }});
+          shipmentDateInputNode.value = savedValue;
+          setStatus(savedValue ? "Szállítási dátum mentve." : "Szállítási dátum törölve.", "is-success");
+        }} catch (error) {{
+          shipmentDateInputNode.value = previousValue;
+          setStatus(error instanceof Error ? error.message : "A szállítási dátum mentése nem sikerült.", "is-error");
+        }} finally {{
+          shipmentDateControlNode.classList.remove("is-saving");
+          syncShipmentDateControl();
+        }}
+      }});
+
       rowEditCancelNode.addEventListener("click", closeRowEditModal);
       rowEditModalNode.addEventListener("click", (event) => {{
         if (event.target === rowEditModalNode) closeRowEditModal();
@@ -5452,19 +5759,13 @@ def render_manufacturing_page(
             throw new Error(result.error || "A soradat mentése nem sikerült.");
           }}
           const savedFields = result.fields || fields;
-          const originalFields = activeRowEdit.row._rowDataOriginal || {{}};
-          const editedFields = new Set(activeRowEdit.row._rowDataEditedFields || []);
-          Object.keys(savedFields).forEach((field) => {{
-            const originalValue = Object.prototype.hasOwnProperty.call(originalFields, field)
-              ? originalFields[field]
-              : (activeRowEdit.row[field] ?? "");
-            originalFields[field] = originalValue;
-            if (String(savedFields[field] ?? "") !== String(originalValue ?? "")) editedFields.add(field);
-            else editedFields.delete(field);
-          }});
-          activeRowEdit.row._rowDataOriginal = originalFields;
-          activeRowEdit.row._rowDataEditedFields = Array.from(editedFields).sort();
-          Object.assign(activeRowEdit.row, savedFields);
+          adminChangeRevision = String(result.admin_change_revision || adminChangeRevision);
+          const visibleCopies = matchingEditableRows(activeRowEdit.rowKey, activeRowEdit.productionNumber);
+          if (visibleCopies.length) {{
+            visibleCopies.forEach((item) => applySavedFieldsToRow(item.row, savedFields));
+          }} else {{
+            applySavedFieldsToRow(activeRowEdit.row, savedFields);
+          }}
           productionPayloadCache.clear();
           closeRowEditModal();
           renderAll();

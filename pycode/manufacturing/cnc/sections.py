@@ -2639,6 +2639,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 "name", "size", "color", "hardware_type", "side_type", "edge"
             ]
             item["_postOverrideMergeKind"] = "upper-box"
+            item["markSideTypeBlack"] = "fkf nutos tiplis" in folded(item.get("side_type"))
             unmerged_rows.append(item)
         return unmerged_rows
 

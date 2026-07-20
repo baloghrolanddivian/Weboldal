@@ -8,7 +8,7 @@ import re
 import threading
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 
@@ -425,5 +425,75 @@ def save_row_data(
     current[clean_row_key] = merged_fields
     path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
     return dict(merged_fields)
+
+
+def load_shipment_date(runtime_root: Path, shipment_id: str) -> str:
+    """Load a Topfloor shipment date stored beside the shipment state."""
+    clean_shipment_id = str(shipment_id or "").strip()
+    if not clean_shipment_id:
+        return ""
+    path = runtime_root / clean_shipment_id / "shipment-date.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        value = str(payload.get("shipment_date", "") if isinstance(payload, dict) else "").strip()
+        date.fromisoformat(value)
+        return value
+    except Exception:
+        return ""
+
+
+def save_shipment_date(runtime_root: Path, shipment_id: str, shipment_date: str) -> str:
+    """Save or clear a Topfloor shipment date in its own adjacent JSON file."""
+    clean_shipment_id = str(shipment_id or "").strip()
+    clean_date = str(shipment_date or "").strip()
+    if not clean_shipment_id:
+        raise ValueError("Hiányzik a szállítmány azonosítója.")
+    if clean_date:
+        try:
+            date.fromisoformat(clean_date)
+        except ValueError as exc:
+            raise ValueError("A szállítási dátum formátuma hibás.") from exc
+    target_dir = runtime_root / clean_shipment_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = target_dir / "shipment-date.json"
+    path.write_text(
+        json.dumps({"shipment_date": clean_date}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return clean_date
+
+
+def load_admin_change_revision(runtime_root: Path) -> str:
+    """Load the revision shared by all Manufacturing browser views."""
+    path = runtime_root / "admin-change.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return str(payload.get("revision", "") if isinstance(payload, dict) else "").strip()
+    except Exception:
+        return ""
+
+
+def signal_admin_change(runtime_root: Path, *, kind: str, target: str) -> str:
+    """Bump the revision observed by every open Manufacturing view."""
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    revision = str(time.time_ns())
+    path = runtime_root / "admin-change.json"
+    path.write_text(
+        json.dumps(
+            {
+                "revision": revision,
+                "kind": str(kind or "").strip(),
+                "target": str(target or "").strip(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return revision
 
 

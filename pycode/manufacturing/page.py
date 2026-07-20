@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import urllib.parse
+from datetime import date
 
 
 def _json_script_payload(payload: object) -> str:
@@ -20,6 +21,8 @@ def render_manufacturing_page(
     partial_qty_route: str,
     report_ready_route: str,
     topfloor_box_route: str = "",
+    admin_revision_route: str = "",
+    admin_change_revision: str = "",
     topfloor_storage_box_types: list[dict[str, object]] | None = None,
     selected_number: str,
     operations: list[dict[str, str]],
@@ -100,6 +103,28 @@ def render_manufacturing_page(
             return " is-complete"
         return ""
 
+    def chip_shipment_date(entry: dict) -> str:
+        if str(entry.get("kind", "")) != "shipment" or str(entry.get("view_key", "")) == "shipment::__all__":
+            return ""
+        value = str(entry.get("shipment_date", "") or "").strip()
+        try:
+            date.fromisoformat(value)
+        except ValueError:
+            return ""
+        return value
+
+    def chip_date_class(entry: dict) -> str:
+        value = chip_shipment_date(entry)
+        if not value:
+            return ""
+        days = (date.fromisoformat(value) - date.today()).days
+        tone = "red" if days <= 0 else ("orange" if days <= 7 else "yellow")
+        return f" has-shipment-date is-date-{tone}"
+
+    def chip_shipment_date_html(entry: dict) -> str:
+        value = chip_shipment_date(entry)
+        return f'<span class="mfg-chip-shipment-date">{html.escape(value)}</span>' if value else ""
+
     def chip_number_text(entry: dict) -> str:
         entry_number = str(entry.get("number", ""))
         if str(entry.get("kind", "")) != "shipment":
@@ -121,11 +146,12 @@ def render_manufacturing_page(
 
     recent_chips_html = "".join(
         (
-            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}" '
+            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}{chip_date_class(entry)}" '
             f'href="{chip_href(entry)}" '
             f"{chip_attrs(entry)}>"
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
             f'<span class="mfg-chip-number">{html.escape(chip_number_text(entry))}</span>'
+            f'{chip_shipment_date_html(entry)}'
             f"</a>"
         )
         for entry in recent_productions
@@ -192,6 +218,8 @@ def render_manufacturing_page(
             "partialQtyRoute": partial_qty_route,
             "reportReadyRoute": report_ready_route,
             "topfloorBoxRoute": topfloor_box_route,
+            "adminRevisionRoute": admin_revision_route,
+            "adminChangeRevision": admin_change_revision,
             "topfloorStorageBoxTypes": topfloor_storage_box_types or [],
         }
     )
@@ -676,6 +704,45 @@ def render_manufacturing_page(
     }}
     .mfg-chip-link.is-active .mfg-chip-number {{
       color: #4b5563;
+    }}
+    .mfg-chip-link.has-shipment-date {{
+      min-height: 52px;
+      border-radius: 18px;
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }}
+    .mfg-chip-link.is-date-yellow {{
+      border-color: #e5bd36;
+      background: #fff3b0;
+      color: #624a00;
+    }}
+    .mfg-chip-link.is-date-orange {{
+      border-color: #ed8b2d;
+      background: #ffd5a3;
+      color: #7a3300;
+    }}
+    .mfg-chip-link.is-date-red {{
+      border-color: #dc2626;
+      background: #fecaca;
+      color: #991b1b;
+    }}
+    .mfg-chip-link.is-date-yellow .mfg-chip-number,
+    .mfg-chip-link.is-date-yellow .mfg-chip-shipment-date {{
+      color: #624a00;
+    }}
+    .mfg-chip-link.is-date-orange .mfg-chip-number,
+    .mfg-chip-link.is-date-orange .mfg-chip-shipment-date {{
+      color: #7a3300;
+    }}
+    .mfg-chip-link.is-date-red .mfg-chip-number,
+    .mfg-chip-link.is-date-red .mfg-chip-shipment-date {{
+      color: #991b1b;
+    }}
+    .mfg-chip-shipment-date {{
+      margin-top: 2px;
+      font-size: 0.61rem;
+      line-height: 1;
+      font-weight: 800;
     }}
     .mfg-stats {{
       display: grid;
@@ -2580,6 +2647,9 @@ def render_manufacturing_page(
       const partialQtyRoute = String(payload.partialQtyRoute || "");
       const reportReadyRoute = String(payload.reportReadyRoute || "");
       const topfloorBoxRoute = String(payload.topfloorBoxRoute || "");
+      const adminRevisionRoute = String(payload.adminRevisionRoute || "");
+      let adminChangeRevision = String(payload.adminChangeRevision || "");
+      let adminRevisionRefreshInFlight = false;
       const pageRoute = String(payload.route || window.location.pathname || "");
       const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
       let productionNumber = String(payload.productionNumber || "");
@@ -2717,6 +2787,29 @@ def render_manufacturing_page(
         const statusClass = chipStatusClass(status, isComplete);
         if (statusClass) link.classList.add(statusClass);
       }};
+      const shipmentDateTone = (value) => {{
+        const cleanValue = String(value || "").trim();
+        if (!/^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(cleanValue)) return "";
+        const target = new Date(`${{cleanValue}}T00:00:00`);
+        if (Number.isNaN(target.getTime())) return "";
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.round((target.getTime() - today.getTime()) / 86400000);
+        return days <= 0 ? "red" : (days <= 7 ? "orange" : "yellow");
+      }};
+      const applyChipShipmentDate = (link, value) => {{
+        if (!(link instanceof HTMLElement)) return;
+        link.classList.remove("has-shipment-date", "is-date-yellow", "is-date-orange", "is-date-red");
+        link.querySelector(".mfg-chip-shipment-date")?.remove();
+        const cleanValue = String(value || "").trim();
+        const tone = shipmentDateTone(cleanValue);
+        if (!tone) return;
+        link.classList.add("has-shipment-date", `is-date-${{tone}}`);
+        const shipmentDateNode = document.createElement("span");
+        shipmentDateNode.className = "mfg-chip-shipment-date";
+        shipmentDateNode.textContent = cleanValue;
+        link.append(shipmentDateNode);
+      }};
       const renderProductionChips = (recentProductions = []) => {{
         if (!chipRowNode) return;
         chipRowNode.replaceChildren();
@@ -2752,6 +2845,9 @@ def render_manufacturing_page(
             ? (entryViewKey === topfloorAllShipmentsKey ? ratioText : `${{entryNumber}} · ${{ratioText}}`)
             : entryNumber;
           link.append(dateNode, numberNode);
+          if (entryKind === "shipment" && entryViewKey !== topfloorAllShipmentsKey) {{
+            applyChipShipmentDate(link, entry?.shipment_date || "");
+          }}
           chipRowNode.append(link);
         }}
         updateProductionChipState(recentProductions);
@@ -2853,6 +2949,75 @@ def render_manufacturing_page(
         }}
       }}
       cacheProductionPayload(payload);
+      const forceRefreshForAdminChange = async (nextRevision) => {{
+        if (adminRevisionRefreshInFlight || !currentDocKey) return;
+        adminRevisionRefreshInFlight = true;
+        const preservedView = {{
+          currentViewKey,
+          currentSubcategoryKey,
+          secondaryViewKey,
+          currentTopfloorShipmentKey,
+          topfloorShowIssued,
+          layoutMode,
+          activeSearchText,
+          scrollState: captureScrollState(),
+        }};
+        try {{
+          await flushPendingWrites();
+          const isTopfloor = String(currentDocKey || "") === "topfloor";
+          const url = productionDataUrl(isTopfloor ? "" : productionNumber, currentDocKey);
+          url.searchParams.set("admin_revision", String(nextRevision || ""));
+          const response = await fetch(url.toString(), {{
+            cache: "no-store",
+            headers: {{ "Accept": "application/json" }},
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "Az admin módosítás betöltése nem sikerült.");
+          }}
+          productionPayloadCache.clear();
+          cacheProductionPayload(result);
+          applyProductionPayload(result);
+          currentViewKey = preservedView.currentViewKey;
+          currentSubcategoryKey = preservedView.currentSubcategoryKey;
+          secondaryViewKey = preservedView.secondaryViewKey;
+          currentTopfloorShipmentKey = preservedView.currentTopfloorShipmentKey;
+          topfloorShowIssued = preservedView.topfloorShowIssued;
+          layoutMode = preservedView.layoutMode;
+          activeSearchText = preservedView.activeSearchText;
+          searchInputNode.value = preservedView.activeSearchText;
+          renderProductionChips(result.recentProductions);
+          renderAll(preservedView.scrollState);
+          adminChangeRevision = String(nextRevision || "");
+          setStatus("Admin módosítás automatikusan betöltve.", "is-success");
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "Az admin módosítás betöltése nem sikerült.", "is-error");
+        }} finally {{
+          adminRevisionRefreshInFlight = false;
+        }}
+      }};
+      const pollAdminChangeRevision = async () => {{
+        if (!adminRevisionRoute || adminRevisionRefreshInFlight) return;
+        try {{
+          const url = new URL(adminRevisionRoute, window.location.origin);
+          url.searchParams.set("_", String(Date.now()));
+          const response = await fetch(url.toString(), {{
+            cache: "no-store",
+            headers: {{ "Accept": "application/json" }},
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) return;
+          const nextRevision = String(result.revision || "");
+          if (!nextRevision || nextRevision === adminChangeRevision) return;
+          await forceRefreshForAdminChange(nextRevision);
+        }} catch (_error) {{
+        }}
+      }};
+      window.setInterval(() => void pollAdminChangeRevision(), 10000);
+      document.addEventListener("visibilitychange", () => {{
+        if (!document.hidden) void pollAdminChangeRevision();
+      }});
+
       const refreshProductionClientCache = async () => {{
         if (!currentDocKey) return;
         const refreshStartedAt = performance.now();
@@ -4396,11 +4561,11 @@ def render_manufacturing_page(
               ? `<span class="is-pill-black">${{displayRowField(row, "drawerType")}}</span>`
               : `<span>${{displayRowField(row, "drawerType")}}</span>`;
             const cncUpperSizeMarkup = row.markSizeBlack
-              ? `<span class="is-pill-black">${{escapeHtml(row.size || "Méret nélkül")}}</span>`
-              : `<span class="is-size">${{escapeHtml(row.size || "Méret nélkül")}}</span>`;
+              ? `<span class="is-pill-black">${{displayRowField(row, "size", "Méret nélkül")}}</span>`
+              : `<span class="is-size">${{displayRowField(row, "size", "Méret nélkül")}}</span>`;
             const cncUpperSideTypeMarkup = row.markSideTypeBlack
-              ? `<span class="is-pill-black">${{escapeHtml(row.side_type || "-")}}</span>`
-              : `<span>${{escapeHtml(row.side_type || "-")}}</span>`;
+              ? `<span class="is-pill-black">${{displayRowField(row, "side_type")}}</span>`
+              : `<span>${{displayRowField(row, "side_type")}}</span>`;
             const pantoloNormalizeMarkText = (value) =>
               String(value || "")
                 .trim()
@@ -4544,10 +4709,10 @@ def render_manufacturing_page(
                             ${{subtitleMarkup}}
                           </div>
                           <div class="mfg-row-meta">${{cncUpperSizeMarkup}}</div>
-                          <div class="mfg-row-meta"><span class="is-color">${{escapeHtml(row.color || "Szín nélkül")}}</span></div>
+                          <div class="mfg-row-meta"><span class="is-color">${{displayRowField(row, "color", "Szín nélkül")}}</span></div>
                           <div class="mfg-row-meta">${{cncUpperSideTypeMarkup}}</div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.hardware_type || "-")}}</span></div>
-                          <div class="mfg-row-meta"><span>${{escapeHtml(row.edge || "-")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{displayRowField(row, "hardware_type")}}</span></div>
+                          <div class="mfg-row-meta"><span>${{displayRowField(row, "edge")}}</span></div>
                           <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.quantity || 0))}} db</div></div>
                           ${{partialMarkup}}
                         `
