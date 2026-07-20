@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# Admin view of the unified Manufacturing package.
+
 MANUFACTURING_ACCESS_USER_IDS = frozenset({"gyartas-vezerlo"})
 
 from .common import (
@@ -14,10 +16,14 @@ from .common import (
     load_row_data,
     load_shipment_date,
     load_selection_state,
+    manufacturing_row_requires_edit_alert,
     production_folder,
     save_row_data,
+    save_issued_row_edit_marker,
     save_shipment_date,
     signal_admin_change,
+    topfloor_category_is_issued,
+    topfloor_row_requires_edit_alert,
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
@@ -84,13 +90,17 @@ __all__ = [
     "load_row_data",
     "load_shipment_date",
     "load_selection_state",
+    "manufacturing_row_requires_edit_alert",
     "manufacturing_client_payload",
     "manufacturing_module_payload",
     "production_folder",
     "render_manufacturing_module",
     "runtime_dir",
     "save_row_data",
+    "save_issued_row_edit_marker",
     "save_shipment_date",
     "signal_admin_change",
+    "topfloor_category_is_issued",
+    "topfloor_row_requires_edit_alert",
 ]
 

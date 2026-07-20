@@ -125,6 +125,9 @@ def render_manufacturing_page(
         value = chip_shipment_date(entry)
         return f'<span class="mfg-chip-shipment-date">{html.escape(value)}</span>' if value else ""
 
+    def chip_issued_edit_class(entry: dict) -> str:
+        return " has-issued-row-edit" if bool(entry.get("has_issued_row_edit")) else ""
+
     def chip_number_text(entry: dict) -> str:
         entry_number = str(entry.get("number", ""))
         if str(entry.get("kind", "")) != "shipment":
@@ -146,7 +149,7 @@ def render_manufacturing_page(
 
     recent_chips_html = "".join(
         (
-            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}{chip_date_class(entry)}" '
+            f'<a class="mfg-chip-link{" is-active" if bool(entry.get("is_active")) else ""}{chip_state_class(entry)}{chip_date_class(entry)}{chip_issued_edit_class(entry)}" '
             f'href="{chip_href(entry)}" '
             f"{chip_attrs(entry)}>"
             f'<span class="mfg-chip-date">{html.escape(str(entry.get("date_label", "") or "Dátum nélkül"))}</span>'
@@ -553,6 +556,20 @@ def render_manufacturing_page(
     .mfg-status.is-success {{
       color: var(--mfg-green-text);
     }}
+    .mfg-issued-edit-warning {{
+      margin: 0 0 10px;
+      padding: 10px 14px;
+      border: 2px solid #dc2626;
+      border-radius: 12px;
+      background: #fff1f2;
+      box-shadow: 0 0 14px rgba(220, 38, 38, 0.28);
+      color: #991b1b;
+      font-size: 0.82rem;
+      font-weight: 900;
+    }}
+    .mfg-issued-edit-warning[hidden] {{
+      display: none;
+    }}
     .mfg-picker {{
       display: flex;
       gap: 6px;
@@ -725,6 +742,17 @@ def render_manufacturing_page(
       border-color: #dc2626;
       background: #fecaca;
       color: #991b1b;
+    }}
+    .mfg-chip-link.has-shipment-date.is-active {{
+      box-shadow:
+        inset 0 0 0 2px #111827,
+        0 1px 3px rgba(17, 24, 39, 0.24);
+    }}
+    .mfg-chip-link.has-issued-row-edit {{
+      border-color: #dc2626;
+      box-shadow:
+        inset 0 0 0 2px #dc2626,
+        0 0 12px rgba(220, 38, 38, 0.72);
     }}
     .mfg-chip-link.is-date-yellow .mfg-chip-number,
     .mfg-chip-link.is-date-yellow .mfg-chip-shipment-date {{
@@ -1771,6 +1799,14 @@ def render_manufacturing_page(
       background: var(--mfg-red-bg);
       box-shadow: inset 3px 0 0 var(--mfg-red-line);
     }}
+    .mfg-row.is-issued-edited {{
+      position: relative;
+      z-index: 1;
+      border-color: #dc2626;
+      box-shadow:
+        inset 0 0 0 2px #dc2626,
+        0 0 12px rgba(220, 38, 38, 0.62) !important;
+    }}
     .mfg-row.is-done {{
       color: #f4fff8;
     }}
@@ -1884,6 +1920,12 @@ def render_manufacturing_page(
     .mfg-row.is-done .mfg-row-meta span,
     .mfg-row.is-done .mfg-row-code {{
       color: #f4fff8;
+    }}
+    .mfg-row.is-done .mfg-row-subtitle {{
+      color: #dcfce7;
+      font-weight: 750;
+      opacity: 1;
+      text-shadow: 0 1px 1px rgba(4, 78, 50, 0.55);
     }}
     .mfg-row.is-done .mfg-row-qty {{
       background: #0a7448;
@@ -2551,6 +2593,7 @@ def render_manufacturing_page(
           </div>
         </div>
       </div>
+      <div class="mfg-issued-edit-warning" id="mfg-issued-edit-warning" role="alert" hidden></div>
       <div class="mfg-content" id="mfg-content"></div>
       <div class="mfg-scroll-rail" id="mfg-scroll-rail" aria-hidden="true"></div>
     </section>
@@ -2603,6 +2646,7 @@ def render_manufacturing_page(
       const contentNode = document.getElementById("mfg-content");
       const scrollRailNode = document.getElementById("mfg-scroll-rail");
       const statusNode = document.getElementById("mfg-status");
+      const issuedEditWarningNode = document.getElementById("mfg-issued-edit-warning");
       const operationTitleNode = document.getElementById("mfg-operation-title");
       const operationSourceNode = document.getElementById("mfg-operation-source");
       const reportReadyButtonNode = document.getElementById("mfg-report-ready");
@@ -2611,7 +2655,7 @@ def render_manufacturing_page(
       const choiceModalNode = document.getElementById("mfg-choice-modal");
       const creatorModalNode = document.getElementById("mfg-creator-modal");
       const confirmModalNode = document.getElementById("mfg-confirm-modal");
-      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !reportReadyButtonNode || !issuedToggleNode || !layoutToggleNode || !choiceModalNode || !creatorModalNode || !confirmModalNode) return;
+      if (!dataNode || !docTabsNode || !sectionTabsNode || !subsectionTabsNode || !searchRowNode || !searchInputNode || !contentNode || !scrollRailNode || !statusNode || !issuedEditWarningNode || !reportReadyButtonNode || !issuedToggleNode || !layoutToggleNode || !choiceModalNode || !creatorModalNode || !confirmModalNode) return;
       const shopfloorLoadPrefix = "[shopfloor-load]";
       const shopfloorSeconds = (startedAt) => ((performance.now() - startedAt) / 1000).toFixed(3);
       const shopfloorLog = (message, data = null) => {{
@@ -2652,6 +2696,7 @@ def render_manufacturing_page(
       let adminRevisionRefreshInFlight = false;
       const pageRoute = String(payload.route || window.location.pathname || "");
       const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
+      const issuedEditCompleteRoute = `${{pageRoute.endsWith("/") ? pageRoute.slice(0, -1) : pageRoute}}/issued-row-edit-complete`;
       let productionNumber = String(payload.productionNumber || "");
       let currentDocKey = String(payload.currentDocumentKey || documents[0]?.key || "");
       if (!documents.some((document) => document.key === currentDocKey)) {{
@@ -2820,6 +2865,7 @@ def render_manufacturing_page(
           const entryViewKey = String(entry?.view_key || "").trim();
           const link = document.createElement("a");
           link.className = "mfg-chip-link";
+          link.classList.toggle("has-issued-row-edit", Boolean(entry?.has_issued_row_edit));
           if (entryKind === "shipment" && entryViewKey) {{
             link.href = chipHref(productionNumber);
             link.setAttribute("data-mfg-shipment-link", "");
@@ -2867,7 +2913,9 @@ def render_manufacturing_page(
           if (!(link instanceof HTMLElement)) return;
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
           const shipmentComplete = topfloorSectionsComplete(topfloorShipmentSectionsForKey(currentDocument(), viewKey, {{ includeIssued: true }}));
-          link.hidden = !topfloorShowIssued && !topfloorShipmentKeyIsAll(viewKey) && shipmentComplete;
+          const shipmentHasIssuedEdit = topfloorShipmentHasIssuedEdit(currentDocument(), viewKey);
+          link.hidden = !topfloorShowIssued && !topfloorShipmentKeyIsAll(viewKey) && shipmentComplete && !shipmentHasIssuedEdit;
+          link.classList.toggle("has-issued-row-edit", shipmentHasIssuedEdit);
           link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
           const allTabStatus = viewKey === currentTopfloorShipmentKey ? currentAllTabStateStatus() : "";
           applyChipStatusClass(link, allTabStatus || (shipmentComplete ? "done" : ""), shipmentComplete);
@@ -2876,6 +2924,16 @@ def render_manufacturing_page(
           if (!(link instanceof HTMLElement)) return;
           const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
           const isActiveProduction = linkNumber === productionNumber;
+          const cachedPayload = isActiveProduction
+            ? null
+            : productionPayloadCache.get(productionCacheKey(currentDocKey, linkNumber));
+          const alertDocuments = isActiveProduction
+            ? documents
+            : (Array.isArray(cachedPayload?.documents) ? cachedPayload.documents : []);
+          link.classList.toggle(
+            "has-issued-row-edit",
+            alertDocuments.some((document) => alertRowsForDocument(document).length),
+          );
           link.classList.toggle("is-active", isActiveProduction);
           if (statusByNumber.has(linkNumber)) {{
             const statusItem = statusByNumber.get(linkNumber) || {{}};
@@ -3847,8 +3905,13 @@ def render_manufacturing_page(
         return [...baseSections, ...extraSections];
       }};
       const topfloorSectionIsIssued = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued);
+      const topfloorSectionHasIssuedEdit = (section) =>
+        Boolean(section?.topfloorCategory?.hasIssuedRowEdit)
+        || (Array.isArray(section?.rows) && section.rows.some((row) => Boolean(row?._editedAfterIssue)));
       const topfloorFilterIssuedSections = (sections, includeIssued = false) =>
-        includeIssued ? (Array.isArray(sections) ? sections : []) : (Array.isArray(sections) ? sections : []).filter((section) => !topfloorSectionIsIssued(section));
+        includeIssued
+          ? (Array.isArray(sections) ? sections : [])
+          : (Array.isArray(sections) ? sections : []).filter((section) => !topfloorSectionIsIssued(section) || topfloorSectionHasIssuedEdit(section));
       const topfloorShipmentSections = (document, options = {{}}) => {{
         const sections = Array.isArray(document?.sections) ? document.sections : [];
         if (String(document?.key || "") !== "topfloor") return sections;
@@ -3868,6 +3931,34 @@ def render_manufacturing_page(
           ? sections
           : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
         return topfloorFilterIssuedSections(shipmentSections, Boolean(options?.includeIssued) || topfloorShowIssued);
+      }};
+      const topfloorShipmentHasIssuedEdit = (document, shipmentKey) =>
+        topfloorShipmentSectionsForKey(document, shipmentKey, {{ includeIssued: true }}).some(topfloorSectionHasIssuedEdit);
+      const alertSectionsForDocument = (document) => {{
+        const sections = Array.isArray(document?.sections) ? [...document.sections] : [];
+        for (const collectionKey of ["specialViews", "topfloorShipmentViews"]) {{
+          for (const view of (Array.isArray(document?.[collectionKey]) ? document[collectionKey] : [])) {{
+            if (Array.isArray(view?.sections)) sections.push(...view.sections);
+          }}
+        }}
+        return Array.from(new Set(sections));
+      }};
+      const alertRowsForDocument = (document) => Array.from(new Set(
+        alertSectionsForDocument(document)
+          .flatMap((section) => Array.isArray(section?.rows) ? section.rows : [])
+          .filter((row) => Boolean(row?._editedAfterIssue))
+      ));
+      const syncIssuedEditWarning = () => {{
+        const affectedRows = documents.flatMap(alertRowsForDocument);
+        const hasNonTopfloorAlert = documents.some((document) =>
+          String(document?.key || "") !== "topfloor" && alertRowsForDocument(document).length
+        );
+        issuedEditWarningNode.hidden = affectedRows.length === 0;
+        issuedEditWarningNode.textContent = affectedRows.length
+          ? (hasNonTopfloorAlert
+              ? `Figyelem: ${{affectedRows.length}} zöldre vagy készre jelölés után adminisztrátor által módosított tétel van. A pirosan kiemelt gyártást és sort ellenőrizni kell.`
+              : `Figyelem: ${{affectedRows.length}} dobozba rakás vagy kiadás után adminisztrátor által módosított Anyagraktár-tétel van. A pirosan kiemelt szállítmányt és sort ellenőrizni kell.`)
+          : "";
       }};
       const isTopfloorDoneState = (value) => /^\\d{{1,12}}$/.test(String(value || "").trim());
       const topfloorCategoryReadyToIssue = (section) => {{
@@ -4532,6 +4623,8 @@ def render_manufacturing_page(
             const rowStateClass = String(document?.key || "") === "topfloor" && isTopfloorDoneState(rowState)
               ? " is-done"
               : (rowState ? ` is-${{escapeHtml(rowState)}}` : "");
+            const issuedEditAlert = Boolean(row?._editedAfterIssue);
+            const issuedEditClass = issuedEditAlert ? " is-issued-edited" : "";
             const partialKey = rowStateKey(row);
             const partialValue = showPartialColumn && rowState === "red" ? String(partialQuantityState[partialKey] || "") : "";
             const partialMarkup = showPartialColumn
@@ -4686,7 +4779,7 @@ def render_manufacturing_page(
                 }}).join("")
               : "";
             return `
-              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" type="button"${{topfloorRowsLocked ? " disabled" : ""}} data-mfg-row${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-state-storage-key="${{escapeHtml(rowStorageKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
+              <button class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}${{issuedEditClass}}" type="button"${{topfloorRowsLocked && !issuedEditAlert ? " disabled" : ""}} data-mfg-row${{issuedEditAlert ? " data-issued-edit-alert" : ""}}${{pantoloIsGroup ? " data-pantolo-group" : ""}} data-pantolo-state="${{escapeHtml(rowState)}}" data-row-id="${{escapeHtml(row.row_id)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(rowStateKey(row))}}" data-state-storage-key="${{escapeHtml(rowStorageKey(row))}}" data-source-row-ids="${{escapeHtml(sourceRowIdsForRow.join(","))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
@@ -4865,6 +4958,7 @@ def render_manufacturing_page(
       const renderAll = (snapshot = null) => {{
         const scrollState = snapshot || captureScrollState();
         const document = currentDocument();
+        syncIssuedEditWarning();
         if (String(document?.key || "") === "topfloor") {{
           if (!topfloorShipmentViewForKey(document, currentTopfloorShipmentKey)) {{
             currentTopfloorShipmentKey = firstTopfloorShipmentViewKey();
@@ -4872,6 +4966,7 @@ def render_manufacturing_page(
           if (
             !topfloorShowIssued
             && !topfloorShipmentKeyIsAll(currentTopfloorShipmentKey)
+            && !topfloorShipmentHasIssuedEdit(document, currentTopfloorShipmentKey)
             && topfloorSectionsComplete(topfloorShipmentSectionsForKey(document, currentTopfloorShipmentKey, {{ includeIssued: true }}))
           ) {{
             currentTopfloorShipmentKey = topfloorAllShipmentsKey;
@@ -5136,6 +5231,97 @@ def render_manufacturing_page(
           pendingConfirmResolve = resolve;
           confirmModalNode.hidden = false;
         }});
+
+      const optimisticallyCompleteIssuedEditAlert = (productionId, rowKey, documentKey) => {{
+        const previousView = {{ currentTopfloorShipmentKey, currentViewKey, currentSubcategoryKey }};
+        const rowSnapshots = [];
+        const categorySnapshots = [];
+        const entrySnapshots = [];
+        const seenRows = new Set();
+        const seenCategories = new Set();
+        for (const document of documents) {{
+          if (documentKey && String(document?.key || "") !== String(documentKey)) continue;
+          for (const section of alertSectionsForDocument(document)) {{
+            const sectionRows = Array.isArray(section?.rows) ? section.rows : [];
+            for (const row of sectionRows) {{
+              if (rowProductionNumber(row) !== String(productionId) || rowStorageKey(row) !== String(rowKey)) continue;
+              if (seenRows.has(row)) continue;
+              seenRows.add(row);
+              rowSnapshots.push({{
+                row,
+                editedAfterIssue: row._editedAfterIssue,
+                issuedEditFields: row._issuedEditFields,
+              }});
+              delete row._editedAfterIssue;
+              delete row._issuedEditFields;
+            }}
+            const category = section?.topfloorCategory;
+            if (category && !seenCategories.has(category) && String(category.shipmentID || "") === String(productionId)) {{
+              seenCategories.add(category);
+              categorySnapshots.push({{ category, value: category.hasIssuedRowEdit }});
+              category.hasIssuedRowEdit = sectionRows.some((row) => Boolean(row?._editedAfterIssue));
+            }}
+          }}
+        }}
+        if (documentKey === "topfloor") {{
+          for (const entry of (Array.isArray(payload.recentProductions) ? payload.recentProductions : [])) {{
+            if (String(entry?.view_key || "") !== `shipment::${{productionId}}`) continue;
+            entrySnapshots.push({{ entry, value: entry.has_issued_row_edit }});
+            entry.has_issued_row_edit = documents.some((document) =>
+              String(document?.key || "") === "topfloor"
+              && topfloorShipmentHasIssuedEdit(document, `shipment::${{productionId}}`)
+            );
+          }}
+        }}
+        renderAll();
+        return () => {{
+          for (const snapshot of rowSnapshots) {{
+            snapshot.row._editedAfterIssue = snapshot.editedAfterIssue;
+            snapshot.row._issuedEditFields = snapshot.issuedEditFields;
+          }}
+          for (const snapshot of categorySnapshots) snapshot.category.hasIssuedRowEdit = snapshot.value;
+          for (const snapshot of entrySnapshots) snapshot.entry.has_issued_row_edit = snapshot.value;
+          currentTopfloorShipmentKey = previousView.currentTopfloorShipmentKey;
+          currentViewKey = previousView.currentViewKey;
+          currentSubcategoryKey = previousView.currentSubcategoryKey;
+          renderAll();
+        }};
+      }};
+
+      const completeIssuedEditAlert = async (productionId, rowKey, documentKey) => {{
+        const isTopfloorAlert = String(documentKey || "") === "topfloor";
+        const confirmed = await requestConfirmModal({{
+          title: "Módosítás ellenőrizve?",
+          copy: isTopfloorAlert
+            ? "Biztosan késznek jelölöd ezt a dobozba rakás vagy kiadás után módosított tételt? A figyelmeztetés megszűnik, és a lezárt tétel ismét elrejthető lesz."
+            : "Biztosan ellenőrzöttnek jelölöd ezt a zöldre vagy készre jelölés után módosított tételt? A piros figyelmeztetés megszűnik.",
+          confirmText: "Igen, kész",
+        }});
+        if (!confirmed) return;
+        const rollbackOptimisticCompletion = optimisticallyCompleteIssuedEditAlert(productionId, rowKey, documentKey);
+        setStatus("Figyelmeztetés lezárása...");
+        try {{
+          const response = await fetch(issuedEditCompleteRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{
+              production_number: productionId,
+              shipment_id: isTopfloorAlert ? productionId : "",
+              document_key: documentKey,
+              row_key: rowKey,
+            }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) {{
+            throw new Error(result.error || "A figyelmeztetés lezárása nem sikerült.");
+          }}
+          await forceRefreshForAdminChange(String(result.admin_change_revision || Date.now()));
+          setStatus("A módosított tétel késznek jelölve.", "is-success");
+        }} catch (error) {{
+          rollbackOptimisticCompletion();
+          setStatus(error instanceof Error ? error.message : "A figyelmeztetés lezárása nem sikerült.", "is-error");
+        }}
+      }};
 
       const requestCreatorModal = () =>
         new Promise((resolve) => {{
@@ -5446,7 +5632,7 @@ def render_manufacturing_page(
         }}
       }});
 
-      contentNode.addEventListener("click", (event) => {{
+      contentNode.addEventListener("click", async (event) => {{
         const partialInput = event.target.closest("[data-partial-input]");
         if (partialInput instanceof HTMLElement) {{
           event.stopPropagation();
@@ -5492,6 +5678,12 @@ def render_manufacturing_page(
           .map((value) => String(value || "").trim())
           .filter(Boolean);
         if (!rowId) return;
+        if (row.hasAttribute("data-issued-edit-alert")) {{
+          event.preventDefault();
+          event.stopPropagation();
+          await completeIssuedEditAlert(targetProductionNumber, storageKey, currentDocKey);
+          return;
+        }}
         const currentState = row.getAttribute("data-pantolo-state") || selectionState[stateKey] || "";
         if (currentState === "done") {{
           return;

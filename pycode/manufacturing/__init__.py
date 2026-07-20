@@ -7,6 +7,7 @@ MANUFACTURING_ACCESS_USER_IDS = frozenset({"manufacturer"})
 from .common import (
     available_production_entries,
     available_production_numbers,
+    complete_issued_row_edit,
     latest_production_number,
     load_partial_quantity_state,
     load_production_bundle,
@@ -19,6 +20,7 @@ from .config import configure_manufacturing, runtime_dir
 from .routes import (
     MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
+    MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
@@ -48,6 +50,7 @@ from .workflow import (
 __all__ = [
     "MANUFACTURING_ADMIN_REVISION_ROUTE",
     "MANUFACTURING_DATA_ROUTE",
+    "MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE",
     "MANUFACTURING_OPERATION_DEFINITIONS",
     "MANUFACTURING_PARTIAL_QTY_ROUTE",
     "MANUFACTURING_PRIME_SYNC_ON_START",
@@ -70,6 +73,7 @@ __all__ = [
     "_prime_manufacturing_cache_worker",
     "available_production_entries",
     "available_production_numbers",
+    "complete_issued_row_edit",
     "configure_manufacturing",
     "latest_production_number",
     "load_partial_quantity_state",

@@ -1,12 +1,12 @@
-﻿"""Runtime configuration for the manufacturing papers workflow."""
+"""Shared runtime configuration for all Manufacturing views."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
-_runtime_dir = REPO_ROOT / "runtime" / "admin-gyartasi-papirok"
+_runtime_dir = REPO_ROOT / "runtime" / "gyartasi-papirok"
 
 
 def configure_manufacturing(runtime_dir: Path) -> None:
@@ -23,4 +23,3 @@ def runtime_dir() -> Path:
 def bundle_disk_cache_dir() -> Path:
     """Return the folder used for parsed manufacturing bundle cache files."""
     return _runtime_dir / "bundle-cache"
-

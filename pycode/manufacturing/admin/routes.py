@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# Admin route profile for the unified Manufacturing package.
+
 MANUFACTURING_ROUTE = "/apps/admin-gyartasi-papirok"
 MANUFACTURING_DATA_ROUTE = f"{MANUFACTURING_ROUTE}/data"
 MANUFACTURING_ROW_DATA_ROUTE = f"{MANUFACTURING_ROUTE}/row-data"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# Admin renderer for the unified Manufacturing package.
+
 import html
 import json
 import urllib.parse
@@ -776,6 +778,11 @@ def render_manufacturing_page(
       border-color: #dc2626;
       background: #fecaca;
       color: #991b1b;
+    }}
+    .mfg-chip-link.has-shipment-date.is-active {{
+      box-shadow:
+        inset 0 0 0 2px #111827,
+        0 1px 3px rgba(17, 24, 39, 0.24);
     }}
     .mfg-chip-link.is-date-yellow .mfg-chip-number,
     .mfg-chip-link.is-date-yellow .mfg-chip-shipment-date {{
@@ -1935,6 +1942,12 @@ def render_manufacturing_page(
     .mfg-row.is-done .mfg-row-meta span,
     .mfg-row.is-done .mfg-row-code {{
       color: #f4fff8;
+    }}
+    .mfg-row.is-done .mfg-row-subtitle {{
+      color: #dcfce7;
+      font-weight: 750;
+      opacity: 1;
+      text-shadow: 0 1px 1px rgba(4, 78, 50, 0.55);
     }}
     .mfg-row.is-done .mfg-row-qty {{
       background: #0a7448;
@@ -3312,7 +3325,11 @@ def render_manufacturing_page(
           for (const section of editableSectionsForDocument(document)) {{
             for (const row of (Array.isArray(section?.rows) ? section.rows : [])) {{
               if (rowStorageKey(row) === cleanKey && rowProductionNumber(row) === cleanProduction) {{
-                matches.push({{ row, documentKey: String(document?.key || "") }});
+                matches.push({{
+                  row,
+                  documentKey: String(document?.key || ""),
+                  categoryKey: String(section?.topfloorCategory?.categoryKey || ""),
+                }});
               }}
             }}
           }}
@@ -3360,6 +3377,7 @@ def render_manufacturing_page(
           rowKey,
           productionNumber: targetProductionNumber,
           documentKey: found.documentKey,
+          categoryKey: found.categoryKey,
         }};
         rowEditFieldsNode.innerHTML = visibleFields.map(([field, label]) => `
           <label class="mfg-row-edit-field">
@@ -3864,9 +3882,10 @@ def render_manufacturing_page(
         const category = group?.topfloorCategory || null;
         if (!category) return "";
         const boxId = String(category.boxId || "").trim();
+        const boxName = String(category.boxDescription || category.defaultBoxDescription || "").trim();
         const boxCreatedBy = String(category.boxCreatedBy || "").trim();
         const boxLabel = boxId
-          ? `Doboz: ${{escapeHtml(boxId)}}${{boxCreatedBy ? ` · ${{escapeHtml(boxCreatedBy)}}` : ""}}`
+          ? `Doboz: ${{boxName ? `${{escapeHtml(boxName)}} · ID: ` : ""}}${{escapeHtml(boxId)}}${{boxCreatedBy ? ` · ${{escapeHtml(boxCreatedBy)}}` : ""}}`
           : "Nincs doboz";
         const statusLabel = category.storageBoxIssued
           ? "Kiadva"
@@ -5738,8 +5757,14 @@ def render_manufacturing_page(
         Array.from(rowEditFieldsNode.querySelectorAll("[data-row-edit-field]")).forEach((input) => {{
           if (!(input instanceof HTMLInputElement)) return;
           const field = String(input.getAttribute("data-row-edit-field") || "").trim();
-          if (field) fields[field] = String(input.value || "").trim();
+          const value = String(input.value || "").trim();
+          if (field && value !== String(activeRowEdit.row?.[field] ?? "").trim()) fields[field] = value;
         }});
+        if (!Object.keys(fields).length) {{
+          closeRowEditModal();
+          setStatus("Nem történt változtatás.");
+          return;
+        }}
         const submitButton = rowEditFormNode.querySelector('button[type="submit"]');
         if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
         setStatus("Soradat mentése...");
@@ -5750,7 +5775,15 @@ def render_manufacturing_page(
             body: JSON.stringify({{
               production_number: activeRowEdit.productionNumber,
               document_key: activeRowEdit.documentKey,
+              category_key: String(activeRowEdit.categoryKey || ""),
               row_key: activeRowEdit.rowKey,
+              visible_state: rowStateValue(activeRowEdit.row),
+              state_keys: Array.from(new Set([
+                String(activeRowEdit.row?.state_key || ""),
+                String(activeRowEdit.row?.state_storage_key || ""),
+                String(activeRowEdit.row?.row_id || ""),
+                ...(Array.isArray(activeRowEdit.row?.sourceRowIds) ? activeRowEdit.row.sourceRowIds : []),
+              ].map((value) => String(value || "").trim()).filter(Boolean))),
               fields,
             }}),
           }});

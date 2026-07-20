@@ -1,4 +1,4 @@
-"""Operation-specific section builders for front manufacturing papers."""
+"""Shared Front section builder for all Manufacturing views."""
 
 from __future__ import annotations
 

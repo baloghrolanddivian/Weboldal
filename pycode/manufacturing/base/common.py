@@ -1,4 +1,4 @@
-"""Common manufacturing production discovery and row state persistence."""
+"""Shared Manufacturing discovery and read-only persistence helpers."""
 
 from __future__ import annotations
 
@@ -294,7 +294,7 @@ def load_production_bundle(production_number: str) -> dict:
 
 
 def selection_state_path(runtime_root: Path, production_number: str) -> Path:
-    """Return the existing row-state JSON path without changing the filesystem."""
+    """Return the row-state JSON path without changing the filesystem."""
     return runtime_root / production_number / "state.json"
 
 
@@ -321,7 +321,7 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
 
 
 def partial_quantity_state_path(runtime_root: Path, production_number: str) -> Path:
-    """Return the existing partial-quantity JSON path without changing the filesystem."""
+    """Return the partial-quantity JSON path without changing the filesystem."""
     return runtime_root / production_number / "partial-qty.json"
 
 
@@ -368,14 +368,9 @@ ROW_DATA_EDITABLE_FIELDS = frozenset({
 })
 
 
-def row_data_path(runtime_root: Path, production_number: str) -> Path:
-    """Return the row-data override file beside the production state file."""
-    return runtime_root / production_number / "row-data.json"
-
-
 def load_row_data(runtime_root: Path, production_number: str) -> dict[str, dict[str, str]]:
-    """Load safe display-field overrides keyed by the persisted row identity."""
-    path = row_data_path(runtime_root, production_number)
+    """Load display-field overrides stored beside manufacturing state."""
+    path = runtime_root / production_number / "row-data.json"
     if not path.exists():
         return {}
     try:
@@ -399,32 +394,34 @@ def load_row_data(runtime_root: Path, production_number: str) -> dict[str, dict[
     return result
 
 
-def save_row_data(
-    runtime_root: Path,
-    production_number: str,
-    row_key: str,
-    fields: dict[str, object],
-) -> dict[str, str]:
-    """Persist safe display overrides using the same row identity as state saving."""
-    clean_number = str(production_number or "").strip()
-    clean_row_key = str(row_key or "").strip()
-    if not clean_number or not clean_row_key:
-        raise ValueError("Hiányzik a gyártás/szállítmány vagy a sorazonosító.")
-    clean_fields = {
-        str(field): str(value or "").strip()[:500]
-        for field, value in fields.items()
-        if str(field) in ROW_DATA_EDITABLE_FIELDS
-    }
-    if not clean_fields:
-        raise ValueError("Nincs menthető soradat.")
-    target_dir = runtime_root / clean_number
-    target_dir.mkdir(parents=True, exist_ok=True)
-    path = row_data_path(runtime_root, clean_number)
-    current = load_row_data(runtime_root, clean_number)
-    merged_fields = {**current.get(clean_row_key, {}), **clean_fields}
-    current[clean_row_key] = merged_fields
-    path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
-    return dict(merged_fields)
+def load_issued_row_edits(runtime_root: Path, production_number: str) -> dict[str, dict[str, object]]:
+    """Load pending/completed alerts for rows edited after reaching their handled state."""
+    path = runtime_root / production_number / "issued-row-edits.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    result: dict[str, dict[str, object]] = {}
+    for row_key, raw_marker in payload.items():
+        clean_key = str(row_key or "").strip()
+        if not clean_key or not isinstance(raw_marker, dict):
+            continue
+        result[clean_key] = {
+            "category_key": str(raw_marker.get("category_key", "") or "").strip(),
+            "edited_at": str(raw_marker.get("edited_at", "") or "").strip(),
+            "completed": bool(raw_marker.get("completed")),
+            "completed_at": str(raw_marker.get("completed_at", "") or "").strip(),
+            "edited_fields": sorted({
+                str(field).strip()
+                for field in raw_marker.get("edited_fields", [])
+                if str(field).strip() in ROW_DATA_EDITABLE_FIELDS
+            }) if isinstance(raw_marker.get("edited_fields"), list) else [],
+        }
+    return result
 
 
 def load_shipment_date(runtime_root: Path, shipment_id: str) -> str:
@@ -444,29 +441,8 @@ def load_shipment_date(runtime_root: Path, shipment_id: str) -> str:
         return ""
 
 
-def save_shipment_date(runtime_root: Path, shipment_id: str, shipment_date: str) -> str:
-    """Save or clear a Topfloor shipment date in its own adjacent JSON file."""
-    clean_shipment_id = str(shipment_id or "").strip()
-    clean_date = str(shipment_date or "").strip()
-    if not clean_shipment_id:
-        raise ValueError("Hiányzik a szállítmány azonosítója.")
-    if clean_date:
-        try:
-            date.fromisoformat(clean_date)
-        except ValueError as exc:
-            raise ValueError("A szállítási dátum formátuma hibás.") from exc
-    target_dir = runtime_root / clean_shipment_id
-    target_dir.mkdir(parents=True, exist_ok=True)
-    path = target_dir / "shipment-date.json"
-    path.write_text(
-        json.dumps({"shipment_date": clean_date}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    return clean_date
-
-
 def load_admin_change_revision(runtime_root: Path) -> str:
-    """Load the revision shared by all Manufacturing browser views."""
+    """Load the revision bumped by an Admin Manufacturing display edit."""
     path = runtime_root / "admin-change.json"
     if not path.exists():
         return ""
@@ -475,25 +451,5 @@ def load_admin_change_revision(runtime_root: Path) -> str:
         return str(payload.get("revision", "") if isinstance(payload, dict) else "").strip()
     except Exception:
         return ""
-
-
-def signal_admin_change(runtime_root: Path, *, kind: str, target: str) -> str:
-    """Bump the revision observed by every open Manufacturing view."""
-    runtime_root.mkdir(parents=True, exist_ok=True)
-    revision = str(time.time_ns())
-    path = runtime_root / "admin-change.json"
-    path.write_text(
-        json.dumps(
-            {
-                "revision": revision,
-                "kind": str(kind or "").strip(),
-                "target": str(target or "").strip(),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    return revision
 
 

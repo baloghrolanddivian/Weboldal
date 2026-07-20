@@ -1,4 +1,4 @@
-"""Operation-specific section builders for pantolas manufacturing papers."""
+"""Shared Pántolás section builder for all Manufacturing views."""
 
 from __future__ import annotations
 

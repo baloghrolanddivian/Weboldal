@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# Non-merging CNC presentation used only by the admin view.
+
 from ..workflow import *
 
 def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[list[dict], int, list[dict], str, str]:

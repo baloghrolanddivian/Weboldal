@@ -32,6 +32,7 @@ from manufacturing import (
     MANUFACTURING_ACCESS_USER_IDS,
     MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
+    MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE,
     MANUFACTURING_OPERATION_DEFINITIONS,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_PRIME_SYNC_ON_START,
@@ -51,6 +52,7 @@ from manufacturing import (
     _prime_manufacturing_cache_async,
     _prime_manufacturing_cache_worker,
     configure_manufacturing,
+    complete_issued_row_edit,
     load_partial_quantity_state,
     load_selection_state,
     manufacturing_client_payload,
@@ -60,7 +62,7 @@ from manufacturing import (
     save_partial_quantity_state,
     save_selection_state,
 )
-from admin_manufacturing import (
+from manufacturing.admin import (
     MANUFACTURING_DATA_ROUTE as ADMIN_MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_ROW_DATA_ROUTE as ADMIN_MANUFACTURING_ROW_DATA_ROUTE,
     MANUFACTURING_SHIPMENT_DATE_ROUTE as ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE,
@@ -69,11 +71,14 @@ from admin_manufacturing import (
     manufacturing_client_payload as admin_manufacturing_client_payload,
     manufacturing_module_payload as admin_manufacturing_module_payload,
     load_admin_change_revision as load_admin_manufacturing_change_revision,
+    manufacturing_row_requires_edit_alert as admin_manufacturing_row_requires_edit_alert,
     render_manufacturing_module as render_admin_manufacturing_module,
     runtime_dir as admin_manufacturing_runtime_dir,
+    save_issued_row_edit_marker as save_admin_manufacturing_issued_row_edit_marker,
     save_row_data as save_admin_manufacturing_row_data,
     save_shipment_date as save_admin_manufacturing_shipment_date,
     signal_admin_change as signal_admin_manufacturing_change,
+    topfloor_row_requires_edit_alert as admin_manufacturing_topfloor_row_requires_edit_alert,
 )
 from matt_inventory import (
     MATT_INVENTORY_ACCESS_USER_IDS,
@@ -388,6 +393,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (HR_CONFIRM_ROUTE, HR_ACCESS_USER_IDS),
     (MANUFACTURING_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_DATA_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_ADMIN_REVISION_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_STATE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_PARTIAL_QTY_ROUTE, STANDARD_ACCESS_USER_IDS),
@@ -6178,20 +6184,48 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
             row_key = str(payload.get("row_key", "")).strip()
             document_key = str(payload.get("document_key", "")).strip()
+            category_key = str(payload.get("category_key", "")).strip()
+            state_keys = payload.get("state_keys", [])
+            visible_state = str(payload.get("visible_state", "")).strip().lower()
             fields = payload.get("fields", {})
-            if not production_number or not row_key or not isinstance(fields, dict):
+            if not production_number or not row_key or not isinstance(fields, dict) or not isinstance(state_keys, list):
                 self.respond_json(400, {"ok": False, "error": "Hiányos soradat-mentési kérés."})
                 return
             runtime_root = admin_manufacturing_runtime_dir()
-            if document_key == "topfloor" or row_key.startswith("topfloor::"):
+            is_topfloor_row = document_key == "topfloor" or row_key.startswith("topfloor::")
+            if is_topfloor_row:
                 runtime_root = runtime_root / "topfloor"
             try:
+                requires_edit_alert = bool(
+                    admin_manufacturing_topfloor_row_requires_edit_alert(
+                        runtime_root,
+                        production_number,
+                        category_key,
+                        row_key,
+                    )
+                    if is_topfloor_row
+                    else admin_manufacturing_row_requires_edit_alert(
+                        runtime_root,
+                        production_number,
+                        row_key,
+                        [str(value or "").strip() for value in state_keys],
+                        visible_state,
+                    )
+                )
                 saved_fields = save_admin_manufacturing_row_data(
                     runtime_root,
                     production_number,
                     row_key,
                     fields,
                 )
+                if requires_edit_alert:
+                    save_admin_manufacturing_issued_row_edit_marker(
+                        runtime_root,
+                        production_number,
+                        row_key,
+                        category_key,
+                        set(fields),
+                    )
                 admin_change_revision = signal_admin_manufacturing_change(
                     admin_manufacturing_runtime_dir(),
                     kind="row-data",
@@ -6210,6 +6244,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "production_number": production_number,
                     "row_key": row_key,
                     "fields": saved_fields,
+                    "issued_after_edit": requires_edit_alert,
+                    "requires_edit_alert": requires_edit_alert,
                     "admin_change_revision": admin_change_revision,
                 },
             )
@@ -6219,6 +6255,55 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.respond_json(
                 405,
                 {"ok": False, "error": "Az Admin Gyártási Papírok modul csak megfigyelésre használható."},
+            )
+            return
+
+        if path == MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            production_number = _manufacturing_normalize_number(
+                payload.get("production_number", "") or payload.get("shipment_id", "")
+            )
+            document_key = str(payload.get("document_key", "")).strip()
+            row_key = str(payload.get("row_key", "")).strip()
+            if not production_number or not row_key:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártás/szállítmány vagy a sorazonosító."})
+                return
+            try:
+                alert_runtime_root = manufacturing_runtime_dir()
+                if document_key == "topfloor":
+                    alert_runtime_root = alert_runtime_root / "topfloor"
+                completed = complete_issued_row_edit(
+                    alert_runtime_root,
+                    production_number,
+                    row_key,
+                )
+                admin_change_revision = signal_admin_manufacturing_change(
+                    manufacturing_runtime_dir(),
+                    kind="issued-row-edit-complete",
+                    target=production_number,
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A figyelmeztetés lezárása nem sikerült: {exc}"})
+                return
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "completed": completed,
+                    "production_number": production_number,
+                    "shipment_id": production_number if document_key == "topfloor" else "",
+                    "row_key": row_key,
+                    "admin_change_revision": admin_change_revision,
+                },
             )
             return
 

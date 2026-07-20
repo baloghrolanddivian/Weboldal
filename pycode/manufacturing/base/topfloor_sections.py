@@ -1,4 +1,4 @@
-"""Operation-specific section builders for Topfloor manufacturing views."""
+"""Shared Topfloor section builder for all Manufacturing views."""
 
 from __future__ import annotations
 

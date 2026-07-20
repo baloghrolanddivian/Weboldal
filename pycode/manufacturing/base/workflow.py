@@ -24,6 +24,7 @@ from .common import (
     is_structured_manufacturing_state_key,
     latest_production_number,
     load_admin_change_revision,
+    load_issued_row_edits,
     load_partial_quantity_state,
     load_production_bundle,
     load_row_data,
@@ -31,14 +32,13 @@ from .common import (
     load_selection_state,
     production_folder,
 )
-from .page import render_manufacturing_page
 from .config import REPO_ROOT, bundle_disk_cache_dir, runtime_dir
-from .routes import (
+from ..routes import (
+    MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
     MANUFACTURING_ROUTE,
-    MANUFACTURING_SHIPMENT_DATE_ROUTE,
     MANUFACTURING_STATE_ROUTE,
     MANUFACTURING_TOPFLOOR_BOX_ROUTE,
 )
@@ -52,7 +52,6 @@ MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-17-xml-source-file-state-v1"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 TOPFLOOR_BOX_TYPES_PATH = REPO_ROOT / "data" / "topfloor_box_types.json"
-MANUFACTURING_SHARED_ADMIN_REVISION_ROUTE = "/apps/gyartasi-papirok/admin-revision"
 TOPFLOOR_BOX_TYPES_FALLBACK = [
     {"name": "Válassz dobozt!", "code": "", "id": 0},
     {"name": "Nincs", "code": "", "id": 0},
@@ -83,14 +82,16 @@ MANUFACTURING_SOURCE_LABELS = {
 
 
 def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str = "") -> None:
-    """Overlay saved display-only row edits without changing state identities."""
+    """Overlay admin-authored display data without changing row state identity."""
     loaded: dict[tuple[str, str], dict[str, dict[str, str]]] = {}
+    issued_edit_loaded: dict[tuple[str, str], dict[str, dict[str, object]]] = {}
     documents = bundle.get("documents", []) if isinstance(bundle, dict) else []
     for document in documents if isinstance(documents, list) else []:
         if not isinstance(document, dict):
             continue
         if str(document.get("key", "")).strip() == "cnc_furas":
-            # The admin CNC builder applies overrides after XML placement.
+            # CNC applies overrides after XML categorization/sorting and before
+            # its final display-row merge.
             continue
         is_topfloor = str(document.get("key", "")).strip() == "topfloor"
         override_root = runtime_dir() / "topfloor" if is_topfloor else runtime_dir()
@@ -110,6 +111,13 @@ def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str =
                     loaded[cache_key] = load_row_data(override_root, number)
                 override_map = loaded[cache_key]
                 normalized_overrides = {str(key).casefold(): fields for key, fields in override_map.items()}
+                issued_edit_map: dict[str, dict[str, object]] = {}
+                normalized_issued_edits: dict[str, dict[str, object]] = {}
+                if is_topfloor:
+                    if cache_key not in issued_edit_loaded:
+                        issued_edit_loaded[cache_key] = load_issued_row_edits(override_root, number)
+                    issued_edit_map = issued_edit_loaded[cache_key]
+                    normalized_issued_edits = {str(key).casefold(): marker for key, marker in issued_edit_map.items()}
                 row_keys = [
                     str(row.get("state_storage_key", "") or "").strip(),
                     str(row.get("row_id", "") or "").strip(),
@@ -146,6 +154,107 @@ def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str =
                             else:
                                 edited_fields.discard(field)
                         row["_rowDataEditedFields"] = sorted(edited_fields)
+                    issued_edit_marker = next(
+                        (
+                            issued_edit_map.get(candidate)
+                            or normalized_issued_edits.get(candidate.casefold())
+                            for candidate in candidate_keys
+                            if issued_edit_map.get(candidate) or normalized_issued_edits.get(candidate.casefold())
+                        ),
+                        None,
+                    )
+                    category = section.get("topfloorCategory")
+                    marker_completed = isinstance(issued_edit_marker, dict) and bool(issued_edit_marker.get("completed"))
+                    should_alert = bool(issued_edit_marker) and not marker_completed
+                    if should_alert:
+                        row["_editedAfterIssue"] = True
+                        marker_fields = issued_edit_marker.get("edited_fields", []) if isinstance(issued_edit_marker, dict) else []
+                        row["_issuedEditFields"] = list(marker_fields or row.get("_rowDataEditedFields", []))
+                        if isinstance(category, dict):
+                            category["hasIssuedRowEdit"] = True
+
+
+def _manufacturing_apply_row_edit_alerts(bundle: dict, fallback_number: str = "") -> None:
+    """Apply pending admin-edit alerts to final rows of every operation."""
+    loaded: dict[tuple[str, str], dict[str, dict[str, object]]] = {}
+    documents = bundle.get("documents", []) if isinstance(bundle, dict) else []
+    for document in documents if isinstance(documents, list) else []:
+        if not isinstance(document, dict):
+            continue
+        document_key = str(document.get("key", "") or "").strip()
+        alert_root = runtime_dir() / "topfloor" if document_key == "topfloor" else runtime_dir()
+        sections: list[dict] = []
+        seen_sections: set[int] = set()
+        for candidate in document.get("sections", []):
+            if isinstance(candidate, dict) and id(candidate) not in seen_sections:
+                seen_sections.add(id(candidate))
+                sections.append(candidate)
+        for collection_key in ("specialViews", "topfloorShipmentViews"):
+            for view in document.get(collection_key, []):
+                if not isinstance(view, dict):
+                    continue
+                for candidate in view.get("sections", []):
+                    if isinstance(candidate, dict) and id(candidate) not in seen_sections:
+                        seen_sections.add(id(candidate))
+                        sections.append(candidate)
+
+        for section in sections:
+            category = section.get("topfloorCategory")
+            if isinstance(category, dict):
+                category["hasIssuedRowEdit"] = False
+            for row in section.get("rows", []):
+                if not isinstance(row, dict):
+                    continue
+                row.pop("_editedAfterIssue", None)
+                row.pop("_issuedEditFields", None)
+                number = _manufacturing_normalize_number(row.get("production_number", "") or fallback_number)
+                if not number:
+                    continue
+                cache_key = (str(alert_root), number)
+                if cache_key not in loaded:
+                    loaded[cache_key] = load_issued_row_edits(alert_root, number)
+                marker_map = loaded[cache_key]
+                normalized_markers = {str(key).casefold(): marker for key, marker in marker_map.items()}
+                identity_markers = {
+                    "::".join(str(key).strip().split("::")[1:]).casefold(): marker
+                    for key, marker in marker_map.items()
+                    if len(str(key).strip().split("::")) == 4
+                }
+                row_keys = [
+                    str(row.get("state_storage_key", "") or "").strip(),
+                    str(row.get("state_key", "") or "").strip(),
+                    str(row.get("row_id", "") or "").strip(),
+                    *(
+                        [str(value or "").strip() for value in row.get("sourceRowIds", [])]
+                        if isinstance(row.get("sourceRowIds"), list)
+                        else []
+                    ),
+                ]
+                pending_markers: list[dict[str, object]] = []
+                for row_key in dict.fromkeys(key for key in row_keys if key):
+                    candidate_keys = [row_key]
+                    if row_key.endswith("::0"):
+                        candidate_keys.append(row_key[:-3])
+                    elif row_key.count("::") >= 2:
+                        candidate_keys.append(f"{row_key}::0")
+                    for candidate in candidate_keys:
+                        marker = marker_map.get(candidate) or normalized_markers.get(candidate.casefold())
+                        parts = candidate.split("::")
+                        if not marker and len(parts) == 4:
+                            marker = identity_markers.get("::".join(parts[1:]).casefold())
+                        if isinstance(marker, dict) and not bool(marker.get("completed")) and marker not in pending_markers:
+                            pending_markers.append(marker)
+                if not pending_markers:
+                    continue
+                row["_editedAfterIssue"] = True
+                row["_issuedEditFields"] = sorted({
+                    str(field).strip()
+                    for marker in pending_markers
+                    for field in marker.get("edited_fields", [])
+                    if str(field).strip()
+                }) or list(row.get("_rowDataEditedFields", []))
+                if isinstance(category, dict):
+                    category["hasIssuedRowEdit"] = True
 
 def _manufacturing_query_params(raw_path: str) -> dict[str, str]:
     """Return the last value for each manufacturing query-string parameter."""
@@ -941,10 +1050,10 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
     those rows so the special view can be rendered without loading each source
     production separately in the browser.
     """
-    from .cnc.sections import _manufacturing_cnc_sections
-    from .front.sections import _manufacturing_front_sections
-    from .korpusz.sections import _manufacturing_korpusz_sections
-    from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
+    from ..cnc.sections import _manufacturing_cnc_sections
+    from ..front.sections import _manufacturing_front_sections
+    from ..korpusz.sections import _manufacturing_korpusz_sections
+    from ..pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
 
     sections: list[dict] = []
     selection_state: dict[str, str] = {}
@@ -1064,6 +1173,9 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
             bool(category.get("storageBoxIssued")) for category in shipment_categories
         )
         issued_count = sum(1 for category in shipment_categories if bool(category.get("storageBoxIssued")))
+        has_issued_row_edit = not is_all_shipments_view and any(
+            bool(category.get("hasIssuedRowEdit")) for category in shipment_categories
+        )
         entries.append(
             {
                 "kind": "shipment",
@@ -1076,13 +1188,14 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
                 "is_active": not entries,
                 "is_complete": shipment_complete,
                 "state_status": "done" if shipment_complete else "plain",
+                "has_issued_row_edit": has_issued_row_edit,
             }
         )
     return entries
 
 def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> tuple[dict, dict[str, str], dict[str, str]]:
     """Build the Topfloor bundle from all recent production folders."""
-    from .topfloor.sections import _manufacturing_topfloor_document_from_bundles
+    from ..topfloor.sections import _manufacturing_topfloor_document_from_bundles
 
     source_bundles: list[tuple[dict, str]] = []
     for production_number in production_numbers:
@@ -1137,6 +1250,7 @@ def _manufacturing_view_bundle(
     *,
     include_all_red_view: bool = True,
     operation_filter: str = "",
+    cnc_sections_builder=None,
 ) -> tuple[dict, dict[str, str]]:
     """Build operation document bundle and client state payload.
 
@@ -1149,6 +1263,8 @@ def _manufacturing_view_bundle(
     documents: list[dict] = []
     selection_state_payload = _manufacturing_selection_state_payload(current_number, current_selection_state)
     target_operation = _manufacturing_normalize_operation(operation_filter)
+    if cnc_sections_builder is None:
+        from ..cnc.sections import _manufacturing_cnc_sections as cnc_sections_builder
 
     def finalize_filtered_documents(filtered_documents: list[dict]) -> tuple[dict, dict[str, str]]:
         existing_keys = {str(document.get("key", "")).strip() for document in filtered_documents}
@@ -1169,7 +1285,7 @@ def _manufacturing_view_bundle(
         )
 
     if target_operation == "korpusz_osszekeszites":
-        from .korpusz.sections import (
+        from ..korpusz.sections import (
             _manufacturing_alkatresz_kesz_xml_sections,
             _manufacturing_korpusz_sections,
             _manufacturing_osszekeszito_xml_sections,
@@ -1222,7 +1338,7 @@ def _manufacturing_view_bundle(
         )
 
     if target_operation == "front_osszekeszites":
-        from .front.sections import _manufacturing_front_sections
+        from ..front.sections import _manufacturing_front_sections
 
         front_sections, front_row_count = _manufacturing_front_sections(raw_bundle, current_number)
         front_source_type = "Nincs XML"
@@ -1270,9 +1386,7 @@ def _manufacturing_view_bundle(
         )
 
     if target_operation == "cnc_furas":
-        from .cnc.sections import _manufacturing_cnc_sections
-
-        cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, cnc_source_label = _manufacturing_cnc_sections(raw_bundle, current_number)
+        cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, cnc_source_label = cnc_sections_builder(raw_bundle, current_number)
         return finalize_filtered_documents(
             [
                 {
@@ -1293,7 +1407,7 @@ def _manufacturing_view_bundle(
         )
 
     if target_operation == "pantolas":
-        from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
+        from ..pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
 
         pantolo_sections, pantolo_row_count = _manufacturing_pantolo_sections(raw_bundle, current_number)
         _, _, pantolo_xml_available = _manufacturing_pantolo_xml_sections(raw_bundle, current_number)
@@ -1318,19 +1432,18 @@ def _manufacturing_view_bundle(
         )
 
     if target_operation == "topfloor":
-        from .topfloor.sections import _manufacturing_topfloor_document
+        from ..topfloor.sections import _manufacturing_topfloor_document
 
         return finalize_filtered_documents([_manufacturing_topfloor_document(raw_bundle, current_number)])
 
-    from .cnc.sections import _manufacturing_cnc_sections
-    from .front.sections import _manufacturing_front_sections
-    from .korpusz.sections import (
+    from ..front.sections import _manufacturing_front_sections
+    from ..korpusz.sections import (
         _manufacturing_alkatresz_kesz_xml_sections,
         _manufacturing_korpusz_sections,
         _manufacturing_osszekeszito_xml_sections,
     )
-    from .pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
-    from .topfloor.sections import _manufacturing_topfloor_document
+    from ..pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
+    from ..topfloor.sections import _manufacturing_topfloor_document
 
     korpusz_sections, korpusz_row_count = _manufacturing_korpusz_sections(raw_bundle, current_number)
     korpusz_osszekeszito_sections, korpusz_osszekeszito_count, korpusz_osszekeszito_xml_available = _manufacturing_osszekeszito_xml_sections(raw_bundle, current_number)
@@ -1421,7 +1534,7 @@ def _manufacturing_view_bundle(
         }
     )
 
-    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, cnc_source_label = _manufacturing_cnc_sections(raw_bundle, current_number)
+    cnc_sections, cnc_row_count, cnc_special_views, cnc_source_type, cnc_source_label = cnc_sections_builder(raw_bundle, current_number)
     documents.append(
         {
             "key": "cnc_furas",
@@ -1484,18 +1597,19 @@ def manufacturing_module_payload(
     success: bool = False,
     include_client_cache: bool = True,
     route: str = MANUFACTURING_ROUTE,
+    view_mode: str = "default",
+    cnc_sections_builder=None,
 ) -> dict[str, object]:
     """Build the manufacturing module payload shared by HTML and JSON views."""
+    is_admin_view = str(view_mode or "").strip().lower() == "admin"
     module_route = str(route or MANUFACTURING_ROUTE).rstrip("/")
     data_route = f"{module_route}/data"
-    # This duplicated module is observational: it reads persisted state but
-    # deliberately exposes no browser mutation endpoints.
-    state_route = ""
-    partial_qty_route = ""
-    report_ready_route = ""
-    topfloor_box_route = ""
-    row_edit_route = f"{module_route}/row-data"
-    shipment_date_route = f"{module_route}/shipment-date"
+    state_route = "" if is_admin_view else MANUFACTURING_STATE_ROUTE
+    partial_qty_route = "" if is_admin_view else MANUFACTURING_PARTIAL_QTY_ROUTE
+    report_ready_route = "" if is_admin_view else MANUFACTURING_REPORT_READY_ROUTE
+    topfloor_box_route = "" if is_admin_view else MANUFACTURING_TOPFLOOR_BOX_ROUTE
+    row_edit_route = f"{module_route}/row-data" if is_admin_view else ""
+    shipment_date_route = f"{module_route}/shipment-date" if is_admin_view else ""
     requested_number = _manufacturing_normalize_number(production_number)
     selected_operation = _manufacturing_normalize_operation(operation)
     lightweight_operation_picker = not bool(selected_operation)
@@ -1546,6 +1660,7 @@ def manufacturing_module_payload(
                 saved_state,
                 include_all_red_view=False,
                 operation_filter=operation_filter,
+                cnc_sections_builder=cnc_sections_builder,
             )
             target_document = next(
                 (
@@ -1582,6 +1697,7 @@ def manufacturing_module_payload(
     if selected_operation == "topfloor" and not lightweight_operation_picker:
         try:
             bundle, selection_state, partial_quantity_state = _manufacturing_topfloor_aggregate_bundle(recent_numbers)
+            _manufacturing_apply_row_data_overrides(bundle, selected_number)
             recent_productions = _manufacturing_topfloor_shipment_entries(bundle)
             if not recent_productions:
                 combined_message = "Nem találok megjeleníthető Anyagraktár szállítmányt a legutóbbi gyártási mappákban."
@@ -1603,6 +1719,7 @@ def manufacturing_module_payload(
                 current_selection_state,
                 include_all_red_view=True,
                 operation_filter=selected_operation,
+                cnc_sections_builder=cnc_sections_builder,
             )
         except Exception as exc:
             combined_message = f"A gyártási papírok betöltése nem sikerült: {exc}"
@@ -1615,7 +1732,9 @@ def manufacturing_module_payload(
             "documents": [],
         }
 
-    _manufacturing_apply_row_data_overrides(bundle, selected_number)
+    if selected_operation != "topfloor":
+        _manufacturing_apply_row_data_overrides(bundle, selected_number)
+    _manufacturing_apply_row_edit_alerts(bundle, selected_number)
 
     production_client_cache: list[dict[str, object]] = []
     topfloor_storage_box_types = _topfloor_storage_box_types()
@@ -1639,20 +1758,18 @@ def manufacturing_module_payload(
                         cache_saved_state,
                         include_all_red_view=True,
                         operation_filter=selected_operation,
+                        cnc_sections_builder=cnc_sections_builder,
                     )
                     _manufacturing_apply_row_data_overrides(cache_bundle, cache_number)
-                production_client_cache.append(
-                    manufacturing_client_payload(
-                        {
+                    _manufacturing_apply_row_edit_alerts(cache_bundle, cache_number)
+                cache_payload = {
                             "route": module_route,
                             "dataRoute": data_route,
                             "stateRoute": state_route,
                             "partialQtyRoute": partial_qty_route,
                             "reportReadyRoute": report_ready_route,
                             "topfloorBoxRoute": topfloor_box_route,
-                            "rowEditRoute": row_edit_route,
-                            "shipmentDateRoute": shipment_date_route,
-                            "adminRevisionRoute": MANUFACTURING_SHARED_ADMIN_REVISION_ROUTE,
+                            "adminRevisionRoute": MANUFACTURING_ADMIN_REVISION_ROUTE,
                             "adminChangeRevision": load_admin_change_revision(runtime_dir()),
                             "topfloorStorageBoxTypes": topfloor_storage_box_types,
                             "productionNumber": cache_number,
@@ -1663,22 +1780,22 @@ def manufacturing_module_payload(
                             "partialQuantityState": cache_partial_quantity_state,
                             "message": "",
                             "success": False,
-                        }
-                    )
-                )
+                }
+                if is_admin_view:
+                    cache_payload["rowEditRoute"] = row_edit_route
+                    cache_payload["shipmentDateRoute"] = shipment_date_route
+                production_client_cache.append(manufacturing_client_payload(cache_payload))
             except Exception:
                 continue
 
-    return {
+    result = {
         "route": module_route,
         "dataRoute": data_route,
         "stateRoute": state_route,
         "partialQtyRoute": partial_qty_route,
         "reportReadyRoute": report_ready_route,
         "topfloorBoxRoute": topfloor_box_route,
-        "rowEditRoute": row_edit_route,
-        "shipmentDateRoute": shipment_date_route,
-        "adminRevisionRoute": MANUFACTURING_SHARED_ADMIN_REVISION_ROUTE,
+        "adminRevisionRoute": MANUFACTURING_ADMIN_REVISION_ROUTE,
         "adminChangeRevision": load_admin_change_revision(runtime_dir()),
         "topfloorStorageBoxTypes": topfloor_storage_box_types,
         "productionNumber": selected_number,
@@ -1692,6 +1809,10 @@ def manufacturing_module_payload(
         "message": combined_message,
         "success": combined_success,
     }
+    if is_admin_view:
+        result["rowEditRoute"] = row_edit_route
+        result["shipmentDateRoute"] = shipment_date_route
+    return result
 
 def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str, object]:
     """Return the compact browser payload for one selected manufacturing operation."""
@@ -1707,7 +1828,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         None,
     )
     visible_documents = [active_document] if isinstance(active_document, dict) else documents
-    return {
+    result = {
         "productionNumber": str(module_payload.get("productionNumber", "")),
         "route": str(module_payload.get("route", MANUFACTURING_ROUTE)),
         "dataRoute": str(module_payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
@@ -1721,9 +1842,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
-        "rowEditRoute": str(module_payload.get("rowEditRoute", "")),
-        "shipmentDateRoute": str(module_payload.get("shipmentDateRoute", MANUFACTURING_SHIPMENT_DATE_ROUTE)),
-        "adminRevisionRoute": str(module_payload.get("adminRevisionRoute", MANUFACTURING_SHARED_ADMIN_REVISION_ROUTE)),
+        "adminRevisionRoute": str(module_payload.get("adminRevisionRoute", MANUFACTURING_ADMIN_REVISION_ROUTE)),
         "adminChangeRevision": str(module_payload.get("adminChangeRevision", "")),
         "topfloorStorageBoxTypes": (
             module_payload.get("topfloorStorageBoxTypes", [])
@@ -1733,6 +1852,10 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "message": str(module_payload.get("message", "")),
         "success": bool(module_payload.get("success", False)),
     }
+    if "rowEditRoute" in module_payload or "shipmentDateRoute" in module_payload:
+        result["rowEditRoute"] = str(module_payload.get("rowEditRoute", ""))
+        result["shipmentDateRoute"] = str(module_payload.get("shipmentDateRoute", ""))
+    return result
 
 def render_manufacturing_module(
     production_number: str = "",
@@ -1740,6 +1863,9 @@ def render_manufacturing_module(
     message: str = "",
     success: bool = False,
     route: str = MANUFACTURING_ROUTE,
+    view_mode: str = "default",
+    cnc_sections_builder=None,
+    page_renderer=None,
 ) -> bytes:
     """Render the manufacturing HTML page for the selected operation."""
     payload = manufacturing_module_payload(
@@ -1748,30 +1874,37 @@ def render_manufacturing_module(
         message=message,
         success=success,
         route=route,
+        view_mode=view_mode,
+        cnc_sections_builder=cnc_sections_builder,
     )
-    return render_manufacturing_page(
-        route=str(payload.get("route", MANUFACTURING_ROUTE)),
-        data_route=str(payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
-        state_route=str(payload.get("stateRoute", MANUFACTURING_STATE_ROUTE)),
-        partial_qty_route=str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
-        report_ready_route=str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
-        topfloor_box_route=str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
-        row_edit_route=str(payload.get("rowEditRoute", "")),
-        shipment_date_route=str(payload.get("shipmentDateRoute", MANUFACTURING_SHIPMENT_DATE_ROUTE)),
-        admin_revision_route=str(payload.get("adminRevisionRoute", MANUFACTURING_SHARED_ADMIN_REVISION_ROUTE)),
-        admin_change_revision=str(payload.get("adminChangeRevision", "")),
-        topfloor_storage_box_types=payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
-        selected_number=str(payload.get("productionNumber", "")),
-        operations=payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
-        selected_operation=str(payload.get("selectedOperation", "")),
-        recent_productions=payload.get("recentProductions", []) if isinstance(payload.get("recentProductions"), list) else [],
-        production_client_cache=payload.get("productionClientCache", []) if isinstance(payload.get("productionClientCache"), list) else [],
-        bundle=payload.get("bundle", {}) if isinstance(payload.get("bundle"), dict) else {},
-        selection_state=payload.get("selectionState", {}) if isinstance(payload.get("selectionState"), dict) else {},
-        partial_quantity_state=payload.get("partialQuantityState", {}) if isinstance(payload.get("partialQuantityState"), dict) else {},
-        message=str(payload.get("message", "")),
-        success=bool(payload.get("success", False)),
-    )
+    if page_renderer is None:
+        from ..page import render_manufacturing_page as page_renderer
+    renderer = page_renderer
+    render_kwargs = {
+        "route": str(payload.get("route", MANUFACTURING_ROUTE)),
+        "data_route": str(payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
+        "state_route": str(payload.get("stateRoute", MANUFACTURING_STATE_ROUTE)),
+        "partial_qty_route": str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
+        "report_ready_route": str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
+        "topfloor_box_route": str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        "admin_revision_route": str(payload.get("adminRevisionRoute", MANUFACTURING_ADMIN_REVISION_ROUTE)),
+        "admin_change_revision": str(payload.get("adminChangeRevision", "")),
+        "topfloor_storage_box_types": payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
+        "selected_number": str(payload.get("productionNumber", "")),
+        "operations": payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
+        "selected_operation": str(payload.get("selectedOperation", "")),
+        "recent_productions": payload.get("recentProductions", []) if isinstance(payload.get("recentProductions"), list) else [],
+        "production_client_cache": payload.get("productionClientCache", []) if isinstance(payload.get("productionClientCache"), list) else [],
+        "bundle": payload.get("bundle", {}) if isinstance(payload.get("bundle"), dict) else {},
+        "selection_state": payload.get("selectionState", {}) if isinstance(payload.get("selectionState"), dict) else {},
+        "partial_quantity_state": payload.get("partialQuantityState", {}) if isinstance(payload.get("partialQuantityState"), dict) else {},
+        "message": str(payload.get("message", "")),
+        "success": bool(payload.get("success", False)),
+    }
+    if str(view_mode or "").strip().lower() == "admin":
+        render_kwargs["row_edit_route"] = str(payload.get("rowEditRoute", ""))
+        render_kwargs["shipment_date_route"] = str(payload.get("shipmentDateRoute", ""))
+    return renderer(**render_kwargs)
 
 def _prime_manufacturing_cache_worker(*, include_all_red_view: bool = False, limit: int = 10) -> None:
     """Warm bundle, view, and operation-state-key caches in the background."""

@@ -1,4 +1,4 @@
-"""Operation-specific section builders for korpusz manufacturing papers."""
+"""Shared Korpusz section builder for all Manufacturing views."""
 
 from __future__ import annotations
 
