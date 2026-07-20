@@ -30,7 +30,9 @@ except Exception:  # pragma: no cover - Windows-only optional import
 
 from manufacturing import (
     MANUFACTURING_ACCESS_USER_IDS,
+    MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
+    MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE,
     MANUFACTURING_OPERATION_DEFINITIONS,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_PRIME_SYNC_ON_START,
@@ -50,6 +52,7 @@ from manufacturing import (
     _prime_manufacturing_cache_async,
     _prime_manufacturing_cache_worker,
     configure_manufacturing,
+    complete_issued_row_edit,
     load_partial_quantity_state,
     load_selection_state,
     manufacturing_client_payload,
@@ -58,6 +61,24 @@ from manufacturing import (
     runtime_dir as manufacturing_runtime_dir,
     save_partial_quantity_state,
     save_selection_state,
+)
+from manufacturing.admin import (
+    MANUFACTURING_DATA_ROUTE as ADMIN_MANUFACTURING_DATA_ROUTE,
+    MANUFACTURING_ROW_DATA_ROUTE as ADMIN_MANUFACTURING_ROW_DATA_ROUTE,
+    MANUFACTURING_SHIPMENT_DATE_ROUTE as ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE,
+    MANUFACTURING_ROUTE as ADMIN_MANUFACTURING_ROUTE,
+    configure_manufacturing as configure_admin_manufacturing,
+    manufacturing_client_payload as admin_manufacturing_client_payload,
+    manufacturing_module_payload as admin_manufacturing_module_payload,
+    load_admin_change_revision as load_admin_manufacturing_change_revision,
+    manufacturing_row_requires_edit_alert as admin_manufacturing_row_requires_edit_alert,
+    render_manufacturing_module as render_admin_manufacturing_module,
+    runtime_dir as admin_manufacturing_runtime_dir,
+    save_issued_row_edit_marker as save_admin_manufacturing_issued_row_edit_marker,
+    save_row_data as save_admin_manufacturing_row_data,
+    save_shipment_date as save_admin_manufacturing_shipment_date,
+    signal_admin_change as signal_admin_manufacturing_change,
+    topfloor_row_requires_edit_alert as admin_manufacturing_topfloor_row_requires_edit_alert,
 )
 from matt_inventory import (
     MATT_INVENTORY_ACCESS_USER_IDS,
@@ -256,6 +277,7 @@ LOGIN_DB_PATH = DATA_DIR / "login.db"
 RUNTIME_DIR = BASE_DIR / "runtime"
 LOGIN_ROUTE = "/login"
 configure_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
+configure_admin_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 ensure_login_database(LOGIN_DB_PATH)
 DEV_RELOAD_ROUTE = "/__dev__/events"
 DEV_CHILD_ENV = "DIVIAN_HUB_DEV_CHILD"
@@ -267,8 +289,10 @@ WATCHED_EXTENSIONS = {".py", ".html", ".css", ".js", ".json", ".xlsx", ".xlsm", 
 WATCHED_FILES = {"requirements.txt"}
 WATCH_IGNORED_DIRS = {".git", "__pycache__", "runtime", ".venv", "venv", "node_modules"}
 APP_VERSION = "2.1.5"
-STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer"})
+STANDARD_ACCESS_USER_IDS = frozenset({"manufacturer", "gyartas-vezerlo"})
+ADMIN_MANUFACTURING_ACCESS_USER_IDS = frozenset({"gyartas-vezerlo"})
 HR_THEME_USER_ID = "hriroda"
+PRODUCTION_CONTROLLER_THEME_USER_ID = "gyartas-vezerlo"
 ADMIN_THEME_CLASS = b"admin-theme"
 ADMIN_THEME_CLASS_SUFFIX = b" admin-theme"
 
@@ -279,6 +303,8 @@ def apply_user_theme(body: bytes, user) -> bytes:
         theme_class = ADMIN_THEME_CLASS
     elif user is not None and user.user_id == HR_THEME_USER_ID:
         theme_class = b"hr-theme"
+    elif user is not None and user.user_id == PRODUCTION_CONTROLLER_THEME_USER_ID:
+        theme_class = b"production-controller-theme"
     if theme_class is not None:
         body_match = re.search(br"<body([^>]*)>", body, flags=re.IGNORECASE)
         if not body_match:
@@ -361,16 +387,19 @@ SEMIFINISHED_FRONT_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RU
 
 
 AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
-    (APP_ROUTE, STANDARD_ACCESS_USER_IDS),
-    (GENERATE_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (APP_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
+    (GENERATE_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
     (HR_APP_ROUTE, HR_ACCESS_USER_IDS),
     (HR_CONFIRM_ROUTE, HR_ACCESS_USER_IDS),
     (MANUFACTURING_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_DATA_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_ADMIN_REVISION_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_STATE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_PARTIAL_QTY_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_REPORT_READY_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_TOPFLOOR_BOX_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (ADMIN_MANUFACTURING_ROUTE, ADMIN_MANUFACTURING_ACCESS_USER_IDS),
     (PRODUCTION_INVENTORY_GROUP_ROUTE, STANDARD_ACCESS_USER_IDS),
     (FRONT_INVENTORY_WORKER_ROUTE, STANDARD_ACCESS_USER_IDS),
     (FRONT_INVENTORY_LEGACY_WORKER_ROUTE, STANDARD_ACCESS_USER_IDS),
@@ -473,6 +502,8 @@ def render_home_page(user: AuthUser, raw_path: str = "/") -> bytes:
     page = (BASE_DIR / "index.html").read_text(encoding="utf-8")
     if user.user_id == HR_THEME_USER_ID:
         page = page.replace('<body>', '<body class="hr-theme">', 1)
+    elif user.user_id == PRODUCTION_CONTROLLER_THEME_USER_ID:
+        page = page.replace('<body>', '<body class="production-controller-theme">', 1)
     page = _filter_home_module_cards(page, user)
     page = page.replace("{{APP_VERSION}}", html.escape(APP_VERSION), 1)
     page = page.replace("</header>", _login_form_html(user, raw_path) + "\n      </header>", 1)
@@ -5209,8 +5240,14 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self._theme_is_html_response = True
         if keyword.lower() == "content-length" and getattr(self, "_theme_is_html_response", False):
             user = getattr(self, "_theme_user", None)
-            if user is not None and user.is_admin:
-                value = str(int(value) + len(ADMIN_THEME_CLASS_SUFFIX))
+            if user is not None and (
+                user.is_admin
+                or user.user_id in {HR_THEME_USER_ID, PRODUCTION_CONTROLLER_THEME_USER_ID}
+            ):
+                # The response writer may add a body class after the original
+                # byte length was calculated. Let HTTP delimit the complete
+                # response so trailing scripts are never truncated.
+                return
         super().send_header(keyword, value)
 
     def end_headers(self) -> None:
@@ -5258,6 +5295,11 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
         if self.reject_unauthorized_module():
+            return
+
+        if path == MANUFACTURING_ADMIN_REVISION_ROUTE:
+            revision = load_admin_manufacturing_change_revision(admin_manufacturing_runtime_dir())
+            self.respond_json(200, {"ok": True, "revision": revision})
             return
 
         if path == APP_ROUTE:
@@ -5320,9 +5362,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MANUFACTURING_ROUTE:
+        if path in {MANUFACTURING_ROUTE, ADMIN_MANUFACTURING_ROUTE}:
             query = _manufacturing_query_params(self.path)
-            body = render_manufacturing_module(
+            render_module = render_admin_manufacturing_module if path == ADMIN_MANUFACTURING_ROUTE else render_manufacturing_module
+            body = render_module(
                 production_number=query.get("production", ""),
                 operation=query.get("operation", ""),
             )
@@ -5334,16 +5377,18 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MANUFACTURING_DATA_ROUTE:
+        if path in {MANUFACTURING_DATA_ROUTE, ADMIN_MANUFACTURING_DATA_ROUTE}:
             query = _manufacturing_query_params(self.path)
             include_client_cache = str(query.get("refresh_cache", "")).strip().lower() in {"1", "true", "yes"}
             try:
-                payload = manufacturing_module_payload(
+                build_payload = admin_manufacturing_module_payload if path == ADMIN_MANUFACTURING_DATA_ROUTE else manufacturing_module_payload
+                build_client_payload = admin_manufacturing_client_payload if path == ADMIN_MANUFACTURING_DATA_ROUTE else manufacturing_client_payload
+                payload = build_payload(
                     production_number=query.get("production", ""),
                     operation=query.get("operation", ""),
                     include_client_cache=include_client_cache,
                 )
-                response_payload = {"ok": True, **manufacturing_client_payload(payload)}
+                response_payload = {"ok": True, **build_client_payload(payload)}
                 if include_client_cache:
                     response_payload["productionClientCache"] = payload.get("productionClientCache", [])
                 self.respond_json(200, response_payload)
@@ -6085,6 +6130,181 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
         if self.reject_unauthorized_module():
+            return
+
+        if path == ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            shipment_id = _manufacturing_normalize_number(payload.get("shipment_id", ""))
+            shipment_date = str(payload.get("shipment_date", "") or "").strip()
+            if not shipment_id:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a szállítmány azonosítója."})
+                return
+            try:
+                saved_date = save_admin_manufacturing_shipment_date(
+                    admin_manufacturing_runtime_dir() / "topfloor",
+                    shipment_id,
+                    shipment_date,
+                )
+                admin_change_revision = signal_admin_manufacturing_change(
+                    admin_manufacturing_runtime_dir(),
+                    kind="shipment-date",
+                    target=shipment_id,
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A szállítási dátum mentése nem sikerült: {exc}"})
+                return
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "shipment_id": shipment_id,
+                    "shipment_date": saved_date,
+                    "admin_change_revision": admin_change_revision,
+                },
+            )
+            return
+
+        if path == ADMIN_MANUFACTURING_ROW_DATA_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            production_number = _manufacturing_normalize_number(payload.get("production_number", ""))
+            row_key = str(payload.get("row_key", "")).strip()
+            document_key = str(payload.get("document_key", "")).strip()
+            category_key = str(payload.get("category_key", "")).strip()
+            state_keys = payload.get("state_keys", [])
+            visible_state = str(payload.get("visible_state", "")).strip().lower()
+            fields = payload.get("fields", {})
+            if not production_number or not row_key or not isinstance(fields, dict) or not isinstance(state_keys, list):
+                self.respond_json(400, {"ok": False, "error": "Hiányos soradat-mentési kérés."})
+                return
+            runtime_root = admin_manufacturing_runtime_dir()
+            is_topfloor_row = document_key == "topfloor" or row_key.startswith("topfloor::")
+            if is_topfloor_row:
+                runtime_root = runtime_root / "topfloor"
+            try:
+                requires_edit_alert = bool(
+                    admin_manufacturing_topfloor_row_requires_edit_alert(
+                        runtime_root,
+                        production_number,
+                        category_key,
+                        row_key,
+                    )
+                    if is_topfloor_row
+                    else admin_manufacturing_row_requires_edit_alert(
+                        runtime_root,
+                        production_number,
+                        row_key,
+                        [str(value or "").strip() for value in state_keys],
+                        visible_state,
+                    )
+                )
+                saved_fields = save_admin_manufacturing_row_data(
+                    runtime_root,
+                    production_number,
+                    row_key,
+                    fields,
+                )
+                if requires_edit_alert:
+                    save_admin_manufacturing_issued_row_edit_marker(
+                        runtime_root,
+                        production_number,
+                        row_key,
+                        category_key,
+                        set(fields),
+                    )
+                admin_change_revision = signal_admin_manufacturing_change(
+                    admin_manufacturing_runtime_dir(),
+                    kind="row-data",
+                    target=production_number,
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A soradat mentése nem sikerült: {exc}"})
+                return
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "production_number": production_number,
+                    "row_key": row_key,
+                    "fields": saved_fields,
+                    "issued_after_edit": requires_edit_alert,
+                    "requires_edit_alert": requires_edit_alert,
+                    "admin_change_revision": admin_change_revision,
+                },
+            )
+            return
+
+        if _route_matches(path, ADMIN_MANUFACTURING_ROUTE):
+            self.respond_json(
+                405,
+                {"ok": False, "error": "Az Admin Gyártási Papírok modul csak megfigyelésre használható."},
+            )
+            return
+
+        if path == MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            production_number = _manufacturing_normalize_number(
+                payload.get("production_number", "") or payload.get("shipment_id", "")
+            )
+            document_key = str(payload.get("document_key", "")).strip()
+            row_key = str(payload.get("row_key", "")).strip()
+            if not production_number or not row_key:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártás/szállítmány vagy a sorazonosító."})
+                return
+            try:
+                alert_runtime_root = manufacturing_runtime_dir()
+                if document_key == "topfloor":
+                    alert_runtime_root = alert_runtime_root / "topfloor"
+                completed = complete_issued_row_edit(
+                    alert_runtime_root,
+                    production_number,
+                    row_key,
+                )
+                admin_change_revision = signal_admin_manufacturing_change(
+                    manufacturing_runtime_dir(),
+                    kind="issued-row-edit-complete",
+                    target=production_number,
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A figyelmeztetés lezárása nem sikerült: {exc}"})
+                return
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "completed": completed,
+                    "production_number": production_number,
+                    "shipment_id": production_number if document_key == "topfloor" else "",
+                    "row_key": row_key,
+                    "admin_change_revision": admin_change_revision,
+                },
+            )
             return
 
         if path == MANUFACTURING_STATE_ROUTE:

@@ -1,28 +1,37 @@
-"""Public API for the manufacturing papers workflow."""
+﻿"""Public API for the manufacturing papers workflow."""
 
 from __future__ import annotations
 
-MANUFACTURING_ACCESS_USER_IDS = frozenset({"manufacturer"})
+# Admin view of the unified Manufacturing package.
+
+MANUFACTURING_ACCESS_USER_IDS = frozenset({"gyartas-vezerlo"})
 
 from .common import (
     available_production_entries,
     available_production_numbers,
-    complete_issued_row_edit,
     latest_production_number,
+    load_admin_change_revision,
     load_partial_quantity_state,
     load_production_bundle,
+    load_row_data,
+    load_shipment_date,
     load_selection_state,
+    manufacturing_row_requires_edit_alert,
     production_folder,
-    save_partial_quantity_state,
-    save_selection_state,
+    save_row_data,
+    save_issued_row_edit_marker,
+    save_shipment_date,
+    signal_admin_change,
+    topfloor_category_is_issued,
+    topfloor_row_requires_edit_alert,
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
-    MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
-    MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE,
     MANUFACTURING_PARTIAL_QTY_ROUTE,
     MANUFACTURING_REPORT_READY_ROUTE,
+    MANUFACTURING_ROW_DATA_ROUTE,
+    MANUFACTURING_SHIPMENT_DATE_ROUTE,
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
     MANUFACTURING_TOPFLOOR_BOX_ROUTE,
@@ -48,13 +57,13 @@ from .workflow import (
 )
 
 __all__ = [
-    "MANUFACTURING_ADMIN_REVISION_ROUTE",
     "MANUFACTURING_DATA_ROUTE",
-    "MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE",
     "MANUFACTURING_OPERATION_DEFINITIONS",
     "MANUFACTURING_PARTIAL_QTY_ROUTE",
     "MANUFACTURING_PRIME_SYNC_ON_START",
     "MANUFACTURING_REPORT_READY_ROUTE",
+    "MANUFACTURING_ROW_DATA_ROUTE",
+    "MANUFACTURING_SHIPMENT_DATE_ROUTE",
     "MANUFACTURING_ROUTE",
     "MANUFACTURING_STATE_ROUTE",
     "MANUFACTURING_TOPFLOOR_BOX_ROUTE",
@@ -73,17 +82,25 @@ __all__ = [
     "_prime_manufacturing_cache_worker",
     "available_production_entries",
     "available_production_numbers",
-    "complete_issued_row_edit",
     "configure_manufacturing",
     "latest_production_number",
+    "load_admin_change_revision",
     "load_partial_quantity_state",
     "load_production_bundle",
+    "load_row_data",
+    "load_shipment_date",
     "load_selection_state",
+    "manufacturing_row_requires_edit_alert",
     "manufacturing_client_payload",
     "manufacturing_module_payload",
     "production_folder",
     "render_manufacturing_module",
     "runtime_dir",
-    "save_partial_quantity_state",
-    "save_selection_state",
+    "save_row_data",
+    "save_issued_row_edit_marker",
+    "save_shipment_date",
+    "signal_admin_change",
+    "topfloor_category_is_issued",
+    "topfloor_row_requires_edit_alert",
 ]
+
