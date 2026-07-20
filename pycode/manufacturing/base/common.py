@@ -347,7 +347,6 @@ def load_partial_quantity_state(runtime_root: Path, production_number: str) -> d
 ROW_DATA_EDITABLE_FIELDS = frozenset({
     "name",
     "detail",
-    "model",
     "modelLabel",
     "size",
     "color",

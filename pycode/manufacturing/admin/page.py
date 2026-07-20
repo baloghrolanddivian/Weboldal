@@ -3288,7 +3288,6 @@ def render_manufacturing_page(
       const rowEditFieldDefinitions = [
         ["name", "Megnevezés"],
         ["detail", "Részletek"],
-        ["model", "Modell"],
         ["modelLabel", "Modell megnevezés"],
         ["size", "Méret"],
         ["color", "Szín"],
@@ -3307,6 +3306,28 @@ def render_manufacturing_page(
         ["pantType", "Pánt típus"],
         ["frontTrait", "Front jellemző"],
       ];
+      const displayedEditFieldsForRow = (row, columnLayout, hideSideTypeColumn = false) => {{
+        const layoutFields = {{
+          "cnc-lower": ["name", "detail", "size", "color", "drawer_drill", "side_type", "edge"],
+          "cnc-upper": ["name", "detail", "size", "color", "side_type", "hardware_type", "edge"],
+          "cnc-fiokelo": ["detail", "modelLabel", "color", "size", "netfrontColor", "drillLabel", "drawerType"],
+          "pantolo": ["detail", "color23", "pantType", "size", "handleDrill", "handleType", "openingDir", "doorType"],
+          "front-standard": ["name", "detail", "modelLabel", "size", "color"],
+          "topfloor": ["name", "detail"],
+          "default": ["name", "detail", "size", "color", "edge"],
+        }};
+        const fields = [...(layoutFields[columnLayout] || layoutFields.default)];
+        if (["cnc-lower", "cnc-upper", "default"].includes(columnLayout || "default") && String(row?.modelLabel || "").trim()) {{
+          fields.splice(2, 0, "modelLabel");
+        }}
+        if (columnLayout === "front-standard" && String(row?.frontTrait || "").trim() === "Blende") {{
+          fields.push("frontTrait");
+        }}
+        if (hideSideTypeColumn) {{
+          return fields.filter((field) => field !== "side_type");
+        }}
+        return fields;
+      }};
       let activeRowEdit = null;
       const editableSectionsForDocument = (document) => {{
         const sections = Array.isArray(document?.sections) ? [...document.sections] : [];
@@ -3317,18 +3338,22 @@ def render_manufacturing_page(
         }}
         return Array.from(new Set(sections));
       }};
-      const matchingEditableRows = (rowKey, targetProductionNumber) => {{
+      const matchingEditableRows = (rowKey, targetProductionNumber, targetSectionKey = "") => {{
         const cleanKey = String(rowKey || "");
         const cleanProduction = String(targetProductionNumber || "");
         const matches = [];
         for (const document of documents) {{
           for (const section of editableSectionsForDocument(document)) {{
+            if (targetSectionKey && String(section?.key || "") !== String(targetSectionKey)) continue;
             for (const row of (Array.isArray(section?.rows) ? section.rows : [])) {{
               if (rowStorageKey(row) === cleanKey && rowProductionNumber(row) === cleanProduction) {{
                 matches.push({{
                   row,
                   documentKey: String(document?.key || ""),
                   categoryKey: String(section?.topfloorCategory?.categoryKey || ""),
+                  sectionKey: String(section?.key || ""),
+                  columnLayout: groupColumnLayout(section),
+                  hideSideTypeColumn: Boolean(section?.hideSideTypeColumn),
                 }});
               }}
             }}
@@ -3336,8 +3361,8 @@ def render_manufacturing_page(
         }}
         return matches;
       }};
-      const findRowForEdit = (rowKey, targetProductionNumber) => {{
-        return matchingEditableRows(rowKey, targetProductionNumber)[0] || null;
+      const findRowForEdit = (rowKey, targetProductionNumber, targetSectionKey = "") => {{
+        return matchingEditableRows(rowKey, targetProductionNumber, targetSectionKey)[0] || null;
       }};
       const applySavedFieldsToRow = (row, savedFields) => {{
         const originalFields = row._rowDataOriginal || {{}};
@@ -3363,11 +3388,11 @@ def render_manufacturing_page(
         if (!rowEditRoute) return;
         const rowKey = String(trigger.getAttribute("data-row-edit-key") || "").trim();
         const targetProductionNumber = String(trigger.getAttribute("data-row-production") || productionNumber || "").trim();
-        const found = findRowForEdit(rowKey, targetProductionNumber);
+        const targetSectionKey = String(trigger.getAttribute("data-row-section-key") || "").trim();
+        const found = findRowForEdit(rowKey, targetProductionNumber, targetSectionKey);
         if (!found) return;
-        const visibleFields = rowEditFieldDefinitions.filter(([field]) =>
-          field === "detail" || Object.prototype.hasOwnProperty.call(found.row, field)
-        );
+        const editableFields = new Set(displayedEditFieldsForRow(found.row, found.columnLayout, found.hideSideTypeColumn));
+        const visibleFields = rowEditFieldDefinitions.filter(([field]) => editableFields.has(field));
         if (!visibleFields.length) {{
           setStatus("Ehhez a sorhoz nincs módosítható megjelenített adat.", "is-error");
           return;
@@ -4842,7 +4867,7 @@ def render_manufacturing_page(
                 }}).join("")
               : "";
             return `
-              <div class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" data-row-edit data-row-edit-key="${{escapeHtml(rowStorageKey(row))}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}">
+              <div class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" data-row-edit data-row-edit-key="${{escapeHtml(rowStorageKey(row))}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-row-section-key="${{escapeHtml(String(group?.key || ""))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `
