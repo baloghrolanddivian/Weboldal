@@ -5831,7 +5831,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 time.sleep(DEV_EVENT_HEARTBEAT_SECONDS)
                 self.wfile.write(b": keep-alive\n\n")
                 self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             return
 
     def manufacturing_state_runtime_root(self, document_key: object = "", state_keys: list[str] | tuple[str, ...] = ()) -> Path:

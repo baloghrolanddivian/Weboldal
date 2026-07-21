@@ -655,6 +655,10 @@ def render_manufacturing_page(
       white-space: nowrap;
       flex: 0 0 auto;
     }}
+    /* The chip layout sets display explicitly, so reinforce the HTML hidden state. */
+    .mfg-chip-link[hidden] {{
+      display: none;
+    }}
     .mfg-chip-link[data-mfg-all-shipments] {{
       position: sticky;
       left: 0;
@@ -743,10 +747,20 @@ def render_manufacturing_page(
       background: #fecaca;
       color: #991b1b;
     }}
+    .mfg-chip-link.is-done.has-shipment-date {{
+      border-color: var(--mfg-done-line);
+      background: var(--mfg-done-bg);
+      color: var(--mfg-done-text);
+    }}
     .mfg-chip-link.has-shipment-date.is-active {{
       box-shadow:
         inset 0 0 0 2px #111827,
         0 1px 3px rgba(17, 24, 39, 0.24);
+    }}
+    .mfg-chip-link.is-done.has-shipment-date.is-active {{
+      border-color: #064e3b;
+      background: #047857;
+      color: #ffffff;
     }}
     .mfg-chip-link.has-issued-row-edit {{
       border-color: #dc2626;
@@ -765,6 +779,14 @@ def render_manufacturing_page(
     .mfg-chip-link.is-date-red .mfg-chip-number,
     .mfg-chip-link.is-date-red .mfg-chip-shipment-date {{
       color: #991b1b;
+    }}
+    .mfg-chip-link.is-done.has-shipment-date .mfg-chip-number,
+    .mfg-chip-link.is-done.has-shipment-date .mfg-chip-shipment-date {{
+      color: rgba(244, 255, 248, 0.86);
+    }}
+    .mfg-chip-link.is-done.has-shipment-date.is-active .mfg-chip-number,
+    .mfg-chip-link.is-done.has-shipment-date.is-active .mfg-chip-shipment-date {{
+      color: rgba(255, 255, 255, 0.92);
     }}
     .mfg-chip-shipment-date {{
       margin-top: 2px;
@@ -3196,6 +3218,8 @@ def render_manufacturing_page(
           return key === "korpusz-osszekeszito" || key === "korpusz-alkatresz-kesz" || key === "all-productions-red";
         }});
       }};
+      const korpuszXmlBackedViewKeys = new Set(["korpusz-osszekeszito", "korpusz-alkatresz-kesz"]);
+      const korpuszViewEmptyIsDone = (view) => korpuszXmlBackedViewKeys.has(String(view?.key || ""));
       const specialViewUsesRedFilter = (view) => ["current-production-red", "all-productions-red"].includes(String(view?.key || ""));
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowStorageKey = (row) => String(row?.state_storage_key || row?.row_id || "");
@@ -3821,8 +3845,8 @@ def render_manufacturing_page(
         `;
       }};
 
-      const tabStateClassForRows = (rows) => {{
-        if (!rows.length) return "";
+      const tabStateClassForRows = (rows, emptyIsDone = false) => {{
+        if (!rows.length) return emptyIsDone ? " is-done" : "";
         const states = rows.map((row) => rowStateValue(row));
         if (states.some((state) => !state || state === "mixed")) return "";
         if (states.some((state) => state === "red")) return " is-alert";
@@ -4012,7 +4036,7 @@ def render_manufacturing_page(
               .filter(Boolean)
               .map((view) => {{
                 const sections = orderedSectionsForTabs(Array.isArray(view?.sections) ? view.sections : []);
-                return statusFromTabStateClass(tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])));
+                return statusFromTabStateClass(tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []), true));
               }})
           );
         }}
@@ -4328,7 +4352,7 @@ def render_manufacturing_page(
           const currentKorpuszSections = orderedSectionsForTabs(Array.isArray(currentKorpuszView?.sections) ? currentKorpuszView.sections : []);
           const korpuszAllRows = currentKorpuszSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
           const korpuszSubTabs = [
-            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows) }},
+            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows, korpuszViewEmptyIsDone(currentKorpuszView)) }},
             {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)), stateClass: "" }},
             {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
             {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},
@@ -4343,7 +4367,7 @@ def render_manufacturing_page(
             currentSubcategoryKey = "all";
           }}
           sectionTabsNode.innerHTML = mainKorpuszViews.map((item) => `
-            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{tabStateClassForRows(Array.isArray(item?.sections) ? item.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : [])}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
+            <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{tabStateClassForRows(Array.isArray(item?.sections) ? item.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : [], korpuszViewEmptyIsDone(item))}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
               <small>${{totalQuantityForSections(item?.sections)}}</small>
             </button>
