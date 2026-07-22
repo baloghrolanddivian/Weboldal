@@ -692,13 +692,16 @@ def _manufacturing_combine_all_tab_statuses(statuses: tuple[str, ...]) -> str:
 def _manufacturing_document_all_tab_status(document: dict | None, view_state: dict[str, str], production_number: str) -> str:
     """Return the combined Osszes status represented by one production chip."""
     group_statuses: list[str] = []
+    empty_group_is_done = isinstance(document, dict) and str(document.get("key", "")).strip() == "korpusz_osszekeszites"
     for sections in _manufacturing_all_tab_section_groups(document):
         row_states: list[str] = []
         for section in sections:
             for row in section.get("rows", []):
                 if isinstance(row, dict):
                     row_states.append(_manufacturing_view_row_state(row, view_state, production_number))
-        group_statuses.append(_manufacturing_status_from_row_states(tuple(row_states)))
+        group_statuses.append(
+            "done" if empty_group_is_done and not row_states else _manufacturing_status_from_row_states(tuple(row_states))
+        )
     return _manufacturing_combine_all_tab_statuses(tuple(group_statuses))
 
 def _manufacturing_document_row_states(document: dict | None, view_state: dict[str, str], production_number: str) -> tuple[str, ...]:
