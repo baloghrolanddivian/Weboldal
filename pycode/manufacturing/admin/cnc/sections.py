@@ -2681,6 +2681,11 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
     def sort_upper_rows(rows: list[dict], mode: str) -> list[dict]:
         """Sort upper rows by type, size, color, and source order."""
+        def fuf_fzn_first_size_desc(row: dict) -> int:
+            """Sort FÜF/FZN rows by their meaningful first size, largest first."""
+            parts = size_parts(row.get("size"))
+            return -parts[0] if parts and parts[0] != 9999 else 0
+
         if mode == "normal":
             rows.sort(
                 key=lambda row: (
@@ -2715,9 +2720,10 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif mode == "rack2-other":
             rows.sort(
                 key=lambda row: (
-                    1 if is_upper_fuf_or_fzn(row) else 0,
-                    0 if "fuf" in upper_combined_text(row) or "füf" in upper_combined_text(row) else 1,
+                    0 if is_upper_fuf_or_fzn(row) else 1,
                     clean_text(row.get("color")),
+                    fuf_fzn_first_size_desc(row) if is_upper_fuf_or_fzn(row) else 0,
+                    0 if is_upper_fuf_or_fzn(row) and ("fuf" in upper_combined_text(row) or "füf" in upper_combined_text(row)) else 1,
                     0 if clean_text(row.get("size")).startswith("595 x ") else 1,
                     0 if is_upper_360_special(row) else 1,
                     0 if is_upper_680(row) else 1,
