@@ -2363,6 +2363,9 @@ def render_manufacturing_page(
     .mfg-confirm-actions.is-single {{
       grid-template-columns: 1fr;
     }}
+    .mfg-confirm-actions.is-creator {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
     .mfg-confirm-button {{
       min-height: 42px;
       border-radius: 12px;
@@ -2634,9 +2637,10 @@ def render_manufacturing_page(
       <div class="mfg-confirm-card" role="dialog" aria-modal="true" aria-labelledby="mfg-creator-title">
         <h3 class="mfg-confirm-title" id="mfg-creator-title">Ki hozta létre a dobozt?</h3>
         <p class="mfg-confirm-copy">Válaszd ki a doboz létrehozóját.</p>
-        <div class="mfg-confirm-actions">
-          <button class="mfg-confirm-button is-cancel" type="button" data-creator-action="Andi">Andi</button>
-          <button class="mfg-confirm-button is-confirm" type="button" data-creator-action="Ági">Ági</button>
+        <div class="mfg-confirm-actions is-creator">
+          <button class="mfg-confirm-button" type="button" data-creator-action="Andi">Andi</button>
+          <button class="mfg-confirm-button" type="button" data-creator-action="Ági">Ági</button>
+          <button class="mfg-confirm-button" type="button" data-creator-action="Niki">Niki</button>
         </div>
       </div>
     </div>
