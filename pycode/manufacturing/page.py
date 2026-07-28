@@ -25,6 +25,7 @@ def render_manufacturing_page(
     admin_change_revision: str = "",
     topfloor_storage_box_types: list[dict[str, object]] | None = None,
     selected_number: str,
+    direct_lookup: bool = False,
     operations: list[dict[str, str]],
     selected_operation: str,
     recent_productions: list[dict[str, str]],
@@ -159,6 +160,19 @@ def render_manufacturing_page(
         )
         for entry in recent_productions
     )
+    direct_lookup_markup = (
+        """
+      <form class="mfg-production-lookup" id="mfg-production-lookup">
+        <label for="mfg-production-number">Korábbi gyártás</label>
+        <div>
+          <input id="mfg-production-number" name="production" type="number" min="1" step="1" inputmode="numeric" placeholder="Gyártási szám" required />
+          <button type="submit">Betöltés</button>
+        </div>
+      </form>
+        """
+        if selected_operation_key and selected_operation_key != "topfloor"
+        else ""
+    )
     toolbar_markup = (
         f"""
     <section class="mfg-toolbar">
@@ -193,10 +207,13 @@ def render_manufacturing_page(
     operation_header_html = (
         f"""
       <section class="mfg-operation-header">
-        <div>
-          <span class="mfg-kicker">Kiválasztott művelet</span>
-          <strong id="mfg-operation-title">{html.escape(str(active_document.get("label", "")))}</strong>
-          <span class="mfg-operation-source" id="mfg-operation-source"{"" if active_source_label else " hidden"}>{html.escape(active_source_label)}</span>
+        <div class="mfg-operation-heading">
+          <div>
+            <span class="mfg-kicker">Kiválasztott művelet</span>
+            <strong id="mfg-operation-title">{html.escape(str(active_document.get("label", "")))}</strong>
+            <span class="mfg-operation-source" id="mfg-operation-source"{"" if active_source_label else " hidden"}>{html.escape(active_source_label)}</span>
+          </div>
+          {direct_lookup_markup}
         </div>
         <a class="mfg-picker-back" href="{picker_href}">Másik művelet</a>
       </section>
@@ -208,6 +225,7 @@ def render_manufacturing_page(
     payload_json = _json_script_payload(
         {
             "productionNumber": selected_number,
+            "directLookup": direct_lookup,
             "route": route,
             "dataRoute": data_route,
             "folder": bundle.get("folder", ""),
@@ -336,7 +354,53 @@ def render_manufacturing_page(
       box-shadow: 0 10px 22px rgba(17, 24, 39, 0.05);
       display: flex;
       align-items: center;
+      gap: 10px;
       overflow: hidden;
+    }}
+    .mfg-production-lookup {{
+      flex: 0 0 auto;
+      display: grid;
+      gap: 3px;
+    }}
+    .mfg-production-lookup label {{
+      color: var(--mfg-muted);
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }}
+    .mfg-production-lookup > div {{
+      display: flex;
+      gap: 5px;
+    }}
+    .mfg-production-lookup input {{
+      width: 132px;
+      min-height: 36px;
+      padding: 0 10px;
+      border: 1px solid var(--mfg-line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--mfg-text);
+      font-weight: 800;
+    }}
+    .mfg-production-lookup input:focus {{
+      outline: none;
+      border-color: #111827;
+      box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.08);
+    }}
+    .mfg-production-lookup button {{
+      min-height: 36px;
+      padding: 0 11px;
+      border: 1px solid #111827;
+      border-radius: 10px;
+      background: #111827;
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }}
+    .mfg-production-lookup.is-loading {{
+      opacity: 0.62;
+      pointer-events: none;
     }}
     .mfg-topbar {{
       display: flex;
@@ -479,6 +543,16 @@ def render_manufacturing_page(
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+    }}
+    .mfg-operation-heading {{
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }}
+    .mfg-operation-heading > div:first-child {{
+      flex: 0 1 auto;
+      min-width: 0;
     }}
     .mfg-operation-header strong {{
       display: block;
@@ -2664,6 +2738,8 @@ def render_manufacturing_page(
       const dataNode = document.getElementById("manufacturing-data");
       const chipRowNode = document.getElementById("mfg-chip-row");
       const cacheRefreshButtonNode = document.getElementById("mfg-cache-refresh");
+      const productionLookupNode = document.getElementById("mfg-production-lookup");
+      const productionNumberInputNode = document.getElementById("mfg-production-number");
       const docTabsNode = document.getElementById("mfg-doc-tabs");
       const sectionTabsNode = document.getElementById("mfg-section-tabs");
       const subsectionTabsNode = document.getElementById("mfg-subsection-tabs");
@@ -2724,6 +2800,7 @@ def render_manufacturing_page(
       const dataRoute = String(payload.dataRoute || `${{pageRoute}}/data`);
       const issuedEditCompleteRoute = `${{pageRoute.endsWith("/") ? pageRoute.slice(0, -1) : pageRoute}}/issued-row-edit-complete`;
       let productionNumber = String(payload.productionNumber || "");
+      let directLookup = Boolean(payload.directLookup);
       let currentDocKey = String(payload.currentDocumentKey || documents[0]?.key || "");
       if (!documents.some((document) => document.key === currentDocKey)) {{
         currentDocKey = String(documents[0]?.key || "");
@@ -2783,11 +2860,13 @@ def render_manufacturing_page(
       const cacheProductionPayload = (nextPayload) => {{
         const targetProductionNumber = String(nextPayload?.productionNumber || "").trim();
         const operationKey = String(nextPayload?.currentDocumentKey || currentDocKey || "").trim();
+        if (Boolean(nextPayload?.directLookup)) return;
         if (!operationKey || !Array.isArray(nextPayload?.documents) || !nextPayload.documents.length) return;
         if (operationKey !== "topfloor" && !targetProductionNumber) return;
         productionPayloadCache.set(productionCacheKey(operationKey, targetProductionNumber), nextPayload);
       }};
       const storeCurrentProductionPayload = () => {{
+        if (directLookup) return;
         cacheProductionPayload({{
           productionNumber,
           route: pageRoute,
@@ -3003,6 +3082,7 @@ def render_manufacturing_page(
         partialQuantityState = Object.assign({{}}, nextPayload.partialQuantityState || {{}});
         topfloorStorageBoxTypes = Array.isArray(nextPayload.topfloorStorageBoxTypes) ? nextPayload.topfloorStorageBoxTypes : topfloorStorageBoxTypes;
         productionNumber = String(nextPayload.productionNumber || "");
+        directLookup = Boolean(nextPayload.directLookup);
         pendingWriteStorageKey = `mfg-pending-state-writes:${{productionNumber || "unknown"}}`;
         currentDocKey = String(nextPayload.currentDocumentKey || documents[0]?.key || "");
         if (!documents.some((document) => document.key === currentDocKey)) {{
@@ -5394,6 +5474,31 @@ def render_manufacturing_page(
         cacheRefreshButtonNode.addEventListener("click", (event) => {{
           event.preventDefault();
           void refreshProductionClientCache();
+        }});
+      }}
+      if (productionLookupNode instanceof HTMLFormElement && productionNumberInputNode instanceof HTMLInputElement) {{
+        productionLookupNode.addEventListener("submit", async (event) => {{
+          event.preventDefault();
+          const targetProductionNumber = String(productionNumberInputNode.value || "").replace(/[^0-9]/g, "");
+          if (!targetProductionNumber || !currentDocKey) {{
+            setStatus("Adj meg egy érvényes gyártási számot.", "is-error");
+            return;
+          }}
+          if (targetProductionNumber === productionNumber) return;
+          storeCurrentProductionPayload();
+          productionLookupNode.classList.add("is-loading");
+          setStatus("Korábbi gyártás keresése...");
+          try {{
+            await flushPendingWrites();
+            const nextPayload = await fetchProductionPayload(targetProductionNumber, currentDocKey);
+            applyProductionPayload(nextPayload);
+            productionNumberInputNode.value = "";
+            setStatus(`A ${{targetProductionNumber}} gyártás betöltve.`, "is-success");
+          }} catch (error) {{
+            setStatus(error instanceof Error ? error.message : "A gyártás betöltése nem sikerült.", "is-error");
+          }} finally {{
+            productionLookupNode.classList.remove("is-loading");
+          }}
         }});
       }}
 

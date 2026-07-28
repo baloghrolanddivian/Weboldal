@@ -1628,11 +1628,13 @@ def manufacturing_module_payload(
             operation=selected_operation,
         )
         recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
-        selected_number = (
-            requested_number
-            if (requested_number and requested_number in recent_numbers)
-            else (recent_numbers[0] if recent_numbers else "")
-        )
+        selected_number = requested_number or (recent_numbers[0] if recent_numbers else "")
+    direct_lookup = bool(
+        requested_number
+        and selected_operation
+        and selected_operation != "topfloor"
+        and requested_number not in recent_numbers
+    )
     operations = [
         {
             "key": operation_key,
@@ -1641,11 +1643,6 @@ def manufacturing_module_payload(
         }
         for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS
     ]
-    if requested_number and requested_number not in recent_numbers and not lightweight_operation_picker and selected_operation != "topfloor":
-        combined_prefix = f"A {requested_number} gyártás nem szerepel a friss használható XML-es gyártási listában, ezért a legfrissebb használható gyártást nyitottam meg."
-        message = f"{combined_prefix} {message}".strip() if message else combined_prefix
-        success = False
-
     def production_state_status(entry_number: str, operation_key: str) -> str:
         """Return toolbar status: plain, red, green, or done."""
         operation_filter = _manufacturing_normalize_operation(operation_key)
@@ -1713,7 +1710,13 @@ def manufacturing_module_payload(
         combined_success = False
     elif not lightweight_operation_picker:
         try:
-            raw_bundle = _load_manufacturing_bundle_cached(selected_number)
+            # One-off lookups outside the 12 recent productions must not join
+            # the warmed background bundle cache.
+            raw_bundle = (
+                load_production_bundle(selected_number)
+                if direct_lookup
+                else _load_manufacturing_bundle_cached(selected_number)
+            )
             current_selection_state = load_selection_state(runtime_dir(), selected_number)
             partial_quantity_state = load_partial_quantity_state(runtime_dir(), selected_number)
             bundle, selection_state = _manufacturing_view_bundle(
@@ -1802,6 +1805,7 @@ def manufacturing_module_payload(
         "adminChangeRevision": load_admin_change_revision(runtime_dir()),
         "topfloorStorageBoxTypes": topfloor_storage_box_types,
         "productionNumber": selected_number,
+        "directLookup": direct_lookup,
         "operations": operations,
         "selectedOperation": selected_operation,
         "recentProductions": recent_productions,
@@ -1833,6 +1837,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
     visible_documents = [active_document] if isinstance(active_document, dict) else documents
     result = {
         "productionNumber": str(module_payload.get("productionNumber", "")),
+        "directLookup": bool(module_payload.get("directLookup")),
         "route": str(module_payload.get("route", MANUFACTURING_ROUTE)),
         "dataRoute": str(module_payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
         "folder": str(bundle.get("folder", "")),
@@ -1894,6 +1899,7 @@ def render_manufacturing_module(
         "admin_change_revision": str(payload.get("adminChangeRevision", "")),
         "topfloor_storage_box_types": payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
         "selected_number": str(payload.get("productionNumber", "")),
+        "direct_lookup": bool(payload.get("directLookup")),
         "operations": payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
         "selected_operation": str(payload.get("selectedOperation", "")),
         "recent_productions": payload.get("recentProductions", []) if isinstance(payload.get("recentProductions"), list) else [],
