@@ -146,6 +146,15 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
             return ("2", text[5:])
         return None
 
+    def merged_lower_section_label(label: str) -> str:
+        """Collapse numbered lower pairs to their shared visible category."""
+        pair_info = pair_info_for_section_label(label)
+        if not pair_info:
+            return clean_text(label)
+        shared_label = clean_text(pair_info[1])
+        match = re.match(r"^als[oó]\s*-\s*(.+)$", shared_label, flags=re.IGNORECASE)
+        return clean_text(match.group(1)) if match else clean_text(label)
+
     def pair_sections_in_display_order(sections: list[dict]) -> list[dict]:
         """Keep 1-es/2-es paired sections adjacent in display order."""
         by_label = {clean_text(section.get("label")): section for section in sections}
@@ -173,6 +182,34 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
                 used.add(section_key)
                 ordered.append(section)
         return ordered
+
+    def merge_lower_sections_in_display_order(sections: list[dict]) -> list[dict]:
+        """Merge lower pairs without moving their position in the old order."""
+        merged_by_label: dict[str, dict] = {}
+        output: list[dict] = []
+        for section in sections:
+            source_label = clean_text(section.get("label"))
+            display_label = merged_lower_section_label(source_label)
+            if display_label == source_label:
+                output.append(section)
+                continue
+            existing = merged_by_label.get(display_label)
+            if existing is None:
+                existing = {
+                    **section,
+                    "key": f"osszekeszito::{_manufacturing_local_slug(display_label)}",
+                    "label": display_label,
+                    "rows": [],
+                }
+                merged_by_label[display_label] = existing
+                output.append(existing)
+            for row in section.get("rows", []):
+                if not isinstance(row, dict):
+                    continue
+                row["section_key"] = _manufacturing_local_slug(display_label)
+                row["section_label"] = display_label
+                existing["rows"].append(row)
+        return output
 
     section_rows: dict[str, list[dict]] = {}
     row_index = 0
@@ -228,13 +265,15 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         for label, rows in section_rows.items()
         if rows
     ]
-    sections = pair_sections_in_display_order(
-        sorted(
-            sections,
-            key=lambda section: (
-                0 if is_all_section_label(section.get("label")) else 1,
-                pair_info_for_section_label(str(section.get("label", ""))) or ("9", str(section.get("label", "")).lower()),
-            ),
+    sections = merge_lower_sections_in_display_order(
+        pair_sections_in_display_order(
+            sorted(
+                sections,
+                key=lambda section: (
+                    0 if is_all_section_label(section.get("label")) else 1,
+                    pair_info_for_section_label(str(section.get("label", ""))) or ("9", str(section.get("label", "")).lower()),
+                ),
+            )
         )
     )
     return sections, sum(len(section.get("rows", [])) for section in sections), True
