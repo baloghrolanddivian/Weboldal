@@ -48,7 +48,7 @@ MANUFACTURING_BUNDLE_CACHE_LOCK = threading.Lock()
 MANUFACTURING_BUNDLE_FAST_TTL_SECONDS = 900.0
 MANUFACTURING_SIGNATURE_CACHE_TTL_SECONDS = 180.0
 MANUFACTURING_SIGNATURE_CACHE: dict[str, dict[str, object]] = {}
-MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-06-17-xml-source-file-state-v1"
+MANUFACTURING_BUNDLE_SCHEMA_VERSION = "2026-07-29-korpusz-lower-category-merge-v1"
 MANUFACTURING_OPERATION_STATE_KEYS_CACHE: dict[tuple[str, str], dict[str, object]] = {}
 MANUFACTURING_PRIME_SYNC_ON_START = False
 TOPFLOOR_BOX_TYPES_PATH = REPO_ROOT / "data" / "topfloor_box_types.json"
@@ -95,10 +95,20 @@ def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str =
             continue
         is_topfloor = str(document.get("key", "")).strip() == "topfloor"
         override_root = runtime_dir() / "topfloor" if is_topfloor else runtime_dir()
-        sections = document.get("sections", [])
-        for section in sections if isinstance(sections, list) else []:
-            if not isinstance(section, dict):
+        sections: list[dict] = []
+        seen_sections: set[int] = set()
+        for candidate in document.get("sections", []):
+            if isinstance(candidate, dict) and id(candidate) not in seen_sections:
+                seen_sections.add(id(candidate))
+                sections.append(candidate)
+        for special_view in document.get("specialViews", []):
+            if not isinstance(special_view, dict):
                 continue
+            for candidate in special_view.get("sections", []):
+                if isinstance(candidate, dict) and id(candidate) not in seen_sections:
+                    seen_sections.add(id(candidate))
+                    sections.append(candidate)
+        for section in sections:
             rows = section.get("rows", [])
             for row in rows if isinstance(rows, list) else []:
                 if not isinstance(row, dict):
@@ -172,6 +182,79 @@ def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str =
                         row["_issuedEditFields"] = list(marker_fields or row.get("_rowDataEditedFields", []))
                         if isinstance(category, dict):
                             category["hasIssuedRowEdit"] = True
+
+
+def _manufacturing_merge_default_korpusz_rows(bundle: dict) -> None:
+    """Merge equal Osszekeszito rows for the default manufacturing view."""
+
+    def source_row_ids(row: dict) -> list[str]:
+        values = row.get("sourceRowIds", []) if isinstance(row.get("sourceRowIds"), list) else []
+        result = [str(value or "").strip() for value in values if str(value or "").strip()]
+        fallback = str(row.get("state_storage_key", "") or row.get("row_id", "")).strip()
+        if fallback and fallback not in result:
+            result.append(fallback)
+        return result
+
+    def merge_rows(rows: list[dict]) -> list[dict]:
+        merged_by_key: dict[tuple[str, str, str, str, str], dict] = {}
+        output: list[dict] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("doc_key", "") or "").strip() != "osszekeszito":
+                output.append(row)
+                continue
+            merge_key = tuple(
+                str(row.get(field, "") or "").strip()
+                for field in ("name", "detail", "size", "color", "edge")
+            )
+            existing = merged_by_key.get(merge_key)
+            if existing is None:
+                row["sourceRowIds"] = source_row_ids(row)
+                merged_by_key[merge_key] = row
+                output.append(row)
+                continue
+            existing["quantity"] = int(existing.get("quantity", 0) or 0) + int(row.get("quantity", 0) or 0)
+            sources = list(existing.get("sourceRowIds", []))
+            for source_id in source_row_ids(row):
+                if source_id not in sources:
+                    sources.append(source_id)
+            existing["sourceRowIds"] = sources
+            existing_edited = set(existing.get("_rowDataEditedFields", []))
+            existing_edited.update(row.get("_rowDataEditedFields", []))
+            existing["_rowDataEditedFields"] = sorted(existing_edited)
+            existing_original = existing.setdefault("_rowDataOriginal", {})
+            for field, value in row.get("_rowDataOriginal", {}).items():
+                existing_original.setdefault(field, value)
+        return output
+
+    documents = bundle.get("documents", []) if isinstance(bundle, dict) else []
+    for document in documents if isinstance(documents, list) else []:
+        if not isinstance(document, dict) or str(document.get("key", "")).strip() != "korpusz_osszekeszites":
+            continue
+        processed_sections: set[int] = set()
+        main_sections = [section for section in document.get("sections", []) if isinstance(section, dict)]
+        sections_to_process = list(main_sections)
+        korpusz_view: dict | None = None
+        for special_view in document.get("specialViews", []):
+            if not isinstance(special_view, dict) or str(special_view.get("key", "")).strip() != "korpusz-osszekeszito":
+                continue
+            korpusz_view = special_view
+            sections_to_process.extend(
+                section for section in special_view.get("sections", []) if isinstance(section, dict)
+            )
+        for section in sections_to_process:
+            if id(section) in processed_sections:
+                continue
+            processed_sections.add(id(section))
+            section["rows"] = merge_rows(section.get("rows", []) if isinstance(section.get("rows"), list) else [])
+        document["row_count"] = sum(len(section.get("rows", [])) for section in main_sections)
+        if korpusz_view is not None:
+            korpusz_view["count"] = sum(
+                len(section.get("rows", []))
+                for section in korpusz_view.get("sections", [])
+                if isinstance(section, dict)
+            )
 
 
 def _manufacturing_apply_row_edit_alerts(bundle: dict, fallback_number: str = "") -> None:
@@ -1628,11 +1711,13 @@ def manufacturing_module_payload(
             operation=selected_operation,
         )
         recent_numbers = [str(entry.get("number", "")) for entry in recent_productions]
-        selected_number = (
-            requested_number
-            if (requested_number and requested_number in recent_numbers)
-            else (recent_numbers[0] if recent_numbers else "")
-        )
+        selected_number = requested_number or (recent_numbers[0] if recent_numbers else "")
+    direct_lookup = bool(
+        requested_number
+        and selected_operation
+        and selected_operation != "topfloor"
+        and requested_number not in recent_numbers
+    )
     operations = [
         {
             "key": operation_key,
@@ -1641,11 +1726,6 @@ def manufacturing_module_payload(
         }
         for operation_key, operation_label in MANUFACTURING_OPERATION_DEFINITIONS
     ]
-    if requested_number and requested_number not in recent_numbers and not lightweight_operation_picker and selected_operation != "topfloor":
-        combined_prefix = f"A {requested_number} gyártás nem szerepel a friss használható XML-es gyártási listában, ezért a legfrissebb használható gyártást nyitottam meg."
-        message = f"{combined_prefix} {message}".strip() if message else combined_prefix
-        success = False
-
     def production_state_status(entry_number: str, operation_key: str) -> str:
         """Return toolbar status: plain, red, green, or done."""
         operation_filter = _manufacturing_normalize_operation(operation_key)
@@ -1713,7 +1793,13 @@ def manufacturing_module_payload(
         combined_success = False
     elif not lightweight_operation_picker:
         try:
-            raw_bundle = _load_manufacturing_bundle_cached(selected_number)
+            # One-off lookups outside the 12 recent productions must not join
+            # the warmed background bundle cache.
+            raw_bundle = (
+                load_production_bundle(selected_number)
+                if direct_lookup
+                else _load_manufacturing_bundle_cached(selected_number)
+            )
             current_selection_state = load_selection_state(runtime_dir(), selected_number)
             partial_quantity_state = load_partial_quantity_state(runtime_dir(), selected_number)
             bundle, selection_state = _manufacturing_view_bundle(
@@ -1737,6 +1823,8 @@ def manufacturing_module_payload(
 
     if selected_operation != "topfloor":
         _manufacturing_apply_row_data_overrides(bundle, selected_number)
+    if not is_admin_view and selected_operation == "korpusz_osszekeszites":
+        _manufacturing_merge_default_korpusz_rows(bundle)
     _manufacturing_apply_row_edit_alerts(bundle, selected_number)
 
     production_client_cache: list[dict[str, object]] = []
@@ -1764,6 +1852,8 @@ def manufacturing_module_payload(
                         cnc_sections_builder=cnc_sections_builder,
                     )
                     _manufacturing_apply_row_data_overrides(cache_bundle, cache_number)
+                    if not is_admin_view and selected_operation == "korpusz_osszekeszites":
+                        _manufacturing_merge_default_korpusz_rows(cache_bundle)
                     _manufacturing_apply_row_edit_alerts(cache_bundle, cache_number)
                 cache_payload = {
                             "route": module_route,
@@ -1802,6 +1892,7 @@ def manufacturing_module_payload(
         "adminChangeRevision": load_admin_change_revision(runtime_dir()),
         "topfloorStorageBoxTypes": topfloor_storage_box_types,
         "productionNumber": selected_number,
+        "directLookup": direct_lookup,
         "operations": operations,
         "selectedOperation": selected_operation,
         "recentProductions": recent_productions,
@@ -1833,6 +1924,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
     visible_documents = [active_document] if isinstance(active_document, dict) else documents
     result = {
         "productionNumber": str(module_payload.get("productionNumber", "")),
+        "directLookup": bool(module_payload.get("directLookup")),
         "route": str(module_payload.get("route", MANUFACTURING_ROUTE)),
         "dataRoute": str(module_payload.get("dataRoute", MANUFACTURING_DATA_ROUTE)),
         "folder": str(bundle.get("folder", "")),
@@ -1894,6 +1986,7 @@ def render_manufacturing_module(
         "admin_change_revision": str(payload.get("adminChangeRevision", "")),
         "topfloor_storage_box_types": payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],
         "selected_number": str(payload.get("productionNumber", "")),
+        "direct_lookup": bool(payload.get("directLookup")),
         "operations": payload.get("operations", []) if isinstance(payload.get("operations"), list) else [],
         "selected_operation": str(payload.get("selectedOperation", "")),
         "recent_productions": payload.get("recentProductions", []) if isinstance(payload.get("recentProductions"), list) else [],
