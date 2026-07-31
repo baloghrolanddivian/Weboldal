@@ -301,6 +301,320 @@ body.production-controller-theme .button-primary,
 body.production-controller-theme .nav-cta { color: #000000; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3); }
 body.production-controller-theme .login-notice { color: var(--accent-warm); }
 
+/* Inventory admin pages inherit the signed-in user's palette; counting views
+   use the same layer with the standard default-user palette. */
+body.matinv-page,
+body.frontinv-admin-page,
+body.frontinv-worker-page,
+body.frontinv-worker-stage {
+  --inventory-surface: var(--panel-strong);
+  --inventory-surface-soft: var(--panel);
+  --inventory-control: var(--panel-soft);
+  --inventory-contrast: var(--bg-soft);
+  --inventory-accent-ink: var(--bg);
+  --frontinv-text: var(--text);
+  --frontinv-muted: var(--muted);
+  --frontinv-line: var(--line);
+  --frontinv-accent: var(--accent);
+  --frontinv-accent-strong: var(--accent-strong);
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 28rem),
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--accent-warm) 12%, transparent), transparent 24rem),
+    linear-gradient(180deg, var(--bg), var(--bg-soft)) !important;
+  background-attachment: fixed !important;
+}
+
+body.matinv-page {
+  --accent2: var(--accent-strong);
+}
+
+body.hr-theme.matinv-page,
+body.hr-theme.frontinv-admin-page,
+body.hr-theme.frontinv-worker-page,
+body.hr-theme.frontinv-worker-stage {
+  --inventory-accent-ink: var(--text);
+}
+
+/* Counting screens deliberately use the established Manufacturing/shop-floor
+   palette instead of an account palette. */
+body.matinv-page[data-theme-scope="default"],
+body.frontinv-worker-page[data-theme-scope="default"],
+body.frontinv-worker-stage[data-theme-scope="default"] {
+  --bg: #f3f5f7;
+  --bg-soft: #f3f5f7;
+  --panel: #ffffff;
+  --panel-strong: #ffffff;
+  --panel-soft: #f8fafc;
+  --border: rgba(18, 20, 23, 0.08);
+  --line: #d7dde4;
+  --text: #121417;
+  --muted: #5f6975;
+  --accent: #0c8d57;
+  --accent-strong: #12a566;
+  --accent-warm: #86efac;
+  --shadow: none;
+  --inventory-accent-ink: #ffffff;
+  color-scheme: light;
+  background: #f3f5f7 !important;
+}
+
+body.matinv-page[data-theme-scope="default"] .matinv-view-tab.is-active,
+body.matinv-page[data-theme-scope="default"] .matinv-table .is-total span,
+body.frontinv-worker-page[data-theme-scope="default"] .frontinv-chip.is-active,
+body.frontinv-worker-page[data-theme-scope="default"] .frontinv-count-pill,
+body.frontinv-worker-stage[data-theme-scope="default"] .frontinv-chip.is-active,
+body.frontinv-worker-stage[data-theme-scope="default"] .frontinv-count-pill {
+  color: #ffffff;
+  background: #111827;
+  border-color: #111827;
+}
+
+body.matinv-page[data-theme-scope="default"] .matinv-tag,
+body.matinv-page[data-theme-scope="default"] .matinv-meta-chip,
+body.matinv-page[data-theme-scope="default"] .matinv-table .is-color,
+body.frontinv-worker-page[data-theme-scope="default"] .frontinv-tag,
+body.frontinv-worker-page[data-theme-scope="default"] .frontinv-color-chip,
+body.frontinv-worker-stage[data-theme-scope="default"] .frontinv-tag,
+body.frontinv-worker-stage[data-theme-scope="default"] .frontinv-color-chip {
+  color: #0d6b37;
+  background: #e7f8ee;
+  border-color: #6fc893;
+}
+
+body.matinv-page[data-theme-scope="default"] .matinv-chip.is-complete,
+body.frontinv-worker-page[data-theme-scope="default"] .frontinv-chip.is-complete:not(.is-active),
+body.frontinv-worker-stage[data-theme-scope="default"] .frontinv-chip.is-complete:not(.is-active) {
+  color: #0d6b37;
+  background: #e7f8ee;
+  border-color: #6fc893;
+}
+
+body.matinv-page .matinv-top,
+body.matinv-page .matinv-upload-card,
+body.matinv-page .matinv-board,
+body.frontinv-admin-page .frontinv-top,
+body.frontinv-admin-page .frontinv-upload-card,
+body.frontinv-admin-page .frontinv-board,
+body.frontinv-worker-page .frontinv-board,
+body.frontinv-worker-stage .frontinv-board {
+  color: var(--text);
+  background: var(--inventory-surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
+body.matinv-page .matinv-top,
+body.frontinv-admin-page .frontinv-top {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, var(--inventory-surface)), var(--inventory-surface));
+}
+
+body.matinv-page .matinv-upload-card::before,
+body.matinv-page .matinv-board::before,
+body.frontinv-admin-page .frontinv-upload-card::before,
+body.frontinv-admin-page .frontinv-board::before,
+body.frontinv-worker-page .frontinv-board::before,
+body.frontinv-worker-stage .frontinv-board::before {
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent), var(--accent-warm));
+}
+
+body.matinv-page .matinv-top a,
+body.matinv-page .matinv-view-switch,
+body.matinv-page .matinv-view-tab,
+body.matinv-page .button-secondary,
+body.matinv-page .matinv-field,
+body.matinv-page .matinv-upload-note,
+body.matinv-page .matinv-chip,
+body.matinv-page .matinv-search input,
+body.matinv-page .matinv-board-stamp,
+body.matinv-page .matinv-stats article,
+body.matinv-page .matinv-callout,
+body.matinv-page .matinv-table-wrap,
+body.matinv-page .matinv-input,
+body.frontinv-admin-page .frontinv-top a,
+body.frontinv-admin-page .frontinv-view-switch,
+body.frontinv-admin-page .frontinv-view-tab,
+body.frontinv-admin-page .frontinv-visual,
+body.frontinv-admin-page .frontinv-visual-pill,
+body.frontinv-admin-page .frontinv-meta-chip,
+body.frontinv-admin-page .frontinv-field,
+body.frontinv-admin-page .frontinv-open-button,
+body.frontinv-admin-page .frontinv-board-stamp,
+body.frontinv-admin-page .frontinv-stats article,
+body.frontinv-admin-page .frontinv-phase-callout,
+body.frontinv-admin-page .frontinv-search input,
+body.frontinv-admin-page .frontinv-table-wrap,
+body.frontinv-admin-page .frontinv-input,
+body.frontinv-worker-page .frontinv-board-stamp,
+body.frontinv-worker-page .frontinv-chip,
+body.frontinv-worker-page .frontinv-search input,
+body.frontinv-worker-page .frontinv-phase-callout,
+body.frontinv-worker-page .frontinv-table-wrap,
+body.frontinv-worker-page .frontinv-input,
+body.frontinv-worker-stage .frontinv-board-stamp,
+body.frontinv-worker-stage .frontinv-chip,
+body.frontinv-worker-stage .frontinv-search input,
+body.frontinv-worker-stage .frontinv-phase-callout,
+body.frontinv-worker-stage .frontinv-table-wrap,
+body.frontinv-worker-stage .frontinv-input {
+  color: var(--text);
+  background: var(--inventory-control);
+  border-color: var(--line);
+}
+
+body.matinv-page .matinv-field input,
+body.frontinv-admin-page .frontinv-field input[type="file"] {
+  color: var(--text);
+  background: var(--inventory-control);
+  border-color: var(--line);
+}
+
+body.matinv-page .matinv-view-tab.is-active,
+body.matinv-page .matinv-field input::file-selector-button,
+body.matinv-page .matinv-table .is-total span,
+body.frontinv-admin-page .frontinv-view-tab.is-active,
+body.frontinv-admin-page .frontinv-visual-pill.is-strong,
+body.frontinv-admin-page .frontinv-count-pill,
+body.frontinv-worker-page .frontinv-chip.is-active,
+body.frontinv-worker-page .frontinv-count-pill,
+body.frontinv-worker-stage .frontinv-chip.is-active,
+body.frontinv-worker-stage .frontinv-count-pill {
+  color: var(--inventory-accent-ink);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent-warm));
+  border-color: transparent;
+}
+
+body.frontinv-admin-page .frontinv-field input[type="file"]::file-selector-button {
+  color: var(--inventory-accent-ink);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent-warm));
+}
+
+body.matinv-page .button-primary,
+body.frontinv-admin-page .button-primary,
+body.frontinv-worker-page .button-primary,
+body.frontinv-worker-stage .button-primary {
+  color: var(--inventory-accent-ink);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent-warm));
+  border-color: transparent;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent-strong) 28%, transparent);
+}
+
+body.matinv-page .matinv-tag,
+body.matinv-page .matinv-meta-chip,
+body.frontinv-admin-page .frontinv-tag,
+body.frontinv-worker-page .frontinv-tag,
+body.frontinv-worker-stage .frontinv-tag {
+  color: var(--accent-warm);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+body.matinv-page .matinv-upload-head p,
+body.matinv-page .matinv-board-head p,
+body.matinv-page .matinv-board.is-empty p,
+body.matinv-page .matinv-search,
+body.matinv-page .matinv-adjust label,
+body.matinv-page .matinv-empty-row,
+body.matinv-page .matinv-stats span,
+body.matinv-page .matinv-table .is-book-qty,
+body.frontinv-admin-page .frontinv-copy p,
+body.frontinv-admin-page .frontinv-board-head p,
+body.frontinv-admin-page .frontinv-field small,
+body.frontinv-admin-page .frontinv-field span,
+body.frontinv-admin-page .frontinv-phase-callout p,
+body.frontinv-admin-page .frontinv-search,
+body.frontinv-admin-page .frontinv-adjust label,
+body.frontinv-admin-page .frontinv-empty-row,
+body.frontinv-admin-page .frontinv-stats span,
+body.frontinv-admin-page .frontinv-generated-by,
+body.frontinv-worker-page .frontinv-board-head p,
+body.frontinv-worker-page .frontinv-phase-callout p,
+body.frontinv-worker-page .frontinv-search,
+body.frontinv-worker-page .frontinv-adjust label,
+body.frontinv-worker-page .frontinv-empty-row,
+body.frontinv-worker-stage .frontinv-board-head p,
+body.frontinv-worker-stage .frontinv-phase-callout p,
+body.frontinv-worker-stage .frontinv-search,
+body.frontinv-worker-stage .frontinv-adjust label,
+body.frontinv-worker-stage .frontinv-empty-row,
+body.frontinv-worker-stage .frontinv-generated-by {
+  color: var(--muted);
+}
+
+body.matinv-page .matinv-upload-head strong,
+body.matinv-page .matinv-board-head strong,
+body.matinv-page .matinv-upload-note b,
+body.matinv-page .matinv-top a,
+body.matinv-page .matinv-stats strong,
+body.matinv-page .matinv-table td,
+body.frontinv-admin-page .frontinv-copy strong,
+body.frontinv-admin-page .frontinv-board-head strong,
+body.frontinv-admin-page .frontinv-empty strong,
+body.frontinv-admin-page .frontinv-phase-callout strong,
+body.frontinv-admin-page .frontinv-field strong,
+body.frontinv-admin-page .frontinv-top a,
+body.frontinv-admin-page .frontinv-stats strong,
+body.frontinv-admin-page .frontinv-table tbody td,
+body.frontinv-worker-page .frontinv-board-head strong,
+body.frontinv-worker-page .frontinv-empty strong,
+body.frontinv-worker-page .frontinv-phase-callout strong,
+body.frontinv-worker-page .frontinv-table tbody td,
+body.frontinv-worker-stage .frontinv-board-head strong,
+body.frontinv-worker-stage .frontinv-empty strong,
+body.frontinv-worker-stage .frontinv-phase-callout strong,
+body.frontinv-worker-stage .frontinv-table tbody td {
+  color: var(--text);
+}
+
+body.matinv-page .matinv-table .is-color {
+  color: var(--accent-warm);
+}
+
+body.matinv-page .matinv-chip.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+body.matinv-page .matinv-admin-actions,
+body.matinv-page .matinv-table td,
+body.frontinv-admin-page .frontinv-admin-actions,
+body.frontinv-admin-page .frontinv-table tbody td,
+body.frontinv-worker-page .frontinv-table tbody td,
+body.frontinv-worker-stage .frontinv-table tbody td {
+  border-color: var(--line);
+}
+
+body.matinv-page .matinv-row.is-counted,
+body.frontinv-admin-page .frontinv-row.is-counted,
+body.frontinv-worker-page .frontinv-row.is-counted,
+body.frontinv-worker-stage .frontinv-row.is-counted {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+body.matinv-page .matinv-table thead th,
+body.matinv-page .matinv-table tbody tr:nth-child(2n),
+body.frontinv-admin-page .frontinv-table thead th,
+body.frontinv-admin-page .frontinv-table tbody tr:nth-child(2n),
+body.frontinv-worker-page .frontinv-table thead th,
+body.frontinv-worker-page .frontinv-table tbody tr:nth-child(2n),
+body.frontinv-worker-stage .frontinv-table thead th,
+body.frontinv-worker-stage .frontinv-table tbody tr:nth-child(2n) {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+  border-color: var(--line);
+}
+
+body.frontinv-admin-page .frontinv-color-chip,
+body.frontinv-worker-page .frontinv-color-chip,
+body.frontinv-worker-stage .frontinv-color-chip {
+  color: var(--accent-warm);
+  background: color-mix(in srgb, var(--accent) 13%, var(--inventory-control));
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
 * {
   box-sizing: border-box;
 }
