@@ -298,6 +298,13 @@ ADMIN_THEME_CLASS_SUFFIX = b" admin-theme"
 
 def apply_user_theme(body: bytes, user) -> bytes:
     """Add the per-user visual theme class to an HTML response body."""
+    body_match = re.search(br"<body([^>]*)>", body, flags=re.IGNORECASE)
+    if body_match and re.search(
+        br'\sdata-theme-scope=(?:"default"|\'default\')',
+        body_match.group(1),
+        flags=re.IGNORECASE,
+    ):
+        return body
     theme_class = None
     if user is not None and user.is_admin:
         theme_class = ADMIN_THEME_CLASS
@@ -306,7 +313,6 @@ def apply_user_theme(body: bytes, user) -> bytes:
     elif user is not None and user.user_id == PRODUCTION_CONTROLLER_THEME_USER_ID:
         theme_class = b"production-controller-theme"
     if theme_class is not None:
-        body_match = re.search(br"<body([^>]*)>", body, flags=re.IGNORECASE)
         if not body_match:
             return body
         attributes = body_match.group(1)
@@ -2893,7 +2899,7 @@ def render_material_inventory_form(
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    :root {{ --text:#0f172a; --muted:#64748b; --line:#d8e0ea; --accent:#0c8d57; --accent2:#12a566; --bg:#eef3f7; }}
+    :root {{ --accent2:var(--accent-strong); }}
     * {{ box-sizing:border-box; }}
     body {{ margin:0; min-height:100vh; background:
       radial-gradient(circle at 8% 4%, rgba(18,165,102,.16), transparent 28rem),
@@ -3000,7 +3006,7 @@ def render_material_inventory_form(
     @media (max-width: 780px) {{ .matinv-upload-head,.matinv-board-head,.matinv-upload-form {{ grid-template-columns:1fr; }} .matinv-top {{ align-items:flex-start; flex-direction:column; }} .matinv-stats {{ grid-template-columns:1fr 1fr; }} .button {{ width:100%; }} }}
   </style>
 </head>
-<body>
+<body class="matinv-page"{' data-theme-scope="default"' if active_view == 'leltar' else ''}>
   <main class="matinv-shell">
     <header class="matinv-top">
       <div>
@@ -3453,9 +3459,10 @@ def render_unified_inventory_worker_page(kind: str, selected_category: str = "",
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
   {_unified_inventory_style()}
 </head>
-<body class="frontinv-worker-stage">
+<body class="frontinv-worker-stage" data-theme-scope="default">
   {content_html}
   {_unified_inventory_script()}
 </body>
@@ -5183,7 +5190,7 @@ def render_front_inventory_form(
   <link rel="stylesheet" href="/styles.css" />
   {extra_script}
 </head>
-<body class="frontinv-worker-page">
+<body class="frontinv-worker-page" data-theme-scope="default">
   {notice_html}
   <main class="frontinv-worker-stage">
     {inventory_html}
