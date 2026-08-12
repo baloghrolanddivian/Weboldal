@@ -7,9 +7,10 @@ import copy
 import io
 import re
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import quoteattr
 
 DOCX_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 ODT_TABLE = "urn:oasis:names:tc:opendocument:xmlns:table:1.0"
@@ -18,6 +19,50 @@ ODT_STYLE = "urn:oasis:names:tc:opendocument:xmlns:style:1.0"
 ET.register_namespace("w", DOCX_NS)
 ET.register_namespace("table", ODT_TABLE)
 ET.register_namespace("text", ODT_TEXT)
+
+
+def _source_namespaces(xml_data: bytes) -> list[tuple[str, str]]:
+    """Return namespace declarations in source order, including unused ones."""
+    namespaces: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for _event, declaration in ET.iterparse(io.BytesIO(xml_data), events=("start-ns",)):
+        prefix, uri = declaration
+        item = (prefix or "", uri)
+        if item not in seen:
+            namespaces.append(item)
+            seen.add(item)
+    return namespaces
+
+
+def _serialize_xml(root: ET.Element, namespaces: list[tuple[str, str]]) -> bytes:
+    """Serialize XML while retaining the template's namespace prefixes.
+
+    ElementTree normally discards declarations used only by values such as
+    ``mc:Ignorable``. Word treats those dangling prefix references as damaged
+    OOXML, so restore every original declaration on the document root.
+    """
+    for prefix, uri in namespaces:
+        try:
+            ET.register_namespace(prefix, uri)
+        except ValueError:
+            # ElementTree reserves generated prefixes such as ``ns0``.
+            continue
+    xml_data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    declaration_end = xml_data.find(b"?>")
+    root_start = xml_data.find(b"<", declaration_end + 2 if declaration_end >= 0 else 0)
+    root_end = xml_data.find(b">", root_start)
+    if root_start < 0 or root_end < 0:
+        return xml_data
+    root_tag = xml_data[root_start:root_end]
+    additions = []
+    for prefix, uri in namespaces:
+        attribute = f"xmlns:{prefix}" if prefix else "xmlns"
+        if re.search(rb"\s" + re.escape(attribute.encode("ascii")) + rb"\s*=", root_tag):
+            continue
+        additions.append(f" {attribute}={quoteattr(uri)}".encode("utf-8"))
+    if not additions:
+        return xml_data
+    return xml_data[:root_end] + b"".join(additions) + xml_data[root_end:]
 
 
 def _use_poppins(run: ET.Element, size_half_points: int | None = None) -> None:
@@ -63,10 +108,20 @@ def _three_months(value: str) -> str:
             month = d.month + 3
             year = d.year + (month - 1) // 12
             month = (month - 1) % 12 + 1
-            return date(year, month, min(d.day, calendar.monthrange(year, month)[1])).strftime("%Y.%m.%d.")
+            anniversary = date(year, month, min(d.day, calendar.monthrange(year, month)[1]))
+            return (anniversary - timedelta(days=1)).strftime("%Y.%m.%d.")
         except ValueError:
             continue
     return value
+
+
+def format_payment(value: str) -> str:
+    """Format an integer payment with Hungarian thousands separators."""
+    raw = str(value or "").strip()
+    digits = re.sub(r"[.\s]", "", raw)
+    if not digits.isdigit():
+        return raw
+    return f"{int(digits):,}".replace(",", ".")
 
 
 ONES = ("nulla", "egy", "kettő", "három", "négy", "öt", "hat", "hét", "nyolc", "kilenc")
@@ -90,11 +145,28 @@ def number_hu(value: str) -> str:
     except ValueError: return value
     integer = int(amount)
     if integer == 0: return "nulla"
-    if integer < 1000: return _hundred(integer)
-    thousands, rest = divmod(integer, 1000)
-    thousand_word = "ezer" if thousands == 1 else (("két" if thousands == 2 else _hundred(thousands)) + "ezer")
-    result = thousand_word
-    return result if rest == 0 else result + _hundred(rest)
+    if integer < 0:
+        return "mínusz " + number_hu(str(abs(integer)))
+    groups: list[int] = []
+    remaining = integer
+    while remaining:
+        remaining, group = divmod(remaining, 1000)
+        groups.append(group)
+    scale_names = ("", "ezer", "millió", "milliárd", "billió")
+    if len(groups) > len(scale_names):
+        return value
+    parts = []
+    for scale_index in range(len(groups) - 1, -1, -1):
+        group = groups[scale_index]
+        if not group:
+            continue
+        if scale_index == 0:
+            parts.append(_hundred(group))
+            continue
+        prefix = "" if group == 1 else ("két" if group == 2 else _hundred(group))
+        parts.append(prefix + scale_names[scale_index])
+    separator = "-" if integer >= 2000 else ""
+    return separator.join(parts)
 
 
 def _template_kind(path: Path) -> str:
@@ -267,7 +339,7 @@ def _append_cell(cell: ET.Element, value: str, odt: bool = False) -> None:
         source_props = source_run.find(f"{{{DOCX_NS}}}rPr")
         if source_props is not None:
             run.append(copy.deepcopy(source_props))
-    _use_poppins(run, size_half_points=18)
+    _use_poppins(run, size_half_points=20)
     text = ET.SubElement(run, f"{{{DOCX_NS}}}t")
     text.text = " " + str(value)
     text.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
@@ -309,7 +381,7 @@ def _set_cell(cell: ET.Element, value: str, odt: bool = False, no_wrap: bool = F
     run = ET.SubElement(paragraph, f"{{{DOCX_NS}}}r")
     if source_props is not None:
         run.append(source_props)
-    _use_poppins(run, size_half_points=18)
+    _use_poppins(run, size_half_points=20)
     text = ET.SubElement(run, f"{{{DOCX_NS}}}t")
     text.text = str(value)
 
@@ -413,7 +485,9 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
         entries = {name: source.read(name) for name in source.namelist()}
     odt = template.suffix.lower() == ".odt"
     xml_name = "content.xml" if odt else "word/document.xml"
-    root = ET.fromstring(entries[xml_name])
+    source_xml = entries[xml_name]
+    namespaces = _source_namespaces(source_xml)
+    root = ET.fromstring(source_xml)
     if odt:
         text_tags = {f"{{{ODT_TEXT}}}p", f"{{{ODT_TEXT}}}span"}
     else:
@@ -480,7 +554,7 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
 
     _replace_all(root, replacements_to_apply, text_tags)
     _clean_colours(root, odt)
-    entries[xml_name] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    entries[xml_name] = _serialize_xml(root, namespaces)
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w", zipfile.ZIP_DEFLATED) as target:
         for name, data in entries.items(): target.writestr(name, data)
@@ -495,6 +569,9 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
     generated = 0
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         for index, person in enumerate(people):
+            person = dict(person)
+            if not str(person.get("stayaddress", "")).strip():
+                person["stayaddress"] = str(person.get("address", ""))
             person_extra = dict(extra[index]) if isinstance(extra, list) else (dict(extra) if isinstance(extra, dict) else {})
             boss = person_extra.get("boss", "")
             boss_data = person_extra.get("boss_data", {}) if isinstance(person_extra.get("boss_data"), dict) else {}
@@ -505,6 +582,7 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
             values["breaktype"] = "amely része a munkaidőnek" if person_extra.get("breaktype") == "a munkaidő részét képezi" else "nem képezi a munkaidő részét"
             values["probation_end"] = _three_months(person.get("entry", ""))
             values["payment_words"] = number_hu(person.get("payment", ""))
+            values["payment_formatted"] = format_payment(person.get("payment", ""))
             written_break = "hatvan perc" if person_extra.get("workbreak", "").strip() == "60 perc" else "harminc perc"
             values.update({
                 "Munkavállaló neve": person.get("name", ""), "Munkavállaló neve:": person.get("name", ""),
@@ -537,7 +615,7 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
                 "6724 Szeged, Trafó köz 3.": person_extra.get("workplace", ""), "+3630": values["bossphone"],
                 ".....@divian.hu": values["bossemail"], "30 perc": person_extra.get("workbreak", ""),
                 "harminc perc": written_break, "amely része a munkaidőnek": values["breaktype"],
-                "__PAYMENT_PLACEHOLDER__": f" {person.get('payment', '')},- Ft / hó",
+                "__PAYMENT_PLACEHOLDER__": f" {values['payment_formatted']},- Ft / hó",
                 "---": person.get("jobdescription", ""),
                 "NÉV": person.get("name", ""),
                 "Adóazonosító jel: .": f"Adóazonosító jel: {person.get('vat', '')}",

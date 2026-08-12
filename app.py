@@ -7483,12 +7483,14 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if not selected_indices:
                     raise ValueError("Legalább egy személyt válassz ki a dokumentumgeneráláshoz.")
                 people = [{key: str(form_data.get(f"p_{index}_{key}", "")) for key in HR_DATA_COLUMNS} for index in selected_indices]
-                required_person_keys = (*HR_DATA_COLUMNS, "jobdescription")
+                required_person_keys = tuple(key for key in HR_DATA_COLUMNS if key != "stayaddress") + ("jobdescription",)
                 for row_number, person in zip(selected_indices, people):
                     person["jobdescription"] = str(form_data.get(f"p_{row_number}_jobdescription", ""))
                     missing = [key for key in required_person_keys if not person.get(key, "").strip()]
                     if missing:
                         raise ValueError(f"A(z) {row_number + 1}. kiválasztott sorban minden személyes mezőt ki kell tölteni.")
+                    if not person.get("stayaddress", "").strip():
+                        person["stayaddress"] = person.get("address", "")
                 bosses = json.loads((DATA_DIR / "HR-files" / "bosses.json").read_text(encoding="utf-8"))
                 extra_keys = ("workplace", "boss", "workbreak", "breaktype", "orderfromname", "qualification", "requirements")
                 extras = []
