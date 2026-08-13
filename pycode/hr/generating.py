@@ -322,13 +322,37 @@ def _replace_split_placeholder(
     return replaced
 
 
+def _replace_odt_text(root: ET.Element, old: str, new: str) -> int:
+    """Replace text stored directly or after nested ODT spacing elements."""
+    replaced = 0
+    for span in root.iter(f"{{{ODT_TEXT}}}span"):
+        for element in span.iter():
+            if element.text and old in element.text:
+                count = element.text.count(old)
+                element.text = element.text.replace(old, str(new))
+                replaced += count
+            if element is not span and element.tail and old in element.tail:
+                count = element.tail.count(old)
+                element.tail = element.tail.replace(old, str(new))
+                replaced += count
+    return replaced
+
+
 def _append_cell(cell: ET.Element, value: str, odt: bool = False) -> None:
     """Append a value beside an existing label without destroying its formatting."""
     if odt:
         paragraph = cell.find(f"{{{ODT_TEXT}}}p")
         if paragraph is None:
             paragraph = ET.SubElement(cell, f"{{{ODT_TEXT}}}p")
-        paragraph.text = (paragraph.text or "") + " " + str(value)
+        children = list(paragraph)
+        if children:
+            value_span = ET.SubElement(paragraph, f"{{{ODT_TEXT}}}span")
+            style_name = children[-1].get(f"{{{ODT_TEXT}}}style-name")
+            if style_name:
+                value_span.set(f"{{{ODT_TEXT}}}style-name", style_name)
+            value_span.text = " " + str(value)
+        else:
+            paragraph.text = (paragraph.text or "") + " " + str(value)
         return
     paragraph = cell.find(f".//{{{DOCX_NS}}}p")
     if paragraph is None:
@@ -406,7 +430,8 @@ def _fill_label_cells(root: ET.Element, values: dict[str, str], odt: bool = Fals
                     target = cells[index + 1] if index + 1 < len(cells) and not _norm("".join(cells[index + 1].itertext())) else cell
                     if target is cell:
                         # Keep the label in ODT's single-cell form and append the value.
-                        if odt: replacement = f"{''.join(cell.itertext()).strip()} {replacement}"
+                        if odt and not append_same_cell:
+                            replacement = f"{''.join(cell.itertext()).strip()} {replacement}"
                     if target is cell and append_same_cell:
                         _append_cell(target, replacement, odt)
                     else:
@@ -495,7 +520,7 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
     if "szép" in template.stem.casefold():
         _fill_szep_card(root, values)
     skip_labels = {_norm("NÉV"), _norm("NÉV:")} if template.stem.casefold().startswith("gdpr") else set()
-    append_same_cell = any(marker in template.stem.casefold() for marker in ("munkaközi szünet", "munkaszerződés"))
+    append_same_cell = any(marker in template.stem.casefold() for marker in ("munkaközi szünet", "munkaszerződés", "munkaidőkeret"))
     if "szép" not in template.stem.casefold():
         _fill_label_cells(root, values, odt, skip_labels=skip_labels, append_same_cell=append_same_cell)
     replacements_to_apply = replacements
@@ -546,6 +571,50 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
         _replace_split_placeholder(root, workplace_placeholder, workplace_value, text_tags)
         replacements_to_apply.pop(workplace_placeholder, None)
 
+        # These contract placeholders are split across multiple Word runs.
+        # Replace only those runs so the surrounding sentence keeps its own
+        # formatting and the marked values retain their original bold style.
+        contract_fields = (
+            ("BELÉPÉS DÁTUM", replacements.get("BELÉPÉS DÁTUM", "")),
+            ("PRÓBAIDŐ VÉGE DÁTUM", replacements.get("PRÓBAIDŐ VÉGE DÁTUM", "")),
+            (",-Ft/ hó", replacements.get("__PAYMENT_PLACEHOLDER__", "").strip()),
+            ("SZÁMMAL KIÍRVA", replacements.get("SZÁMMAL KIÍRVA", "")),
+        )
+        for placeholder, value in contract_fields:
+            _replace_split_placeholder(root, placeholder, value, text_tags, force_bold=True)
+            replacements_to_apply.pop(placeholder, None)
+        replacements_to_apply.pop("__PAYMENT_PLACEHOLDER__", None)
+
+    if "munkaidőkeret" in template_name:
+        workplace_placeholder = "6724 Szeged, Trafó köz 3."
+        workplace_value = replacements.get(workplace_placeholder, "")
+        # Replace only the highlighted work-location field. The identical,
+        # unmarked address in the company header is the registered office and
+        # must remain unchanged. Editing the existing span preserves whether
+        # the template made the field bold or regular.
+        _replace_split_placeholder(
+            root,
+            workplace_placeholder,
+            workplace_value,
+            text_tags,
+            paragraph_filter=lambda text: "munkavégzésének helye" in _norm(text),
+        )
+        replacements_to_apply.pop(workplace_placeholder, None)
+
+        break_duration = values.get("workbreak", "")
+        break_type = values.get("breaktype_selected", "")
+        _replace_split_placeholder(root, "30 perc", break_duration, text_tags)
+        if odt:
+            _replace_odt_text(root, "mely a munkaidő részét képezi", f"mely {break_type}")
+        else:
+            _replace_split_placeholder(
+                root,
+                "mely a munkaidő részét képezi",
+                f"mely {break_type}",
+                text_tags,
+            )
+        replacements_to_apply.pop("30 perc", None)
+
     if "munkaruha" in template_name:
         # The first occurrence is the label ``Dátum:``, while only the second
         # standalone placeholder after ``Szeged,`` belongs to the document.
@@ -557,7 +626,13 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
     entries[xml_name] = _serialize_xml(root, namespaces)
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w", zipfile.ZIP_DEFLATED) as target:
-        for name, data in entries.items(): target.writestr(name, data)
+        if odt and "mimetype" in entries:
+            # ODF requires this entry to be first and uncompressed.
+            target.writestr("mimetype", entries["mimetype"], compress_type=zipfile.ZIP_STORED)
+        for name, data in entries.items():
+            if odt and name == "mimetype":
+                continue
+            target.writestr(name, data)
     return result.getvalue()
 
 
@@ -579,6 +654,7 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
             values["birthplace+birthday"] = f"{person.get('birthplace', '')}, {person.get('birthday', '')}".strip(" ,")
             values["orderfrom+orderfromname"] = person_extra.get("orderfromname", "").strip()
             values["workbreak"] = person_extra.get("workbreak", "")
+            values["breaktype_selected"] = person_extra.get("breaktype", "")
             values["breaktype"] = "amely része a munkaidőnek" if person_extra.get("breaktype") == "a munkaidő részét képezi" else "nem képezi a munkaidő részét"
             values["probation_end"] = _three_months(person.get("entry", ""))
             values["payment_words"] = number_hu(person.get("payment", ""))
