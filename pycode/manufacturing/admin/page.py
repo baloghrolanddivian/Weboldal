@@ -23,6 +23,7 @@ def render_manufacturing_page(
     partial_qty_route: str,
     report_ready_route: str,
     topfloor_box_route: str = "",
+    topfloor_transfer_route: str = "",
     row_edit_route: str = "",
     shipment_date_route: str = "",
     admin_revision_route: str = "",
@@ -2212,6 +2213,27 @@ def render_manufacturing_page(
     .mfg-row.is-pantolo-unit.is-last-unit {{
       border-bottom: 4px solid #0f172a;
     }}
+    .mfg-row.is-pantolo-unit.is-opening {{
+      overflow: hidden;
+      animation: mfg-pantolo-child-open 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }}
+    .mfg-row.is-pantolo-unit.is-collapsing {{
+      overflow: hidden;
+      pointer-events: none;
+      animation: mfg-pantolo-child-close 160ms cubic-bezier(0.4, 0, 1, 1) both;
+    }}
+    @keyframes mfg-pantolo-child-open {{
+      from {{ min-height: 0; max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(-8px); }}
+      to {{ min-height: 50px; max-height: 72px; padding-top: 7px; padding-bottom: 7px; opacity: 1; transform: translateY(0); }}
+    }}
+    @keyframes mfg-pantolo-child-close {{
+      from {{ min-height: 50px; max-height: 72px; padding-top: 7px; padding-bottom: 7px; opacity: 1; transform: translateY(0); }}
+      to {{ min-height: 0; max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(-8px); }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+      .mfg-row.is-pantolo-unit.is-opening,
+      .mfg-row.is-pantolo-unit.is-collapsing {{ animation: none; }}
+    }}
     .mfg-pantolo-expand-cell {{
       display: grid;
       align-items: center;
@@ -2849,6 +2871,8 @@ def render_manufacturing_page(
       const sectionSortState = Object.create(null);
       const partialSaveTimers = new Map();
       const expandedPantoloGroups = new Set();
+      const openingPantoloGroups = new Set();
+      const collapsingPantoloGroups = new Set();
       let pendingRedChoice = null;
       let pendingCreatorResolve = null;
       let pendingConfirmResolve = null;
@@ -2872,6 +2896,8 @@ def render_manufacturing_page(
         return text.startsWith("shipment::") ? text.slice("shipment::".length).trim() : "";
       }};
       const topfloorShipmentKeyIsAll = (key) => String(key || "").trim() === topfloorAllShipmentsKey;
+      const topfloorHettichShipmentKey = "shipment::hettich";
+      const topfloorShipmentKeyIsHettich = (key) => String(key || "").trim() === topfloorHettichShipmentKey;
       const currentShipmentEntry = () => {{
         const entries = Array.isArray(payload.recentProductions) ? payload.recentProductions : [];
         return entries.find((entry) => String(entry?.view_key || "") === String(currentTopfloorShipmentKey || "")) || null;
@@ -2881,7 +2907,8 @@ def render_manufacturing_page(
         const isTopfloorDateEditor = String(currentDocKey || "") === "topfloor" && Boolean(shipmentDateRoute);
         const canEdit = isTopfloorDateEditor
           && Boolean(shipmentId)
-          && !topfloorShipmentKeyIsAll(currentTopfloorShipmentKey);
+          && !topfloorShipmentKeyIsAll(currentTopfloorShipmentKey)
+          && !topfloorShipmentKeyIsHettich(currentTopfloorShipmentKey);
         shipmentDateControlNode.hidden = !isTopfloorDateEditor;
         shipmentDateInputNode.disabled = !canEdit;
         shipmentDateControlNode.title = canEdit ? "" : "Válassz egy szállítmányt a dátum beállításához.";
@@ -3313,7 +3340,7 @@ def render_manufacturing_page(
       }};
       const frontSubcategoriesForView = (document, viewKey) => {{
         if (String(document?.key || "") !== "front_osszekeszites") return [];
-        if (!["front-folias", "front-butorlapos"].includes(String(viewKey || ""))) return [];
+        if (!/^front-(folias|butorlapos)-(also|felso)$/.test(String(viewKey || ""))) return [];
         const specialView = specialViewForKey(document, viewKey);
         const sections = Array.isArray(specialView?.sections) ? specialView.sections : [];
         const grouped = new Map();
@@ -4131,7 +4158,7 @@ def render_manufacturing_page(
           .filter((section) => Array.isArray(section.rows) && section.rows.length);
         return [...baseSections, ...extraSections];
       }};
-      const topfloorSectionIsIssued = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued);
+      const topfloorSectionIsIssued = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued || section?.hettichCategory?.transferDone);
       const topfloorFilterIssuedSections = (sections, includeIssued = false) =>
         includeIssued ? (Array.isArray(sections) ? sections : []) : (Array.isArray(sections) ? sections : []).filter((section) => !topfloorSectionIsIssued(section));
       const topfloorShipmentSections = (document, options = {{}}) => {{
@@ -4139,9 +4166,12 @@ def render_manufacturing_page(
         if (String(document?.key || "") !== "topfloor") return sections;
         const shipmentId = topfloorShipmentIdFromKey(currentTopfloorShipmentKey || firstTopfloorShipmentViewKey());
         if (!shipmentId) return [];
-        const shipmentSections = topfloorShipmentKeyIsAll(currentTopfloorShipmentKey || firstTopfloorShipmentViewKey())
-          ? sections
-          : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
+        const selectedShipmentKey = currentTopfloorShipmentKey || firstTopfloorShipmentViewKey();
+        const shipmentSections = topfloorShipmentKeyIsHettich(selectedShipmentKey)
+          ? sections.filter((section) => Boolean(section?.hettichCategory))
+          : topfloorShipmentKeyIsAll(selectedShipmentKey)
+            ? sections.filter((section) => !section?.hettichCategory)
+            : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
         return topfloorFilterIssuedSections(shipmentSections, Boolean(options?.includeIssued) || topfloorShowIssued);
       }};
       const topfloorShipmentSectionsForKey = (document, shipmentKey, options = {{}}) => {{
@@ -4149,9 +4179,11 @@ def render_manufacturing_page(
         if (String(document?.key || "") !== "topfloor") return [];
         const shipmentId = topfloorShipmentIdFromKey(shipmentKey);
         if (!shipmentId) return [];
-        const shipmentSections = topfloorShipmentKeyIsAll(shipmentKey)
-          ? sections
-          : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
+        const shipmentSections = topfloorShipmentKeyIsHettich(shipmentKey)
+          ? sections.filter((section) => Boolean(section?.hettichCategory))
+          : topfloorShipmentKeyIsAll(shipmentKey)
+            ? sections.filter((section) => !section?.hettichCategory)
+            : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
         return topfloorFilterIssuedSections(shipmentSections, Boolean(options?.includeIssued) || topfloorShowIssued);
       }};
       const isTopfloorDoneState = (value) => /^\\d{{1,12}}$/.test(String(value || "").trim());
@@ -4161,8 +4193,9 @@ def render_manufacturing_page(
         if (!category || category.storageBoxIssued || !String(category.boxId || "").trim() || category.boxOpen || !rows.length) return false;
         return rows.every((row) => isTopfloorDoneState(rowStateValue(row)));
       }};
-      const topfloorSectionComplete = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued);
+      const topfloorSectionComplete = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued || section?.hettichCategory?.transferDone);
       const topfloorCategoryStateClass = (section) => {{
+        if (section?.hettichCategory) return section.hettichCategory.transferDone ? " is-topfloor-done" : "";
         const category = section?.topfloorCategory || null;
         if (!category || !String(category.boxId || "").trim()) return "";
         if (category.storageBoxIssued) return " is-topfloor-done";
@@ -4171,7 +4204,7 @@ def render_manufacturing_page(
         return " is-topfloor-boxed";
       }};
       const topfloorSectionsComplete = (sections) => {{
-        const cleanSections = (Array.isArray(sections) ? sections : []).filter((section) => section?.topfloorCategory);
+        const cleanSections = (Array.isArray(sections) ? sections : []).filter((section) => section?.topfloorCategory || section?.hettichCategory);
         return cleanSections.length > 0 && cleanSections.every((section) => topfloorSectionComplete(section));
       }};
       const topfloorSectionsStateClass = (sections) => topfloorSectionsComplete(sections) ? " is-done" : "";
@@ -4899,6 +4932,7 @@ def render_manufacturing_page(
             }}
             const pantoloIsGroup = isPantoloGroupedRow(row);
             const pantoloGroupExpanded = pantoloIsGroup && expandedPantoloGroups.has(rowStateKey(row));
+            const pantoloGroupOpening = pantoloGroupExpanded && openingPantoloGroups.has(rowStateKey(row));
             const pantoloGroupSourceRowIds = pantoloIsGroup
               ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitStorageKey(row, index))
               : [];
@@ -4964,7 +4998,7 @@ def render_manufacturing_page(
                   const unitPartialMarkup = showPartialColumn ? `<div class="mfg-row-partial-empty"></div>` : "";
                   const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
                   return `
-                    <div class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}">
+                    <div class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{pantoloGroupOpening ? " is-opening" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}">
                       ${{groupedQuantityCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
                     </div>
                   `;
@@ -5787,9 +5821,36 @@ def render_manufacturing_page(
           event.stopPropagation();
           const stateKey = expandButton.getAttribute("data-state-key") || "";
           if (!stateKey) return;
-          if (expandedPantoloGroups.has(stateKey)) expandedPantoloGroups.delete(stateKey);
-          else expandedPantoloGroups.add(stateKey);
-          renderAll();
+          if (collapsingPantoloGroups.has(stateKey)) return;
+          if (expandedPantoloGroups.has(stateKey)) {{
+            const parentRow = expandButton.closest(".is-pantolo-group");
+            const childRows = [];
+            let sibling = parentRow?.nextElementSibling || null;
+            while (sibling instanceof HTMLElement && sibling.classList.contains("is-pantolo-unit")) {{
+              childRows.push(sibling);
+              sibling = sibling.nextElementSibling;
+            }}
+            const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+            if (!childRows.length || reducedMotion) {{
+              expandedPantoloGroups.delete(stateKey);
+              renderAll();
+              return;
+            }}
+            collapsingPantoloGroups.add(stateKey);
+            expandButton.textContent = "\u25BC";
+            expandButton.setAttribute("aria-label", "Kinyitás");
+            childRows.forEach((childRow) => childRow.classList.add("is-collapsing"));
+            window.setTimeout(() => {{
+              expandedPantoloGroups.delete(stateKey);
+              collapsingPantoloGroups.delete(stateKey);
+              renderAll();
+            }}, 170);
+          }} else {{
+            expandedPantoloGroups.add(stateKey);
+            openingPantoloGroups.add(stateKey);
+            renderAll();
+            openingPantoloGroups.delete(stateKey);
+          }}
           return;
         }}
         const editTrigger = event.target.closest("[data-row-edit]");

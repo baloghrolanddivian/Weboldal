@@ -40,6 +40,7 @@ from manufacturing import (
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
     MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+    MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE,
     _load_manufacturing_bundle_cached,
     _manufacturing_is_virtual_unit_row_id,
     _manufacturing_normalize_number,
@@ -260,6 +261,7 @@ from tools.shopfloor import (
     load_and_close_topfloor_category_box as _topfloor_load_and_close_category_box,
     open_topfloor_category_box as _topfloor_open_category_box,
     reprint_topfloor_category_label as _topfloor_reprint_category_label,
+    transfer_hettich_inventory_item as _topfloor_transfer_hettich_item,
 )
 from tools.static_assets import load_static_asset
 
@@ -405,6 +407,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (MANUFACTURING_PARTIAL_QTY_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_REPORT_READY_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_TOPFLOOR_BOX_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE, STANDARD_ACCESS_USER_IDS),
     (ADMIN_MANUFACTURING_ROUTE, ADMIN_MANUFACTURING_ACCESS_USER_IDS),
     (PRODUCTION_INVENTORY_GROUP_ROUTE, STANDARD_ACCESS_USER_IDS),
     (FRONT_INVENTORY_WORKER_ROUTE, STANDARD_ACCESS_USER_IDS),
@@ -6442,6 +6445,85 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "production_number": production_number,
                     "state_key": state_key,
                     "value": current_state.get(state_key, ""),
+                },
+            )
+            return
+
+        if path == MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+
+            prd_id = _manufacturing_normalize_number(payload.get("prd_id", ""))
+            raw_entries = payload.get("entries", [])
+            if not prd_id:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik a Hettich prdID."})
+                return
+            if not isinstance(raw_entries, list):
+                self.respond_json(400, {"ok": False, "error": "Érvénytelen Hettich tétellista."})
+                return
+
+            entries: list[dict[str, str]] = []
+            for item in raw_entries:
+                if not isinstance(item, dict):
+                    continue
+                state_key = str(item.get("state_key", "") or "").strip()
+                if not state_key.startswith(f"Atraktarozas::{prd_id}::"):
+                    continue
+                entries.append(
+                    {
+                        "item_number": str(item.get("item_number", "") or "").strip(),
+                        "itm_id": str(item.get("itm_id", "") or "").strip(),
+                        "quantity": str(item.get("quantity", "") or "").strip(),
+                        "uom_code": str(item.get("uom_code", "") or "").strip(),
+                        "state_key": state_key,
+                    }
+                )
+
+            completed_items: list[dict[str, str]] = []
+            failed_items: list[dict[str, str]] = []
+            transfer_client = None
+            if entries:
+                try:
+                    transfer_client = _ShopfloorApiClient.for_endpoint("topfloor_transfer")
+                except Exception as exc:
+                    error_text = str(exc)
+                    failed_items = [{**entry, "error": error_text} for entry in entries]
+            if transfer_client is not None:
+                for entry in entries:
+                    try:
+                        _topfloor_transfer_hettich_item(
+                            itm_id=entry["itm_id"],
+                            quantity=entry["quantity"],
+                            uom_code=entry["uom_code"],
+                            item_number=entry["item_number"],
+                            client=transfer_client,
+                        )
+                    except Exception as exc:
+                        failed_items.append({**entry, "error": str(exc)})
+                    else:
+                        completed_items.append(entry)
+
+            failed_keys = {item["state_key"] for item in failed_items}
+            state_runtime_root = self.manufacturing_state_runtime_root("topfloor")
+            for entry in entries:
+                save_selection_state(
+                    state_runtime_root,
+                    prd_id,
+                    entry["state_key"],
+                    "red" if entry["state_key"] in failed_keys else "done",
+                )
+            self.respond_json(
+                200,
+                {
+                    "ok": True,
+                    "prd_id": prd_id,
+                    "completed_items": completed_items,
+                    "failed_items": failed_items,
                 },
             )
             return

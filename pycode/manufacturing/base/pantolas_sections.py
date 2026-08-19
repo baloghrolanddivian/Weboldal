@@ -47,6 +47,15 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
         text = "".join(char for char in text if not unicodedata.combining(char))
         return re.sub(r"\s+", " ", text).strip().lower()
 
+    def cabinet_level(value: object) -> str:
+        """Classify a KorpTipPer value as lower or upper cabinet."""
+        normalized = folded_ascii(value)
+        if "also" in normalized:
+            return "also"
+        if "felso" in normalized:
+            return "felso"
+        return ""
+
     def tag_key(tag: object) -> str:
         """Return a compact normalized XML field key."""
         return re.sub(r"[^a-z0-9]+", "", folded_ascii(local_name(tag)))
@@ -142,6 +151,8 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
                 "section_key": "pantolo",
                 "section_label": "Pántoló",
                 "page_number": 1,
+                "korpTipPer": front_type,
+                "cabinetLevel": cabinet_level(front_type),
                 **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
             }
         )
@@ -200,6 +211,15 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
         ):
             text = text.replace(source, target)
         return text
+
+    def cabinet_level(value: object) -> str:
+        """Classify a KorpTipPer/front-type value as lower or upper cabinet."""
+        normalized = folded(value)
+        if "also" in normalized:
+            return "also"
+        if "felso" in normalized:
+            return "felso"
+        return ""
 
     opening_tokens = {
         "bal": "Bal",
@@ -493,18 +513,22 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             drill_label, handle_type, opening_dir, door_type = parse_tail_fields(tail_payload)
             group_label = f"Front típus: {front_type} | {color} | {model_label}"
             group_key = _manufacturing_local_slug(f"pantolo::{front_type}::{color}::{model_label}")
+            level = clean_text(row.get("cabinetLevel")) or cabinet_level(front_type)
             if group_key not in grouped_sections:
                 grouped_sections[group_key] = {
                     "key": f"pantolo::{group_key}",
                     "label": group_label,
                     "rows": [],
                     "columnLayout": "pantolo",
+                    "cabinetLevel": level,
                 }
                 grouped_order.append(group_key)
             row["name"] = color
             row["color"] = color
             row["detail"] = ""
             row["frontType"] = front_type
+            row["korpTipPer"] = clean_text(row.get("korpTipPer")) or front_type
+            row["cabinetLevel"] = level
             row["modelLabel"] = model_label
             row["color23"] = "-"
             row["pantType"] = normalize_pant_label(pant_type or "Nincs")
@@ -543,6 +567,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                     "label": rebuilt_group_label,
                     "rows": [],
                     "columnLayout": "pantolo",
+                    "cabinetLevel": clean_text(row.get("cabinetLevel")) or cabinet_level(front_type),
                 }
                 rebuilt_order.append(rebuilt_group_key)
             rebuilt_sections[rebuilt_group_key]["rows"].append(row)
@@ -636,6 +661,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                     "label": regrouped_group_label,
                     "rows": [],
                     "columnLayout": "pantolo",
+                    "cabinetLevel": clean_text(row.get("cabinetLevel")) or cabinet_level(front_type),
                 }
                 regrouped_order.append(regrouped_group_key)
             regrouped_sections[regrouped_group_key]["rows"].append(row)
@@ -957,4 +983,10 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             if "_pantolo_missing_pant" in row:
                 row.pop("_pantolo_missing_pant", None)
 
+    sections.sort(
+        key=lambda section: {"also": 0, "felso": 1}.get(
+            clean_text(section.get("cabinetLevel")),
+            2,
+        )
+    )
     return sections, row_count

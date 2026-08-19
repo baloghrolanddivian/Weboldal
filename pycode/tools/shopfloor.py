@@ -33,6 +33,8 @@ TOPFLOOR_UNLOADING_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_UNLOADING_CHECKPOINT_
 TOPFLOOR_UNLOADING_TAB_ID = int(os.getenv("TOPFLOOR_UNLOADING_TAB_ID", "204"))
 TOPFLOOR_STORAGE_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_STORAGE_CHECKPOINT_ID", "137"))
 TOPFLOOR_STORAGE_TAB_ID = int(os.getenv("TOPFLOOR_STORAGE_TAB_ID", "228"))
+TOPFLOOR_TRANSFER_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_TRANSFER_CHECKPOINT_ID", "136"))
+TOPFLOOR_TRANSFER_TAB_ID = int(os.getenv("TOPFLOOR_TRANSFER_TAB_ID", "223"))
 TOPFLOOR_BOX_CTS_ID = int(os.getenv("TOPFLOOR_BOX_CTS_ID", "24"))
 TOPFLOOR_RUNTIME_DIR = Path(os.getenv("TOPFLOOR_RUNTIME_DIR", "runtime/gyartasi-papirok/topfloor"))
 SHOPFLOOR_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("SHOPFLOOR_MAX_CONCURRENT_REQUESTS", "3")))
@@ -412,6 +414,58 @@ def issue_topfloor_storage_box(
     }
     _save_topfloor_category_box(category_key, result, open_state=bool(box.get("open")))
     return result
+
+
+def transfer_hettich_inventory_item(
+    *,
+    itm_id: int | str,
+    quantity: int | float | str,
+    uom_code: str,
+    item_number: str = "",
+    client: ShopfloorApiClient | None = None,
+) -> dict[str, object]:
+    """Move one Hettich item from Anyag.anyag (8) to ÜZEMI Raktár.Üzem (10)."""
+    clean_item_id = int(str(itm_id or "0").strip())
+    clean_quantity_text = str(quantity or "").strip().replace(",", ".")
+    clean_uom_code = str(uom_code or "").strip()
+    if clean_item_id <= 0:
+        raise ValueError("Hiányzik az átraktározandó tétel itmID értéke.")
+    try:
+        numeric_quantity = int(float(clean_quantity_text))
+    except ValueError as exc:
+        raise ValueError("Érvénytelen az átraktározandó mennyiség.") from exc
+    if numeric_quantity <= 0:
+        raise ValueError("Az átraktározandó mennyiségnek pozitívnak kell lennie.")
+    transfer_quantity = numeric_quantity
+    if not clean_uom_code:
+        raise ValueError("Hiányzik az átraktározandó tétel PrimaryUOMCode értéke.")
+    client = client or ShopfloorApiClient.for_endpoint("topfloor_transfer")
+    payload = {
+        "glcCode": "UNDEFINED",
+        "invtComment": "",
+        "invtTransDate": None,
+        "invtTransUomQty": transfer_quantity,
+        "invtTypeId": 6,
+        "isLocQty": False,
+        "itmId": clean_item_id,
+        "lcIdFrom": 8,
+        "lcIdTo": 10,
+        "lotId": None,
+        "prdId": None,
+        "transUomCode": clean_uom_code,
+    }
+    status_code, response_body = client.run_procedure(
+        TOPFLOOR_TRANSFER_CHECKPOINT_ID,
+        TOPFLOOR_TRANSFER_TAB_ID,
+        2,
+        payload,
+    )
+    _shopfloor_require_success(
+        status_code,
+        response_body,
+        f"Hettich átraktározás {str(item_number or clean_item_id).strip()}",
+    )
+    return {"itmId": clean_item_id, "quantity": transfer_quantity, "uomCode": clean_uom_code}
 
 
 def _shopfloor_auth_header(username: str = SHOPFLOOR_USERNAME, password: str = SHOPFLOOR_PASSWORD) -> str:
@@ -865,6 +919,9 @@ def _shopfloor_ready_endpoint_credentials(ready_endpoint: str) -> tuple[str, str
         "topfloor_unloading",
         "topfloor-unloading",
         "unloading",
+        "topfloor_transfer",
+        "topfloor-transfer",
+        "transfer",
     }:
         return TOPFLOOR_USERNAME, TOPFLOOR_PASSWORD
     return SHOPFLOOR_USERNAME, SHOPFLOOR_PASSWORD

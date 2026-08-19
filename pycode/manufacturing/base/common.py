@@ -40,6 +40,7 @@ MANUFACTURING_OPERATION_XML_GROUPS: dict[str, tuple[frozenset[str], ...]] = {
                 "anyagraktar.xml",
                 "anyagraktár.xml",
                 "anyagraktar_topfloor.xml",
+                "atraktarozas.xml",
             }
         ),
     ),
