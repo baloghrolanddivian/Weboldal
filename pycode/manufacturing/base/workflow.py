@@ -41,6 +41,7 @@ from ..routes import (
     MANUFACTURING_ROUTE,
     MANUFACTURING_STATE_ROUTE,
     MANUFACTURING_TOPFLOOR_BOX_ROUTE,
+    MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE,
 )
 
 MANUFACTURING_BUNDLE_CACHE: dict[str, dict[str, object]] = {}
@@ -1237,6 +1238,7 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
         if not shipment_id:
             continue
         is_all_shipments_view = shipment_id == "__all__"
+        is_hettich_view = bool(view.get("isHettich")) or shipment_id == "hettich"
         shipment_date = "" if is_all_shipments_view else load_shipment_date(runtime_dir() / "topfloor", shipment_id)
         shipment_label = str(view.get("label", "") or "").strip() or "Nagyautó"
         try:
@@ -1255,26 +1257,37 @@ def _manufacturing_topfloor_shipment_entries(bundle: dict) -> list[dict[str, obj
                 )
             )
         ]
-        shipment_complete = bool(shipment_categories) and all(
-            bool(category.get("storageBoxIssued")) for category in shipment_categories
-        )
-        issued_count = sum(1 for category in shipment_categories if bool(category.get("storageBoxIssued")))
+        hettich_categories = [
+            section.get("hettichCategory", {})
+            for section in sections
+            if isinstance(section, dict) and isinstance(section.get("hettichCategory"), dict)
+        ] if is_hettich_view else []
+        if is_hettich_view:
+            shipment_complete = bool(hettich_categories) and all(bool(category.get("transferDone")) for category in hettich_categories)
+            issued_count = sum(1 for category in hettich_categories if bool(category.get("transferDone")))
+            category_count = len(hettich_categories)
+        else:
+            shipment_complete = bool(shipment_categories) and all(
+                bool(category.get("storageBoxIssued")) for category in shipment_categories
+            )
+            issued_count = sum(1 for category in shipment_categories if bool(category.get("storageBoxIssued")))
         has_issued_row_edit = not is_all_shipments_view and any(
             bool(category.get("hasIssuedRowEdit")) for category in shipment_categories
         )
         entries.append(
             {
                 "kind": "shipment",
-                "number": "Összes" if is_all_shipments_view else shipment_id,
+                "number": "Hettich" if is_hettich_view else ("Összes" if is_all_shipments_view else shipment_id),
                 "count": category_count,
                 "issued_count": issued_count,
-                "date_label": shipment_label,
+                "date_label": "Átraktározás" if is_hettich_view else shipment_label,
                 "shipment_date": shipment_date,
                 "view_key": view_key,
                 "is_active": not entries,
                 "is_complete": shipment_complete,
                 "state_status": "done" if shipment_complete else "plain",
                 "has_issued_row_edit": has_issued_row_edit,
+                "is_hettich": is_hettich_view,
             }
         )
     return entries
@@ -1312,13 +1325,29 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
         if view_key.startswith("shipment::") and view_key.split("::", 1)[1].strip()
         and view_key.split("::", 1)[1].strip() != "__all__"
     ]
+    hettich_production_ids = sorted(
+        {
+            str(section.get("hettichCategory", {}).get("prdID", "") or "").strip()
+            for section in topfloor_document.get("sections", [])
+            if isinstance(section, dict) and isinstance(section.get("hettichCategory"), dict)
+        }
+        - {""}
+    )
     selection_state: dict[str, str] = {}
     partial_quantity_state: dict[str, str] = {}
     topfloor_runtime_root = runtime_dir() / "topfloor"
-    for shipment_id in shipment_ids:
-        raw_state = _manufacturing_load_existing_selection_state(topfloor_runtime_root, shipment_id)
-        selection_state.update(_manufacturing_selection_state_payload(shipment_id, raw_state))
-        _manufacturing_apply_row_state_aliases([topfloor_document], shipment_id, raw_state, selection_state)
+    for state_owner_id in dict.fromkeys([*shipment_ids, *hettich_production_ids]):
+        raw_state = _manufacturing_load_existing_selection_state(topfloor_runtime_root, state_owner_id)
+        selection_state.update(_manufacturing_selection_state_payload(state_owner_id, raw_state))
+        _manufacturing_apply_row_state_aliases([topfloor_document], state_owner_id, raw_state, selection_state)
+    for section in topfloor_document.get("sections", []):
+        if not isinstance(section, dict) or not isinstance(section.get("hettichCategory"), dict):
+            continue
+        hettich_rows = [row for row in section.get("rows", []) if isinstance(row, dict)]
+        section["hettichCategory"]["transferDone"] = bool(hettich_rows) and all(
+            str(selection_state.get(str(row.get("state_key", "") or ""), "")).strip().lower() == "done"
+            for row in hettich_rows
+        )
     return (
         {
             "production_number": "",
@@ -1328,6 +1357,44 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
         selection_state,
         partial_quantity_state,
     )
+
+def _manufacturing_front_level_special_views(sections: list[dict]) -> list[dict]:
+    """Build material/level filters, with every lower filter before upper ones."""
+    views: list[dict] = []
+    for level, level_label in (("also", "alsó"), ("felso", "felső")):
+        for material, material_key in (("Fóliás", "folias"), ("Bútorlapos", "butorlapos")):
+            matching = [
+                dict(section)
+                for section in sections
+                if str(section.get("cabinetLevel", "")) == level
+                and str(section.get("frontMaterial", "")) == material
+            ]
+            views.append(
+                {
+                    "key": f"front-{material_key}-{level}",
+                    "label": f"{material} {level_label}",
+                    "count": sum(len(section.get("rows", [])) for section in matching),
+                    "sections": matching,
+                }
+            )
+    return views
+
+
+def _manufacturing_pantolo_level_special_views(sections: list[dict]) -> list[dict]:
+    """Build lower/upper filters for Pántolás in manufacturing order."""
+    views: list[dict] = []
+    for level, label in (("also", "Alsó"), ("felso", "Felső")):
+        matching = [dict(section) for section in sections if str(section.get("cabinetLevel", "")) == level]
+        views.append(
+            {
+                "key": f"pantolo-{level}",
+                "label": label,
+                "count": sum(len(section.get("rows", [])) for section in matching),
+                "sections": matching,
+            }
+        )
+    return views
+
 
 def _manufacturing_view_bundle(
     raw_bundle: dict,
@@ -1438,8 +1505,6 @@ def _manufacturing_view_bundle(
                     front_source_type = "XML"
             except OSError:
                 pass
-        front_folias_sections = [dict(section) for section in front_sections if "\u00b7 F\u00f3li\u00e1s" in str(section.get("label", ""))]
-        front_butorlapos_sections = [dict(section) for section in front_sections if "\u00b7 B\u00fatorlapos" in str(section.get("label", ""))]
         return finalize_filtered_documents(
             [
                 {
@@ -1451,20 +1516,7 @@ def _manufacturing_view_bundle(
                     "sections": front_sections,
                     "row_count": front_row_count,
                     "placeholderMessage": "Ehhez az opci\u00f3hoz m\u00e9g nincs megjelen\u00edthet\u0151 sor.",
-                    "specialViews": [
-                        {
-                            "key": "front-folias",
-                            "label": "F\u00f3li\u00e1s",
-                            "count": sum(len(section.get("rows", [])) for section in front_folias_sections),
-                            "sections": front_folias_sections,
-                        },
-                        {
-                            "key": "front-butorlapos",
-                            "label": "B\u00fatorlapos",
-                            "count": sum(len(section.get("rows", [])) for section in front_butorlapos_sections),
-                            "sections": front_butorlapos_sections,
-                        },
-                    ],
+                    "specialViews": _manufacturing_front_level_special_views(front_sections),
                     "allowSplit": False,
                     "singleColumnOverview": True,
                 }
@@ -1509,7 +1561,7 @@ def _manufacturing_view_bundle(
                     "sections": pantolo_sections,
                     "row_count": pantolo_row_count,
                     "placeholderMessage": "A kiv\u00e1lasztott gy\u00e1rt\u00e1sban nem tal\u00e1ltam haszn\u00e1lhat\u00f3 P\u00e1ntol\u00f3 sort.",
-                    "specialViews": [],
+                    "specialViews": _manufacturing_pantolo_level_special_views(pantolo_sections),
                     "hideBarcodeColumn": True,
                     "allowSplit": False,
                     "singleColumnOverview": True,
@@ -1588,9 +1640,6 @@ def _manufacturing_view_bundle(
                 front_source_type = "XML"
         except OSError:
             pass
-    front_folias_sections = [dict(section) for section in front_sections if "· Fóliás" in str(section.get("label", ""))]
-    front_butorlapos_sections = [dict(section) for section in front_sections if "· Bútorlapos" in str(section.get("label", ""))]
-
     documents.append(
         {
             "key": "front_osszekeszites",
@@ -1601,20 +1650,7 @@ def _manufacturing_view_bundle(
             "sections": front_sections,
             "row_count": front_row_count,
             "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
-            "specialViews": [
-                {
-                    "key": "front-folias",
-                    "label": "Fóliás",
-                    "count": sum(len(section.get("rows", [])) for section in front_folias_sections),
-                    "sections": front_folias_sections,
-                },
-                {
-                    "key": "front-butorlapos",
-                    "label": "Bútorlapos",
-                    "count": sum(len(section.get("rows", [])) for section in front_butorlapos_sections),
-                    "sections": front_butorlapos_sections,
-                },
-            ],
+            "specialViews": _manufacturing_front_level_special_views(front_sections),
             "allowSplit": False,
             "singleColumnOverview": True,
         }
@@ -1651,7 +1687,7 @@ def _manufacturing_view_bundle(
             "sections": pantolo_sections,
             "row_count": pantolo_row_count,
             "placeholderMessage": "A kiválasztott gyártásban nem találtam használható Pántoló sort.",
-            "specialViews": [],
+            "specialViews": _manufacturing_pantolo_level_special_views(pantolo_sections),
             "hideBarcodeColumn": True,
             "allowSplit": False,
             "singleColumnOverview": True,
@@ -1694,6 +1730,7 @@ def manufacturing_module_payload(
     partial_qty_route = "" if is_admin_view else MANUFACTURING_PARTIAL_QTY_ROUTE
     report_ready_route = "" if is_admin_view else MANUFACTURING_REPORT_READY_ROUTE
     topfloor_box_route = "" if is_admin_view else MANUFACTURING_TOPFLOOR_BOX_ROUTE
+    topfloor_transfer_route = "" if is_admin_view else MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE
     row_edit_route = f"{module_route}/row-data" if is_admin_view else ""
     shipment_date_route = f"{module_route}/shipment-date" if is_admin_view else ""
     requested_number = _manufacturing_normalize_number(production_number)
@@ -1862,6 +1899,7 @@ def manufacturing_module_payload(
                             "partialQtyRoute": partial_qty_route,
                             "reportReadyRoute": report_ready_route,
                             "topfloorBoxRoute": topfloor_box_route,
+                            "topfloorTransferRoute": topfloor_transfer_route,
                             "adminRevisionRoute": MANUFACTURING_ADMIN_REVISION_ROUTE,
                             "adminChangeRevision": load_admin_change_revision(runtime_dir()),
                             "topfloorStorageBoxTypes": topfloor_storage_box_types,
@@ -1888,6 +1926,7 @@ def manufacturing_module_payload(
         "partialQtyRoute": partial_qty_route,
         "reportReadyRoute": report_ready_route,
         "topfloorBoxRoute": topfloor_box_route,
+        "topfloorTransferRoute": topfloor_transfer_route,
         "adminRevisionRoute": MANUFACTURING_ADMIN_REVISION_ROUTE,
         "adminChangeRevision": load_admin_change_revision(runtime_dir()),
         "topfloorStorageBoxTypes": topfloor_storage_box_types,
@@ -1937,6 +1976,7 @@ def manufacturing_client_payload(module_payload: dict[str, object]) -> dict[str,
         "partialQtyRoute": str(module_payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "reportReadyRoute": str(module_payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         "topfloorBoxRoute": str(module_payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        "topfloorTransferRoute": str(module_payload.get("topfloorTransferRoute", MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE)),
         "adminRevisionRoute": str(module_payload.get("adminRevisionRoute", MANUFACTURING_ADMIN_REVISION_ROUTE)),
         "adminChangeRevision": str(module_payload.get("adminChangeRevision", "")),
         "topfloorStorageBoxTypes": (
@@ -1982,6 +2022,7 @@ def render_manufacturing_module(
         "partial_qty_route": str(payload.get("partialQtyRoute", MANUFACTURING_PARTIAL_QTY_ROUTE)),
         "report_ready_route": str(payload.get("reportReadyRoute", MANUFACTURING_REPORT_READY_ROUTE)),
         "topfloor_box_route": str(payload.get("topfloorBoxRoute", MANUFACTURING_TOPFLOOR_BOX_ROUTE)),
+        "topfloor_transfer_route": str(payload.get("topfloorTransferRoute", MANUFACTURING_TOPFLOOR_TRANSFER_ROUTE)),
         "admin_revision_route": str(payload.get("adminRevisionRoute", MANUFACTURING_ADMIN_REVISION_ROUTE)),
         "admin_change_revision": str(payload.get("adminChangeRevision", "")),
         "topfloor_storage_box_types": payload.get("topfloorStorageBoxTypes", []) if isinstance(payload.get("topfloorStorageBoxTypes"), list) else [],

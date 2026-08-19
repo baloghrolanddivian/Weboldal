@@ -15,6 +15,19 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             text = text.replace(source, target)
         return text
 
+    def cabinet_level(value: object) -> str:
+        """Classify a KorpTipPer value as lower or upper cabinet."""
+        normalized = folded(value)
+        if "also" in normalized:
+            return "also"
+        if "felso" in normalized:
+            return "felso"
+        return ""
+
+    def cabinet_level_label(value: object) -> str:
+        """Return the visible Hungarian label for a cabinet level key."""
+        return {"also": "Alsó", "felso": "Felső"}.get(str(value or ""), "")
+
     def clean_text(value: object) -> str:
         """Clean text and repair known mojibake/OCR splits."""
         text = (
@@ -341,6 +354,8 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             barcode = field_value(fields, "Barcode") or con_id or f"FRONTXML-{row_index + 1:04d}"
             type_label = category_label(fields, name, model, color)
             door_type = field_value(fields, "AJTO_TIP", "Ajto Tip", "Ajtó Tip")
+            korp_tip_per = field_value(fields, "KorpTipPer")
+            level = cabinet_level(korp_tip_per)
             row_index += 1
             row_id = hashlib.sha1(
                 f"front-xml|{production_number}|{row_index}|{barcode}|{name}|{model}|{color}|{size_label}|{type_label}|{quantity}".encode("utf-8")
@@ -368,6 +383,8 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
                     "frontModel": model,
                     "doorType": door_type,
                     "frontPullOut": is_pullout_door_type(door_type),
+                    "korpTipPer": korp_tip_per,
+                    "cabinetLevel": level,
                     **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
                 }
             )
@@ -397,16 +414,23 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             material = front_material_label(row)
             type_label = front_type_label(row)
             box_type_label = front_box_type_label(type_label)
+            level = clean_text(row.get("cabinetLevel")) or cabinet_level(row.get("korpTipPer"))
+            level_label = cabinet_level_label(level)
             group_size = front_group_size_label(row, size, box_type_label) or size
-            section_key = f"{group_size}::{material}::{box_type_label}"
+            section_key = f"{level or 'other'}::{group_size}::{material}::{box_type_label}"
             section_slug = _manufacturing_local_slug(section_key)
+            visible_label = f"{group_size} · {material} · {box_type_label}"
+            if level_label:
+                visible_label = f"{visible_label} · {level_label}"
             if section_slug not in grouped_sections:
                 grouped_sections[section_slug] = {
                     "key": f"front_osszekeszito::{section_slug}",
-                    "label": f"{size} · {material} · {box_type_label}",
+                    "label": visible_label,
                     "rows": [],
+                    "frontMaterial": material,
+                    "cabinetLevel": level,
                 }
-            grouped_sections[section_slug]["label"] = f"{group_size} · {material} · {box_type_label}"
+            grouped_sections[section_slug]["label"] = visible_label
             row["name"] = clean_text(raw_row.get("name")) or display_row_name(row)
             row["detail"] = type_label
             row["modelLabel"] = clean_text(raw_row.get("frontModel")) or front_model_label(raw_row)
@@ -437,6 +461,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
     sorted_sections.sort(
         key=lambda section: (
+            {"also": 0, "felso": 1}.get(str(section.get("cabinetLevel", "")), 2),
             size_sort_key(str(section.get("label", "")).split("·", 1)[0].strip()),
             material_order.get(str(section.get("label", "")).split("·", 2)[1].strip(), 9)
             if "·" in str(section.get("label", ""))
