@@ -133,6 +133,12 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         description = field_value(fields, "icg2Description")
         return " - ".join(part for part in (korp_tip, description) if part) or "Összes"
 
+    def is_lower_box_item(fields: dict[str, str]) -> bool:
+        """Return whether a row belongs to the dedicated Alsó boxos category."""
+        korp_tip = folded_ascii(field_value(fields, "KorpTipPer"))
+        side_type = folded_ascii(field_value(fields, "Oldal_tip"))
+        return korp_tip == "2-es also" and "fiok" in side_type
+
     def is_all_section_label(label: object) -> bool:
         """Return whether is all section label is true."""
         return folded_ascii(label) == "osszes"
@@ -211,13 +217,26 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
                 existing["rows"].append(row)
         return output
 
+    def place_lower_box_before_upper_sections(sections: list[dict]) -> list[dict]:
+        """Place Alsó boxos after the lower chips and before the first upper chip."""
+        box_section = next((section for section in sections if clean_text(section.get("label")) == "Alsó fiók boxos"), None)
+        if box_section is None:
+            return sections
+        remaining = [section for section in sections if section is not box_section]
+        upper_index = next(
+            (index for index, section in enumerate(remaining) if "felso" in folded_ascii(section.get("label"))),
+            len(remaining),
+        )
+        remaining.insert(upper_index, box_section)
+        return remaining
+
     section_rows: dict[str, list[dict]] = {}
     row_index = 0
     for con_element in root.iter():
         if tag_key(getattr(con_element, "tag", "")) != "con":
             continue
         fields = con_fields(con_element)
-        label = section_label(fields)
+        label = "Alsó fiók boxos" if is_lower_box_item(fields) else section_label(fields)
         name = field_value(fields, "Leiras", "Leírás") or "Tétel"
         length = whole_number(field_value(fields, "Hossz"))
         width = whole_number(field_value(fields, "Szelleseg", "Szélesség"))
@@ -265,14 +284,16 @@ def _manufacturing_osszekeszito_xml_sections(bundle: dict, production_number: st
         for label, rows in section_rows.items()
         if rows
     ]
-    sections = merge_lower_sections_in_display_order(
-        pair_sections_in_display_order(
-            sorted(
-                sections,
-                key=lambda section: (
-                    0 if is_all_section_label(section.get("label")) else 1,
-                    pair_info_for_section_label(str(section.get("label", ""))) or ("9", str(section.get("label", "")).lower()),
-                ),
+    sections = place_lower_box_before_upper_sections(
+        merge_lower_sections_in_display_order(
+            pair_sections_in_display_order(
+                sorted(
+                    sections,
+                    key=lambda section: (
+                        0 if is_all_section_label(section.get("label")) else 1,
+                        pair_info_for_section_label(str(section.get("label", ""))) or ("9", str(section.get("label", "")).lower()),
+                    ),
+                )
             )
         )
     )
