@@ -22,6 +22,8 @@ TOPFLOOR_XML_NAMES = (
     "Anyagrakt\u00e1r.xml",
     "Anyagraktar_topfloor.xml",
 )
+TOPFLOOR_TRANSFER_XML_NAME = "Atraktarozas.xml"
+TOPFLOOR_HETTICH_VIEW_KEY = "shipment::hettich"
 TOPFLOOR_VENCODE_ABBREVIATIONS_PATH = REPO_ROOT / "data" / "venCode_Abrv"
 _TOPFLOOR_VENCODE_ABBREVIATIONS: dict[str, str] | None = None
 _TOPFLOOR_VENCODE_ABBREVIATIONS_MTIME_NS: int | None = None
@@ -35,11 +37,15 @@ def _manufacturing_topfloor_document(bundle: dict, production_number: str) -> di
 def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]]) -> dict:
     """Build the Topfloor operation document from multiple production XML folders."""
     xml_paths: list[Path] = []
+    transfer_xml_paths: list[Path] = []
     for bundle, _production_number in bundles:
         xml_path = _topfloor_xml_path(bundle)
         if xml_path is not None:
             xml_paths.append(xml_path)
-    if not xml_paths:
+        transfer_xml_path = _topfloor_transfer_xml_path(bundle)
+        if transfer_xml_path is not None:
+            transfer_xml_paths.append(transfer_xml_path)
+    if not xml_paths and not transfer_xml_paths:
         return _topfloor_empty_document("Az Anyagraktár XML még nem található.")
 
     rows: list[dict[str, str]] = []
@@ -49,17 +55,18 @@ def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]
             rows.extend(_topfloor_xml_rows(xml_path))
         except Exception as exc:
             errors.append(f"{xml_path.name}: {exc}")
-    if errors and not rows:
+    if errors and not rows and not transfer_xml_paths:
         return _topfloor_empty_document(f"Az Anyagraktár XML feldolgozása nem sikerült: {'; '.join(errors)}")
     rows = _topfloor_deduplicate_rows(rows)
-    source_xml_path = xml_paths[0]
+    hettich_rows = _topfloor_transfer_rows_from_paths(transfer_xml_paths)
+    source_xml_path = xml_paths[0] if xml_paths else transfer_xml_paths[0]
     source_label = (
         f"Beolvasva: {source_xml_path.name}"
-        if len(xml_paths) == 1
+        if len(xml_paths) <= 1
         else f"Beolvasva: {len(xml_paths)} Anyagraktár XML"
     )
 
-    if not rows:
+    if not rows and not hettich_rows:
         return _topfloor_empty_document("Az Anyagraktár XML-ben nincs megjeleníthető elem.", xml_path=source_xml_path)
 
     box_registry = _topfloor_category_box_registry()
@@ -95,14 +102,29 @@ def _manufacturing_topfloor_document_from_bundles(bundles: list[tuple[dict, str]
         row_count += sum(len(section.get("rows", [])) for section in sections)
         all_sections.extend(sections)
 
-    source_label = f"{len(all_sections)} doboz" if all_sections else source_label
-    if all_sections:
+    hettich_sections = _topfloor_hettich_sections(hettich_rows)
+    if hettich_sections:
+        shipment_views.insert(
+            0,
+            {
+                "key": TOPFLOOR_HETTICH_VIEW_KEY,
+                "label": "Hettich",
+                "count": len(hettich_sections),
+                "isHettich": True,
+            },
+        )
+        row_count += sum(len(section.get("rows", [])) for section in hettich_sections)
+        all_sections = [*hettich_sections, *all_sections]
+
+    normal_section_count = len(all_sections) - len(hettich_sections)
+    source_label = f"{normal_section_count} doboz" if normal_section_count else source_label
+    if normal_section_count:
         shipment_views.insert(
             0,
             {
                 "key": "shipment::__all__",
                 "label": "\u00d6sszes",
-                "count": len(all_sections),
+                "count": normal_section_count,
             },
         )
 
@@ -162,6 +184,131 @@ def _topfloor_xml_path(bundle: dict) -> Path | None:
     except OSError:
         return None
     return None
+
+
+def _topfloor_transfer_xml_path(bundle: dict) -> Path | None:
+    """Find Atraktarozas.xml in one production folder."""
+    folder = Path(str(bundle.get("folder", "") or "").strip())
+    if not folder.exists():
+        return None
+    try:
+        return next(
+            (
+                path
+                for path in folder.iterdir()
+                if path.is_file() and path.name.casefold() == TOPFLOOR_TRANSFER_XML_NAME.casefold()
+            ),
+            None,
+        )
+    except OSError:
+        return None
+
+
+def _topfloor_transfer_rows_from_paths(xml_paths: list[Path]) -> list[dict[str, object]]:
+    """Read and deduplicate PA_FISH transfer rows from recent production folders."""
+    result: list[dict[str, object]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for xml_path in xml_paths:
+        try:
+            root = ET.parse(xml_path).getroot()
+        except Exception:
+            continue
+        for index, element in enumerate(root.iter(), start=1):
+            values = {
+                re.sub(r"[^a-z0-9]+", "", _topfloor_fold(str(child.tag).split("}", 1)[-1])): "".join(child.itertext()).strip()
+                for child in list(element)
+            }
+            values.update(
+                {
+                    re.sub(r"[^a-z0-9]+", "", _topfloor_fold(str(key).split("}", 1)[-1])): str(value or "").strip()
+                    for key, value in element.attrib.items()
+                }
+            )
+            item_number = str(values.get("itmitemnumber", "") or "").strip()
+            item_id = str(values.get("itmid", "") or "").strip()
+            prd_id = str(values.get("prdid", "") or "").strip()
+            quantity = _topfloor_transfer_integer_quantity(values.get("orireqqty", ""))
+            uom_code = str(values.get("primaryuomcode", "") or "").strip()
+            item_description = str(values.get("itmdescription", "") or "").strip()
+            if not item_number.upper().startswith("PA_FISH") or not item_id or not prd_id or quantity is None or not uom_code:
+                continue
+            identity = (prd_id, item_id, item_number.casefold())
+            if identity in seen:
+                continue
+            seen.add(identity)
+            result.append(
+                {
+                    "itmItemNumber": item_number,
+                    "itmID": item_id,
+                    "prdID": prd_id,
+                    "oriReqQty": quantity,
+                    "PrimaryUOMCode": uom_code,
+                    "itmDescription": item_description,
+                    "sourceFileStem": xml_path.stem,
+                    "_index": str(index),
+                }
+            )
+    return result
+
+
+def _topfloor_transfer_integer_quantity(value: object) -> int | None:
+    """Convert an Atraktarozas quantity to a non-negative whole number."""
+    try:
+        quantity = int(float(str(value or "").strip().replace(",", ".")))
+    except (TypeError, ValueError):
+        return None
+    return quantity if quantity >= 0 else None
+
+
+def _topfloor_hettich_sections(rows: list[dict[str, object]]) -> list[dict]:
+    """Group Hettich transfer rows by prdID."""
+    grouped: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row.get("prdID", "") or "").strip()].append(row)
+    sections: list[dict] = []
+    for prd_id in sorted(grouped, key=_topfloor_id_sort_key, reverse=True):
+        section_rows: list[dict] = []
+        for row in grouped[prd_id]:
+            item_id = str(row.get("itmID", "") or "").strip()
+            item_number = str(row.get("itmItemNumber", "") or "").strip()
+            state_key = f"Atraktarozas::{prd_id}::{item_id}::0"
+            row_hash = hashlib.sha1(f"{prd_id}|{item_id}|{item_number}".encode("utf-8")).hexdigest()[:16]
+            section_rows.append(
+                {
+                    "row_id": f"hettich-{row_hash}",
+                    "state_key": state_key,
+                    "state_storage_key": state_key,
+                    "production_number": prd_id,
+                    "doc_key": TOPFLOOR_OPERATION_KEY,
+                    "section_key": f"hettich-{_topfloor_local_slug(prd_id)}",
+                    "section_label": f"prdID: {prd_id}",
+                    "columnLayout": "topfloor",
+                    "name": row.get("itmDescription", "") or item_number,
+                    "detail": "",
+                    "hideSubtitle": True,
+                    "size": "-",
+                    "color": "-",
+                    "edge": "-",
+                    "quantity": row["oriReqQty"],
+                    "code": item_number,
+                    "itmItemNumber": item_number,
+                    "itmID": item_id,
+                    "prdID": prd_id,
+                    "oriReqQty": row["oriReqQty"],
+                    "PrimaryUOMCode": row["PrimaryUOMCode"],
+                    "itmDescription": row.get("itmDescription", ""),
+                    "isHettichTransfer": True,
+                }
+            )
+        sections.append(
+            {
+                "key": f"hettich::{_topfloor_local_slug(prd_id)}",
+                "label": f"prdID: {prd_id}",
+                "rows": section_rows,
+                "hettichCategory": {"prdID": prd_id, "transferDone": False},
+            }
+        )
+    return sections
 
 
 def _topfloor_deduplicate_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:

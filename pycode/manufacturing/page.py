@@ -21,6 +21,7 @@ def render_manufacturing_page(
     partial_qty_route: str,
     report_ready_route: str,
     topfloor_box_route: str = "",
+    topfloor_transfer_route: str = "",
     admin_revision_route: str = "",
     admin_change_revision: str = "",
     topfloor_storage_box_types: list[dict[str, object]] | None = None,
@@ -239,6 +240,7 @@ def render_manufacturing_page(
             "partialQtyRoute": partial_qty_route,
             "reportReadyRoute": report_ready_route,
             "topfloorBoxRoute": topfloor_box_route,
+            "topfloorTransferRoute": topfloor_transfer_route,
             "adminRevisionRoute": admin_revision_route,
             "adminChangeRevision": admin_change_revision,
             "topfloorStorageBoxTypes": topfloor_storage_box_types or [],
@@ -1733,6 +1735,10 @@ def render_manufacturing_page(
     .mfg-row.is-topfloor {{
       grid-template-columns: minmax(0, 1fr) 0.2fr minmax(160px, 0.46fr);
     }}
+    .mfg-table-head.is-topfloor.is-hettich,
+    .mfg-row.is-topfloor.is-hettich {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
     .mfg-section-title {{
       font-size: 0.82rem;
       font-weight: 800;
@@ -2190,6 +2196,57 @@ def render_manufacturing_page(
     .mfg-row.is-pantolo-unit.is-last-unit {{
       border-bottom: 4px solid #0f172a;
     }}
+    .mfg-row.is-pantolo-unit.is-opening {{
+      overflow: hidden;
+      animation: mfg-pantolo-child-open 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }}
+    .mfg-row.is-pantolo-unit.is-collapsing {{
+      overflow: hidden;
+      pointer-events: none;
+      animation: mfg-pantolo-child-close 160ms cubic-bezier(0.4, 0, 1, 1) both;
+    }}
+    @keyframes mfg-pantolo-child-open {{
+      from {{
+        min-height: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        opacity: 0;
+        transform: translateY(-8px);
+      }}
+      to {{
+        min-height: 50px;
+        max-height: 72px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+        opacity: 1;
+        transform: translateY(0);
+      }}
+    }}
+    @keyframes mfg-pantolo-child-close {{
+      from {{
+        min-height: 50px;
+        max-height: 72px;
+        padding-top: 7px;
+        padding-bottom: 7px;
+        opacity: 1;
+        transform: translateY(0);
+      }}
+      to {{
+        min-height: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        opacity: 0;
+        transform: translateY(-8px);
+      }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+      .mfg-row.is-pantolo-unit.is-opening,
+      .mfg-row.is-pantolo-unit.is-collapsing {{
+        animation: none;
+      }}
+    }}
     .mfg-pantolo-expand-cell {{
       display: grid;
       align-items: center;
@@ -2473,6 +2530,18 @@ def render_manufacturing_page(
       justify-self: end;
       width: min(100%, 216px);
       max-width: 216px;
+    }}
+    .mfg-row.is-topfloor.is-hettich .mfg-row-barcode-wrap {{
+      justify-self: stretch;
+      width: 100%;
+      max-width: none;
+    }}
+    .mfg-row.is-topfloor.is-hettich .mfg-row-side {{
+      justify-items: center;
+    }}
+    .mfg-row.is-topfloor.is-hettich .mfg-row-qty {{
+      min-width: 44px;
+      width: auto;
     }}
     .mfg-row-barcode {{
       min-height: 34px;
@@ -2793,6 +2862,7 @@ def render_manufacturing_page(
       const partialQtyRoute = String(payload.partialQtyRoute || "");
       const reportReadyRoute = String(payload.reportReadyRoute || "");
       const topfloorBoxRoute = String(payload.topfloorBoxRoute || "");
+      const topfloorTransferRoute = String(payload.topfloorTransferRoute || "");
       const adminRevisionRoute = String(payload.adminRevisionRoute || "");
       let adminChangeRevision = String(payload.adminChangeRevision || "");
       let adminRevisionRefreshInFlight = false;
@@ -2814,6 +2884,8 @@ def render_manufacturing_page(
       const sectionSortState = Object.create(null);
       const partialSaveTimers = new Map();
       const expandedPantoloGroups = new Set();
+      const openingPantoloGroups = new Set();
+      const collapsingPantoloGroups = new Set();
       let pendingRedChoice = null;
       let pendingCreatorResolve = null;
       let pendingConfirmResolve = null;
@@ -2837,6 +2909,8 @@ def render_manufacturing_page(
         return text.startsWith("shipment::") ? text.slice("shipment::".length).trim() : "";
       }};
       const topfloorShipmentKeyIsAll = (key) => String(key || "").trim() === topfloorAllShipmentsKey;
+      const topfloorHettichShipmentKey = "shipment::hettich";
+      const topfloorShipmentKeyIsHettich = (key) => String(key || "").trim() === topfloorHettichShipmentKey;
 
       const syncUrlForDocument = () => {{
         try {{
@@ -2881,6 +2955,7 @@ def render_manufacturing_page(
           partialQtyRoute,
           reportReadyRoute,
           topfloorBoxRoute,
+          topfloorTransferRoute,
           topfloorStorageBoxTypes,
         }});
       }};
@@ -3019,7 +3094,7 @@ def render_manufacturing_page(
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
           const shipmentComplete = topfloorSectionsComplete(topfloorShipmentSectionsForKey(currentDocument(), viewKey, {{ includeIssued: true }}));
           const shipmentHasIssuedEdit = topfloorShipmentHasIssuedEdit(currentDocument(), viewKey);
-          link.hidden = !topfloorShowIssued && !topfloorShipmentKeyIsAll(viewKey) && shipmentComplete && !shipmentHasIssuedEdit;
+          link.hidden = !topfloorShowIssued && !topfloorShipmentKeyIsAll(viewKey) && !topfloorShipmentKeyIsHettich(viewKey) && shipmentComplete && !shipmentHasIssuedEdit;
           link.classList.toggle("has-issued-row-edit", shipmentHasIssuedEdit);
           link.classList.toggle("is-active", viewKey === currentTopfloorShipmentKey);
           const allTabStatus = viewKey === currentTopfloorShipmentKey ? currentAllTabStateStatus() : "";
@@ -3065,7 +3140,7 @@ def render_manufacturing_page(
             : null;
           const boxCount = Math.max(0, Number.parseInt(String(shipmentView?.count || "0"), 10) || 0);
           const sourceLabel = boxCount
-            ? `${{boxCount}} doboz`
+            ? (Boolean(shipmentView?.isHettich) ? `${{boxCount}} kategória` : `${{boxCount}} doboz`)
             : String(activeDocument?.sourceLabel || "").trim();
           operationSourceNode.textContent = sourceLabel;
           operationSourceNode.hidden = !sourceLabel;
@@ -3276,7 +3351,7 @@ def render_manufacturing_page(
       }};
       const frontSubcategoriesForView = (document, viewKey) => {{
         if (String(document?.key || "") !== "front_osszekeszites") return [];
-        if (!["front-folias", "front-butorlapos"].includes(String(viewKey || ""))) return [];
+        if (!/^front-(folias|butorlapos)-(also|felso)$/.test(String(viewKey || ""))) return [];
         const specialView = specialViewForKey(document, viewKey);
         const sections = Array.isArray(specialView?.sections) ? specialView.sections : [];
         const grouped = new Map();
@@ -3865,7 +3940,24 @@ def render_manufacturing_page(
         `;
       }};
 
+      const topfloorHettichActionsMarkup = (group) => {{
+        const category = group?.hettichCategory || null;
+        if (!category || !topfloorTransferRoute) return "";
+        const rows = Array.isArray(group?.rows) ? group.rows : [];
+        const ready = rows.length > 0 && rows.every((row) => Boolean(rowStateValue(row)));
+        const done = Boolean(category.transferDone);
+        return `
+          <div class="mfg-topfloor-actions" data-hettich-category="${{escapeHtml(String(category.prdID || ""))}}">
+            <div class="mfg-topfloor-button-row">
+              ${{done
+                ? '<span class="mfg-topfloor-issued">Kész</span>'
+                : `<button class="mfg-topfloor-button" type="button" data-hettich-transfer${{ready ? "" : " disabled"}}>Átraktározás</button>`}}
+            </div>
+          </div>
+        `;
+      }};
       const topfloorCategoryActionsMarkup = (group) => {{
+        if (group?.hettichCategory) return topfloorHettichActionsMarkup(group);
         const category = group?.topfloorCategory || null;
         if (!category || !topfloorBoxRoute) return "";
         const categoryKey = String(category.categoryKey || "");
@@ -3910,6 +4002,9 @@ def render_manufacturing_page(
         `;
       }};
       const topfloorCategoryTitleMarkup = (group) => {{
+        if (group?.hettichCategory) {{
+          return `<div class="mfg-topfloor-title"><div><span>Termelés:</span> <strong>${{escapeHtml(String(group.hettichCategory.prdID || ""))}}</strong></div></div>`;
+        }}
         const category = group?.topfloorCategory || null;
         if (!category) return escapeHtml(group?.label || "");
         const lines = [
@@ -4012,7 +4107,9 @@ def render_manufacturing_page(
           .filter((section) => Array.isArray(section.rows) && section.rows.length);
         return [...baseSections, ...extraSections];
       }};
-      const topfloorSectionIsIssued = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued);
+      const topfloorSectionIsIssued = (section) => Boolean(
+        section?.topfloorCategory?.storageBoxIssued || section?.hettichCategory?.transferDone
+      );
       const topfloorSectionHasIssuedEdit = (section) =>
         Boolean(section?.topfloorCategory?.hasIssuedRowEdit)
         || (Array.isArray(section?.rows) && section.rows.some((row) => Boolean(row?._editedAfterIssue)));
@@ -4025,9 +4122,12 @@ def render_manufacturing_page(
         if (String(document?.key || "") !== "topfloor") return sections;
         const shipmentId = topfloorShipmentIdFromKey(currentTopfloorShipmentKey || firstTopfloorShipmentViewKey());
         if (!shipmentId) return [];
-        const shipmentSections = topfloorShipmentKeyIsAll(currentTopfloorShipmentKey || firstTopfloorShipmentViewKey())
-          ? sections
-          : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
+        const selectedShipmentKey = currentTopfloorShipmentKey || firstTopfloorShipmentViewKey();
+        const shipmentSections = topfloorShipmentKeyIsHettich(selectedShipmentKey)
+          ? sections.filter((section) => Boolean(section?.hettichCategory))
+          : topfloorShipmentKeyIsAll(selectedShipmentKey)
+            ? sections.filter((section) => !section?.hettichCategory)
+            : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
         return topfloorFilterIssuedSections(shipmentSections, Boolean(options?.includeIssued) || topfloorShowIssued);
       }};
       const topfloorShipmentSectionsForKey = (document, shipmentKey, options = {{}}) => {{
@@ -4035,9 +4135,11 @@ def render_manufacturing_page(
         if (String(document?.key || "") !== "topfloor") return [];
         const shipmentId = topfloorShipmentIdFromKey(shipmentKey);
         if (!shipmentId) return [];
-        const shipmentSections = topfloorShipmentKeyIsAll(shipmentKey)
-          ? sections
-          : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
+        const shipmentSections = topfloorShipmentKeyIsHettich(shipmentKey)
+          ? sections.filter((section) => Boolean(section?.hettichCategory))
+          : topfloorShipmentKeyIsAll(shipmentKey)
+            ? sections.filter((section) => !section?.hettichCategory)
+            : sections.filter((section) => String(section?.topfloorCategory?.shipmentID || "") === shipmentId);
         return topfloorFilterIssuedSections(shipmentSections, Boolean(options?.includeIssued) || topfloorShowIssued);
       }};
       const topfloorShipmentHasIssuedEdit = (document, shipmentKey) =>
@@ -4075,8 +4177,18 @@ def render_manufacturing_page(
         if (!category || category.storageBoxIssued || !String(category.boxId || "").trim() || category.boxOpen || !rows.length) return false;
         return rows.every((row) => isTopfloorDoneState(rowStateValue(row)));
       }};
-      const topfloorSectionComplete = (section) => Boolean(section?.topfloorCategory?.storageBoxIssued);
+      const topfloorHettichCategoryReady = (section) => {{
+        const rows = Array.isArray(section?.rows) ? section.rows : [];
+        return Boolean(section?.hettichCategory) && rows.length > 0 && rows.every((row) => Boolean(rowStateValue(row)));
+      }};
+      const topfloorSectionComplete = (section) => Boolean(
+        section?.topfloorCategory?.storageBoxIssued || section?.hettichCategory?.transferDone
+      );
       const topfloorCategoryStateClass = (section) => {{
+        if (section?.hettichCategory) {{
+          if (section.hettichCategory.transferDone) return " is-topfloor-done";
+          return topfloorHettichCategoryReady(section) ? " is-topfloor-open" : "";
+        }}
         const category = section?.topfloorCategory || null;
         if (!category || !String(category.boxId || "").trim()) return "";
         if (category.storageBoxIssued) return " is-topfloor-done";
@@ -4085,7 +4197,7 @@ def render_manufacturing_page(
         return " is-topfloor-boxed";
       }};
       const topfloorSectionsComplete = (sections) => {{
-        const cleanSections = (Array.isArray(sections) ? sections : []).filter((section) => section?.topfloorCategory);
+        const cleanSections = (Array.isArray(sections) ? sections : []).filter((section) => section?.topfloorCategory || section?.hettichCategory);
         return cleanSections.length > 0 && cleanSections.every((section) => topfloorSectionComplete(section));
       }};
       const topfloorSectionsStateClass = (sections) => topfloorSectionsComplete(sections) ? " is-done" : "";
@@ -4579,7 +4691,7 @@ def render_manufacturing_page(
         }}
 
         contentNode.innerHTML = groups.map((group) => {{
-          const showSectionHeader = isOverviewMode || isSplitMode || (String(document?.key || "") === "topfloor" && group?.topfloorCategory);
+          const showSectionHeader = isOverviewMode || isSplitMode || (String(document?.key || "") === "topfloor" && (group?.topfloorCategory || group?.hettichCategory));
           const hideBarcode = documentHidesBarcode(document);
           const hideSideTypeColumn = Boolean(group?.hideSideTypeColumn);
           const columnLayout = groupColumnLayout(group);
@@ -4599,7 +4711,7 @@ def render_manufacturing_page(
               : columnLayout === "front-standard"
               ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
               : columnLayout === "topfloor"
-              ? " is-topfloor"
+              ? ` is-topfloor${{group?.hettichCategory ? " is-hettich" : ""}}`
             : effectiveHideBarcode
               ? " is-no-barcode"
               : "";
@@ -4615,12 +4727,12 @@ def render_manufacturing_page(
               : columnLayout === "front-standard"
                 ? (" is-front-standard" + (effectiveHideBarcode ? " is-no-barcode" : ""))
               : columnLayout === "topfloor"
-                ? " is-topfloor"
+                ? ` is-topfloor${{group?.hettichCategory ? " is-hettich" : ""}}`
               : effectiveHideBarcode
                 ? " is-no-barcode"
                 : "";
           const totalQuantity = (Array.isArray(group.rows) ? group.rows : []).reduce((sum, row) => sum + Number(row?.quantity || 0), 0);
-          const sectionTitleMarkup = String(document?.key || "") === "topfloor" && group?.topfloorCategory
+          const sectionTitleMarkup = String(document?.key || "") === "topfloor" && (group?.topfloorCategory || group?.hettichCategory)
             ? topfloorCategoryTitleMarkup(group)
             : isPantoloLayout
               ? pantoloCategoryLabelMarkup(group.label)
@@ -4694,13 +4806,19 @@ def render_manufacturing_page(
                 </div>
               `
             : columnLayout === "topfloor"
-              ? `
+              ? (group?.hettichCategory ? `
+                <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
+                  ${{sortButtonMarkup(group.key, "name", "itmDescription")}}
+                  ${{sortButtonMarkup(group.key, "code", "itmItemNumber")}}
+                  ${{sortButtonMarkup(group.key, "quantity", "oriReqQty")}}
+                </div>
+              ` : `
                 <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
                   ${{sortButtonMarkup(group.key, "name", "Leírás")}}
                   ${{sortButtonMarkup(group.key, "quantity", "Db")}}
                   ${{sortButtonMarkup(group.key, "code", "Vonalkód")}}
                 </div>
-              `
+              `)
             : columnLayout === "front-standard"
               ? `
                 <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
@@ -4815,6 +4933,7 @@ def render_manufacturing_page(
             }}
             const pantoloIsGroup = isPantoloGroupedRow(row);
             const pantoloGroupExpanded = pantoloIsGroup && expandedPantoloGroups.has(rowStateKey(row));
+            const pantoloGroupOpening = pantoloGroupExpanded && openingPantoloGroups.has(rowStateKey(row));
             const pantoloGroupSourceRowIds = pantoloIsGroup
               ? Array.from({{ length: pantoloQuantity(row) }}, (_item, index) => childUnitStorageKey(row, index))
               : [];
@@ -4880,7 +4999,7 @@ def render_manufacturing_page(
                   const unitPartialMarkup = showPartialColumn ? `<div class="mfg-row-partial-empty"></div>` : "";
                   const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
                   return `
-                    <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-state-storage-key="${{escapeHtml(rowStorageKey(unitRow))}}" data-source-row-ids="">
+                    <button class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{pantoloGroupOpening ? " is-opening" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" type="button" data-mfg-row data-pantolo-unit data-pantolo-state="${{escapeHtml(unitState)}}" data-pantolo-parent-row-id="${{escapeHtml(row.row_id)}}" data-row-id="${{escapeHtml(unitRowId)}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-state-key="${{escapeHtml(unitStateKey)}}" data-state-storage-key="${{escapeHtml(rowStorageKey(unitRow))}}" data-source-row-ids="">
                       ${{groupedQuantityCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
                     </button>
                   `;
@@ -4933,7 +5052,15 @@ def render_manufacturing_page(
                               ${{pantoloCellsMarkup(row, pantoloQuantityText(row), pantoloExpandMarkup, partialMarkup)}}
                             `
                         : columnLayout === "topfloor"
-                          ? `
+                          ? (group?.hettichCategory ? `
+                              <div class="mfg-row-main">
+                                <div class="mfg-row-title">${{escapeHtml(String(row.itmDescription || "-"))}}</div>
+                              </div>
+                              <div class="mfg-row-barcode-wrap">
+                                <div class="mfg-row-code">${{escapeHtml(String(row.itmItemNumber || "-"))}}</div>
+                              </div>
+                              <div class="mfg-row-side"><div class="mfg-row-qty">${{escapeHtml(String(row.oriReqQty || 0))}}</div></div>
+                            ` : `
                               <div class="mfg-row-main">
                                 <div class="mfg-row-title">${{displayRowField(row, "name", "Anyagraktár tétel")}}</div>
                                 ${{subtitleMarkup}}
@@ -4942,7 +5069,7 @@ def render_manufacturing_page(
                               <div class="mfg-row-barcode-wrap">
                                 <div class="mfg-row-code">${{escapeHtml(row.code || "Kód nélkül")}}</div>
                               </div>
-                            `
+                            `)
                         : columnLayout === "front-standard"
                           ? `
                               ${{frontCellsMarkup(row, showPantoloExpanderColumn ? pantoloQuantityText(row) : String(row.quantity || 0), pantoloExpandMarkup, partialMarkup)}}
@@ -5074,6 +5201,7 @@ def render_manufacturing_page(
           if (
             !topfloorShowIssued
             && !topfloorShipmentKeyIsAll(currentTopfloorShipmentKey)
+            && Boolean(topfloorShipmentViewForKey(document, topfloorAllShipmentsKey))
             && !topfloorShipmentHasIssuedEdit(document, currentTopfloorShipmentKey)
             && topfloorSectionsComplete(topfloorShipmentSectionsForKey(document, currentTopfloorShipmentKey, {{ includeIssued: true }}))
           ) {{
@@ -5645,6 +5773,70 @@ def render_manufacturing_page(
       }});
 
       contentNode.addEventListener("click", async (event) => {{
+        const button = event.target.closest("[data-hettich-transfer]");
+        if (!(button instanceof HTMLButtonElement) || button.disabled || !topfloorTransferRoute) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const categoryNode = button.closest("[data-hettich-category]");
+        const prdId = String(categoryNode?.getAttribute("data-hettich-category") || "").trim();
+        const document = currentDocument();
+        if (String(document?.key || "") !== "topfloor" || !prdId) return;
+        const group = (Array.isArray(document.sections) ? document.sections : []).find(
+          (item) => String(item?.hettichCategory?.prdID || "") === prdId
+        );
+        if (!group || !topfloorHettichCategoryReady(group)) return;
+        const entries = (Array.isArray(group.rows) ? group.rows : [])
+          .filter((row) => isReadyGreenState(rowStateValue(row)))
+          .map((row) => ({{
+            item_number: String(row?.itmItemNumber || row?.code || "").trim(),
+            itm_id: String(row?.itmID || "").trim(),
+            quantity: String(row?.oriReqQty || row?.quantity || "").trim(),
+            uom_code: String(row?.PrimaryUOMCode || "").trim(),
+            state_key: String(rowStateKey(row) || "").trim(),
+          }}))
+          .filter((entry) => entry.item_number && entry.itm_id && entry.quantity && entry.uom_code && entry.state_key);
+        const confirmed = await requestConfirmModal({{
+          title: "Biztosan átraktározod a kijelölt tételeket?",
+          copy: entries.length
+            ? `${{entries.length}} zöld Hettich tétel kerül át az Anyag raktárból az ÜZEMI raktárba.`
+            : "Nincs zöld tétel ebben a kategóriában; nem történik átraktározás.",
+          confirmText: "Igen, átraktározom",
+        }});
+        if (!confirmed) return;
+        button.disabled = true;
+        setStatus("Hettich átraktározás folyamatban...");
+        try {{
+          await flushPendingWrites();
+          const response = await fetch(topfloorTransferRoute, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{ prd_id: prdId, entries }}),
+          }});
+          const result = await response.json().catch(() => ({{}}));
+          if (!response.ok || !result.ok) throw new Error(result.error || "A Hettich átraktározás nem sikerült.");
+          productionPayloadCache.delete(productionCacheKey(currentDocKey, productionNumber));
+          const refreshed = await fetchProductionPayload(productionNumber, currentDocKey);
+          documents = Array.isArray(refreshed.documents) ? refreshed.documents : documents;
+          selectionState = Object.assign({{}}, refreshed.selectionState || selectionState || {{}});
+          if (Array.isArray(refreshed.recentProductions)) {{
+            payload.recentProductions = refreshed.recentProductions;
+            renderProductionChips(refreshed.recentProductions);
+          }}
+          const failedCount = Array.isArray(result.failed_items) ? result.failed_items.length : 0;
+          setStatus(
+            failedCount
+              ? `Az átraktározás elkészült, de ${{failedCount}} tétel sikertelen volt és pirosra váltott.`
+              : "A Hettich átraktározás elkészült.",
+            failedCount ? "is-error" : "is-success",
+          );
+          renderAll();
+        }} catch (error) {{
+          setStatus(error instanceof Error ? error.message : "A Hettich átraktározás nem sikerült.", "is-error");
+          renderAll();
+        }}
+      }});
+
+      contentNode.addEventListener("click", async (event) => {{
         const button = event.target.closest("[data-topfloor-action]");
         if (!(button instanceof HTMLElement)) return;
         if (button.disabled || !topfloorBoxRoute) return;
@@ -5795,9 +5987,36 @@ def render_manufacturing_page(
           event.stopPropagation();
           const stateKey = expandButton.getAttribute("data-state-key") || "";
           if (!stateKey) return;
-          if (expandedPantoloGroups.has(stateKey)) expandedPantoloGroups.delete(stateKey);
-          else expandedPantoloGroups.add(stateKey);
-          renderAll();
+          if (collapsingPantoloGroups.has(stateKey)) return;
+          if (expandedPantoloGroups.has(stateKey)) {{
+            const parentRow = expandButton.closest(".is-pantolo-group");
+            const childRows = [];
+            let sibling = parentRow?.nextElementSibling || null;
+            while (sibling instanceof HTMLElement && sibling.classList.contains("is-pantolo-unit")) {{
+              childRows.push(sibling);
+              sibling = sibling.nextElementSibling;
+            }}
+            const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+            if (!childRows.length || reducedMotion) {{
+              expandedPantoloGroups.delete(stateKey);
+              renderAll();
+              return;
+            }}
+            collapsingPantoloGroups.add(stateKey);
+            expandButton.textContent = "\u25BC";
+            expandButton.setAttribute("aria-label", "Kinyitás");
+            childRows.forEach((childRow) => childRow.classList.add("is-collapsing"));
+            window.setTimeout(() => {{
+              expandedPantoloGroups.delete(stateKey);
+              collapsingPantoloGroups.delete(stateKey);
+              renderAll();
+            }}, 170);
+          }} else {{
+            expandedPantoloGroups.add(stateKey);
+            openingPantoloGroups.add(stateKey);
+            renderAll();
+            openingPantoloGroups.delete(stateKey);
+          }}
           return;
         }}
         const row = event.target.closest("[data-mfg-row]");
