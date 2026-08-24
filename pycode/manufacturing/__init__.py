@@ -15,6 +15,8 @@ from .common import (
     production_folder,
     save_partial_quantity_state,
     save_selection_state,
+    save_pantolo_missing_description,
+    sync_pantolo_missing_state,
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
@@ -88,4 +90,6 @@ __all__ = [
     "runtime_dir",
     "save_partial_quantity_state",
     "save_selection_state",
+    "save_pantolo_missing_description",
+    "sync_pantolo_missing_state",
 ]

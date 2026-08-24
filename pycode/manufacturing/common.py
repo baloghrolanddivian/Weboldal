@@ -5,9 +5,152 @@ from __future__ import annotations
 import json
 import re
 import time
+import threading
 from pathlib import Path
 
 from .base.common import *
+from .base.common import _production_date_label_cached
+
+
+PANTOLO_MISSING_INDEX_LOCK = threading.RLock()
+
+
+def _pantolo_missing_row_snapshot(production_number: str, state_key: str) -> tuple[dict, dict] | None:
+    """Resolve one newly-red Pántoló identity while its source XML is available."""
+    from .pantolas.sections import _manufacturing_pantolo_sections
+    from .workflow import _load_manufacturing_bundle_cached, _manufacturing_row_state_storage_key
+
+    bundle = _load_manufacturing_bundle_cached(production_number)
+    sections, _count = _manufacturing_pantolo_sections(bundle, production_number)
+    wanted = str(state_key or "").strip()
+    wanted_parts = wanted.split("::")
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        for row in section.get("rows", []):
+            if not isinstance(row, dict):
+                continue
+            parent_key = _manufacturing_row_state_storage_key(production_number, row)
+            parent_row_id = str(row.get("row_id", "") or "").strip()
+            matches_parent = wanted in {
+                parent_key,
+                parent_row_id,
+                str(row.get("state_key", "") or "").strip(),
+            }
+            matches_child = (
+                len(wanted_parts) == 4
+                and len(parent_key.split("::")) == 4
+                and wanted_parts[:3] == parent_key.split("::")[:3]
+                and wanted_parts[3].isdigit()
+                and int(wanted_parts[3]) > 0
+            ) or bool(parent_row_id and re.fullmatch(re.escape(parent_row_id) + r"__(?:child|pantolo)_unit_\d+", wanted))
+            if not matches_parent and not matches_child:
+                continue
+            snapshot = {
+                key: value
+                for key, value in row.items()
+                if not str(key).startswith("_")
+            }
+            snapshot["production_number"] = production_number
+            snapshot["state_storage_key"] = wanted
+            snapshot["state_key"] = wanted
+            snapshot["sourceRowIds"] = []
+            if matches_child:
+                child_match = re.search(r"(\d+)$", wanted)
+                child_number = int(child_match.group(1)) if child_match else 1
+                snapshot["row_id"] = f"{str(row.get('row_id', '')).strip()}__child_unit_{child_number}"
+                snapshot["quantity"] = 1
+                snapshot["meValue"] = 1
+                snapshot["isPantoloUnit"] = True
+            category = {
+                "key": str(section.get("key", "") or "pantolo").strip(),
+                "label": str(section.get("label", "") or "Pántoló").strip(),
+                "cabinetLevel": str(section.get("cabinetLevel", "") or "").strip(),
+                "columnLayout": str(section.get("columnLayout", "") or snapshot.get("columnLayout", "pantolo")).strip(),
+            }
+            return category, snapshot
+    return None
+
+
+def sync_pantolo_missing_state(runtime_root: Path, production_number: str, state_keys: list[str], state: str) -> None:
+    """Add/remove Pántoló red snapshots without consulting old XML on reads."""
+    clean_number = re.sub(r"[^0-9]", "", str(production_number or ""))
+    clean_keys = list(dict.fromkeys(str(key or "").strip() for key in state_keys if str(key or "").strip()))
+    if not clean_number or not clean_keys:
+        return
+    normalized_state = str(state or "").strip().lower()
+    with PANTOLO_MISSING_INDEX_LOCK:
+        payload = load_pantolo_missing_index(runtime_root)
+        productions = payload.setdefault("productions", {})
+        production = productions.get(clean_number)
+        if not isinstance(production, dict):
+            production = {"production_date": "", "categories": {}}
+            productions[clean_number] = production
+        categories = production.setdefault("categories", {})
+        if not isinstance(categories, dict):
+            categories = {}
+            production["categories"] = categories
+
+        for key in clean_keys:
+            for category_key, category in list(categories.items()):
+                rows = category.get("rows", {}) if isinstance(category, dict) else {}
+                if isinstance(rows, dict):
+                    rows.pop(key, None)
+                if not rows:
+                    categories.pop(category_key, None)
+            if normalized_state != "red":
+                continue
+            resolved = _pantolo_missing_row_snapshot(clean_number, key)
+            if not resolved:
+                continue
+            category_data, row_snapshot = resolved
+            category_key = category_data.pop("key") or "pantolo"
+            category = categories.setdefault(category_key, {**category_data, "rows": {}})
+            category.setdefault("rows", {})[key] = row_snapshot
+
+        if categories and not str(production.get("production_date", "")).strip():
+            production["production_date"] = _production_date_label_cached(production_folder(clean_number))
+        if not categories:
+            productions.pop(clean_number, None)
+        target = runtime_root / PANTOLO_MISSING_INDEX_FILE
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(target)
+
+
+def save_pantolo_missing_description(runtime_root: Path, production_number: str, row_key: str, description: str) -> None:
+    """Save an admin description into every missing child of one parent row."""
+    clean_number = re.sub(r"[^0-9]", "", str(production_number or ""))
+    clean_key = str(row_key or "").strip()
+    if not clean_number or not clean_key:
+        return
+    clean_description = str(description or "")[:500]
+    clean_parts = clean_key.split("::")
+    with PANTOLO_MISSING_INDEX_LOCK:
+        payload = load_pantolo_missing_index(runtime_root)
+        production = payload.get("productions", {}).get(clean_number, {})
+        categories = production.get("categories", {}) if isinstance(production, dict) else {}
+        changed = False
+        for category in categories.values() if isinstance(categories, dict) else []:
+            rows = category.get("rows", {}) if isinstance(category, dict) else {}
+            for state_key, row in rows.items() if isinstance(rows, dict) else []:
+                state_parts = str(state_key or "").split("::")
+                same_parent = (
+                    len(clean_parts) == 4
+                    and len(state_parts) == 4
+                    and clean_parts[:3] == state_parts[:3]
+                )
+                if not isinstance(row, dict) or (str(state_key) != clean_key and not same_parent):
+                    continue
+                row["missingDescription"] = clean_description
+                changed = True
+        if not changed:
+            return
+        target = runtime_root / PANTOLO_MISSING_INDEX_FILE
+        temporary = target.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(target)
 
 
 def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:

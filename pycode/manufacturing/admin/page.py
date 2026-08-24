@@ -75,6 +75,8 @@ def render_manufacturing_page(
 
     def chip_href(entry: dict) -> str:
         entry_kind = str(entry.get("kind", ""))
+        if entry_kind == "missing":
+            return "#pantolo-missing"
         entry_number = str(entry.get("number", ""))
         target_number = selected_number if entry_kind == "shipment" else entry_number
         target_query = f"production={urllib.parse.quote(target_number)}" if target_number else ""
@@ -87,6 +89,8 @@ def render_manufacturing_page(
         return route
 
     def chip_attrs(entry: dict) -> str:
+        if str(entry.get("kind", "")) == "missing":
+            return 'data-mfg-missing-link data-view-key="pantolo-missing"'
         if str(entry.get("kind", "")) == "shipment":
             view_key = str(entry.get("view_key", ""))
             all_shipments_attr = " data-mfg-all-shipments" if view_key == "shipment::__all__" else ""
@@ -133,6 +137,8 @@ def render_manufacturing_page(
 
     def chip_number_text(entry: dict) -> str:
         entry_number = str(entry.get("number", ""))
+        if str(entry.get("kind", "")) == "missing":
+            return f"{max(0, int(entry.get('count', 0) or 0))} tétel"
         if str(entry.get("kind", "")) != "shipment":
             return entry_number
         try:
@@ -3047,7 +3053,11 @@ def render_manufacturing_page(
           const entryViewKey = String(entry?.view_key || "").trim();
           const link = document.createElement("a");
           link.className = "mfg-chip-link";
-          if (entryKind === "shipment" && entryViewKey) {{
+          if (entryKind === "missing") {{
+            link.href = "#pantolo-missing";
+            link.setAttribute("data-mfg-missing-link", "");
+            link.setAttribute("data-view-key", "pantolo-missing");
+          }} else if (entryKind === "shipment" && entryViewKey) {{
             link.href = chipHref(productionNumber);
             link.setAttribute("data-mfg-shipment-link", "");
             link.setAttribute("data-view-key", entryViewKey);
@@ -3068,9 +3078,11 @@ def render_manufacturing_page(
           const categoryCount = Math.max(0, Number.parseInt(String(entry?.count || "0"), 10) || 0);
           const issuedCount = Math.min(categoryCount, Math.max(0, Number.parseInt(String(entry?.issued_count || "0"), 10) || 0));
           const ratioText = `${{issuedCount}}/${{categoryCount}}`;
-          numberNode.textContent = entryKind === "shipment" && categoryCount
-            ? (entryViewKey === topfloorAllShipmentsKey ? ratioText : `${{entryNumber}} · ${{ratioText}}`)
-            : entryNumber;
+          numberNode.textContent = entryKind === "missing"
+            ? `${{categoryCount}} tétel`
+            : entryKind === "shipment" && categoryCount
+              ? (entryViewKey === topfloorAllShipmentsKey ? ratioText : `${{entryNumber}} · ${{ratioText}}`)
+              : entryNumber;
           link.append(dateNode, numberNode);
           if (entryKind === "shipment" && entryViewKey !== topfloorAllShipmentsKey) {{
             applyChipShipmentDate(link, entry?.shipment_date || "");
@@ -3090,6 +3102,23 @@ def render_manufacturing_page(
               }},
             ]),
         );
+        document.querySelectorAll("[data-mfg-missing-link]").forEach((link) => {{
+          if (!(link instanceof HTMLElement)) return;
+          link.classList.toggle("is-active", currentViewKey === "pantolo-missing");
+          const missingView = specialViewForKey(currentDocument(), "pantolo-missing");
+          const missingCount = Array.isArray(missingView?.sections)
+            ? missingView.sections
+                .flatMap((section) => Array.isArray(section?.rows) ? section.rows : [])
+                .reduce((total, row) => {{
+                  const childKeys = Array.isArray(row?.childUnitStateKeys) ? row.childUnitStateKeys : [];
+                  if (childKeys.length) return total + childKeys.filter((key) => selectionState[String(key || "")] === "red").length;
+                  return total + (rowStateValue(row) === "red" ? pantoloQuantity(row) : 0);
+                }}, 0)
+            : 0;
+          const numberNode = link.querySelector(".mfg-chip-number");
+          if (numberNode) numberNode.textContent = `${{missingCount}} tétel`;
+          applyChipStatusClass(link, missingCount ? "red" : "plain", false);
+        }});
         document.querySelectorAll("[data-mfg-shipment-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
           const viewKey = String(link.getAttribute("data-view-key") || "").trim();
@@ -3103,7 +3132,7 @@ def render_manufacturing_page(
           if (!(link instanceof HTMLElement)) return;
           const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
           const isActiveProduction = linkNumber === productionNumber;
-          link.classList.toggle("is-active", isActiveProduction);
+          link.classList.toggle("is-active", isActiveProduction && currentViewKey !== "pantolo-missing");
           if (statusByNumber.has(linkNumber)) {{
             const statusItem = statusByNumber.get(linkNumber) || {{}};
             const cachedStatus = isActiveProduction ? currentAllTabStateStatus() : cachedProductionAllTabStateStatus(linkNumber);
@@ -3368,7 +3397,7 @@ def render_manufacturing_page(
       }};
       const korpuszXmlBackedViewKeys = new Set(["korpusz-osszekeszito", "korpusz-alkatresz-kesz"]);
       const korpuszViewEmptyIsDone = (view) => korpuszXmlBackedViewKeys.has(String(view?.key || ""));
-      const specialViewUsesRedFilter = (view) => ["current-production-red", "all-productions-red"].includes(String(view?.key || ""));
+      const specialViewUsesRedFilter = (view) => Boolean(view?.redFilter) || ["current-production-red", "all-productions-red", "pantolo-missing"].includes(String(view?.key || ""));
       const rowStateKey = (row) => String(row?.state_key || row?.row_id || "");
       const rowStorageKey = (row) => String(row?.state_storage_key || row?.row_id || "");
       const rowProductionNumber = (row) => String(row?.production_number || productionNumber || "");
@@ -3380,7 +3409,7 @@ def render_manufacturing_page(
       const documentUsesGroupedQuantityRows = (document) => ["pantolas", "front_osszekeszites"].includes(String(document?.key || ""));
       const rowUsesGroupedQuantity = (row) => groupedQuantityLayouts.has(String(row?.columnLayout || "").trim());
       const isPantoloRow = (row) => rowUsesGroupedQuantity(row);
-      const isPantoloGroupedRow = (row) => isPantoloRow(row) && !row?.isPantoloUnit && pantoloQuantity(row) > 1;
+      const isPantoloGroupedRow = (row) => isPantoloRow(row) && !row?.isPantoloUnit && (pantoloQuantity(row) > 1 || Boolean(row?.forcePantoloGroup));
       const childUnitRowId = (row, index) => `${{String(row?.row_id || "")}}__child_unit_${{index + 1}}`;
       const isChildUnitRowId = (value) => {{
         const text = String(value || "");
@@ -3394,6 +3423,9 @@ def render_manufacturing_page(
         return xmlSourceStateKeyPattern.test(text) ? text : stateKeyForRowId(targetProductionNumber, text);
       }};
       const childUnitStorageKey = (row, index) => {{
+        const explicitKeys = Array.isArray(row?.childUnitStateKeys) ? row.childUnitStateKeys : [];
+        const explicitKey = String(explicitKeys[index] || "").trim();
+        if (explicitKey) return explicitKey;
         const parentStorageKey = rowStorageKey(row);
         if (xmlSourceStateKeyPattern.test(parentStorageKey)) {{
           return parentStorageKey.replace(/::\\d+$/, `::${{index + 1}}`);
@@ -3436,6 +3468,7 @@ def render_manufacturing_page(
         ["doorType", "Ajtó típus"],
         ["pantType", "Pánt típus"],
         ["frontTrait", "Front jellemző"],
+        ["missingDescription", "Leírás"],
       ];
       const displayedEditFieldsForRow = (row, columnLayout, hideSideTypeColumn = false) => {{
         const layoutFields = {{
@@ -3522,8 +3555,13 @@ def render_manufacturing_page(
         const targetSectionKey = String(trigger.getAttribute("data-row-section-key") || "").trim();
         const found = findRowForEdit(rowKey, targetProductionNumber, targetSectionKey);
         if (!found) return;
-        const editableFields = new Set(displayedEditFieldsForRow(found.row, found.columnLayout, found.hideSideTypeColumn));
-        const visibleFields = rowEditFieldDefinitions.filter(([field]) => editableFields.has(field));
+        const isMissingDescriptionEdit = currentViewKey === "pantolo-missing";
+        const editableFields = isMissingDescriptionEdit
+          ? new Set(["missingDescription"])
+          : new Set(displayedEditFieldsForRow(found.row, found.columnLayout, found.hideSideTypeColumn));
+        const visibleFields = rowEditFieldDefinitions
+          .filter(([field]) => editableFields.has(field))
+          .map(([field, label]) => [field, label]);
         if (!visibleFields.length) {{
           setStatus("Ehhez a sorhoz nincs módosítható megjelenített adat.", "is-error");
           return;
@@ -3534,6 +3572,7 @@ def render_manufacturing_page(
           productionNumber: targetProductionNumber,
           documentKey: found.documentKey,
           categoryKey: found.categoryKey,
+          descriptionOnly: isMissingDescriptionEdit,
         }};
         rowEditFieldsNode.innerHTML = visibleFields.map(([field, label]) => `
           <label class="mfg-row-edit-field">
@@ -4439,7 +4478,14 @@ def render_manufacturing_page(
           return specialSections
             .map((section) => ({{
               ...section,
-              rows: (Array.isArray(section.rows) ? section.rows : []).filter((row) => rowStateValue(row) === "red"),
+              rows: (Array.isArray(section.rows) ? section.rows : []).flatMap((row) => {{
+                if (String(currentSpecialView?.key || "") === "pantolo-missing" && Array.isArray(row?.childUnitStateKeys)) {{
+                  const redChildKeys = row.childUnitStateKeys.filter((key) => selectionState[String(key || "")] === "red");
+                  if (!redChildKeys.length) return [];
+                  return [{{ ...row, childUnitStateKeys: redChildKeys, quantity: redChildKeys.length, meValue: redChildKeys.length }}];
+                }}
+                return rowStateValue(row) === "red" ? [row] : [];
+              }}),
             }}))
             .filter((section) => section.rows.length);
         }}
@@ -4798,7 +4844,7 @@ def render_manufacturing_page(
             : columnLayout === "pantolo"
               ? `
                 <div class="mfg-table-head${{tableHeadClass}}${{tableHeadExtraClass}}">
-                  ${{sortButtonMarkup(group.key, "color", "Szín")}}
+                  ${{currentViewKey === "pantolo-missing" ? "<span>Leírás</span>" : sortButtonMarkup(group.key, "color", "Szín")}}
                   ${{sortButtonMarkup(group.key, "color23", "Szín 2/3")}}
                   ${{sortButtonMarkup(group.key, "pant_type", "Pánt típus")}}
                   ${{sortButtonMarkup(group.key, "model", "Modell")}}
@@ -4943,7 +4989,7 @@ def render_manufacturing_page(
               ? `<span class="mfg-pantolo-expand" role="button" tabindex="0" data-pantolo-expand data-state-key="${{escapeHtml(rowStateKey(row))}}" aria-label="${{pantoloGroupExpanded ? "Bezárás" : "Kinyitás"}}">${{pantoloGroupExpanded ? "\\u25B2" : "\\u25BC"}}</span>`
               : `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`;
             const pantoloCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") => `
-              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{displayRowField(displayRow, "color23")}}</span></div>
+              <div class="mfg-row-meta"><span class="${{pantoloCellClass("", "")}}">${{currentViewKey === "pantolo-missing" ? displayRowField(displayRow, "missingDescription", "-") : displayRowField(displayRow, "color23")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloPantMark)}}">${{displayRowField(displayRow, "pantType")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("is-size", "")}}">${{displayRowField(displayRow, "size")}}</span></div>
               <div class="mfg-row-meta"><span class="${{pantoloCellClass("", pantoloHandleDrillMark)}}">${{displayRowField(displayRow, "handleDrill")}}</span></div>
@@ -5529,6 +5575,17 @@ def render_manufacturing_page(
       }}
 
       document.addEventListener("click", async (event) => {{
+        const missingLink = event.target.closest("[data-mfg-missing-link]");
+        if (missingLink instanceof HTMLElement) {{
+          event.preventDefault();
+          const document = currentDocument();
+          if (String(document?.key || "") !== "pantolas" || !specialViewForKey(document, "pantolo-missing")) return;
+          currentViewKey = "pantolo-missing";
+          currentSubcategoryKey = "all";
+          secondaryViewKey = "";
+          renderAll();
+          return;
+        }}
         const shipmentLink = event.target.closest("[data-mfg-shipment-link]");
         if (shipmentLink instanceof HTMLElement) {{
           event.preventDefault();
@@ -5549,7 +5606,16 @@ def render_manufacturing_page(
         if (!(link instanceof HTMLElement)) return;
         const targetProductionNumber = String(link.getAttribute("data-production-number") || "").trim();
         event.preventDefault();
-        if (!targetProductionNumber || targetProductionNumber === productionNumber || !currentDocKey) return;
+        if (!targetProductionNumber || !currentDocKey) return;
+        if (targetProductionNumber === productionNumber) {{
+          if (currentViewKey === "pantolo-missing") {{
+            currentViewKey = "all";
+            currentSubcategoryKey = "all";
+            secondaryViewKey = "";
+            renderAll();
+          }}
+          return;
+        }}
         const switchStartedAt = performance.now();
         shopfloorLog(`production switch start operation=${{currentDocKey || "-"}} from=${{productionNumber || "-"}} to=${{targetProductionNumber || "-"}}`);
         storeCurrentProductionPayload();
@@ -5973,6 +6039,7 @@ def render_manufacturing_page(
           if (!(input instanceof HTMLInputElement)) return;
           const field = String(input.getAttribute("data-row-edit-field") || "").trim();
           const value = String(input.value || "").trim();
+          if (activeRowEdit.descriptionOnly && field !== "missingDescription") return;
           if (field && value !== String(activeRowEdit.row?.[field] ?? "").trim()) fields[field] = value;
         }});
         if (!Object.keys(fields).length) {{
@@ -5992,6 +6059,7 @@ def render_manufacturing_page(
               document_key: activeRowEdit.documentKey,
               category_key: String(activeRowEdit.categoryKey || ""),
               row_key: activeRowEdit.rowKey,
+              missing_view: Boolean(activeRowEdit.descriptionOnly),
               visible_state: rowStateValue(activeRowEdit.row),
               state_keys: Array.from(new Set([
                 String(activeRowEdit.row?.state_key || ""),

@@ -17,6 +17,7 @@ MANUFACTURING_ENTRIES_CACHE_LOCK = threading.Lock()
 MANUFACTURING_ENTRIES_CACHE: dict[tuple[int, bool, str], dict[str, object]] = {}
 MANUFACTURING_DATE_LABEL_CACHE: dict[str, dict[str, object]] = {}
 MANUFACTURING_ENTRIES_CACHE_TTL_SECONDS = 30.0
+PANTOLO_MISSING_INDEX_FILE = "pantolo-missing.json"
 
 
 MANUFACTURING_OPERATION_XML_GROUPS: dict[str, tuple[frozenset[str], ...]] = {
@@ -321,6 +322,20 @@ def load_selection_state(runtime_root: Path, production_number: str) -> dict[str
     return result
 
 
+def load_pantolo_missing_index(runtime_root: Path) -> dict:
+    """Load the XML-independent Pántoló missing-row snapshot index."""
+    path = runtime_root / PANTOLO_MISSING_INDEX_FILE
+    if not path.exists():
+        return {"version": 1, "productions": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"version": 1, "productions": {}}
+    if not isinstance(payload, dict) or not isinstance(payload.get("productions"), dict):
+        return {"version": 1, "productions": {}}
+    return payload
+
+
 def partial_quantity_state_path(runtime_root: Path, production_number: str) -> Path:
     """Return the partial-quantity JSON path without changing the filesystem."""
     return runtime_root / production_number / "partial-qty.json"
@@ -365,6 +380,7 @@ ROW_DATA_EDITABLE_FIELDS = frozenset({
     "doorType",
     "pantType",
     "frontTrait",
+    "missingDescription",
 })
 
 
