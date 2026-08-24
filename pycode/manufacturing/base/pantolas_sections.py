@@ -47,9 +47,13 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
         text = "".join(char for char in text if not unicodedata.combining(char))
         return re.sub(r"\s+", " ", text).strip().lower()
 
-    def cabinet_level(value: object) -> str:
-        """Classify a KorpTipPer value as lower or upper cabinet."""
+    def cabinet_level(value: object, door_type: object = "") -> str:
+        """Classify pantry-upper before lower/upper cabinet types."""
+        if "kam.fel" in folded_ascii(door_type):
+            return "kamra_felso"
         normalized = folded_ascii(value)
+        if normalized == "kamra_felso":
+            return "kamra_felso"
         if "also" in normalized:
             return "also"
         if "felso" in normalized:
@@ -152,7 +156,7 @@ def _manufacturing_pantolo_xml_sections(bundle: dict, production_number: str) ->
                 "section_label": "Pántoló",
                 "page_number": 1,
                 "korpTipPer": front_type,
-                "cabinetLevel": cabinet_level(front_type),
+                "cabinetLevel": cabinet_level(front_type, door_type),
                 **_manufacturing_xml_state_fields(production_number, xml_path.name, barcode, child_id, prd_id, con_id),
             }
         )
@@ -212,9 +216,13 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             text = text.replace(source, target)
         return text
 
-    def cabinet_level(value: object) -> str:
-        """Classify a KorpTipPer/front-type value as lower or upper cabinet."""
+    def cabinet_level(value: object, door_type: object = "") -> str:
+        """Classify pantry-upper before lower/upper cabinet types."""
+        if "kam.fel" in folded(door_type):
+            return "kamra_felso"
         normalized = folded(value)
+        if normalized == "kamra_felso":
+            return "kamra_felso"
         if "also" in normalized:
             return "also"
         if "felso" in normalized:
@@ -511,9 +519,9 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                 row["_pantolo_missing_pant"] = False
                 tail_payload = tail_parts[1:] if len(tail_parts) > 1 else []
             drill_label, handle_type, opening_dir, door_type = parse_tail_fields(tail_payload)
+            level = cabinet_level(clean_text(row.get("cabinetLevel")) or front_type, door_type)
             group_label = f"Front típus: {front_type} | {color} | {model_label}"
-            group_key = _manufacturing_local_slug(f"pantolo::{front_type}::{color}::{model_label}")
-            level = clean_text(row.get("cabinetLevel")) or cabinet_level(front_type)
+            group_key = _manufacturing_local_slug(f"pantolo::{level or 'other'}::{front_type}::{color}::{model_label}")
             if group_key not in grouped_sections:
                 grouped_sections[group_key] = {
                     "key": f"pantolo::{group_key}",
@@ -559,7 +567,8 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             front_type = clean_text(row.get("frontType")) or "-"
             color = clean_text(row.get("name")) or "-"
             model_label = clean_text(row.get("modelLabel")) or "-"
-            rebuilt_group_key = _manufacturing_local_slug(f"pantolo::{front_type}::{color}::{model_label}")
+            level = clean_text(row.get("cabinetLevel")) or cabinet_level(front_type, row.get("doorType"))
+            rebuilt_group_key = _manufacturing_local_slug(f"pantolo::{level or 'other'}::{front_type}::{color}::{model_label}")
             rebuilt_group_label = f"Front típus: {front_type} | {color} | {model_label}"
             if rebuilt_group_key not in rebuilt_sections:
                 rebuilt_sections[rebuilt_group_key] = {
@@ -567,7 +576,7 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
                     "label": rebuilt_group_label,
                     "rows": [],
                     "columnLayout": "pantolo",
-                    "cabinetLevel": clean_text(row.get("cabinetLevel")) or cabinet_level(front_type),
+                    "cabinetLevel": level,
                 }
                 rebuilt_order.append(rebuilt_group_key)
             rebuilt_sections[rebuilt_group_key]["rows"].append(row)
@@ -983,10 +992,23 @@ def _manufacturing_pantolo_sections(bundle: dict, production_number: str) -> tup
             if "_pantolo_missing_pant" in row:
                 row.pop("_pantolo_missing_pant", None)
 
-    sections.sort(
-        key=lambda section: {"also": 0, "felso": 1}.get(
-            clean_text(section.get("cabinetLevel")),
-            2,
+    def category_sort_value(value: object) -> tuple[int, str]:
+        """Sort real category values alphabetically and missing markers last."""
+        text = clean_text(value)
+        if not text or text == "-" or folded(text) == "nincs":
+            return (1, "")
+        return (0, folded(text))
+
+    def section_category_sort_key(section: dict) -> tuple:
+        """Order one level by model A-Z, then colour, then front type."""
+        first_row = next((row for row in section.get("rows", []) if isinstance(row, dict)), {})
+        return (
+            {"kamra_felso": 0, "also": 1, "felso": 2}.get(clean_text(section.get("cabinetLevel")), 3),
+            category_sort_value(first_row.get("modelLabel")),
+            category_sort_value(first_row.get("name") or first_row.get("color")),
+            category_sort_value(first_row.get("frontType")),
+            folded(section.get("label")),
         )
-    )
+
+    sections.sort(key=section_category_sort_key)
     return sections, row_count

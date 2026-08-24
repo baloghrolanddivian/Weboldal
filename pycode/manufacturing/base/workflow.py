@@ -1308,7 +1308,7 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
 def _manufacturing_front_level_special_views(sections: list[dict]) -> list[dict]:
     """Build material/level filters in pantry, lower, then upper order."""
     views: list[dict] = []
-    for level, level_label in (("kamra", "Kamra"), ("also", "alsó"), ("felso", "felső")):
+    for level, level_label in (("kamra_felso", "Kamra Felső"), ("also", "alsó"), ("felso", "felső")):
         for material, material_key in (("Fóliás", "folias"), ("Bútorlapos", "butorlapos")):
             matching = [
                 dict(section)
@@ -1318,7 +1318,7 @@ def _manufacturing_front_level_special_views(sections: list[dict]) -> list[dict]
             ]
             views.append(
                 {
-                    "key": f"front-{material_key}-{level}",
+                    "key": f"front-{material_key}-{level.replace('_', '-')}",
                     "label": f"{material} {level_label}",
                     "count": sum(len(section.get("rows", [])) for section in matching),
                     "sections": matching,
@@ -1328,13 +1328,13 @@ def _manufacturing_front_level_special_views(sections: list[dict]) -> list[dict]
 
 
 def _manufacturing_pantolo_level_special_views(sections: list[dict]) -> list[dict]:
-    """Build lower/upper filters for Pántolás in manufacturing order."""
+    """Build pantry-upper/lower/upper filters for Pántolás in order."""
     views: list[dict] = []
-    for level, label in (("also", "Alsó"), ("felso", "Felső")):
+    for level, label in (("kamra_felso", "Kamra Felső"), ("also", "Alsó"), ("felso", "Felső")):
         matching = [dict(section) for section in sections if str(section.get("cabinetLevel", "")) == level]
         views.append(
             {
-                "key": f"pantolo-{level}",
+                "key": f"pantolo-{level.replace('_', '-')}",
                 "label": label,
                 "count": sum(len(section.get("rows", [])) for section in matching),
                 "sections": matching,
