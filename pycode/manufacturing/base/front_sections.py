@@ -18,15 +18,23 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
     def cabinet_level(value: object) -> str:
         """Classify a KorpTipPer value as lower or upper cabinet."""
         normalized = folded(value)
+        if normalized == "kamra_felso":
+            return "kamra_felso"
         if "also" in normalized:
             return "also"
         if "felso" in normalized:
             return "felso"
         return ""
 
+    def front_cabinet_level(korp_tip_per: object, door_type: object = "") -> str:
+        """Classify pantry fronts before falling back to lower/upper cabinet."""
+        if "kam.fel" in folded(door_type):
+            return "kamra_felso"
+        return cabinet_level(korp_tip_per)
+
     def cabinet_level_label(value: object) -> str:
         """Return the visible Hungarian label for a cabinet level key."""
-        return {"also": "Alsó", "felso": "Felső"}.get(str(value or ""), "")
+        return {"kamra_felso": "Kamra Felső", "also": "Alsó", "felso": "Felső"}.get(str(value or ""), "")
 
     def clean_text(value: object) -> str:
         """Clean text and repair known mojibake/OCR splits."""
@@ -355,7 +363,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             type_label = category_label(fields, name, model, color)
             door_type = field_value(fields, "AJTO_TIP", "Ajto Tip", "Ajtó Tip")
             korp_tip_per = field_value(fields, "KorpTipPer")
-            level = cabinet_level(korp_tip_per)
+            level = front_cabinet_level(korp_tip_per, door_type)
             row_index += 1
             row_id = hashlib.sha1(
                 f"front-xml|{production_number}|{row_index}|{barcode}|{name}|{model}|{color}|{size_label}|{type_label}|{quantity}".encode("utf-8")
@@ -414,7 +422,10 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
             material = front_material_label(row)
             type_label = front_type_label(row)
             box_type_label = front_box_type_label(type_label)
-            level = clean_text(row.get("cabinetLevel")) or cabinet_level(row.get("korpTipPer"))
+            level = front_cabinet_level(
+                clean_text(row.get("cabinetLevel")) or row.get("korpTipPer"),
+                row.get("doorType"),
+            )
             level_label = cabinet_level_label(level)
             group_size = front_group_size_label(row, size, box_type_label) or size
             section_key = f"{level or 'other'}::{group_size}::{material}::{box_type_label}"
@@ -461,7 +472,7 @@ def _manufacturing_front_sections(bundle: dict, production_number: str) -> tuple
 
     sorted_sections.sort(
         key=lambda section: (
-            {"also": 0, "felso": 1}.get(str(section.get("cabinetLevel", "")), 2),
+            {"kamra_felso": 0, "also": 1, "felso": 2}.get(str(section.get("cabinetLevel", "")), 3),
             size_sort_key(str(section.get("label", "")).split("·", 1)[0].strip()),
             material_order.get(str(section.get("label", "")).split("·", 2)[1].strip(), 9)
             if "·" in str(section.get("label", ""))

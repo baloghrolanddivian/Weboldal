@@ -62,6 +62,11 @@ from manufacturing import (
     runtime_dir as manufacturing_runtime_dir,
     save_partial_quantity_state,
     save_selection_state,
+    save_pantolo_missing_description,
+    save_front_missing_description,
+    sync_pantolo_missing_state,
+    sync_front_missing_state,
+    sync_korpusz_missing_state,
 )
 from manufacturing.admin import (
     MANUFACTURING_DATA_ROUTE as ADMIN_MANUFACTURING_DATA_ROUTE,
@@ -6201,6 +6206,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if not production_number or not row_key or not isinstance(fields, dict) or not isinstance(state_keys, list):
                 self.respond_json(400, {"ok": False, "error": "Hiányos soradat-mentési kérés."})
                 return
+            if bool(payload.get("missing_view")):
+                if document_key not in {"pantolas", "front_osszekeszites"} or set(str(field) for field in fields) - {"missingDescription"}:
+                    self.respond_json(400, {"ok": False, "error": "A Hiányosságok nézetben csak leírás adható meg."})
+                    return
             runtime_root = admin_manufacturing_runtime_dir()
             is_topfloor_row = document_key == "topfloor" or row_key.startswith("topfloor::")
             if is_topfloor_row:
@@ -6228,6 +6237,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     row_key,
                     fields,
                 )
+                if bool(payload.get("missing_view")) and "missingDescription" in saved_fields:
+                    description_saver = (
+                        save_front_missing_description
+                        if document_key == "front_osszekeszites"
+                        else save_pantolo_missing_description
+                    )
+                    description_saver(admin_manufacturing_runtime_dir(), production_number, row_key, str(saved_fields.get("missingDescription", "")))
                 if requires_edit_alert:
                     save_admin_manufacturing_issued_row_edit_marker(
                         runtime_root,
@@ -6386,6 +6402,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 for legacy_row_id in target_row_ids:
                     if legacy_row_id not in target_state_keys:
                         current_state = save_selection_state(state_runtime_root, production_number, legacy_row_id, "clear")
+                if document_key == "pantolas":
+                    sync_pantolo_missing_state(state_runtime_root, production_number, target_state_keys, state)
+                elif document_key == "front_osszekeszites":
+                    sync_front_missing_state(state_runtime_root, production_number, target_state_keys, state)
+                elif document_key == "korpusz_osszekeszites":
+                    sync_korpusz_missing_state(state_runtime_root, production_number, target_state_keys, state)
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
                 return

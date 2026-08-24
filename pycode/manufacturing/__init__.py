@@ -15,6 +15,12 @@ from .common import (
     production_folder,
     save_partial_quantity_state,
     save_selection_state,
+    rebuild_manufacturing_missing_indexes,
+    save_pantolo_missing_description,
+    save_front_missing_description,
+    sync_pantolo_missing_state,
+    sync_front_missing_state,
+    sync_korpusz_missing_state,
 )
 from .config import configure_manufacturing, runtime_dir
 from .routes import (
@@ -85,7 +91,13 @@ __all__ = [
     "manufacturing_module_payload",
     "production_folder",
     "render_manufacturing_module",
+    "rebuild_manufacturing_missing_indexes",
     "runtime_dir",
     "save_partial_quantity_state",
     "save_selection_state",
+    "save_pantolo_missing_description",
+    "save_front_missing_description",
+    "sync_pantolo_missing_state",
+    "sync_front_missing_state",
+    "sync_korpusz_missing_state",
 ]
