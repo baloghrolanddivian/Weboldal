@@ -76,7 +76,7 @@ def render_manufacturing_page(
     def chip_href(entry: dict) -> str:
         entry_kind = str(entry.get("kind", ""))
         if entry_kind == "missing":
-            return "#pantolo-missing"
+            return f"#{str(entry.get('view_key', '') or 'missing')}"
         entry_number = str(entry.get("number", ""))
         target_number = selected_number if entry_kind == "shipment" else entry_number
         target_query = f"production={urllib.parse.quote(target_number)}" if target_number else ""
@@ -90,7 +90,7 @@ def render_manufacturing_page(
 
     def chip_attrs(entry: dict) -> str:
         if str(entry.get("kind", "")) == "missing":
-            return 'data-mfg-missing-link data-view-key="pantolo-missing"'
+            return f'data-mfg-missing-link data-view-key="{html.escape(str(entry.get("view_key", "")), quote=True)}"'
         if str(entry.get("kind", "")) == "shipment":
             view_key = str(entry.get("view_key", ""))
             all_shipments_attr = " data-mfg-all-shipments" if view_key == "shipment::__all__" else ""
@@ -3054,9 +3054,9 @@ def render_manufacturing_page(
           const link = document.createElement("a");
           link.className = "mfg-chip-link";
           if (entryKind === "missing") {{
-            link.href = "#pantolo-missing";
+            link.href = `#${{entryViewKey}}`;
             link.setAttribute("data-mfg-missing-link", "");
-            link.setAttribute("data-view-key", "pantolo-missing");
+            link.setAttribute("data-view-key", entryViewKey);
           }} else if (entryKind === "shipment" && entryViewKey) {{
             link.href = chipHref(productionNumber);
             link.setAttribute("data-mfg-shipment-link", "");
@@ -3104,8 +3104,9 @@ def render_manufacturing_page(
         );
         document.querySelectorAll("[data-mfg-missing-link]").forEach((link) => {{
           if (!(link instanceof HTMLElement)) return;
-          link.classList.toggle("is-active", currentViewKey === "pantolo-missing");
-          const missingView = specialViewForKey(currentDocument(), "pantolo-missing");
+          const missingViewKey = String(link.getAttribute("data-view-key") || "").trim();
+          link.classList.toggle("is-active", currentViewKey === missingViewKey);
+          const missingView = specialViewForKey(currentDocument(), missingViewKey);
           const missingCount = Array.isArray(missingView?.sections)
             ? missingView.sections
                 .flatMap((section) => Array.isArray(section?.rows) ? section.rows : [])
@@ -3132,7 +3133,7 @@ def render_manufacturing_page(
           if (!(link instanceof HTMLElement)) return;
           const linkNumber = String(link.getAttribute("data-production-number") || "").trim();
           const isActiveProduction = linkNumber === productionNumber;
-          link.classList.toggle("is-active", isActiveProduction && currentViewKey !== "pantolo-missing");
+          link.classList.toggle("is-active", isActiveProduction && !isMissingViewKey(currentViewKey));
           if (statusByNumber.has(linkNumber)) {{
             const statusItem = statusByNumber.get(linkNumber) || {{}};
             const cachedStatus = isActiveProduction ? currentAllTabStateStatus() : cachedProductionAllTabStateStatus(linkNumber);
@@ -3359,6 +3360,7 @@ def render_manufacturing_page(
       const specialViewsForDocument = (document) => Array.isArray(document?.specialViews) ? document.specialViews : [];
       const specialViewForKey = (document, key) =>
         specialViewsForDocument(document).find((view) => String(view?.key || "") === String(key || "")) || null;
+      const isMissingViewKey = (key) => ["pantolo-missing", "front-missing"].includes(String(key || ""));
       const overviewSectionsForDocument = (document, includeOverviewOnly = false) => {{
         if (String(document?.key || "") === "cnc_furas") {{
           return specialViewsForDocument(document)
@@ -3555,7 +3557,7 @@ def render_manufacturing_page(
         const targetSectionKey = String(trigger.getAttribute("data-row-section-key") || "").trim();
         const found = findRowForEdit(rowKey, targetProductionNumber, targetSectionKey);
         if (!found) return;
-        const isMissingDescriptionEdit = currentViewKey === "pantolo-missing";
+        const isMissingDescriptionEdit = isMissingViewKey(currentViewKey);
         const editableFields = isMissingDescriptionEdit
           ? new Set(["missingDescription"])
           : new Set(displayedEditFieldsForRow(found.row, found.columnLayout, found.hideSideTypeColumn));
@@ -4438,7 +4440,22 @@ def render_manufacturing_page(
         }}
         const currentSpecialView = specialViewForKey(document, currentViewKey);
         if (String(document?.key || "") === "korpusz_osszekeszites" && currentSpecialView) {{
-          const sections = orderedSectionsForTabs(Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : []);
+          let sections = orderedSectionsForTabs(Array.isArray(currentSpecialView.sections) ? currentSpecialView.sections : []);
+          if (specialViewUsesRedFilter(currentSpecialView)) {{
+            sections = sections
+              .map((section) => ({{
+                ...section,
+                rows: (Array.isArray(section.rows) ? section.rows : []).flatMap((row) => {{
+                  if (Array.isArray(row?.childUnitStateKeys)) {{
+                    const redChildKeys = row.childUnitStateKeys.filter((key) => selectionState[String(key || "")] === "red");
+                    if (!redChildKeys.length) return [];
+                    return [{{ ...row, childUnitStateKeys: redChildKeys, quantity: redChildKeys.length, meValue: redChildKeys.length }}];
+                  }}
+                  return rowStateValue(row) === "red" ? [row] : [];
+                }}),
+              }}))
+              .filter((section) => section.rows.length);
+          }}
           if (currentSubcategoryKey === "all") {{
             return sections.filter((section) => Array.isArray(section.rows) && section.rows.length);
           }}
@@ -4479,7 +4496,7 @@ def render_manufacturing_page(
             .map((section) => ({{
               ...section,
               rows: (Array.isArray(section.rows) ? section.rows : []).flatMap((row) => {{
-                if (String(currentSpecialView?.key || "") === "pantolo-missing" && Array.isArray(row?.childUnitStateKeys)) {{
+                if (Array.isArray(row?.childUnitStateKeys)) {{
                   const redChildKeys = row.childUnitStateKeys.filter((key) => selectionState[String(key || "")] === "red");
                   if (!redChildKeys.length) return [];
                   return [{{ ...row, childUnitStateKeys: redChildKeys, quantity: redChildKeys.length, meValue: redChildKeys.length }}];
@@ -4618,7 +4635,12 @@ def render_manufacturing_page(
           sectionTabsNode.innerHTML = mainKorpuszViews.map((item) => `
             <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{tabStateClassForRows(Array.isArray(item?.sections) ? item.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : [], korpuszViewEmptyIsDone(item))}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
-              <small>${{totalQuantityForSections(item?.sections)}}</small>
+              <small>${{specialViewUsesRedFilter(item)
+                ? (Array.isArray(item?.sections) ? item.sections : []).reduce((total, section) => total + (Array.isArray(section?.rows) ? section.rows : []).reduce((sum, row) => {{
+                    if (Array.isArray(row?.childUnitStateKeys)) return sum + row.childUnitStateKeys.filter((key) => selectionState[String(key || "")] === "red").length;
+                    return sum + (rowStateValue(row) === "red" ? Math.max(1, Number(row?.quantity || 0) || 1) : 0);
+                  }}, 0), 0)
+                : totalQuantityForSections(item?.sections)}}</small>
             </button>
           `).join("");
           subsectionTabsNode.style.display = "";
@@ -4908,6 +4930,9 @@ def render_manufacturing_page(
             const subtitleMarkup = (!row.hideSubtitle || detailWasEdited) && detailText
               ? `<div class="mfg-row-subtitle">${{displayRowField(row, "detail", "")}}</div>`
               : "";
+            const missingDescriptionMarkup = isMissingViewKey(currentViewKey) && String(row.missingDescription || "").trim()
+              ? `<div class="mfg-row-subtitle">${{displayRowField(row, "missingDescription", "")}}</div>`
+              : "";
             const glassBadgeMarkup = row.isGlass ? `<span class="mfg-row-badge is-glass">Üveges</span>` : "";
             const pullOutBadgeMarkup = row.isPullOut ? `<span class="mfg-row-badge is-pullout">Alsó Kihúzható</span>` : "";
             const traitBadgeMarkup = row.frontTrait === "Blende" ? `<span class="mfg-row-badge is-curved">Blende${{rowEditedMarker(row, "frontTrait")}}</span>` : "";
@@ -5003,7 +5028,7 @@ def render_manufacturing_page(
             const frontCellsMarkup = (displayRow, quantityText, expandMarkup, rowPartialMarkup = "") => `
               <div class="mfg-row-main">
                 <div class="mfg-row-title">${{displayRowField(displayRow, "name", "Névtelen sor")}}${{glassBadgeMarkup}}${{pullOutBadgeMarkup}}${{traitBadgeMarkup}}${{curvedBadgeMarkup}}</div>
-                ${{subtitleMarkup}}
+                ${{missingDescriptionMarkup || subtitleMarkup}}
               </div>
               <div class="mfg-row-meta is-model${{String(displayRow.modelLabel || "").trim().toLowerCase() === "laura" ? " is-laura-model" : ""}}"><span>${{displayRowField(displayRow, "modelLabel")}}</span></div>
               <div class="mfg-row-meta"><span class="is-size">${{displayRowField(displayRow, "size", "Méret nélkül")}}</span></div>
@@ -5579,8 +5604,9 @@ def render_manufacturing_page(
         if (missingLink instanceof HTMLElement) {{
           event.preventDefault();
           const document = currentDocument();
-          if (String(document?.key || "") !== "pantolas" || !specialViewForKey(document, "pantolo-missing")) return;
-          currentViewKey = "pantolo-missing";
+          const nextMissingViewKey = String(missingLink.getAttribute("data-view-key") || "").trim();
+          if (!isMissingViewKey(nextMissingViewKey) || !specialViewForKey(document, nextMissingViewKey)) return;
+          currentViewKey = nextMissingViewKey;
           currentSubcategoryKey = "all";
           secondaryViewKey = "";
           renderAll();
@@ -5608,7 +5634,7 @@ def render_manufacturing_page(
         event.preventDefault();
         if (!targetProductionNumber || !currentDocKey) return;
         if (targetProductionNumber === productionNumber) {{
-          if (currentViewKey === "pantolo-missing") {{
+          if (isMissingViewKey(currentViewKey)) {{
             currentViewKey = "all";
             currentSubcategoryKey = "all";
             secondaryViewKey = "";

@@ -27,6 +27,8 @@ from .common import (
     load_issued_row_edits,
     load_partial_quantity_state,
     load_pantolo_missing_index,
+    load_front_missing_index,
+    load_korpusz_missing_index,
     load_production_bundle,
     load_row_data,
     load_shipment_date,
@@ -1126,18 +1128,6 @@ def _manufacturing_document_sections(bundle: dict, production_number: str, allow
             row_count += len(rows)
     return sections, row_count
 
-def _manufacturing_red_state_numbers(runtime_root: Path) -> list[str]:
-    """Return production numbers that currently have at least one red row."""
-    numbers: list[str] = []
-    for path in sorted(runtime_root.glob("*/state.json"), key=lambda item: item.parent.name, reverse=True):
-        number = _manufacturing_normalize_number(path.parent.name)
-        if not number:
-            continue
-        state = load_selection_state(runtime_root, number)
-        if any(value == "red" for value in state.values()):
-            numbers.append(number)
-    return numbers
-
 def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict[str, str]]:
     """Build the Korpusz special view containing red rows across productions.
 
@@ -1145,63 +1135,12 @@ def _manufacturing_all_red_special_view(current_number: str) -> tuple[dict, dict
     those rows so the special view can be rendered without loading each source
     production separately in the browser.
     """
-    from ..cnc.sections import _manufacturing_cnc_sections
-    from ..front.sections import _manufacturing_front_sections
-    from ..korpusz.sections import _manufacturing_korpusz_sections
-    from ..pantolas.sections import _manufacturing_pantolo_sections, _manufacturing_pantolo_xml_sections
-
-    sections: list[dict] = []
-    selection_state: dict[str, str] = {}
-    for production_number in _manufacturing_red_state_numbers(runtime_dir()):
-        raw_state = load_selection_state(runtime_dir(), production_number)
-        red_state_keys = {str(row_id).strip() for row_id, state in raw_state.items() if state == "red"}
-        if not red_state_keys:
-            continue
-        selection_state.update(_manufacturing_selection_state_payload(production_number, raw_state))
-        try:
-            bundle = _load_manufacturing_bundle_cached(production_number)
-        except Exception:
-            continue
-        korpusz_sections, _ = _manufacturing_korpusz_sections(bundle, production_number)
-        rows: list[dict] = []
-        for section in korpusz_sections:
-            section_label = str(section.get("label", "")).strip()
-            for row in section.get("rows", []):
-                if not isinstance(row, dict):
-                    continue
-                storage_key = _manufacturing_row_state_storage_key(production_number, row)
-                legacy_storage_key = re.sub(r"::0$", "", storage_key)
-                legacy_state_keys = _manufacturing_legacy_state_keys_for_row(row, storage_key)
-                if (
-                    str(row.get("row_id", "")).strip() not in red_state_keys
-                    and storage_key not in red_state_keys
-                    and legacy_storage_key not in red_state_keys
-                    and not any(legacy_key in red_state_keys for legacy_key in legacy_state_keys)
-                ):
-                    continue
-                suffix_parts = [f"Gyártás {production_number}"]
-                if section_label:
-                    suffix_parts.append(section_label)
-                rows.append(_manufacturing_row_with_context(row, production_number, " · ".join(suffix_parts)))
-        if rows:
-            section_title = f"Gyártás {production_number}"
-            if production_number == _manufacturing_normalize_number(current_number):
-                section_title += " (aktuális)"
-            sections.append(
-                {
-                    "key": f"all-red::{production_number}",
-                    "label": section_title,
-                    "rows": rows,
-                }
-            )
-    return (
-        {
-            "key": "all-productions-red",
-            "label": "Összes gyártás összes piros eleme",
-            "count": sum(len(section.get("rows", [])) for section in sections),
-            "sections": sections,
-        },
-        selection_state,
+    return _manufacturing_missing_special_view(
+        load_korpusz_missing_index(runtime_dir()),
+        "all-productions-red",
+        "",
+        label="Összes gyártás összes piros eleme",
+        hide_tab=False,
     )
 
 def _manufacturing_placeholder_document(key: str, label: str) -> dict:
@@ -1404,9 +1343,15 @@ def _manufacturing_pantolo_level_special_views(sections: list[dict]) -> list[dic
     return views
 
 
-def _manufacturing_pantolo_missing_special_view() -> tuple[dict, dict[str, str]]:
-    """Build Hiányosságok exclusively from saved snapshots, never old XML."""
-    payload = load_pantolo_missing_index(runtime_dir())
+def _manufacturing_missing_special_view(
+    payload: dict,
+    view_key: str,
+    default_layout: str,
+    *,
+    label: str = "Hiányosságok",
+    hide_tab: bool = True,
+) -> tuple[dict, dict[str, str]]:
+    """Build a grouped Hiányosságok view exclusively from saved snapshots."""
     productions = payload.get("productions", {}) if isinstance(payload, dict) else {}
     sections: list[dict] = []
     selection_state: dict[str, str] = {}
@@ -1450,8 +1395,8 @@ def _manufacturing_pantolo_missing_special_view() -> tuple[dict, dict[str, str]]
                 child_keys = [item[0] for item in child_items]
                 parent = dict(child_items[0][1])
                 group_digest = hashlib.sha1('|'.join(child_keys).encode('utf-8')).hexdigest()[:16]
-                parent["row_id"] = f"pantolo-missing-parent::{number}::{group_digest}"
-                parent["state_key"] = f"pantolo-missing::{number}::{group_digest}"
+                parent["row_id"] = f"{view_key}-parent::{number}::{group_digest}"
+                parent["state_key"] = f"{view_key}::{number}::{group_digest}"
                 parent["state_storage_key"] = re.sub(r"::\d+$", "::0", child_keys[0])
                 parent["quantity"] = len(child_keys)
                 parent["meValue"] = len(child_keys)
@@ -1466,29 +1411,39 @@ def _manufacturing_pantolo_missing_special_view() -> tuple[dict, dict[str, str]]
             production_label = f"{production_date} · {number}" if production_date else f"Gyártás {number}"
             sections.append(
                 {
-                    "key": f"pantolo-missing::{number}::{category_key}",
+                    "key": f"{view_key}::{number}::{category_key}",
                     "label": f"{production_label} — {category_label}",
                     "cabinetLevel": str(category.get("cabinetLevel", "") or "").strip(),
-                    "columnLayout": str(category.get("columnLayout", "") or "pantolo").strip(),
+                    "columnLayout": str(category.get("columnLayout", "") or default_layout).strip(),
                     "rows": rows,
                 }
             )
     return (
         {
-            "key": "pantolo-missing",
-            "label": "Hiányosságok",
+            "key": view_key,
+            "label": label,
             "count": sum(
                 max(1, int(row.get("quantity", 0) or 0))
                 for section in sections
                 for row in section["rows"]
             ),
             "sections": sections,
-            "hideTab": True,
+            "hideTab": hide_tab,
             "excludeFromCompletion": True,
             "redFilter": True,
         },
         selection_state,
     )
+
+
+def _manufacturing_pantolo_missing_special_view() -> tuple[dict, dict[str, str]]:
+    """Build the saved Pántoló Hiányosságok view."""
+    return _manufacturing_missing_special_view(load_pantolo_missing_index(runtime_dir()), "pantolo-missing", "pantolo")
+
+
+def _manufacturing_front_missing_special_view() -> tuple[dict, dict[str, str]]:
+    """Build the saved Front összekészítő Hiányosságok view."""
+    return _manufacturing_missing_special_view(load_front_missing_index(runtime_dir()), "front-missing", "front-standard")
 
 
 def _manufacturing_view_bundle(
@@ -1600,6 +1555,8 @@ def _manufacturing_view_bundle(
                     front_source_type = "XML"
             except OSError:
                 pass
+        front_missing_view, front_missing_state = _manufacturing_front_missing_special_view()
+        selection_state_payload.update(front_missing_state)
         return finalize_filtered_documents(
             [
                 {
@@ -1611,7 +1568,7 @@ def _manufacturing_view_bundle(
                     "sections": front_sections,
                     "row_count": front_row_count,
                     "placeholderMessage": "Ehhez az opci\u00f3hoz m\u00e9g nincs megjelen\u00edthet\u0151 sor.",
-                    "specialViews": _manufacturing_front_level_special_views(front_sections),
+                    "specialViews": [front_missing_view, *_manufacturing_front_level_special_views(front_sections)],
                     "allowSplit": False,
                     "singleColumnOverview": True,
                 }
@@ -1737,6 +1694,8 @@ def _manufacturing_view_bundle(
                 front_source_type = "XML"
         except OSError:
             pass
+    front_missing_view, front_missing_state = _manufacturing_front_missing_special_view()
+    selection_state_payload.update(front_missing_state)
     documents.append(
         {
             "key": "front_osszekeszites",
@@ -1747,7 +1706,7 @@ def _manufacturing_view_bundle(
             "sections": front_sections,
             "row_count": front_row_count,
             "placeholderMessage": "Ehhez az opcióhoz még nincs megjeleníthető sor.",
-            "specialViews": _manufacturing_front_level_special_views(front_sections),
+            "specialViews": [front_missing_view, *_manufacturing_front_level_special_views(front_sections)],
             "allowSplit": False,
             "singleColumnOverview": True,
         }
@@ -1906,14 +1865,18 @@ def manufacturing_module_payload(
         selected_number = ""
     else:
         recent_productions = [production_entry_with_status(dict(entry)) for entry in recent_productions]
-    if selected_operation == "pantolas":
-        missing_view, _missing_state = _manufacturing_pantolo_missing_special_view()
+    if selected_operation in {"pantolas", "front_osszekeszites"}:
+        missing_view, _missing_state = (
+            _manufacturing_front_missing_special_view()
+            if selected_operation == "front_osszekeszites"
+            else _manufacturing_pantolo_missing_special_view()
+        )
         recent_productions.insert(
             0,
             {
                 "kind": "missing",
                 "number": "__missing__",
-                "view_key": "pantolo-missing",
+                "view_key": str(missing_view.get("key", "")),
                 "date_label": "Hiányosságok",
                 "count": int(missing_view.get("count", 0) or 0),
                 "state_status": "red" if int(missing_view.get("count", 0) or 0) else "plain",
