@@ -1306,9 +1306,9 @@ def _manufacturing_topfloor_aggregate_bundle(production_numbers: list[str]) -> t
     )
 
 def _manufacturing_front_level_special_views(sections: list[dict]) -> list[dict]:
-    """Build material/level filters, with every lower filter before upper ones."""
+    """Build material/level filters in pantry, lower, then upper order."""
     views: list[dict] = []
-    for level, level_label in (("also", "alsó"), ("felso", "felső")):
+    for level, level_label in (("kamra", "Kamra"), ("also", "alsó"), ("felso", "felső")):
         for material, material_key in (("Fóliás", "folias"), ("Bútorlapos", "butorlapos")):
             matching = [
                 dict(section)

@@ -3371,7 +3371,7 @@ def render_manufacturing_page(
       }};
       const frontSubcategoriesForView = (document, viewKey) => {{
         if (String(document?.key || "") !== "front_osszekeszites") return [];
-        if (!/^front-(folias|butorlapos)-(also|felso)$/.test(String(viewKey || ""))) return [];
+        if (!/^front-(folias|butorlapos)-(kamra|also|felso)$/.test(String(viewKey || ""))) return [];
         const specialView = specialViewForKey(document, viewKey);
         const sections = Array.isArray(specialView?.sections) ? specialView.sections : [];
         const grouped = new Map();
