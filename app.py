@@ -3569,6 +3569,29 @@ def _unified_inventory_script() -> str:
   const categoryRow = root.querySelector(".frontinv-category-row");
   const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
   const searchInput = root.querySelector("[data-frontinv-search]");
+  const selectedCategoryStorageKey = `${storagePrefix}-selected-category`;
+  const categoryFromLink = (link) => {
+    try {
+      return new URL(link.getAttribute("href") || "", window.location.origin).searchParams.get("category") || "all";
+    } catch {
+      return "";
+    }
+  };
+  const categoryLinks = categoryRow ? Array.from(categoryRow.querySelectorAll("a")) : [];
+  const availableCategories = new Set(categoryLinks.map(categoryFromLink).filter(Boolean));
+  const currentUrl = new URL(window.location.href);
+  const hasRequestedCategory = currentUrl.searchParams.has("category");
+  const storedCategory = String(window.sessionStorage.getItem(selectedCategoryStorageKey) || "");
+  if (!hasRequestedCategory && storedCategory && availableCategories.has(storedCategory) && storedCategory !== categoryValue) {
+    currentUrl.searchParams.set("category", storedCategory);
+    window.location.replace(currentUrl.toString());
+    return;
+  }
+  if (categoryValue && availableCategories.has(categoryValue)) {
+    window.sessionStorage.setItem(selectedCategoryStorageKey, categoryValue);
+  } else if (storedCategory && !availableCategories.has(storedCategory)) {
+    window.sessionStorage.removeItem(selectedCategoryStorageKey);
+  }
   const normalizeSearchText = (value) => String(value || "").toLocaleLowerCase("hu-HU").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
   const applySearch = () => {
     if (!searchInput) return;
@@ -3636,8 +3659,12 @@ def _unified_inventory_script() -> str:
     const savedScroll = Number(window.sessionStorage.getItem(scrollStorageKey) || "0");
     if (savedScroll > 0) categoryRow.scrollLeft = savedScroll;
     categoryRow.addEventListener("scroll", () => window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft)), { passive: true });
-    categoryRow.querySelectorAll("a").forEach((link) => {
-      link.addEventListener("click", () => window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft)));
+    categoryLinks.forEach((link) => {
+      link.addEventListener("click", () => {
+        window.sessionStorage.setItem(scrollStorageKey, String(categoryRow.scrollLeft));
+        const nextCategory = categoryFromLink(link);
+        if (nextCategory) window.sessionStorage.setItem(selectedCategoryStorageKey, nextCategory);
+      });
     });
   }
   if (presenceRoute && categoryValue) {
