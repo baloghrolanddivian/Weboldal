@@ -2871,7 +2871,13 @@ def render_manufacturing_page(
       let currentViewKey = "all";
       let currentSubcategoryKey = "all";
       let secondaryViewKey = "";
-      let currentTopfloorShipmentKey = "";
+      let currentTopfloorShipmentKey = (() => {{
+        try {{
+          return String(new URL(window.location.href).searchParams.get("shipment") || "").trim();
+        }} catch (_error) {{
+          return "";
+        }}
+      }})();
       let topfloorShowIssued = false;
       let layoutMode = "single";
       const sectionSortState = Object.create(null);
@@ -2926,10 +2932,17 @@ def render_manufacturing_page(
           const url = new URL(window.location.href);
           if (String(currentDocKey || "") === "topfloor") {{
             url.searchParams.delete("production");
+            if (currentTopfloorShipmentKey) {{
+              url.searchParams.set("shipment", currentTopfloorShipmentKey);
+            }} else {{
+              url.searchParams.delete("shipment");
+            }}
           }} else if (productionNumber) {{
             url.searchParams.set("production", productionNumber);
+            url.searchParams.delete("shipment");
           }} else {{
             url.searchParams.delete("production");
+            url.searchParams.delete("shipment");
           }}
           if (currentDocKey) url.searchParams.set("operation", currentDocKey);
           window.history.replaceState({{}}, "", url.toString());
@@ -3167,6 +3180,7 @@ def render_manufacturing_page(
       }};
       const applyProductionPayload = (nextPayload) => {{
         const applyStartedAt = performance.now();
+        const preservedTopfloorShipmentKey = currentTopfloorShipmentKey;
         const nextDocuments = Array.isArray(nextPayload?.documents) ? nextPayload.documents : [];
         if (!nextDocuments.length) throw new Error("A gyártáshoz nincs megjeleníthető adat.");
         shopfloorLog("apply payload start", shopfloorPayloadStats(nextPayload));
@@ -3185,7 +3199,9 @@ def render_manufacturing_page(
         currentViewKey = "all";
         currentSubcategoryKey = "all";
         secondaryViewKey = "";
-        currentTopfloorShipmentKey = "";
+        currentTopfloorShipmentKey = String(currentDocKey || "") === "topfloor"
+          ? preservedTopfloorShipmentKey
+          : "";
         activeSearchText = "";
         searchInputNode.value = "";
         applyStoredPendingWritesToLocalState();
@@ -4592,6 +4608,7 @@ def render_manufacturing_page(
           if (!validKeys.has(currentViewKey)) {{
             currentViewKey = "all";
           }}
+          syncUrlForDocument();
           subsectionTabsNode.innerHTML = "";
           subsectionTabsNode.style.display = "none";
           const tabs = [
