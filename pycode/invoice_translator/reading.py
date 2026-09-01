@@ -693,6 +693,27 @@ def _infer_unit_from_line(line: str) -> str:
     return ""
 
 
+def _parse_kronospan_quantity_line(line: str, package_qty: str, pcs_total: str) -> str:
+    """Recover a Kronospan quantity from its compact quantity/packs/pieces row."""
+    tokens = line.split()
+    if len(tokens) == 3:
+        quantity, packages, pieces = tokens
+        if packages == package_qty and pieces == pcs_total and _is_signed_number_token(quantity):
+            return quantity
+
+    if len(tokens) != 2 or not package_qty or not pcs_total or tokens[1] != pcs_total:
+        return ""
+
+    # Some Kronospan PDFs position the quantity and pallet count so closely that
+    # PDF text extraction joins them (for example ``78,723 30`` means quantity
+    # 78,72, 3 packs, 30 pieces).
+    quantity_and_packages = tokens[0]
+    if not quantity_and_packages.endswith(package_qty):
+        return ""
+    quantity = quantity_and_packages[: -len(package_qty)]
+    return quantity if quantity and _is_signed_number_token(quantity) else ""
+
+
 def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> list[InvoiceItem]:
     """Parse Kronospan invoice item rows from extracted text lines."""
     items: list[InvoiceItem] = []
@@ -745,6 +766,7 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
         code_line = ""
         packs_line = ""
         pcs_line = ""
+        compact_quantity_line = ""
 
         j = i + 1
         while j < len(lines):
@@ -769,8 +791,9 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
             elif re.fullmatch(r"-?[0-9][0-9.,]*", next_line):
                 if not quantity_line:
                     quantity_line = next_line
-            elif re.fullmatch(r"\d+\s+\d+", next_line):
+            elif re.fullmatch(r"-?[0-9][0-9.,]*(?:\s+\d+){1,2}", next_line):
                 pcs_line = next_line
+                compact_quantity_line = next_line
             elif re.search(r"PACK\(S\)", next_line, re.IGNORECASE):
                 packs_line = next_line
             elif re.fullmatch(r"(?=.*[A-Z])[0-9A-Z ]{6,}", next_line):
@@ -802,10 +825,23 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
 
         if pcs_line:
             parts = pcs_line.split()
-            if len(parts) == 2:
+            if len(parts) in (2, 3):
                 if not item.package_qty:
-                    item.package_qty = parts[0]
-                item.pcs_total = parts[1]
+                    item.package_qty = parts[-2]
+                item.pcs_total = parts[-1]
+
+        if not item.total_qty and compact_quantity_line:
+            item.total_qty = _parse_kronospan_quantity_line(
+                compact_quantity_line,
+                item.package_qty,
+                item.pcs_total,
+            )
+
+        if not item.total_qty and item.net_value and item.unit_price:
+            net_value_num = _parse_eu_number(item.net_value)
+            unit_price_num = _parse_eu_number(item.unit_price)
+            if net_value_num is not None and unit_price_num and unit_price_num > 0:
+                item.total_qty = _format_eu_number(net_value_num / unit_price_num, 2)
 
         if not item.net_value and total_net_fallback and len(items) == 0:
             item.net_value = total_net_fallback
