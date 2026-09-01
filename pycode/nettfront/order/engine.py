@@ -19,6 +19,8 @@ from pathlib import Path
 import openpyxl as ox
 from openpyxl.utils import get_column_letter
 
+from tools.excel import normalize_excel_payload
+
 
 warnings.filterwarnings(
     "ignore",
@@ -122,7 +124,7 @@ def _workbook_from_bytes(payload: bytes):
     """Handle workbook from bytes logic for the NettFront workflows.
 
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
-    return ox.load_workbook(io.BytesIO(payload), data_only=True)
+    return ox.load_workbook(io.BytesIO(normalize_excel_payload(payload)), data_only=True)
 
 
 def load_avg_by_part_from_bytes(payload: bytes) -> dict[str, int]:

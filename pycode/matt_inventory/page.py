@@ -202,14 +202,14 @@ def render_matt_inventory_form(message: str = "", success: bool = False) -> byte
               <label class="matt-field">
                 <span>Fix ártábla</span>
                 <strong>Alkatrészszám + anyagköltség</strong>
-                <input type="file" name="price_file" accept=".xlsx,.xlsm,.csv" />
+                <input type="file" name="price_file" accept=".xls,.xlsx,.xlsm,.csv" />
                 <small>Első alkalommal kötelező. Utána csak akkor töltsd újra, ha frissült.</small>
               </label>
 
               <label class="matt-field">
                 <span>Napi készlet</span>
                 <strong>Alkatrészszám + leírás + mennyiség + szín</strong>
-                <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+                <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
                 <small>Ezt elég naponta frissíteni az aktuális állással.</small>
               </label>
             </div>

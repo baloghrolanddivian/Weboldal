@@ -11,6 +11,8 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+from tools.excel import normalize_excel_payload
+
 try:
     from openpyxl import Workbook, load_workbook
 except Exception:  # pragma: no cover
@@ -18,7 +20,7 @@ except Exception:  # pragma: no cover
     load_workbook = None
 
 
-FRONT_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
+FRONT_INVENTORY_ALLOWED_EXTENSIONS = {".xls", ".xlsx", ".xlsm", ".csv"}
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SERIAL_SIZES_DATA_PATH = REPO_ROOT / "data" / "front-inventory-serial-sizes.json"
 NETTFRONT_TRANSLATIONS_DATA_PATH = REPO_ROOT / "data" / "nettfront-translations.json"
@@ -917,16 +919,16 @@ def _build_inventory_session_row(item: dict, serial_sizes: set[str]) -> dict:
 def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
     """Read raw rows from supported Excel or CSV front inventory uploads."""
     suffix = Path(file_name or "").suffix.lower()
-    if suffix in {".xlsx", ".xlsm"}:
+    if suffix in {".xls", ".xlsx", ".xlsm"}:
         if load_workbook is None:
             raise RuntimeError("Az Excel feldolgozáshoz hiányzik az openpyxl csomag.")
-        workbook = load_workbook(io.BytesIO(payload), data_only=True)
+        workbook = load_workbook(io.BytesIO(normalize_excel_payload(payload)), data_only=True)
         sheet = workbook.active
         return [list(row) for row in sheet.iter_rows(values_only=True)]
     if suffix == ".csv":
         text = _decode_csv_bytes(payload)
         return [list(row) for row in csv.reader(io.StringIO(text))]
-    raise ValueError("Csak XLSX, XLSM vagy CSV fájlokat tudok feldolgozni.")
+    raise ValueError("Csak XLS, XLSX, XLSM vagy CSV fájlokat tudok feldolgozni.")
 
 
 def _decode_csv_bytes(payload: bytes) -> str:

@@ -2096,8 +2096,8 @@ def render_nettfront_form(message: str = "") -> bytes:
 
         <label class="upload-field">
           <strong>Aktuális rendelés</strong>
-          <span class="field-hint">Nem kötelező. XLSX, XLSM vagy CSV esetén összehasonlító report is készül.</span>
-          <input id="nettfront-order" type="file" name="order_file" accept=".xlsx,.xlsm,.csv" />
+          <span class="field-hint">Nem kötelező. XLS, XLSX, XLSM vagy CSV esetén összehasonlító report is készül.</span>
+          <input id="nettfront-order" type="file" name="order_file" accept=".xls,.xlsx,.xlsm,.csv" />
           <span class="field-hint" id="nettfront-order-state">Opcionális feltöltés</span>
         </label>
       </form>
@@ -2889,7 +2889,7 @@ def render_material_inventory_form(
         <form class="matinv-upload-form" method="post" action="{process_route}" enctype="multipart/form-data">
           <label class="matinv-field">
             <span>Leltározandó lista</span>
-            <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+            <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
           </label>
           <button class="button button-primary" type="submit">{upload_button}</button>
         </form>
@@ -4084,7 +4084,7 @@ def render_front_inventory_form(
           <label class="frontinv-field">
             <span>Leltározandó lista</span>
             <strong>Fóliás front leltárfájl</strong>
-            <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+            <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
             <small>Szükséges oszlopok: Alkatr.-szám, Alkatr.-leírás, SZIN.Desc. A Leltarbol_ki oszlopban jelölt sorok kimaradnak.</small>
           </label>
 
@@ -6841,7 +6841,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not material_inventory_file_name_allowed(stock_name):
-                self.respond_material_inventory_form("Az anyagraktár lista csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_material_inventory_form("Az anyagraktár lista csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -6979,7 +6979,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not material_inventory_file_name_allowed(stock_name):
-                self.respond_semifinished_inventory_form("A félkész raktár lista csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_semifinished_inventory_form("A félkész raktár lista csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -7099,7 +7099,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not material_inventory_file_name_allowed(stock_name):
-                self.respond_semifinished_front_inventory_form("A félkész front lista csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_semifinished_front_inventory_form("A félkész front lista csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -7219,7 +7219,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not front_inventory_file_name_allowed(stock_name):
-                self.respond_front_inventory_form("A fóliás front leltárfájl csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_front_inventory_form("A fóliás front leltárfájl csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:

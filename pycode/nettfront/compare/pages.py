@@ -38,9 +38,9 @@ def render_nettfront_compare_form(message: str = "") -> bytes:
 
         <label class="upload-field">
           <strong>Meglévő rendelés</strong>
-          <span class="field-hint">Kötelező. XLSX, XLSM vagy CSV formátum.</span>
-          <input id="nettfront-compare-order" type="file" name="order_file" accept=".xlsx,.xlsm,.csv" required />
-          <span class="field-hint" id="nettfront-compare-order-state">Támogatott formátum: XLSX, XLSM, CSV</span>
+          <span class="field-hint">Kötelező. XLS, XLSX, XLSM vagy CSV formátum.</span>
+          <input id="nettfront-compare-order" type="file" name="order_file" accept=".xls,.xlsx,.xlsm,.csv" required />
+          <span class="field-hint" id="nettfront-compare-order-state">Támogatott formátum: XLS, XLSX, XLSM, CSV</span>
         </label>
       </form>
 
@@ -78,7 +78,7 @@ def render_nettfront_compare_form(message: str = "") -> bytes:
         extra_script=render_file_bind_script(
             [
                 ("nettfront-compare-invoice", "nettfront-compare-invoice-state", "Támogatott formátum: PDF"),
-                ("nettfront-compare-order", "nettfront-compare-order-state", "Támogatott formátum: XLSX, XLSM, CSV"),
+                ("nettfront-compare-order", "nettfront-compare-order-state", "Támogatott formátum: XLS, XLSX, XLSM, CSV"),
             ]
         ),
     )

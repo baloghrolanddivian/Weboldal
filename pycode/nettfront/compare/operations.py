@@ -28,9 +28,9 @@ def process_compare_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, by
         return 400, render_nettfront_compare_form("Csak PDF számla tölthető fel.")
 
     order_name, order_bytes = order_file
-    allowed_order_extensions = (".xlsx", ".xlsm", ".csv")
+    allowed_order_extensions = (".xls", ".xlsx", ".xlsm", ".csv")
     if not order_name.lower().endswith(allowed_order_extensions):
-        return 400, render_nettfront_compare_form("A meglévő rendelés csak XLSX, XLSM vagy CSV fájl lehet.")
+        return 400, render_nettfront_compare_form("A meglévő rendelés csak XLS, XLSX, XLSM vagy CSV fájl lehet.")
 
     try:
         artifacts = build_compare_artifacts(invoice_bytes, order_bytes)
