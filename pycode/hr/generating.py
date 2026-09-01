@@ -381,7 +381,14 @@ def _set_cell_width(cell: ET.Element, width_twips: int) -> None:
     width.set(f"{{{DOCX_NS}}}type", "dxa")
 
 
-def _set_cell(cell: ET.Element, value: str, odt: bool = False, no_wrap: bool = False, min_width_twips: int | None = None) -> None:
+def _set_cell(
+    cell: ET.Element,
+    value: str,
+    odt: bool = False,
+    no_wrap: bool = False,
+    min_width_twips: int | None = None,
+    size_half_points: int = 20,
+) -> None:
     if odt:
         for child in list(cell):
             if child.tag != f"{{{ODT_TABLE}}}table-cell": cell.remove(child)
@@ -405,7 +412,7 @@ def _set_cell(cell: ET.Element, value: str, odt: bool = False, no_wrap: bool = F
     run = ET.SubElement(paragraph, f"{{{DOCX_NS}}}r")
     if source_props is not None:
         run.append(source_props)
-    _use_poppins(run, size_half_points=20)
+    _use_poppins(run, size_half_points=size_half_points)
     text = ET.SubElement(run, f"{{{DOCX_NS}}}t")
     text.text = str(value)
 
@@ -492,12 +499,13 @@ def _fill_szep_card(root: ET.Element, values: dict[str, str]) -> None:
                     cells[cell_index], value,
                     no_wrap=(row_index in {5, 7} and cell_index == 3),
                     min_width_twips=(650 if row_index in {5, 7} and cell_index == 3 else None),
+                    size_half_points=16,
                 )
         # Postal-code labels are part of the cell layout and do not have a
         # separate empty cell in the source document; keep the label and add the value beside it.
         if row_index in {4, 6} and postal and len(cells) > 1:
             label_cell = cells[1]
-            _set_cell(label_cell, f"Irányítószám / Postal code: {postal}")
+            _set_cell(label_cell, f"Irányítószám / Postal code: {postal}", size_half_points=16)
         if row_index in {5, 7} and len(cells) > 3:
             # The template allocates only 236 twips to the house-number value.
             # Take width from its label cell so multi-digit numbers stay on one line.
@@ -620,6 +628,22 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
         # standalone placeholder after ``Szeged,`` belongs to the document.
         _replace_split_placeholder(root, "Dátum", replacements.get("Dátum", ""), text_tags, last_only=True)
         replacements_to_apply.pop("Dátum", None)
+
+    # Contact placeholders can be prefixes of their replacement values.  In
+    # particular, a real Hungarian mobile number may itself start with the
+    # template token ``+3630``.  Replace these fields once in their original
+    # runs and remove them from the generic multi-pass replacement to prevent
+    # the inserted phone number from being expanded again or merged with the
+    # adjacent e-mail field.
+    for placeholder in ("+3630", ".....@divian.hu"):
+        if placeholder not in replacements_to_apply:
+            continue
+        _replace_split_placeholder(
+            root,
+            placeholder,
+            replacements_to_apply.pop(placeholder),
+            text_tags,
+        )
 
     _replace_all(root, replacements_to_apply, text_tags)
     _clean_colours(root, odt)
