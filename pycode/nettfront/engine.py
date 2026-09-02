@@ -21,6 +21,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from tools.excel import is_legacy_xls, normalize_excel_payload
+
 try:
     import openpyxl
     from openpyxl.styles import PatternFill
@@ -443,9 +445,13 @@ def load_alkatresz_map_from_bytes(data: bytes, file_name: str = "") -> dict[str,
     rows: list[Sequence[object]]
     suffix = Path(file_name).suffix.lower()
 
-    if suffix in {".xlsx", ".xlsm"} or zipfile.is_zipfile(io.BytesIO(data)):
+    if suffix in {".xls", ".xlsx", ".xlsm"} or zipfile.is_zipfile(io.BytesIO(data)) or is_legacy_xls(data):
         _require_workbook_support()
-        workbook = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+        workbook = openpyxl.load_workbook(
+            io.BytesIO(normalize_excel_payload(data)),
+            data_only=True,
+            read_only=True,
+        )
         sheet = workbook.active
         rows = list(sheet.iter_rows(values_only=True))
     else:
@@ -583,8 +589,8 @@ def read_order_rows_from_bytes(data: bytes) -> list[list[object]]:
     This function is part of the pydoc-documented shared NettFront workflow layer."""
     _require_workbook_support()
 
-    if zipfile.is_zipfile(io.BytesIO(data)):
-        workbook = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    if zipfile.is_zipfile(io.BytesIO(data)) or is_legacy_xls(data):
+        workbook = openpyxl.load_workbook(io.BytesIO(normalize_excel_payload(data)), data_only=True)
         sheet = workbook.active
         return [list(row) for row in sheet.iter_rows(values_only=True)]
 

@@ -2096,8 +2096,8 @@ def render_nettfront_form(message: str = "") -> bytes:
 
         <label class="upload-field">
           <strong>Aktuális rendelés</strong>
-          <span class="field-hint">Nem kötelező. XLSX, XLSM vagy CSV esetén összehasonlító report is készül.</span>
-          <input id="nettfront-order" type="file" name="order_file" accept=".xlsx,.xlsm,.csv" />
+          <span class="field-hint">Nem kötelező. XLS, XLSX, XLSM vagy CSV esetén összehasonlító report is készül.</span>
+          <input id="nettfront-order" type="file" name="order_file" accept=".xls,.xlsx,.xlsm,.csv" />
           <span class="field-hint" id="nettfront-order-state">Opcionális feltöltés</span>
         </label>
       </form>
@@ -2889,7 +2889,7 @@ def render_material_inventory_form(
         <form class="matinv-upload-form" method="post" action="{process_route}" enctype="multipart/form-data">
           <label class="matinv-field">
             <span>Leltározandó lista</span>
-            <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+            <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
           </label>
           <button class="button button-primary" type="submit">{upload_button}</button>
         </form>
@@ -4084,7 +4084,7 @@ def render_front_inventory_form(
           <label class="frontinv-field">
             <span>Leltározandó lista</span>
             <strong>Fóliás front leltárfájl</strong>
-            <input type="file" name="stock_file" accept=".xlsx,.xlsm,.csv" required />
+            <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
             <small>Szükséges oszlopok: Alkatr.-szám, Alkatr.-leírás, SZIN.Desc. A Leltarbol_ki oszlopban jelölt sorok kimaradnak.</small>
           </label>
 
@@ -6841,7 +6841,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not material_inventory_file_name_allowed(stock_name):
-                self.respond_material_inventory_form("Az anyagraktár lista csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_material_inventory_form("Az anyagraktár lista csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -6979,7 +6979,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not material_inventory_file_name_allowed(stock_name):
-                self.respond_semifinished_inventory_form("A félkész raktár lista csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_semifinished_inventory_form("A félkész raktár lista csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -7099,7 +7099,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not material_inventory_file_name_allowed(stock_name):
-                self.respond_semifinished_front_inventory_form("A félkész front lista csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_semifinished_front_inventory_form("A félkész front lista csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -7219,7 +7219,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
             stock_name, stock_bytes = stock_file
             if not front_inventory_file_name_allowed(stock_name):
-                self.respond_front_inventory_form("A fóliás front leltárfájl csak XLSX, XLSM vagy CSV lehet.")
+                self.respond_front_inventory_form("A fóliás front leltárfájl csak XLS, XLSX, XLSM vagy CSV lehet.")
                 return
 
             try:
@@ -7616,14 +7616,18 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 people = [{key: str(form_data.get(f"p_{index}_{key}", "")) for key in HR_DATA_COLUMNS} for index in selected_indices]
                 required_person_keys = tuple(key for key in HR_DATA_COLUMNS if key != "stayaddress") + ("jobdescription",)
                 for row_number, person in zip(selected_indices, people):
+                    person["feor"] = str(form_data.get(f"p_{row_number}_feor", ""))
                     person["jobdescription"] = str(form_data.get(f"p_{row_number}_jobdescription", ""))
-                    missing = [key for key in required_person_keys if not person.get(key, "").strip()]
+                    missing = [key for key in (*required_person_keys, "feor") if not person.get(key, "").strip()]
                     if missing:
                         raise ValueError(f"A(z) {row_number + 1}. kiválasztott sorban minden személyes mezőt ki kell tölteni.")
                     if not person.get("stayaddress", "").strip():
                         person["stayaddress"] = person.get("address", "")
                 bosses = json.loads((DATA_DIR / "HR-files" / "bosses.json").read_text(encoding="utf-8"))
-                extra_keys = ("workplace", "boss", "workbreak", "breaktype", "orderfromname", "qualification", "requirements")
+                extra_keys = (
+                    "workplace", "boss", "workbreak", "breaktype", "worktime",
+                    "orderfromname", "qualification", "requirements",
+                )
                 extras = []
                 for index in selected_indices:
                     person_extra = {key: str(form_data.get(f"p_{index}_{key}", "")) for key in extra_keys}
