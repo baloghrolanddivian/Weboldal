@@ -132,13 +132,15 @@ HR_COLUMNS = (
     ("name", "Név"), ("birthname", "Születési név"), ("birthplace", "Születési hely"),
     ("birthday", "Születési idő"), ("momname", "Anyja neve"), ("vat", "Adóazonosító jel"),
     ("taj", "TAJ szám"), ("address", "Állandó lakcím"), ("stayaddress", "Tartózkodási hely"),
-    ("email", "E-mail cím"), ("phone", "Telefonszám"), ("job", "Munkakör"),
+    ("email", "E-mail cím"), ("phone", "Telefonszám"), ("feor", "FEOR kód"),
+    ("job", "Munkakör"),
     ("jobdescription", "Munkaköri leírás"), ("entry", "Belépés dátuma"), ("payment", "Munkabér"),
 )
 EXTRA_COLUMNS = (
     ("workplace", "Munkavégzés helye"), ("orderfromname", "Kitől kaphat utasítást?"),
     ("boss", "Közvetlen felettes"), ("workbreak", "Munkaközi szünet"),
     ("breaktype", "A szünet beleszámít a munkaidőbe?"),
+    ("worktime", "Munkaidő"),
     ("qualification", "Legmagasabb végzettség"), ("requirements", "Egyéb követelmények"),
 )
 PERSON_OPTIONS = (
@@ -196,11 +198,17 @@ def render_review(people: list[dict[str, str]], bosses: dict[str, dict[str, str]
         boss_picker = _single_picker(i, "boss", list(bosses))
         break_picker = _single_picker(i, "workbreak", ("30 perc", "60 perc"))
         breaktype_picker = _single_picker(i, "breaktype", ("a munkaidő részét képezi", "nem képezi a munkaidő részét"))
+        worktime_picker = _single_picker(
+            i,
+            "worktime",
+            ("Teljes munkaidő (8 óra)", "Részmunkaidő (6 óra)", "Részmunkaidő (4 óra)"),
+        )
         extra_cells = f'''<td>{workplace_picker}</td>
 <td><div class="hr-multiselect" data-instruction-people data-instruction-target="p_{i}_orderfromname"><button class="hr-multiselect-toggle" type="button" aria-label="Kitől kaphat utasítást?"></button><div class="hr-multiselect-menu">{''.join(f'<label class="hr-multiselect-option"><input type="checkbox" value="{html.escape(name, quote=True)}">{html.escape(name)}</label>' for name in PERSON_OPTIONS)}</div><input type="hidden" name="p_{i}_orderfromname"></div></td>
 <td>{boss_picker}</td>
 <td>{break_picker}</td>
 <td>{breaktype_picker}</td>
+<td>{worktime_picker}</td>
 <td><input name="p_{i}_qualification"></td><td><input name="p_{i}_requirements"></td>'''
         select_cell = f'<td><input type="checkbox" name="p_{i}_selected" value="1" aria-label="{html.escape(person.get("name", "sor"), quote=True)} kiválasztása"></td>'
         rows.append(f'<tr>{select_cell}{cells}{extra_cells}</tr>')

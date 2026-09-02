@@ -9,6 +9,7 @@ import re
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Callable
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import quoteattr
 
@@ -171,6 +172,57 @@ def number_hu(value: str) -> str:
 
 def _template_kind(path: Path) -> str:
     return path.stem.casefold().replace("ő", "ö").replace("ű", "ü")
+
+
+def _template_order(path: Path) -> int | None:
+    """Return the numeric prefix used to route numbered onboarding forms."""
+    match = re.match(r"^(\d+)\.", path.name)
+    return int(match.group(1)) if match else None
+
+
+NUMBERED_TEMPLATE_FIELDS: dict[int, dict[str, str]] = {
+    3: {
+        "ANYJA NEVE": "momname",
+        "SZÜLETÉSI HELY": "birthplace",
+        "SZÜLETÉSI DÁTUM": "birthday",
+        "ADÓAZONOSÍTÓJEL": "vat",
+        "LAKÓHELY": "address",
+        "FEOR KÓD": "feor",
+        "BÉR": "payment_formatted",
+        "HETI MUNKAIDŐ": "weekly_hours",
+        "MUNKAIDŐ(TELJES/RÉSZ)": "worktime_type",
+        "MUNKAIDŐ (TELJES/RÉSZ)": "worktime_type",
+    },
+    4: {"NÉV": "name", "LAKÓHELY": "address", "ADÓAZONOSÍTÓJEL": "vat"},
+    7: {
+        "NÉV": "name",
+        "LAKÓHELY": "address",
+        "ADÓAZONOSÍTÓJEL": "vat",
+        "AKTUÁLIS ÉVSZÁM": "current_year",
+    },
+    8: {
+        "NÉV": "name",
+        "ADÓAZONOSÍTÓJEL": "vat",
+        "SZÜLETÉSI HELY": "birthplace",
+        "SZÜLETÉSI IDŐ": "birthday",
+        "HAVIBÉR": "payment_formatted",
+        "AKTUÁLIS ÉVSZÁM": "current_year",
+    },
+    10: {"NÉV": "name", "LAKÓHELY": "address", "ADÓAZONOSÍTÓJEL": "vat"},
+    11: {"NÉV": "name", "ADÓAZONOSÍTÓJEL": "vat", "AKTUÁLIS ÉVSZÁM": "current_year"},
+    12: {"NÉV": "name", "ADÓAZONOSÍTÓJEL": "vat", "AKTUÁLIS ÉVSZÁM": "current_year"},
+    13: {"NÉV": "name", "ADÓAZONOSÍTÓJEL": "vat", "AKTUÁLIS ÉVSZÁM": "current_year"},
+    14: {
+        "NÉV": "name",
+        "ANYJA NEVE": "momname",
+        "SZÜLETÉSI HELY": "birthplace",
+        "SZÜLETÉSI DÁTUM": "birthday",
+        "ADÓAZONOSÍTÓJEL": "vat",
+        "LAKÓHELY": "address",
+        "TARTÓZKODÁSI HELY": "stayaddress",
+    },
+    21: {"NÉV": "name", "ADÓAZONOSÍTÓJEL": "vat"},
+}
 
 
 def _find_template(root: Path, needle: str) -> Path | None:
@@ -417,7 +469,14 @@ def _set_cell(
     text.text = str(value)
 
 
-def _fill_label_cells(root: ET.Element, values: dict[str, str], odt: bool = False, skip_labels: set[str] | None = None, append_same_cell: bool = False) -> None:
+def _fill_label_cells(
+    root: ET.Element,
+    values: dict[str, str],
+    odt: bool = False,
+    skip_labels: set[str] | None = None,
+    append_same_cell: bool = False,
+    protect: Callable[[object], str] | None = None,
+) -> None:
     row_tag = f"{{{ODT_TABLE}}}table-row" if odt else f"{{{DOCX_NS}}}tr"
     cell_tag = f"{{{ODT_TABLE}}}table-cell" if odt else f"{{{DOCX_NS}}}tc"
     label_map = {_norm(k): v for k, v in values.items()}
@@ -434,6 +493,7 @@ def _fill_label_cells(root: ET.Element, values: dict[str, str], odt: bool = Fals
                 label_tail = label[len(wanted):].strip() if label.startswith(wanted) else ""
                 is_empty_label = label == wanted or label == wanted + ":"
                 if is_empty_label:
+                    replacement = protect(replacement) if protect is not None else str(replacement)
                     target = cells[index + 1] if index + 1 < len(cells) and not _norm("".join(cells[index + 1].itertext())) else cell
                     if target is cell:
                         # Keep the label in ODT's single-cell form and append the value.
@@ -471,7 +531,11 @@ def _split_address(value: str) -> tuple[str, str, str, str]:
     return match.group(1), match.group(2).strip(), match.group(3).strip(), match.group(4)
 
 
-def _fill_szep_card(root: ET.Element, values: dict[str, str]) -> None:
+def _fill_szep_card(
+    root: ET.Element,
+    values: dict[str, str],
+    protect: Callable[[object], str] | None = None,
+) -> None:
     """Fill the fixed multi-column layout of the SZÉP card application form."""
     rows = root.findall(f".//{{{DOCX_NS}}}tr")
     postal, city, street, number = _split_address(values.get("address", ""))
@@ -495,8 +559,9 @@ def _fill_szep_card(root: ET.Element, values: dict[str, str]) -> None:
         cells = rows[row_index].findall(f"{{{DOCX_NS}}}tc")
         for cell_index, value in assignments:
             if cell_index < len(cells) and value:
+                output_value = protect(value) if protect is not None else str(value)
                 _set_cell(
-                    cells[cell_index], value,
+                    cells[cell_index], output_value,
                     no_wrap=(row_index in {5, 7} and cell_index == 3),
                     min_width_twips=(650 if row_index in {5, 7} and cell_index == 3 else None),
                     size_half_points=16,
@@ -505,7 +570,8 @@ def _fill_szep_card(root: ET.Element, values: dict[str, str]) -> None:
         # separate empty cell in the source document; keep the label and add the value beside it.
         if row_index in {4, 6} and postal and len(cells) > 1:
             label_cell = cells[1]
-            _set_cell(label_cell, f"Irányítószám / Postal code: {postal}", size_half_points=16)
+            postal_value = protect(postal) if protect is not None else postal
+            _set_cell(label_cell, f"Irányítószám / Postal code: {postal_value}", size_half_points=16)
         if row_index in {5, 7} and len(cells) > 3:
             # The template allocates only 236 twips to the house-number value.
             # Take width from its label cell so multi-digit numbers stay on one line.
@@ -521,18 +587,50 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
     source_xml = entries[xml_name]
     namespaces = _source_namespaces(source_xml)
     root = ET.fromstring(source_xml)
+    template_order = _template_order(template)
+    is_szep_application = "szép" in template.stem.casefold() and template_order is None
+    protected_values: dict[str, str] = {}
+
+    def protect(value: object) -> str:
+        """Return an opaque token so inserted values are never parsed again."""
+        token = f"\ue000{len(protected_values)}\ue001"
+        protected_values[token] = "" if value is None else str(value)
+        return token
+
+    def restore_protected_values() -> None:
+        if not protected_values:
+            return
+        token_pattern = re.compile("|".join(re.escape(token) for token in protected_values))
+        for element in root.iter():
+            if element.text:
+                element.text = token_pattern.sub(lambda match: protected_values[match.group(0)], element.text)
+            if element.tail:
+                element.tail = token_pattern.sub(lambda match: protected_values[match.group(0)], element.tail)
+
     if odt:
         text_tags = {f"{{{ODT_TEXT}}}p", f"{{{ODT_TEXT}}}span"}
     else:
         text_tags = {f"{{{DOCX_NS}}}t"}
-    if "szép" in template.stem.casefold():
-        _fill_szep_card(root, values)
+    if is_szep_application:
+        _fill_szep_card(root, values, protect=protect)
     skip_labels = {_norm("NÉV"), _norm("NÉV:")} if template.stem.casefold().startswith("gdpr") else set()
     append_same_cell = any(marker in template.stem.casefold() for marker in ("munkaközi szünet", "munkaszerződés", "munkaidőkeret"))
-    if "szép" not in template.stem.casefold():
-        _fill_label_cells(root, values, odt, skip_labels=skip_labels, append_same_cell=append_same_cell)
+    if not is_szep_application and template_order is None:
+        label_values = dict(values)
+        # This literal address is a placeholder only in the contract's
+        # work-location sentence. In every table it is company master data,
+        # so the generic label/value pass must never treat it as an input.
+        label_values.pop("6724 Szeged, Trafó köz 3.", None)
+        _fill_label_cells(
+            root,
+            label_values,
+            odt,
+            skip_labels=skip_labels,
+            append_same_cell=append_same_cell,
+            protect=protect,
+        )
     replacements_to_apply = replacements
-    if "szép" in template.stem.casefold():
+    if is_szep_application:
         # The SZÉP form uses the employee's own mobile/e-mail fields; boss
         # contact placeholders belong only to the work-time information form.
         replacements_to_apply = {
@@ -548,23 +646,54 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
         replacements_to_apply = {
             key: value for key, value in replacements.items() if _norm(key) not in {_norm("NÉV"), _norm("NÉV:")}
         }
+    replacements_to_apply = {key: protect(value) for key, value in replacements_to_apply.items()}
 
     template_name = template.stem.casefold()
+    numbered_fields = NUMBERED_TEMPLATE_FIELDS.get(template_order or -1, {})
+    for placeholder, value_key in numbered_fields.items():
+        replacements_to_apply[placeholder] = protect(values.get(value_key, ""))
+
+    if template_order == 3:
+        # The second NÉV token is specifically the employee's birth name.
+        _replace_split_placeholder(
+            root,
+            "NÉV",
+            protect(values.get("birthname", "")),
+            text_tags,
+            paragraph_filter=lambda text: "születési neve" in _norm(text),
+        )
+        _replace_split_placeholder(root, "NÉV", protect(values.get("name", "")), text_tags)
+        replacements_to_apply.pop("NÉV", None)
+        # ``TAJ`` occurs first in the fixed label and then as the value token
+        # on the same line. Only the final highlighted occurrence is data.
+        _replace_split_placeholder(
+            root,
+            "TAJ",
+            protect(values.get("taj", "")),
+            text_tags,
+            last_only=True,
+        )
+        replacements_to_apply.pop("TAJ", None)
+
+    workplace_placeholder = "6724 Szeged, Trafó köz 3."
+    workplace_value = protect(replacements.get(workplace_placeholder, ""))
+    # The selected workplace is a contract-only field. Other templates use
+    # this same text as the company's registered address, which must remain
+    # untouched along with its original table/paragraph formatting.
+    replacements_to_apply.pop(workplace_placeholder, None)
     # These placeholders are intentionally bold in the templates, but Word
     # stores several of them in multiple runs.  Replace them before the
     # generic fallback so both choices keep the intended bold appearance.
     if "munkaközi szünet" in template_name:
         for placeholder, value in (
-            ("30 perc", replacements.get("30 perc", "")),
-            ("harminc perc", replacements.get("harminc perc", "")),
-            ("amely része a munkaidőnek", replacements.get("amely része a munkaidőnek", "")),
+            ("30 perc", protect(replacements.get("30 perc", ""))),
+            ("harminc perc", protect(replacements.get("harminc perc", ""))),
+            ("amely része a munkaidőnek", protect(replacements.get("amely része a munkaidőnek", ""))),
         ):
             _replace_split_placeholder(root, placeholder, value, text_tags, force_bold=True)
             replacements_to_apply.pop(placeholder, None)
 
     if "munkaszerződés" in template_name:
-        workplace_placeholder = "6724 Szeged, Trafó köz 3."
-        workplace_value = replacements.get(workplace_placeholder, "")
         # In the work-location sentence the address is bold; the company
         # address elsewhere in the contract is deliberately not.  Preserve
         # that distinction for either selected workplace.
@@ -574,19 +703,17 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
             workplace_value,
             text_tags,
             force_bold=True,
-            paragraph_filter=lambda text: "munkahelyen" in _norm(text),
+            paragraph_filter=lambda text: "munkahely" in _norm(text),
         )
-        _replace_split_placeholder(root, workplace_placeholder, workplace_value, text_tags)
-        replacements_to_apply.pop(workplace_placeholder, None)
 
         # These contract placeholders are split across multiple Word runs.
         # Replace only those runs so the surrounding sentence keeps its own
         # formatting and the marked values retain their original bold style.
         contract_fields = (
-            ("BELÉPÉS DÁTUM", replacements.get("BELÉPÉS DÁTUM", "")),
-            ("PRÓBAIDŐ VÉGE DÁTUM", replacements.get("PRÓBAIDŐ VÉGE DÁTUM", "")),
-            (",-Ft/ hó", replacements.get("__PAYMENT_PLACEHOLDER__", "").strip()),
-            ("SZÁMMAL KIÍRVA", replacements.get("SZÁMMAL KIÍRVA", "")),
+            ("BELÉPÉS DÁTUM", protect(replacements.get("BELÉPÉS DÁTUM", ""))),
+            ("PRÓBAIDŐ VÉGE DÁTUM", protect(replacements.get("PRÓBAIDŐ VÉGE DÁTUM", ""))),
+            (",-Ft/ hó", protect(replacements.get("__PAYMENT_PLACEHOLDER__", "").strip())),
+            ("SZÁMMAL KIÍRVA", protect(replacements.get("SZÁMMAL KIÍRVA", ""))),
         )
         for placeholder, value in contract_fields:
             _replace_split_placeholder(root, placeholder, value, text_tags, force_bold=True)
@@ -594,23 +721,8 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
         replacements_to_apply.pop("__PAYMENT_PLACEHOLDER__", None)
 
     if "munkaidőkeret" in template_name:
-        workplace_placeholder = "6724 Szeged, Trafó köz 3."
-        workplace_value = replacements.get(workplace_placeholder, "")
-        # Replace only the highlighted work-location field. The identical,
-        # unmarked address in the company header is the registered office and
-        # must remain unchanged. Editing the existing span preserves whether
-        # the template made the field bold or regular.
-        _replace_split_placeholder(
-            root,
-            workplace_placeholder,
-            workplace_value,
-            text_tags,
-            paragraph_filter=lambda text: "munkavégzésének helye" in _norm(text),
-        )
-        replacements_to_apply.pop(workplace_placeholder, None)
-
-        break_duration = values.get("workbreak", "")
-        break_type = values.get("breaktype_selected", "")
+        break_duration = protect(values.get("workbreak", ""))
+        break_type = protect(values.get("breaktype_selected", ""))
         _replace_split_placeholder(root, "30 perc", break_duration, text_tags)
         if odt:
             _replace_odt_text(root, "mely a munkaidő részét képezi", f"mely {break_type}")
@@ -626,7 +738,7 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
     if "munkaruha" in template_name:
         # The first occurrence is the label ``Dátum:``, while only the second
         # standalone placeholder after ``Szeged,`` belongs to the document.
-        _replace_split_placeholder(root, "Dátum", replacements.get("Dátum", ""), text_tags, last_only=True)
+        _replace_split_placeholder(root, "Dátum", protect(replacements.get("Dátum", "")), text_tags, last_only=True)
         replacements_to_apply.pop("Dátum", None)
 
     # Contact placeholders can be prefixes of their replacement values.  In
@@ -647,6 +759,7 @@ def _edit_template(template: Path, values: dict[str, str], replacements: dict[st
 
     _replace_all(root, replacements_to_apply, text_tags)
     _clean_colours(root, odt)
+    restore_protected_values()
     entries[xml_name] = _serialize_xml(root, namespaces)
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w", zipfile.ZIP_DEFLATED) as target:
@@ -683,6 +796,16 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
             values["probation_end"] = _three_months(person.get("entry", ""))
             values["payment_words"] = number_hu(person.get("payment", ""))
             values["payment_formatted"] = format_payment(person.get("payment", ""))
+            values["current_year"] = str(date.today().year)
+            worktime = person_extra.get("worktime", "")
+            worktime_values = {
+                "Teljes munkaidő (8 óra)": ("40", "teljes munkaidő", "8"),
+                "Részmunkaidő (6 óra)": ("30", "részmunkaidő", "6"),
+                "Részmunkaidő (4 óra)": ("20", "részmunkaidő", "4"),
+            }
+            if worktime not in worktime_values:
+                raise ValueError(f"Érvénytelen munkaidő-beállítás: {worktime or 'nincs megadva'}")
+            values["weekly_hours"], values["worktime_type"], values["daily_hours"] = worktime_values[worktime]
             written_break = "hatvan perc" if person_extra.get("workbreak", "").strip() == "60 perc" else "harminc perc"
             values.update({
                 "Munkavállaló neve": person.get("name", ""), "Munkavállaló neve:": person.get("name", ""),
@@ -722,7 +845,11 @@ def build_hr_documents(people: list[dict[str, str]], extra: dict[str, str] | lis
                 "__SZABADSAG_VAT__": f"Adóazonosító jel: {person.get('vat', '')}",
             }
             values.update(replacements)
-            for template in template_dir.iterdir():
+            templates = sorted(
+                template_dir.iterdir(),
+                key=lambda path: (_template_order(path) is None, _template_order(path) or 0, path.name.casefold()),
+            )
+            for template in templates:
                 if template.suffix.lower() not in {".docx", ".odt"}: continue
                 data = _edit_template(template, values, replacements)
                 safe_name = re.sub(r"[\\/:*?\"<>|]", "_", person.get("name", "ismeretlen"))
