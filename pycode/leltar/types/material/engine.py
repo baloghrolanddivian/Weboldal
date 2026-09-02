@@ -11,6 +11,8 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+from tools.excel import normalize_excel_payload
+
 try:
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -22,7 +24,7 @@ except Exception:  # pragma: no cover
     PatternFill = None
 
 
-MATERIAL_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
+MATERIAL_INVENTORY_ALLOWED_EXTENSIONS = {".xls", ".xlsx", ".xlsm", ".csv"}
 
 
 def file_name_allowed(file_name: str) -> bool:
@@ -299,8 +301,8 @@ def _read_material_rows(file_name: str, payload: bytes) -> list[dict]:
 def _read_xlsx_rows(payload: bytes) -> list[dict]:
     """Read anyagraktar rows from an Excel workbook."""
     if load_workbook is None:
-        raise RuntimeError("Az XLSX olvasáshoz hiányzik az openpyxl csomag.")
-    workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+        raise RuntimeError("Az Excel olvasásához hiányzik az openpyxl csomag.")
+    workbook = load_workbook(io.BytesIO(normalize_excel_payload(payload)), read_only=True, data_only=True)
     sheet = workbook.active
     rows_iter = sheet.iter_rows(values_only=True)
     try:
@@ -350,8 +352,8 @@ def _read_semifinished_rows(file_name: str, payload: bytes) -> list[dict]:
 def _read_semifinished_xlsx_rows(payload: bytes) -> list[dict]:
     """Read semifinished rows from an Excel workbook."""
     if load_workbook is None:
-        raise RuntimeError("Az XLSX olvasáshoz hiányzik az openpyxl csomag.")
-    workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+        raise RuntimeError("Az Excel olvasásához hiányzik az openpyxl csomag.")
+    workbook = load_workbook(io.BytesIO(normalize_excel_payload(payload)), read_only=True, data_only=True)
     sheet = workbook.active
     rows_iter = sheet.iter_rows(values_only=True)
     try:

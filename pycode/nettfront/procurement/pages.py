@@ -110,7 +110,7 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
                 id="nettfront-procurement-parts"
                 type="file"
                 name="parts_file"
-                accept=".xlsx,.xlsm,.csv,text/csv"
+                accept=".xls,.xlsx,.xlsm,.csv,application/vnd.ms-excel,text/csv"
               />
 
               <label class="procurement-upload-surface" for="nettfront-procurement-parts">
@@ -130,7 +130,7 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
                   <span>Pontosabb Beszerzés</span>
                 </div>
 
-                <span class="procurement-file-state" id="nettfront-procurement-parts-state">Támogatott formátum: XLSX, XLSM, CSV</span>
+                <span class="procurement-file-state" id="nettfront-procurement-parts-state">Támogatott formátum: XLS, XLSX, XLSM, CSV</span>
               </label>
 
               <div class="procurement-action-row">
@@ -186,7 +186,7 @@ def render_nettfront_procurement_form(message: str = "") -> bytes:
     });
 
     invoiceInput.addEventListener("change", () => updateState(invoiceInput, invoiceState, "Támogatott formátum: PDF"));
-    partsInput.addEventListener("change", () => updateState(partsInput, partsState, "Támogatott formátum: XLSX, XLSM, CSV"));
+    partsInput.addEventListener("change", () => updateState(partsInput, partsState, "Támogatott formátum: XLS, XLSX, XLSM, CSV"));
 
     form.addEventListener("submit", () => {
       submitButton.textContent = "Beszerzés készül...";
@@ -317,7 +317,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
             <p>Hiányzó kódokat találtunk. Tölts fel egy friss alkatrészlistát, és újraépítjük a Beszerzést.</p>
             {uploaded_meta_html}
             <form class="procurement-remap-form" method="post" action="{NETTFRONT_PROCUREMENT_PARTS_PREFIX}/{job_id}" enctype="multipart/form-data">
-              <input class="procurement-remap-input" type="file" name="parts_file" accept=".xlsx,.xlsm,.csv,text/csv" required />
+              <input class="procurement-remap-input" type="file" name="parts_file" accept=".xls,.xlsx,.xlsm,.csv,application/vnd.ms-excel,text/csv" required />
               <div class="procurement-launch-row">
                 <button class="button button-primary" type="submit">Alkatrészlista feltöltése</button>
                 <a class="button button-secondary" href="{NETTFRONT_PROCUREMENT_ROUTE}">Új feldolgozás</a>

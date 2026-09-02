@@ -36,16 +36,16 @@ def process_order_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int, byte
         return 400, render_nettfront_order_form("A raktár Excel feltöltése kötelező.")
 
     stock_name, stock_bytes = stock_file
-    if not stock_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        return 400, render_nettfront_order_form("A raktárfájl csak XLSX, XLSM vagy CSV lehet.")
+    if not stock_name.lower().endswith((".xls", ".xlsx", ".xlsm", ".csv")):
+        return 400, render_nettfront_order_form("A raktárfájl csak XLS, XLSX, XLSM vagy CSV lehet.")
 
     uploaded_parts_name = ""
     uploaded_parts_bytes: bytes | None = None
     uploaded_parts_count = 0
     if parts_file is not None:
         uploaded_parts_name, uploaded_parts_bytes = parts_file
-        if uploaded_parts_name and not uploaded_parts_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
-            return 400, render_nettfront_order_form("A friss alkatrészlista csak XLSX, XLSM vagy CSV lehet.")
+        if uploaded_parts_name and not uploaded_parts_name.lower().endswith((".xls", ".xlsx", ".xlsm", ".csv")):
+            return 400, render_nettfront_order_form("A friss alkatrészlista csak XLS, XLSX, XLSM vagy CSV lehet.")
         try:
             uploaded_parts_count = len(_load_nettfront_parts_list_from_bytes(uploaded_parts_bytes or b"", uploaded_parts_name))
         except Exception as exc:

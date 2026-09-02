@@ -19,6 +19,8 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
+from tools.excel import normalize_excel_payload
+
 try:
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -27,7 +29,7 @@ except Exception:  # pragma: no cover - optional dependency handling
     load_workbook = None
 
 
-MATT_INVENTORY_ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".csv"}
+MATT_INVENTORY_ALLOWED_EXTENSIONS = {".xls", ".xlsx", ".xlsm", ".csv"}
 FAMILY_STOPWORDS = {
     "folias",
     "foliasfr",
@@ -397,7 +399,7 @@ def _read_price_map(file_name: str, payload: bytes) -> dict[str, MattPriceInfo]:
 
 
 def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
-    """Read daily Matt stock rows from XLSX/XLSM/CSV source data."""
+    """Read daily Matt stock rows from XLS/XLSX/XLSM/CSV source data."""
     rows = _read_rows(file_name, payload)
     if not rows:
         raise ValueError("A napi készletfájl üres.")
@@ -440,10 +442,10 @@ def _read_stock_rows(file_name: str, payload: bytes) -> list[dict]:
 def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
     """Read tabular rows from supported Excel or CSV payloads."""
     suffix = Path(file_name).suffix.lower()
-    if suffix in {".xlsx", ".xlsm"}:
+    if suffix in {".xls", ".xlsx", ".xlsm"}:
         if load_workbook is None:
             raise RuntimeError("Az Excel feldolgozáshoz hiányzik az openpyxl csomag.")
-        workbook = load_workbook(io.BytesIO(payload), data_only=True)
+        workbook = load_workbook(io.BytesIO(normalize_excel_payload(payload)), data_only=True)
         sheet = workbook.active
         return [list(row) for row in sheet.iter_rows(values_only=True)]
 
@@ -451,7 +453,7 @@ def _read_rows(file_name: str, payload: bytes) -> list[list[object]]:
         text = _decode_csv_bytes(payload)
         return [list(row) for row in csv.reader(io.StringIO(text))]
 
-    raise ValueError("Csak XLSX, XLSM vagy CSV fájlokat tudok feldolgozni.")
+    raise ValueError("Csak XLS, XLSX, XLSM vagy CSV fájlokat tudok feldolgozni.")
 
 
 def _decode_csv_bytes(payload: bytes) -> str:

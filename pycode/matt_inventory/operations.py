@@ -27,14 +27,14 @@ def process_matt_inventory_upload(files: dict[str, tuple[str, bytes]]) -> tuple[
 
     stock_name, stock_bytes = stock_file
     if not file_name_allowed(stock_name):
-        return 400, render_matt_inventory_form("A napi k?szletf?jl csak XLSX, XLSM vagy CSV lehet.")
+        return 400, render_matt_inventory_form("A napi k?szletf?jl csak XLS, XLSX, XLSM vagy CSV lehet.")
 
     price_name = ""
     price_bytes: bytes | None = None
     if price_file is not None:
         price_name, price_bytes = price_file
         if not file_name_allowed(price_name):
-            return 400, render_matt_inventory_form("A fix ?rt?bla csak XLSX, XLSM vagy CSV lehet.")
+            return 400, render_matt_inventory_form("A fix ?rt?bla csak XLS, XLSX, XLSM vagy CSV lehet.")
     else:
         saved_price_payload = _matt_inventory_saved_price_payload()
         if saved_price_payload is None:

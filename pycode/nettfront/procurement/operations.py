@@ -38,8 +38,8 @@ def process_procurement_upload(files: dict[str, tuple[str, bytes]]) -> tuple[int
     merged_map = None
     if parts_file is not None:
         uploaded_parts_name, uploaded_parts_bytes = parts_file
-        if not uploaded_parts_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
-            return 400, render_nettfront_procurement_form("Az alkatrészlista csak XLSX, XLSM vagy CSV fájl lehet.")
+        if not uploaded_parts_name.lower().endswith((".xls", ".xlsx", ".xlsm", ".csv")):
+            return 400, render_nettfront_procurement_form("Az alkatrészlista csak XLS, XLSX, XLSM vagy CSV fájl lehet.")
         try:
             merged_map = load_alkatresz_map()
             merged_map.update(load_alkatresz_map_from_bytes(uploaded_parts_bytes, uploaded_parts_name))
@@ -85,8 +85,8 @@ def rebuild_procurement_parts(job_id: str, files: dict[str, tuple[str, bytes]]) 
         return 400, render_nettfront_procurement_result(job_id, metadata, message="Az alkatrészlista feltöltése kötelező.")
 
     parts_name, parts_bytes = parts_file
-    if not parts_name.lower().endswith((".xlsx", ".xlsm", ".csv")):
-        return 400, render_nettfront_procurement_result(job_id, metadata, message="Az alkatrészlista csak XLSX, XLSM vagy CSV fájl lehet.")
+    if not parts_name.lower().endswith((".xls", ".xlsx", ".xlsm", ".csv")):
+        return 400, render_nettfront_procurement_result(job_id, metadata, message="Az alkatrészlista csak XLS, XLSX, XLSM vagy CSV fájl lehet.")
 
     source_invoice_file = str(metadata.get("source_invoice_file", "source-invoice.pdf")).strip() or "source-invoice.pdf"
     source_invoice_path = job_dir / source_invoice_file

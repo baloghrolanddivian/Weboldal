@@ -89,7 +89,7 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                 class="order-file-input"
                 type="file"
                 name="stock_file"
-                accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                accept=".xls,.xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 required
               />
               <label class="order-dropzone-surface" for="nettfront-order-stock">
@@ -102,7 +102,7 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                     <span><code>Alkatr.szám</code>, <code>Alkatr.leírás</code>, <code>Rend.áll.rakt.készl. ME</code>, <code>Rend.áll</code>, <code>Biztonsági készlet</code>, <code>Tárolh.menny.</code></span>
                   </div>
                 </div>
-                <span class="order-file-state" id="nettfront-order-stock-state">Támogatott formátum: XLSX, XLSM, CSV</span>
+                <span class="order-file-state" id="nettfront-order-stock-state">Támogatott formátum: XLS, XLSX, XLSM, CSV</span>
               </label>
             </div>
 
@@ -118,7 +118,7 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                   class="order-file-input"
                   type="file"
                   name="parts_file"
-                  accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                  accept=".xls,.xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 />
                 <label class="order-dropzone-surface" for="nettfront-order-parts">
                   <div class="order-dropzone-copy">
@@ -130,7 +130,7 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
                       <span>Egyszerű, egyoszlopos cikkszámlista. Az első oszlopban csak az alkatrészszámok szerepeljenek.</span>
                     </div>
                   </div>
-                  <span class="order-file-state" id="nettfront-order-parts-state">Támogatott formátum: XLSX, XLSM, CSV</span>
+                  <span class="order-file-state" id="nettfront-order-parts-state">Támogatott formátum: XLS, XLSX, XLSM, CSV</span>
                 </label>
               </div>
             </div>
@@ -444,8 +444,8 @@ def render_nettfront_order_form(message: str = "", success: bool = False) -> byt
     bindDropzone(stockDropzone);
     bindDropzone(partsDropzone);
 
-    stockInput.addEventListener("change", () => updateState(stockInput, stockState, "Támogatott formátum: XLSX, XLSM, CSV"));
-    partsInput.addEventListener("change", () => updateState(partsInput, partsState, "Támogatott formátum: XLSX, XLSM, CSV"));
+    stockInput.addEventListener("change", () => updateState(stockInput, stockState, "Támogatott formátum: XLS, XLSX, XLSM, CSV"));
+    partsInput.addEventListener("change", () => updateState(partsInput, partsState, "Támogatott formátum: XLS, XLSX, XLSM, CSV"));
     form.addEventListener("submit", () => {
       submitButton.textContent = "Javaslat készül...";
       submitButton.disabled = true;

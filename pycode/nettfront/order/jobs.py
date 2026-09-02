@@ -312,10 +312,16 @@ def _load_nettfront_parts_list_from_bytes(payload: bytes, file_name: str) -> lis
     file_name = str(file_name or "").strip().lower()
     values: list[str] = []
 
-    if file_name.endswith((".xlsx", ".xlsm")):
+    if file_name.endswith((".xls", ".xlsx", ".xlsm")):
         if load_workbook is None:
             raise ValueError("Az Excel feldolgozáshoz hiányzik az openpyxl csomag.")
-        workbook = load_workbook(io.BytesIO(payload), data_only=True, read_only=True)
+        from tools.excel import normalize_excel_payload
+
+        workbook = load_workbook(
+            io.BytesIO(normalize_excel_payload(payload)),
+            data_only=True,
+            read_only=True,
+        )
         worksheet = workbook.active
         for row in worksheet.iter_rows(values_only=True):
             first_value = None
@@ -342,7 +348,7 @@ def _load_nettfront_parts_list_from_bytes(payload: bytes, file_name: str) -> lis
             if normalized:
                 values.append(normalized)
     else:
-        raise ValueError("A friss alkatrészlista csak XLSX, XLSM vagy CSV lehet.")
+        raise ValueError("A friss alkatrészlista csak XLS, XLSX, XLSM vagy CSV lehet.")
 
     unique_values: list[str] = []
     seen: set[str] = set()
