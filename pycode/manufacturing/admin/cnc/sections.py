@@ -1132,7 +1132,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "kata": "orange",
             "doroti": "rose",
             "kira": "lime",
-            "klio": "teal",
+            "klio": "klio",
         }
         known_models = {"anna", "kinga", "antonia", "laura", "zille", "kata", "doroti", "kira", "klio"}
         invalid_model_tokens = {"", "-", "nincs", "front", "frontos", "furva", "fura", "fio", "fiok"}
