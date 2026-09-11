@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .base.common import *
 from .base.common import _production_date_label_cached
+from .state_store import atomic_write_json, locked_state_file
 
 
 MANUFACTURING_MISSING_INDEX_LOCK = threading.RLock()
@@ -397,9 +398,23 @@ def rebuild_manufacturing_missing_indexes(
 
     runtime_root = Path(runtime_root)
     runtime_root.mkdir(parents=True, exist_ok=True)
-    state_paths = sorted(
-        runtime_root.glob("*/state.json"),
-        key=lambda path: int(path.parent.name) if path.parent.name.isdigit() else -1,
+    operation_directories = {
+        "pantolo": "pantolas",
+        "front": "front_osszekeszites",
+        "korpusz": "korpusz_osszekeszites",
+    }
+    state_sources: list[tuple[Path, tuple[str, ...], Path]] = [
+        (path, selected, runtime_root)
+        for path in runtime_root.glob("*/state.json")
+    ]
+    for operation in selected:
+        operation_root = runtime_root / operation_directories[operation]
+        state_sources.extend(
+            (path, (operation,), operation_root)
+            for path in operation_root.glob("*/state.json")
+        )
+    state_sources.sort(
+        key=lambda item: int(item[0].parent.name) if item[0].parent.name.isdigit() else -1,
     )
     existing_payloads = {
         operation: operation_specs[operation][1](runtime_root)
@@ -442,19 +457,19 @@ def rebuild_manufacturing_missing_indexes(
 
     with tempfile.TemporaryDirectory(prefix="missing-index-rebuild-", dir=runtime_root) as temporary:
         staging_root = Path(temporary)
-        total = len(state_paths)
-        for position, state_path in enumerate(state_paths, start=1):
+        total = len(state_sources)
+        for position, (state_path, source_operations, state_root) in enumerate(state_sources, start=1):
             production_number = state_path.parent.name
             red_keys = [
                 str(key).strip()
-                for key, value in load_selection_state(runtime_root, production_number).items()
+                for key, value in load_selection_state(state_root, production_number).items()
                 if str(value).strip().lower() == "red" and str(key).strip()
             ]
             red_key_count += len(red_keys)
             emit(f"[{position}/{total}] {production_number}: {len(red_keys)} piros állapot")
             if not red_keys:
                 continue
-            for operation in selected:
+            for operation in source_operations:
                 _filename, _loader, synchronizer, source_names = operation_specs[operation]
                 operation_keys = keys_for_operation(red_keys, source_names)
                 if not operation_keys:
@@ -487,39 +502,59 @@ def rebuild_manufacturing_missing_indexes(
             staged_path.replace(runtime_root / filename)
 
     return {
-        "state_files": len(state_paths),
+        "state_files": len(state_sources),
         "red_state_keys": red_key_count,
         "snapshots": snapshot_counts,
         "elapsed_seconds": round(time.monotonic() - started_at, 3),
     }
 
 
-def save_selection_state(runtime_root: Path, production_number: str, row_id: str, state: str) -> dict[str, str]:
+def save_selection_state(
+    runtime_root: Path,
+    production_number: str,
+    row_id: str,
+    state: str,
+    fallback_runtime_root: Path | None = None,
+) -> dict[str, str]:
     """Persist a row state while preserving non-state metadata records."""
     target_dir = runtime_root / production_number
-    target_dir.mkdir(parents=True, exist_ok=True)
     path = selection_state_path(runtime_root, production_number)
-    try:
-        raw_payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except Exception:
-        raw_payload = {}
-    if not isinstance(raw_payload, dict):
-        raw_payload = {}
-    metadata = {
-        str(key): value
-        for key, value in raw_payload.items()
-        if isinstance(value, (dict, list))
-    }
-    current = load_selection_state(runtime_root, production_number)
-    normalized_state = str(state or "").strip().lower()
-    if normalized_state in {"", "none", "clear"}:
-        current.pop(row_id, None)
-    elif normalized_state in {"green", "red", "done"}:
-        current[row_id] = normalized_state
-    elif is_structured_manufacturing_state_key(row_id) and re.fullmatch(r"\d{1,12}", normalized_state):
-        current[row_id] = normalized_state
-    path.write_text(json.dumps({**metadata, **current}, ensure_ascii=False, indent=2), encoding="utf-8")
-    return current
+    fallback_path = (
+        selection_state_path(Path(fallback_runtime_root), production_number)
+        if fallback_runtime_root is not None
+        else None
+    )
+    with locked_state_file():
+        source_path = path if path.exists() else fallback_path
+        raw_payload: dict = {}
+        if source_path is not None and source_path.exists():
+            try:
+                loaded_payload = json.loads(source_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                raise ValueError(f"A gyártási állapotfájl nem olvasható: {source_path}") from exc
+            if not isinstance(loaded_payload, dict):
+                raise ValueError(f"A gyártási állapotfájl tartalma érvénytelen: {source_path}")
+            raw_payload = loaded_payload
+        metadata = {
+            str(key): value
+            for key, value in raw_payload.items()
+            if isinstance(value, (dict, list))
+        }
+        current = load_selection_state(
+            runtime_root,
+            production_number,
+            fallback_runtime_root=fallback_runtime_root,
+        )
+        normalized_state = str(state or "").strip().lower()
+        if normalized_state in {"", "none", "clear"}:
+            current.pop(row_id, None)
+        elif normalized_state in {"green", "red", "done"}:
+            current[row_id] = normalized_state
+        elif is_structured_manufacturing_state_key(row_id) and re.fullmatch(r"\d{1,12}", normalized_state):
+            current[row_id] = normalized_state
+        target_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(path, {**metadata, **current})
+        return current
 
 
 def save_partial_quantity_state(runtime_root: Path, production_number: str, key: str, value: str) -> dict[str, str]:

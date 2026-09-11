@@ -58,6 +58,7 @@ from manufacturing import (
     load_selection_state,
     manufacturing_client_payload,
     manufacturing_module_payload,
+    operation_runtime_dir as manufacturing_operation_runtime_dir,
     render_manufacturing_module,
     runtime_dir as manufacturing_runtime_dir,
     save_partial_quantity_state,
@@ -5880,8 +5881,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         """Return the runtime folder used for persisted manufacturing row state."""
         clean_document_key = str(document_key or "").strip()
         if clean_document_key == "topfloor" or any(str(key or "").startswith("topfloor::") for key in state_keys):
-            return manufacturing_runtime_dir() / "topfloor"
-        return manufacturing_runtime_dir()
+            clean_document_key = "topfloor"
+        return manufacturing_operation_runtime_dir(clean_document_key)
+
+    def manufacturing_legacy_state_runtime_root(self, state_runtime_root: Path) -> Path | None:
+        """Return the former shared state root while an operation is migrated."""
+        shared_root = manufacturing_runtime_dir()
+        return shared_root if state_runtime_root != shared_root and state_runtime_root.name != "topfloor" else None
 
     def handle_topfloor_box_simple_action(self, action: str, category_key: str, payload: dict) -> bool:
         """Handle Topfloor box actions that do not write row state."""
@@ -6241,6 +6247,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             is_topfloor_row = document_key == "topfloor" or row_key.startswith("topfloor::")
             if is_topfloor_row:
                 runtime_root = runtime_root / "topfloor"
+            state_runtime_root = self.manufacturing_state_runtime_root(document_key, [str(value or "") for value in state_keys])
+            legacy_state_runtime_root = self.manufacturing_legacy_state_runtime_root(state_runtime_root)
             try:
                 requires_edit_alert = bool(
                     admin_manufacturing_topfloor_row_requires_edit_alert(
@@ -6251,11 +6259,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     )
                     if is_topfloor_row
                     else admin_manufacturing_row_requires_edit_alert(
-                        runtime_root,
+                        state_runtime_root,
                         production_number,
                         row_key,
                         [str(value or "").strip() for value in state_keys],
                         visible_state,
+                        legacy_state_runtime_root,
                     )
                 )
                 saved_fields = save_admin_manufacturing_row_data(
@@ -6391,6 +6400,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if not row_id:
                 self.respond_json(400, {"ok": False, "error": "Hiányzik a sorazonosító."})
                 return
+            if document_key not in {key for key, _label in MANUFACTURING_OPERATION_DEFINITIONS}:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik vagy érvénytelen a gyártási művelet."})
+                return
             if state not in {"green", "red", "clear", "none", ""}:
                 self.respond_json(400, {"ok": False, "error": "Érvénytelen sorállapot."})
                 return
@@ -6407,7 +6419,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 if not target_state_keys:
                     target_state_keys = target_row_ids
                 state_runtime_root = self.manufacturing_state_runtime_root(document_key, target_state_keys)
-                current_saved_state = load_selection_state(state_runtime_root, production_number)
+                legacy_state_runtime_root = self.manufacturing_legacy_state_runtime_root(state_runtime_root)
+                current_saved_state = load_selection_state(
+                    state_runtime_root,
+                    production_number,
+                    fallback_runtime_root=legacy_state_runtime_root,
+                )
                 locked_done_row_ids = [
                     target_key
                     for target_key in target_state_keys
@@ -6425,16 +6442,28 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     return
                 current_state: dict[str, str] = {}
                 for target_state_key in target_state_keys:
-                    current_state = save_selection_state(state_runtime_root, production_number, target_state_key, state)
+                    current_state = save_selection_state(
+                        state_runtime_root,
+                        production_number,
+                        target_state_key,
+                        state,
+                        fallback_runtime_root=legacy_state_runtime_root,
+                    )
                 for legacy_row_id in target_row_ids:
                     if legacy_row_id not in target_state_keys:
-                        current_state = save_selection_state(state_runtime_root, production_number, legacy_row_id, "clear")
+                        current_state = save_selection_state(
+                            state_runtime_root,
+                            production_number,
+                            legacy_row_id,
+                            "clear",
+                            fallback_runtime_root=legacy_state_runtime_root,
+                        )
                 if document_key == "pantolas":
-                    sync_pantolo_missing_state(state_runtime_root, production_number, target_state_keys, state)
+                    sync_pantolo_missing_state(manufacturing_runtime_dir(), production_number, target_state_keys, state)
                 elif document_key == "front_osszekeszites":
-                    sync_front_missing_state(state_runtime_root, production_number, target_state_keys, state)
+                    sync_front_missing_state(manufacturing_runtime_dir(), production_number, target_state_keys, state)
                 elif document_key == "korpusz_osszekeszites":
-                    sync_korpusz_missing_state(state_runtime_root, production_number, target_state_keys, state)
+                    sync_korpusz_missing_state(manufacturing_runtime_dir(), production_number, target_state_keys, state)
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
                 return
@@ -6641,6 +6670,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if not production_number:
                 self.respond_json(400, {"ok": False, "error": "Hiányzik a gyártási szám."})
                 return
+            if document_key not in {key for key, _label in MANUFACTURING_OPERATION_DEFINITIONS}:
+                self.respond_json(400, {"ok": False, "error": "Hiányzik vagy érvénytelen a gyártási művelet."})
+                return
             if not isinstance(raw_entries, list) or not raw_entries:
                 self.respond_json(400, {"ok": False, "error": "Nincs készre jelentendő zöld tétel."})
                 return
@@ -6761,14 +6793,27 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         skipped_state_keys.extend([key for key in target_state_keys if key])
                         continue
                     state_runtime_root = self.manufacturing_state_runtime_root(document_key, target_state_keys)
+                    legacy_state_runtime_root = self.manufacturing_legacy_state_runtime_root(state_runtime_root)
                     for target_id in target_state_keys:
                         if not target_id:
                             continue
-                        save_selection_state(state_runtime_root, production_number, target_id, "done")
+                        save_selection_state(
+                            state_runtime_root,
+                            production_number,
+                            target_id,
+                            "done",
+                            fallback_runtime_root=legacy_state_runtime_root,
+                        )
                         done_state_keys.append(target_id)
                     for target_id in unique_target_ids:
                         if target_id not in target_state_keys:
-                            save_selection_state(state_runtime_root, production_number, target_id, "clear")
+                            save_selection_state(
+                                state_runtime_root,
+                                production_number,
+                                target_id,
+                                "clear",
+                                fallback_runtime_root=legacy_state_runtime_root,
+                            )
                         done_row_ids.append(target_id)
             except Exception as exc:
                 self.respond_json(500, {"ok": False, "error": f"A kész állapot mentése nem sikerült: {exc}"})
