@@ -16,6 +16,8 @@ from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
+from manufacturing.state_store import atomic_write_json, locked_state_file
+
 SHOPFLOOR_BASE_URL = os.getenv("SHOPFLOOR_BASE_URL", "https://app01.internal.divian.hu:9000").rstrip("/")
 SHOPFLOOR_USERNAME = os.getenv("SHOPFLOOR_USERNAME", "alkatresz")
 SHOPFLOOR_PASSWORD = os.getenv("SHOPFLOOR_PASSWORD", "PPddaa1234")
@@ -792,19 +794,23 @@ def _topfloor_state_path(shipment_id: str) -> Path:
 def _load_topfloor_state_payload(shipment_id: str) -> dict:
     """Load the raw Topfloor shipment state payload."""
     path = _topfloor_state_path(shipment_id)
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8") or "{}")
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    with locked_state_file():
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8") or "{}")
+        except Exception as exc:
+            raise ValueError(f"A Topfloor állapotfájl nem olvasható: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"A Topfloor állapotfájl tartalma érvénytelen: {path}")
+    return payload
 
 
 def _save_topfloor_state_payload(shipment_id: str, payload: dict) -> None:
     """Save the raw Topfloor shipment state payload."""
     path = _topfloor_state_path(shipment_id)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    with locked_state_file():
+        atomic_write_json(path, payload)
 
 
 def _load_topfloor_state_boxes(shipment_id: str) -> dict[str, dict]:
@@ -820,13 +826,14 @@ def _load_topfloor_state_boxes(shipment_id: str) -> dict[str, dict]:
 def _save_topfloor_state_box(category_key: str, box: dict[str, object]) -> None:
     """Save one Topfloor category box into its shipment state file."""
     shipment_id = _topfloor_category_shipment_id(category_key)
-    payload = _load_topfloor_state_payload(shipment_id)
-    clean_key = str(category_key).strip()
-    legacy_key = _topfloor_legacy_category_key(clean_key)
-    payload[clean_key] = dict(box)
-    if legacy_key and legacy_key != clean_key:
-        payload.pop(legacy_key, None)
-    _save_topfloor_state_payload(shipment_id, payload)
+    with locked_state_file():
+        payload = _load_topfloor_state_payload(shipment_id)
+        clean_key = str(category_key).strip()
+        legacy_key = _topfloor_legacy_category_key(clean_key)
+        payload[clean_key] = dict(box)
+        if legacy_key and legacy_key != clean_key:
+            payload.pop(legacy_key, None)
+        _save_topfloor_state_payload(shipment_id, payload)
 
 
 def _load_topfloor_categories() -> dict[str, dict]:

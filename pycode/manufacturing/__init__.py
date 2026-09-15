@@ -22,7 +22,7 @@ from .common import (
     sync_front_missing_state,
     sync_korpusz_missing_state,
 )
-from .config import configure_manufacturing, runtime_dir
+from .config import configure_manufacturing, operation_runtime_dir, runtime_dir
 from .routes import (
     MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
@@ -89,6 +89,7 @@ __all__ = [
     "load_selection_state",
     "manufacturing_client_payload",
     "manufacturing_module_payload",
+    "operation_runtime_dir",
     "production_folder",
     "render_manufacturing_module",
     "rebuild_manufacturing_missing_indexes",

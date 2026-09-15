@@ -1966,6 +1966,9 @@ def render_manufacturing_page(
     .mfg-row.is-cnc-fiokelo.is-model-orange {{
       background: #ffe4d6;
     }}
+    .mfg-row.is-cnc-fiokelo.is-model-klio {{
+      background: #ffc7a3;
+    }}
     .mfg-row.is-cnc-fiokelo.is-model-rose {{
       background: #ffdbe7;
     }}
@@ -2117,6 +2120,11 @@ def render_manufacturing_page(
       background: #fee2d5;
       color: #c2410c;
       border: 1px solid rgba(194, 65, 12, 0.14);
+    }}
+    .mfg-row-badge.is-model-klio {{
+      background: #ffb982;
+      color: #9a3412;
+      border: 1px solid rgba(154, 52, 18, 0.2);
     }}
     .mfg-row-badge.is-model-rose {{
       background: #ffdce7;

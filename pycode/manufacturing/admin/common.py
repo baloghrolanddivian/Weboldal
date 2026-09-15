@@ -125,6 +125,7 @@ def manufacturing_row_requires_edit_alert(
     row_key: str,
     state_keys: list[str] | tuple[str, ...] | set[str] = (),
     visible_state: str = "",
+    fallback_runtime_root: Path | None = None,
 ) -> bool:
     """Return whether an edited non-Topfloor row is green or completed."""
     clean_number = str(production_number or "").strip()
@@ -161,7 +162,11 @@ def manufacturing_row_requires_edit_alert(
         for key in expanded_candidates
         if (identity := structured_identity(key))
     }
-    state = load_selection_state(runtime_root, clean_number)
+    state = load_selection_state(
+        runtime_root,
+        clean_number,
+        fallback_runtime_root=fallback_runtime_root,
+    )
     return any(
         str(value or "").strip().lower() in {"green", "done"}
         and (
