@@ -722,6 +722,8 @@ def _read_stock_rows(file_name: str, payload: bytes, serial_sizes: set[str] | No
 
     if None in {part_index, desc_index}:
         raise ValueError("A front leltárfájlban kell alkatrészszám és leírás oszlop.")
+    if qty_index is None:
+        raise ValueError("A front leltárfájlból hiányzik a befagyasztott rendszerkészlet oszlopa.")
 
     items: list[dict] = []
     for row in rows[1:]:
