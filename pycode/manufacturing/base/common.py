@@ -11,6 +11,8 @@ import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from pathlib import Path
 
+from ..state_store import locked_state_file
+
 
 MANUFACTURING_ROOT = Path(os.getenv("DIVIAN_MANUFACTURING_ROOT", r"J:\inSightData\Output\Gyartasi_papirok"))
 MANUFACTURING_ENTRIES_CACHE_LOCK = threading.Lock()
@@ -302,17 +304,28 @@ def selection_state_path(runtime_root: Path, production_number: str) -> Path:
     return runtime_root / production_number / "state.json"
 
 
-def load_selection_state(runtime_root: Path, production_number: str) -> dict[str, str]:
+def load_selection_state(
+    runtime_root: Path,
+    production_number: str,
+    fallback_runtime_root: Path | None = None,
+) -> dict[str, str]:
     """Load persisted row state, filtering unsupported keys and values."""
     path = selection_state_path(runtime_root, production_number)
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    fallback_path = (
+        selection_state_path(Path(fallback_runtime_root), production_number)
+        if fallback_runtime_root is not None
+        else None
+    )
+    with locked_state_file():
+        source_path = path if path.exists() else fallback_path
+        if source_path is None or not source_path.exists():
+            return {}
+        try:
+            payload = json.loads(source_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise ValueError(f"A gyártási állapotfájl nem olvasható: {source_path}") from exc
     if not isinstance(payload, dict):
-        return {}
+        raise ValueError(f"A gyártási állapotfájl tartalma érvénytelen: {source_path}")
     result: dict[str, str] = {}
     for key, value in payload.items():
         clean_key = str(key)

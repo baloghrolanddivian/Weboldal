@@ -128,7 +128,7 @@ def _build_color_inventory_session(file_name: str, payload: bytes, export_prefix
                 "row_id": _row_id(part_number, category, str(index)),
                 "part_number": part_number,
                 "description": _clean_text(item.get("description")),
-                "book_qty": "",
+                "book_qty": _clean_number_text(item.get("book_qty")),
                 "icg_code": category,
                 "input_qty": "",
             }
@@ -462,6 +462,8 @@ def _ensure_semifinished_headers(header_map: dict[str, int]) -> None:
             missing.append(label)
     if "color_desc" not in header_map and "color_code" not in header_map:
         missing.append("SZIN vagy SZIN.Desc")
+    if "book_qty" not in header_map:
+        missing.append("Könyvelési mennyiség")
     if missing:
         raise ValueError("Hiányzó kötelező oszlop: " + ", ".join(missing))
 
@@ -496,6 +498,7 @@ def _semifinished_row_from_values(header_map: dict[str, int], values: tuple | li
     return {
         "part_number": get_value("part_number"),
         "description": get_value("description"),
+        "book_qty": get_value("book_qty"),
         "color_code": get_value("color_code"),
         "color_desc": get_value("color_desc"),
         "exclude": get_value("exclude"),

@@ -35,7 +35,7 @@ from .common import (
     load_selection_state,
     production_folder,
 )
-from .config import REPO_ROOT, bundle_disk_cache_dir, runtime_dir
+from .config import REPO_ROOT, bundle_disk_cache_dir, operation_runtime_dir, runtime_dir
 from ..routes import (
     MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
@@ -977,24 +977,7 @@ def _manufacturing_load_existing_selection_state(runtime_root: Path, production_
     normalized_number = _manufacturing_normalize_number(production_number)
     if not normalized_number:
         return {}
-    path = runtime_root / normalized_number / "state.json"
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8") or "{}")
-    except Exception:
-        return {}
-    if not isinstance(payload, dict):
-        return {}
-    result: dict[str, str] = {}
-    for key, value in payload.items():
-        clean_key = str(key)
-        clean_value = str(value)
-        if clean_value in {"green", "red", "done"}:
-            result[clean_key] = clean_value
-        elif is_structured_manufacturing_state_key(clean_key) and re.fullmatch(r"\d{1,12}", clean_value):
-            result[clean_key] = clean_value
-    return result
+    return load_selection_state(runtime_root, normalized_number)
 
 
 def _manufacturing_document_state_rows(documents: list[dict]) -> list[dict]:
@@ -1027,6 +1010,11 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
     without child id. The UI should only receive the current row state_key.
     """
     normalized_number = _manufacturing_normalize_number(production_number)
+    casefolded_raw_state = {
+        str(key or "").strip().casefold(): value
+        for key, value in raw_state.items()
+        if str(key or "").strip()
+    }
     for row in _manufacturing_document_state_rows(documents):
         state_key = str(row.get("state_key", "") or "").strip()
         if not state_key:
@@ -1041,7 +1029,10 @@ def _manufacturing_apply_row_state_aliases(documents: list[dict], production_num
             _manufacturing_state_key(normalized_number, row_id) if row_id else "",
         ]
         for candidate_key in candidate_keys:
-            clean_value = str(raw_state.get(candidate_key, "") or "").strip()
+            raw_value = raw_state.get(candidate_key)
+            if raw_value is None:
+                raw_value = casefolded_raw_state.get(str(candidate_key or "").strip().casefold(), "")
+            clean_value = str(raw_value or "").strip()
             clean_state = clean_value.lower()
             if clean_state in {"green", "red", "done"}:
                 selection_state[state_key] = clean_state
@@ -1830,7 +1821,11 @@ def manufacturing_module_payload(
         if not normalized_number:
             return "plain"
         try:
-            saved_state = load_selection_state(runtime_dir(), normalized_number)
+            saved_state = load_selection_state(
+                operation_runtime_dir(operation_filter),
+                normalized_number,
+                fallback_runtime_root=runtime_dir(),
+            )
             raw_bundle = _load_manufacturing_bundle_cached(normalized_number)
             view_bundle, view_state = _manufacturing_view_bundle(
                 raw_bundle,
@@ -1913,7 +1908,11 @@ def manufacturing_module_payload(
                 if direct_lookup
                 else _load_manufacturing_bundle_cached(selected_number)
             )
-            current_selection_state = load_selection_state(runtime_dir(), selected_number)
+            current_selection_state = load_selection_state(
+                operation_runtime_dir(selected_operation),
+                selected_number,
+                fallback_runtime_root=runtime_dir(),
+            )
             partial_quantity_state = load_partial_quantity_state(runtime_dir(), selected_number)
             bundle, selection_state = _manufacturing_view_bundle(
                 raw_bundle,
@@ -1954,7 +1953,11 @@ def manufacturing_module_payload(
                     cache_partial_quantity_state = partial_quantity_state
                 else:
                     cache_raw_bundle = _load_manufacturing_bundle_cached(cache_number)
-                    cache_saved_state = load_selection_state(runtime_dir(), cache_number)
+                    cache_saved_state = load_selection_state(
+                        operation_runtime_dir(selected_operation),
+                        cache_number,
+                        fallback_runtime_root=runtime_dir(),
+                    )
                     cache_partial_quantity_state = load_partial_quantity_state(runtime_dir(), cache_number)
                     cache_bundle, cache_selection_state = _manufacturing_view_bundle(
                         cache_raw_bundle,
