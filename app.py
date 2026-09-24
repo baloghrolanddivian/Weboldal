@@ -2738,6 +2738,7 @@ def render_material_inventory_form(
     if not is_semifinished and _material_inventory_hydrate_book_qty(session):
         save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
     active_view = _material_inventory_normalize_view(view_mode)
+    show_book_qty = not is_semifinished and active_view == "admin"
     color_page_title = "Félkész front leltár" if is_semifinished_front else "Félkész raktár leltár"
     color_board_title = "Félkész front számolás" if is_semifinished_front else "Félkész raktár számolás"
     color_upload_title = "Félkész front leltár." if is_semifinished_front else "Félkész raktár leltár."
@@ -2798,7 +2799,7 @@ def render_material_inventory_form(
               <tr class="matinv-row{' is-counted' if str(row.get('input_qty', '')).strip() or finalized else ''}">
                 <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
                 {f'<td class="is-color">{html.escape(str(row.get("icg_code", "") or "-"))}</td>' if is_semifinished else ''}
-                {'' if is_semifinished else f'<td class="is-book-qty">{html.escape(str(row.get("book_qty", "") or "-"))}</td>'}
+                {f'<td class="is-book-qty">{html.escape(str(row.get("book_qty", "") or "-"))}</td>' if show_book_qty else ''}
                 <td class="is-total"><span data-matinv-total>{html.escape(str(row.get('counted_qty', row.get('input_qty', '')) or '0'))}</span></td>
                 <td class="is-adjust">
                   <div class="matinv-adjust">
@@ -2812,7 +2813,8 @@ def render_material_inventory_form(
             for row in view_model["visible_rows"]
         )
         if not rows_html:
-            rows_html = '<tr><td colspan="4" class="matinv-empty-row">Ebben a kategóriában nincs tétel.</td></tr>'
+            visible_column_count = 4 if is_semifinished or show_book_qty else 3
+            rows_html = f'<tr><td colspan="{visible_column_count}" class="matinv-empty-row">Ebben a kategóriában nincs tétel.</td></tr>'
 
         download_html = ""
         if finalized:
@@ -2884,7 +2886,7 @@ def render_material_inventory_form(
                 <colgroup>
                   <col class="matinv-col-description" />
                   {f'<col class="matinv-col-color" />' if is_semifinished else ''}
-                  {'' if is_semifinished else '<col class="matinv-col-book" />'}
+                  {'<col class="matinv-col-book" />' if show_book_qty else ''}
                   <col class="matinv-col-total" />
                   <col class="matinv-col-adjust" />
                 </colgroup>
@@ -2892,7 +2894,7 @@ def render_material_inventory_form(
                   <tr>
                     <th>Leírás</th>
                     {f'<th>Szín</th>' if is_semifinished else ''}
-                    {'' if is_semifinished else '<th>Könyvelési menny.</th>'}
+                    {'<th>Könyvelési menny.</th>' if show_book_qty else ''}
                     <th>Összesen</th>
                     <th>Korrekció</th>
                   </tr>
@@ -3241,7 +3243,6 @@ def _unified_inventory_config(kind: str) -> dict:
             "worker_route": MATERIAL_INVENTORY_WORKER_ROUTE,
             "columns": (
                 {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
-                {"key": "book_qty", "label": "Könyvelési menny.", "class": "is-book-qty", "sort": "book_qty"},
             ),
             "search_label": "Keresés leírás alapján",
             "search_keys": ("description",),
@@ -3494,9 +3495,9 @@ def render_inventory_recount_worker(kind: str, selected_group: str = "") -> byte
         second_value = lambda row: str(row.get("color_label", row.get("color", "")) or "-")
         search_keys = ("description", "color_label", "color", "group")
     elif config["kind"] == "material":
-        second_header = "Könyvelési menny."
-        second_class = "is-book-qty"
-        second_value = lambda row: str(row.get("book_qty", "") or "-")
+        second_header = ""
+        second_class = ""
+        second_value = lambda row: ""
         search_keys = ("description", "part_number", "group")
     else:
         second_header = "Szín"
@@ -3506,19 +3507,19 @@ def render_inventory_recount_worker(kind: str, selected_group: str = "") -> byte
     body_rows = "".join(
         f'''<tr class="frontinv-row{' is-counted' if row['recounted'] else ''}" data-frontinv-row data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" data-frontinv-current-value="{html.escape(row['recount_qty'], quote=True)}" data-frontinv-search-text="{html.escape(' '.join(str(row.get(key, '')) for key in search_keys), quote=True)}">
           <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
-          <td class="{second_class}">{f'<span class="frontinv-color-chip">{html.escape(second_value(row))}</span>' if second_class == 'is-color' else html.escape(second_value(row))}</td>
+          {f'<td class="{second_class}"><span class="frontinv-color-chip">{html.escape(second_value(row))}</span></td>' if second_class == 'is-color' else ''}
           <td class="is-count"><div class="frontinv-count-control"><span class="frontinv-count-pill" data-frontinv-total>{html.escape(row['recount_qty'] or '0')}</span><div class="frontinv-adjust">
             <label><span>+</span><input class="frontinv-input" type="number" min="0" inputmode="decimal" autocomplete="off" placeholder="0" data-frontinv-input data-mode="add" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}"></label>
             <label><span>-</span><input class="frontinv-input" type="number" min="0" inputmode="decimal" autocomplete="off" placeholder="0" data-frontinv-input data-mode="subtract" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}"></label>
           </div></div></td></tr>'''
         for row in visible
-    ) or '<tr><td colspan="3" class="frontinv-empty-row">Nincs újraszámolásra váró tétel ebben a kategóriában.</td></tr>'
+    ) or f'<tr><td colspan="{3 if second_header else 2}" class="frontinv-empty-row">Nincs újraszámolásra váró tétel ebben a kategóriában.</td></tr>'
     content = f'''<section class="frontinv-board is-worker is-recount" data-unified-inventory-root data-front-inventory-root data-state-route="{config['state_route']}" data-presence-route="" data-category="{html.escape(active)}" data-storage-prefix="recount-{html.escape(config['kind'])}" data-recount-mode="1">
       <div class="frontinv-board-head"><div><span class="frontinv-tag">Újraszámolás nézet</span><strong>{html.escape(config['title'])} újraszámolás</strong><p>Csak az adminisztrátor által, {config['group_label'].lower()} szerint kiküldött tételek láthatók.</p></div><div class="frontinv-board-stamp">Újraszámolás</div></div>
       <div class="frontinv-category-row">{chips}</div>
       <label class="frontinv-search"><span>Keresés leírás, azonosító vagy kategória alapján</span><input type="search" data-frontinv-search placeholder="Írj be részletet..." autocomplete="off"></label>
       <div class="frontinv-phase-callout"><div><strong>Újraszámolási kör</strong><p>A bevitel és a kategóriaválasztás ugyanúgy működik, mint a leltár nézetben.</p></div></div>
-      <div class="frontinv-table-wrap"><table class="frontinv-table"><colgroup><col><col><col class="frontinv-count-col"></colgroup><thead><tr><th>Leírás</th><th>{second_header}</th><th>Darabszám</th></tr></thead><tbody>{body_rows}</tbody></table></div>
+      <div class="frontinv-table-wrap"><table class="frontinv-table"><colgroup><col>{'<col>' if second_header else ''}<col class="frontinv-count-col"></colgroup><thead><tr><th>Leírás</th>{f'<th>{second_header}</th>' if second_header else ''}<th>Darabszám</th></tr></thead><tbody>{body_rows}</tbody></table></div>
       <div class="frontinv-generated-by">generated by Divian-HUB</div></section>'''
     switch = f'''<div class="frontinv-view-switch frontinv-worker-switch"><a class="frontinv-view-tab" href="{config['worker_route']}">Leltár</a><span class="frontinv-view-tab is-active">Újraszámolás</span></div>'''
     recount_style = """<style>
