@@ -82,6 +82,7 @@ def build_material_inventory_session(file_name: str, payload: bytes) -> dict:
                 "part_number": part_number,
                 "description": _clean_text(item.get("description")),
                 "book_qty": _clean_number_text(item.get("book_qty")),
+                "book_unit": _clean_text(item.get("book_unit")).lower(),
                 "icg_code": category,
                 "input_qty": "",
             }
@@ -413,6 +414,20 @@ def _header_map(header_row: tuple | list) -> dict[str, int]:
             "rend.all.rakt.keszl.",
             "rend.\ufffdll.rakt.k\ufffdszl.",
         },
+        "book_unit": {
+            "könyvelési mértékegység",
+            "konyvelesi mertekegyseg",
+            "könyvelési me",
+            "konyvelesi me",
+            "könyvelés me",
+            "konyveles me",
+            "elsődleges me",
+            "elsodleges me",
+            "raktári me",
+            "raktari me",
+            "mértékegység",
+            "mertekegyseg",
+        },
         "icg_code": {"icg kód", "icg kod", "icg"},
         "color_code": {"szin", "szín", "color", "szinkod", "színkód", "szin kod", "szín kód"},
         "color_desc": {"szin.desc", "szín.desc", "szin desc", "szín desc", "szin leiras", "szín leírás", "szin megnevezes", "szín megnevezés"},
@@ -441,7 +456,7 @@ def _apply_material_book_qty_fallback(header_map: dict[str, int], header_row: tu
     used_by_required = {
         key: index
         for key, index in header_map.items()
-        if key in {"part_number", "description", "icg_code", "exclude"}
+        if key in {"part_number", "description", "book_unit", "icg_code", "exclude"}
     }
     if fallback_index not in used_by_required.values():
         header_map["book_qty"] = fallback_index
@@ -484,6 +499,7 @@ def _row_from_values(header_map: dict[str, int], values: tuple | list) -> dict:
         "part_number": get_value("part_number"),
         "description": get_value("description"),
         "book_qty": get_value("book_qty"),
+        "book_unit": get_value("book_unit"),
         "icg_code": get_value("icg_code"),
         "exclude": get_value("exclude"),
     }

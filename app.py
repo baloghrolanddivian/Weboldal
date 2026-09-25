@@ -404,6 +404,7 @@ FRONT_INVENTORY_INSIGHT_META_PATH = FRONT_INVENTORY_RUNTIME_DIR / "insight-bevet
 MATERIAL_INVENTORY_RUNTIME_DIR = RUNTIME_DIR / "anyag-raktar"
 MATERIAL_INVENTORY_SESSION_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "session.json"
 MATERIAL_INVENTORY_STOCK_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "latest-stock.json"
+MATERIAL_INVENTORY_BOOK_UNITS_PATH = DATA_DIR / "anyag-raktar-konyvelesi-me.json"
 MATERIAL_INVENTORY_PRESENCE_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "presence.json"
 MATERIAL_INVENTORY_INSIGHT_WORKBOOK_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.xlsx"
 MATERIAL_INVENTORY_INSIGHT_META_PATH = MATERIAL_INVENTORY_RUNTIME_DIR / "insight-bevetelezes.json"
@@ -2559,6 +2560,57 @@ def _material_inventory_hydrate_book_qty(session: dict | None) -> bool:
     return changed
 
 
+def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
+    """Backfill bookkeeping units from the material unit catalog and source workbook."""
+    if not isinstance(session, dict):
+        return False
+    rows = session.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return False
+    if all(str(row.get("book_unit", "")).strip() for row in rows if isinstance(row, dict)):
+        return False
+
+    units_by_part: dict[str, str] = {}
+    if MATERIAL_INVENTORY_BOOK_UNITS_PATH.is_file():
+        try:
+            stored_units = json.loads(MATERIAL_INVENTORY_BOOK_UNITS_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            stored_units = {}
+        if isinstance(stored_units, dict):
+            units_by_part = {
+                str(part_number).strip(): str(raw_unit or "").strip().lower()
+                for part_number, raw_unit in stored_units.items()
+                if str(part_number).strip() and str(raw_unit or "").strip()
+            }
+
+    meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_STOCK_META_PATH)
+    stored_name = str(meta.get("stored_name", "")).strip()
+    original_name = str(meta.get("original_name", "")).strip() or stored_name
+    stock_path = MATERIAL_INVENTORY_RUNTIME_DIR / stored_name
+    if stored_name and stock_path.is_file():
+        try:
+            source_session = build_material_inventory_session(original_name, stock_path.read_bytes())
+        except Exception:
+            source_session = {}
+        for source_row in source_session.get("rows", []):
+            if not isinstance(source_row, dict):
+                continue
+            part_number = str(source_row.get("part_number", "")).strip()
+            unit = str(source_row.get("book_unit", "")).strip().lower()
+            if part_number and unit:
+                units_by_part[part_number] = unit
+
+    changed = False
+    for row in rows:
+        if not isinstance(row, dict) or str(row.get("book_unit", "")).strip():
+            continue
+        unit = units_by_part.get(str(row.get("part_number", "")).strip(), "")
+        if unit:
+            row["book_unit"] = unit
+            changed = True
+    return changed
+
+
 def _semifinished_inventory_saved_stock_name() -> str:
     """Return the original filename for the active semifinished stock upload."""
     meta = _matt_inventory_read_meta(SEMIFINISHED_INVENTORY_STOCK_META_PATH)
@@ -2735,7 +2787,12 @@ def render_material_inventory_form(
         saved_insight_name = _material_inventory_saved_insight_name()
         saved_summary_name = _material_inventory_saved_summary_name()
     session = load_material_inventory_session_from_path(session_path)
+    session_changed = False
     if not is_semifinished and _material_inventory_hydrate_book_qty(session):
+        session_changed = True
+    if not is_semifinished and _material_inventory_hydrate_book_units(session):
+        session_changed = True
+    if session_changed and session is not None:
         save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
     active_view = _material_inventory_normalize_view(view_mode)
     show_book_qty = not is_semifinished and active_view == "admin"
@@ -2800,6 +2857,7 @@ def render_material_inventory_form(
                 <td class="is-description">{html.escape(str(row.get('description', '')))}</td>
                 {f'<td class="is-color">{html.escape(str(row.get("icg_code", "") or "-"))}</td>' if is_semifinished else ''}
                 {f'<td class="is-book-qty">{html.escape(str(row.get("book_qty", "") or "-"))}</td>' if show_book_qty else ''}
+                {f'<td class="is-book-unit">{html.escape(str(row.get("book_unit", "") or "-"))}</td>' if show_book_qty else ''}
                 <td class="is-total"><span data-matinv-total>{html.escape(str(row.get('counted_qty', row.get('input_qty', '')) or '0'))}</span></td>
                 <td class="is-adjust">
                   <div class="matinv-adjust">
@@ -2813,7 +2871,7 @@ def render_material_inventory_form(
             for row in view_model["visible_rows"]
         )
         if not rows_html:
-            visible_column_count = 4 if is_semifinished or show_book_qty else 3
+            visible_column_count = 5 if show_book_qty else 4 if is_semifinished else 3
             rows_html = f'<tr><td colspan="{visible_column_count}" class="matinv-empty-row">Ebben a kategóriában nincs tétel.</td></tr>'
 
         download_html = ""
@@ -2887,6 +2945,7 @@ def render_material_inventory_form(
                   <col class="matinv-col-description" />
                   {f'<col class="matinv-col-color" />' if is_semifinished else ''}
                   {'<col class="matinv-col-book" />' if show_book_qty else ''}
+                  {'<col class="matinv-col-book" />' if show_book_qty else ''}
                   <col class="matinv-col-total" />
                   <col class="matinv-col-adjust" />
                 </colgroup>
@@ -2895,6 +2954,7 @@ def render_material_inventory_form(
                     <th>Leírás</th>
                     {f'<th>Szín</th>' if is_semifinished else ''}
                     {'<th>Könyvelési menny.</th>' if show_book_qty else ''}
+                    {'<th>Könyvelési ME</th>' if show_book_qty else ''}
                     <th>Összesen</th>
                     <th>Korrekció</th>
                   </tr>
@@ -3243,6 +3303,7 @@ def _unified_inventory_config(kind: str) -> dict:
             "worker_route": MATERIAL_INVENTORY_WORKER_ROUTE,
             "columns": (
                 {"key": "description", "label": "Leírás", "class": "is-description", "sort": "description"},
+                {"key": "book_unit", "label": "Könyvelési ME", "class": "is-book-unit", "sort": ""},
             ),
             "search_label": "Keresés leírás alapján",
             "search_keys": ("description",),
@@ -3299,8 +3360,12 @@ def _unified_inventory_build_view_model(config: dict, selected_category: str, so
     session = _unified_inventory_load_session(config)
     if session is None:
         return {"session": None, "categories": [], "selected_category": "all", "visible_rows": [], "finalized": False}
-    if config.get("kind") == "material" and _material_inventory_hydrate_book_qty(session):
-        save_material_inventory_session_to_path(config["session_path"], session)
+    if config.get("kind") == "material":
+        session_changed = _material_inventory_hydrate_book_qty(session)
+        if _material_inventory_hydrate_book_units(session):
+            session_changed = True
+        if session_changed:
+            save_material_inventory_session_to_path(config["session_path"], session)
     view_model = build_material_inventory_view_model(session, selected_category)
     active_sort = _unified_inventory_normalize_sort(sort_mode)
     rows = list(view_model.get("visible_rows", []))
@@ -3611,10 +3676,13 @@ def render_unified_inventory_worker_page(kind: str, selected_category: str = "",
             for item in view_model.get("categories", [])
         )
         headers_html = "".join(
-            f"<th>{sort_label(str(column['label']), str(column['sort']))}</th>"
+            f"<th>{sort_label(str(column['label']), str(column['sort'])) if column.get('sort') else html.escape(str(column['label']))}</th>"
             for column in config["columns"]
         )
-        colgroup_html = "".join('<col />' for _ in config["columns"]) + '<col class="frontinv-count-col" />'
+        colgroup_html = "".join(
+            '<col class="frontinv-unit-col" />' if column.get("key") == "book_unit" else '<col />'
+            for column in config["columns"]
+        ) + '<col class="frontinv-count-col" />'
         rows_html = ""
         finalized = bool(view_model.get("finalized"))
         for row in view_model.get("visible_rows", []):
@@ -3710,6 +3778,8 @@ def render_unified_inventory_worker_page(kind: str, selected_category: str = "",
 def _unified_inventory_cell_html(row: dict, key: str) -> str:
     """Render one escaped worker-table cell, including color chip markup."""
     value = str(row.get(key, "") or "-")
+    if key == "book_unit":
+        value = value.lower()
     if key == "icg_code":
         return f'<span class="frontinv-color-chip">{html.escape(value)}</span>'
     return html.escape(value)
@@ -3757,6 +3827,7 @@ def _unified_inventory_style() -> str:
   .frontinv-row.is-counted { background:rgba(22,163,74,.10) !important; }
   .frontinv-table td.is-description { font-weight:800; }
   .frontinv-table td.is-book-qty { width:180px; color:#475569; font-weight:800; }
+  .frontinv-unit-col,.frontinv-table td.is-book-unit { width:10%; color:#0f766e; font-weight:900; text-transform:lowercase; }
   .frontinv-table td.is-color { width:220px; }
   .frontinv-count-col,.frontinv-table td.is-count { width:32%; }
   .frontinv-color-chip { display:inline-flex; align-items:center; min-height:36px; padding:0 14px; border-radius:999px; background:linear-gradient(180deg,#eff6ff 0%,#dbeafe 100%); border:1px solid rgba(37,99,235,.14); color:#1d4ed8; font-weight:800; white-space:nowrap; }
