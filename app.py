@@ -98,6 +98,23 @@ from matt_inventory import (
     render_matt_inventory_form,
 )
 from leltar.group_pages import render_inventory_group_page
+from leltar.cutting_inventory import (
+    apply_active_action as apply_cutting_inventory_action,
+    apply_catalog_action as apply_cutting_inventory_catalog_action,
+    close_inventory as close_cutting_inventory,
+    configure_cutting_inventory,
+    render_admin_page as render_cutting_inventory_admin_page,
+    render_worker_page as render_cutting_inventory_worker_page,
+    start_inventory as start_cutting_inventory,
+)
+from leltar.foil_rolls import (
+    apply_action as apply_foil_roll_action,
+    build_session as build_foil_roll_session,
+    configure_foil_rolls,
+    load_session as load_foil_roll_session,
+    render_page as render_foil_roll_page,
+    save_session as save_foil_roll_session,
+)
 from leltar.recount import (
     recount_groups,
     recount_rows,
@@ -106,6 +123,7 @@ from leltar.recount import (
     update_recount_input,
 )
 from leltar.routes import (
+    ADMIN_CUTTING_INVENTORY_ROUTE,
     ADMIN_INVENTORY_ACCESS_USER_IDS,
     ADMIN_FRONT_INVENTORY_ROUTE,
     ADMIN_FRONT_INVENTORY_CHECKER_ROUTE,
@@ -142,6 +160,16 @@ from leltar.routes import (
     FRONT_INVENTORY_ROUTE,
     FRONT_INVENTORY_STATE_ROUTE,
     FRONT_INVENTORY_WORKER_ROUTE,
+    CUTTING_INVENTORY_CLOSE_ROUTE,
+    CUTTING_INVENTORY_CATALOG_ROUTE,
+    CUTTING_INVENTORY_ROUTE,
+    CUTTING_INVENTORY_START_ROUTE,
+    CUTTING_INVENTORY_STATE_ROUTE,
+    CUTTING_INVENTORY_WORKER_ROUTE,
+    FOIL_ROLL_INVENTORY_PROCESS_ROUTE,
+    FOIL_ROLL_INVENTORY_ROUTE,
+    FOIL_ROLL_INVENTORY_STATE_ROUTE,
+    FOIL_ROLL_INVENTORY_WORKER_ROUTE,
     MATERIAL_INVENTORY_FINALIZE_ROUTE,
     MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE,
     MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE,
@@ -152,6 +180,7 @@ from leltar.routes import (
     MATERIAL_INVENTORY_STATE_ROUTE,
     MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE,
     MATERIAL_INVENTORY_WORKER_ROUTE,
+    ADMIN_FOIL_ROLL_INVENTORY_ROUTE,
     PRODUCTION_INVENTORY_GROUP_ROUTE,
     PRODUCTION_INVENTORY_ACCESS_USER_IDS,
     SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE,
@@ -313,6 +342,8 @@ RUNTIME_DIR = BASE_DIR / "runtime"
 LOGIN_ROUTE = "/login"
 configure_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_admin_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
+configure_foil_rolls(RUNTIME_DIR / "folia-tekercs")
+configure_cutting_inventory(RUNTIME_DIR / "szabaszat-leltar")
 ensure_login_database(LOGIN_DB_PATH)
 DEV_RELOAD_ROUTE = "/__dev__/events"
 DEV_CHILD_ENV = "DIVIAN_HUB_DEV_CHILD"
@@ -454,6 +485,10 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FOIL_ROLL_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (FOIL_ROLL_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (CUTTING_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (CUTTING_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_INVENTORY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
@@ -463,10 +498,18 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_INVENTORY_GROUP_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (CUTTING_INVENTORY_START_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (CUTTING_INVENTORY_CLOSE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (CUTTING_INVENTORY_CATALOG_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (CUTTING_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_CUTTING_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (FOIL_ROLL_INVENTORY_PROCESS_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (FOIL_ROLL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (ADMIN_FOIL_ROLL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_SEMIFINISHED_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
@@ -5766,6 +5809,46 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path in {FOIL_ROLL_INVENTORY_ROUTE, ADMIN_FOIL_ROLL_INVENTORY_ROUTE}:
+            body = render_foil_roll_page(admin=True)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FOIL_ROLL_INVENTORY_WORKER_ROUTE:
+            body = render_foil_roll_page(admin=False)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {CUTTING_INVENTORY_ROUTE, ADMIN_CUTTING_INVENTORY_ROUTE}:
+            body = render_cutting_inventory_admin_page()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == CUTTING_INVENTORY_WORKER_ROUTE:
+            body = render_cutting_inventory_worker_page()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == ADMIN_INVENTORY_GROUP_ROUTE:
             body = render_inventory_group_page("admin")
             self.send_response(200)
@@ -7242,6 +7325,136 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == CUTTING_INVENTORY_START_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 16 * 1024:
+                body = render_cutting_inventory_admin_page("A kérés túl nagy.")
+                status = 413
+            else:
+                form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+                try:
+                    start_cutting_inventory(form_data.get("inventory_date", ""))
+                    body = render_cutting_inventory_admin_page("A szabászati leltár megnyílt.", success=True)
+                    status = 200
+                except ValueError as exc:
+                    body = render_cutting_inventory_admin_page(str(exc))
+                    status = 400
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == CUTTING_INVENTORY_CLOSE_ROUTE:
+            try:
+                close_cutting_inventory()
+                body = render_cutting_inventory_admin_page("A szabászati leltár lezárva.", success=True)
+                status = 200
+            except ValueError as exc:
+                body = render_cutting_inventory_admin_page(str(exc))
+                status = 400
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == CUTTING_INVENTORY_CATALOG_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 16 * 1024:
+                body = render_cutting_inventory_admin_page("A kérés túl nagy.")
+                status = 413
+            else:
+                form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+                try:
+                    apply_cutting_inventory_catalog_action(form_data)
+                    body = render_cutting_inventory_admin_page("A törzsadatok mentése sikerült.", success=True)
+                    status = 200
+                except ValueError as exc:
+                    body = render_cutting_inventory_admin_page(str(exc))
+                    status = 400
+                except Exception as exc:
+                    body = render_cutting_inventory_admin_page(f"A mentés nem sikerült: {exc}")
+                    status = 500
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == CUTTING_INVENTORY_STATE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 16 * 1024:
+                self.respond_json(413, {"ok": False, "error": "A kérés túl nagy."})
+                return
+            form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                payload = apply_cutting_inventory_action(form_data)
+                self.respond_json(200, {"ok": True, **payload})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
+            return
+
+        if path == FOIL_ROLL_INVENTORY_PROCESS_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 31 * 1024 * 1024:
+                body = render_foil_roll_page(admin=True, message="A feltöltött fájl legfeljebb 30 MB lehet.")
+                self.send_response(413)
+            else:
+                raw_body = self.rfile.read(content_length)
+                files = _extract_uploaded_files(self.headers, raw_body)
+                stock_file = files.get("stock_file")
+                if stock_file is None:
+                    body = render_foil_roll_page(admin=True, message="Válassz ki egy Excel- vagy CSV-fájlt.")
+                    self.send_response(400)
+                else:
+                    try:
+                        session = build_foil_roll_session(stock_file[0], stock_file[1])
+                        save_foil_roll_session(session)
+                        body = render_foil_roll_page(
+                            admin=True,
+                            message=f"A fólista betöltve: {len(session.get('rows', []))} tétel.",
+                            success=True,
+                        )
+                        self.send_response(200)
+                    except Exception as exc:
+                        body = render_foil_roll_page(admin=True, message=f"A fólista feldolgozása nem sikerült: {exc}")
+                        self.send_response(400)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == FOIL_ROLL_INVENTORY_STATE_ROUTE:
+            session = load_foil_roll_session()
+            if session is None:
+                self.respond_json(404, {"ok": False, "error": "Nincs aktív fólista."})
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 16 * 1024:
+                self.respond_json(413, {"ok": False, "error": "A kérés túl nagy."})
+                return
+            form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                row_payload = apply_foil_roll_action(session, form_data)
+                save_foil_roll_session(session)
+                self.respond_json(200, {"ok": True, **row_payload})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            except Exception as exc:
+                self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
             return
 
         if path == MATERIAL_INVENTORY_PROCESS_ROUTE:
