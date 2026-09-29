@@ -170,6 +170,8 @@ from leltar.routes import (
     FOIL_ROLL_INVENTORY_ROUTE,
     FOIL_ROLL_INVENTORY_STATE_ROUTE,
     FOIL_ROLL_INVENTORY_WORKER_ROUTE,
+    MATERIAL_INVENTORY_ADD_FILE_ROUTE,
+    MATERIAL_INVENTORY_ADD_ROUTE,
     MATERIAL_INVENTORY_FINALIZE_ROUTE,
     MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE,
     MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE,
@@ -220,6 +222,8 @@ from leltar.types.front import (
     write_runtime_upload as write_front_inventory_runtime_upload,
 )
 from leltar.types.material import (
+    add_material_inventory_row,
+    add_material_inventory_rows_from_file,
     build_material_inventory_insight_workbook,
     build_material_inventory_session,
     build_material_inventory_summary_workbook,
@@ -298,6 +302,7 @@ from tools.dev_reload import dev_reload_token, run_dev_supervisor
 from tools.datetime_format import format_hungarian_timestamp as _front_inventory_format_timestamp
 from tools.html_helpers import json_script_payload as _json_script_payload
 from tools.html_helpers import render_file_bind_script as _render_file_bind_script
+from tools.http import extract_multipart_fields as _extract_multipart_fields
 from tools.http import extract_uploaded_files as _extract_uploaded_files
 from tools.http import normalize_path as _normalize_path
 from tools.http import parse_urlencoded_body as _parse_urlencoded_body
@@ -506,6 +511,8 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_ADD_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_ADD_FILE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (FOIL_ROLL_INVENTORY_PROCESS_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (FOIL_ROLL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
@@ -2875,6 +2882,7 @@ def render_material_inventory_form(
         stock_meta_html = f'<span class="matinv-meta-chip">Aktív forrás: {html.escape(saved_stock_name)}</span>'
 
     admin_session_html = ""
+    add_item_html = ""
     inventory_html = f"""
       <section class="matinv-board is-empty">
         <strong>Még nincs aktív {html.escape(page_title.lower())}.</strong>
@@ -2894,6 +2902,41 @@ def render_material_inventory_form(
             for item in view_model["categories"]
         )
         finalized = bool(view_model.get("finalized"))
+        if not is_semifinished and not finalized:
+            category_options = "".join(
+                f'<option value="{html.escape(str(item.get("label", "")), quote=True)}"></option>'
+                for item in view_model["categories"]
+                if item.get("key") != "all"
+            )
+            add_item_html = f"""
+              <section class="matinv-board matinv-add-card" id="matinv-add-item">
+                <div class="matinv-board-head">
+                  <div>
+                    <span class="matinv-tag">Futó leltár bővítése</span>
+                    <strong>Kimaradt tételek hozzáadása</strong>
+                    <p>Tölts fel egy Excel-listát Alkatr.-szám, Alkatr.-leírás és opcionális Leltarbol_ki oszlopokkal. Az új anyagok azonnal megjelennek a dolgozói leltárnézetben.</p>
+                  </div>
+                </div>
+                <datalist id="matinv-icg-options">{category_options}</datalist>
+                <form class="matinv-bulk-add-form" method="post" action="{MATERIAL_INVENTORY_ADD_FILE_ROUTE}" enctype="multipart/form-data">
+                  <label class="is-wide"><span>Kiegészítő tétellista</span><input type="file" name="item_file" accept=".xls,.xlsx,.xlsm,.csv" required></label>
+                  <label><span>ICG kategória</span><input name="icg_code" list="matinv-icg-options" value="Élzáró" required></label>
+                  <label><span>Könyvelési ME</span><input name="book_unit" value="m" required></label>
+                  <button class="button button-primary" type="submit">Lista hozzáadása</button>
+                </form>
+                <details class="matinv-manual-add">
+                  <summary>Egyetlen tétel kézi felvétele</summary>
+                  <form class="matinv-add-form" method="post" action="{MATERIAL_INVENTORY_ADD_ROUTE}">
+                    <label><span>Alkatrészszám</span><input name="part_number" placeholder="pl. NATB3856GXY2104" required></label>
+                    <label class="is-wide"><span>Alkatrészleírás</span><input name="description" placeholder="pl. Élzáró - Antracit - 21x0,4mm" required></label>
+                    <label><span>ICG kód</span><input name="icg_code" list="matinv-icg-options" placeholder="Válassz vagy írj újat" required></label>
+                    <label><span>Könyvelési mennyiség</span><input name="book_qty" inputmode="decimal" placeholder="Nem kötelező"></label>
+                    <label><span>Könyvelési ME</span><input name="book_unit" value="m" placeholder="pl. m vagy db"></label>
+                    <button class="button button-primary" type="submit">Tétel hozzáadása</button>
+                  </form>
+                </details>
+              </section>
+            """
         rows_html = "".join(
             f"""
               <tr class="matinv-row{' is-counted' if str(row.get('input_qty', '')).strip() or finalized else ''}">
@@ -2961,6 +3004,7 @@ def render_material_inventory_form(
               <a class="button button-secondary" href="{inventory_href}">Leltár nézet megnyitása</a>
               <a class="button button-secondary" href="{recount_config['checker_route']}">Leltárellenőrző</a>
               <a class="button button-secondary" href="{recount_config['review_route']}">Újraszámolások</a>
+              {f'<a class="button button-secondary" href="#matinv-add-item">Tétel hozzáadása</a>' if not is_semifinished and not finalized else ''}
               {download_html}
               {finalize_html}
             </div>
@@ -3097,6 +3141,15 @@ def render_material_inventory_form(
     .matinv-stats strong {{ display:block; margin-top:6px; font:800 1.45rem/1 "Space Grotesk", sans-serif; }}
     .matinv-admin-actions {{ margin-top:20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end; padding-top:16px; border-top:1px solid rgba(15,23,42,.08); }}
     .matinv-admin-actions form {{ margin:0; }}
+    .matinv-bulk-add-form {{ margin-top:18px; display:grid; grid-template-columns:minmax(280px,1.8fr) minmax(180px,1fr) 120px auto; gap:10px; align-items:end; padding:14px; border:1px solid #bbf7d0; border-radius:18px; background:#f0fdf4; }}
+    .matinv-add-form {{ margin-top:18px; display:grid; grid-template-columns:1fr 1.8fr 1fr .8fr .65fr auto; gap:10px; align-items:end; }}
+    .matinv-add-form label,.matinv-bulk-add-form label {{ display:grid; gap:6px; color:#475569; font-size:.72rem; font-weight:900; text-transform:uppercase; }}
+    .matinv-add-form input,.matinv-bulk-add-form input {{ width:100%; min-width:0; min-height:44px; padding:0 12px; border:1px solid var(--line); border-radius:13px; background:#fff; color:var(--text); font:800 .88rem Manrope,sans-serif; text-transform:none; }}
+    .matinv-bulk-add-form input[type="file"] {{ padding:8px; }}
+    .matinv-bulk-add-form input::file-selector-button {{ margin-right:9px; border:0; border-radius:9px; padding:7px 10px; background:#0f172a; color:#fff; font-weight:900; cursor:pointer; }}
+    .matinv-add-form input:focus,.matinv-bulk-add-form input:focus {{ outline:none; border-color:#0f172a; box-shadow:0 0 0 3px rgba(15,23,42,.08); }}
+    .matinv-manual-add {{ margin-top:12px; border-top:1px solid var(--line); }}
+    .matinv-manual-add summary {{ padding-top:12px; color:#475569; font-weight:900; cursor:pointer; }}
     .matinv-table-wrap {{ margin-top:14px; overflow:hidden; border:1px solid var(--line); border-radius:20px; background:#fff; }}
     .matinv-table {{ width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; }}
     .matinv-table th {{ padding:10px 10px; background:#f8fafc; color:#475569; text-align:left; font-size:.72rem; font-weight:800; text-transform:uppercase; }}
@@ -3146,6 +3199,9 @@ def render_material_inventory_form(
       .matinv-adjust {{ grid-template-columns:1fr 1fr 1.08fr; gap:5px; }}
       .matinv-adjust label {{ gap:3px; font-size:.68rem; }}
       .matinv-input {{ min-height:36px; padding:0 5px; font-size:.88rem; border-radius:11px; }}
+      .matinv-add-form {{ grid-template-columns:1fr 1fr; }}
+      .matinv-bulk-add-form {{ grid-template-columns:1fr 1fr; }}
+      .matinv-bulk-add-form .is-wide {{ grid-column:1/-1; }}
     }}
     @media (max-width: 780px) {{ .matinv-upload-head,.matinv-board-head,.matinv-upload-form {{ grid-template-columns:1fr; }} .matinv-top {{ align-items:flex-start; flex-direction:column; }} .matinv-stats {{ grid-template-columns:1fr 1fr; }} .button {{ width:100%; }} }}
   </style>
@@ -3163,6 +3219,7 @@ def render_material_inventory_form(
     {view_switch_html}
     {upload_html if active_view == 'admin' else ''}
     {admin_session_html if active_view == 'admin' and session else ''}
+    {add_item_html if active_view == 'admin' and session else ''}
     {inventory_html if active_view == 'leltar' else ''}
   </main>
   {f'<iframe hidden src="{html.escape(auto_download_href)}"></iframe>' if auto_download_href and active_view == 'admin' else ''}
@@ -7500,6 +7557,95 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 success=True,
             )
             self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == MATERIAL_INVENTORY_ADD_ROUTE:
+            session = load_material_inventory_session_from_path(MATERIAL_INVENTORY_SESSION_PATH)
+            if session is None:
+                body = render_material_inventory_form("Nincs aktív anyagraktár-leltár, amit ki lehetne egészíteni.")
+                status = 404
+            else:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length > 16 * 1024:
+                    body = render_material_inventory_form("A kérés túl nagy.")
+                    status = 413
+                else:
+                    form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+                    try:
+                        row = add_material_inventory_row(
+                            session,
+                            form_data.get("part_number", ""),
+                            form_data.get("description", ""),
+                            form_data.get("icg_code", ""),
+                            form_data.get("book_qty", ""),
+                            form_data.get("book_unit", ""),
+                        )
+                        save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
+                        body = render_material_inventory_form(
+                            f"A tétel hozzáadva: {row['description']} ({row['part_number']}).",
+                            success=True,
+                        )
+                        status = 200
+                    except ValueError as exc:
+                        body = render_material_inventory_form(str(exc))
+                        status = 400
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == MATERIAL_INVENTORY_ADD_FILE_ROUTE:
+            session = load_material_inventory_session_from_path(MATERIAL_INVENTORY_SESSION_PATH)
+            if session is None:
+                body = render_material_inventory_form("Nincs aktív anyagraktár-leltár, amit ki lehetne egészíteni.")
+                status = 404
+            else:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length > 16 * 1024 * 1024:
+                    body = render_material_inventory_form("A kiegészítő lista legfeljebb 15 MB lehet.")
+                    status = 413
+                else:
+                    raw_body = self.rfile.read(content_length)
+                    files = _extract_uploaded_files(self.headers, raw_body)
+                    fields = _extract_multipart_fields(self.headers, raw_body)
+                    uploaded = files.get("item_file")
+                    if uploaded is None:
+                        body = render_material_inventory_form("Válassz ki egy Excel- vagy CSV-fájlt.")
+                        status = 400
+                    else:
+                        try:
+                            result = add_material_inventory_rows_from_file(
+                                session,
+                                uploaded[0],
+                                uploaded[1],
+                                fields.get("icg_code", ""),
+                                fields.get("book_unit", "m"),
+                            )
+                            save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
+                            message = f"{result['added']} új tétel hozzáadva."
+                            if result["duplicate"]:
+                                message += f" {result['duplicate']} már szerepelt, ezért kimaradt."
+                            if result["excluded"]:
+                                message += f" {result['excluded']} kizárt sor kimaradt."
+                            if result["invalid"]:
+                                message += f" {result['invalid']} hiányos sor kimaradt."
+                            body = render_material_inventory_form(message, success=True)
+                            status = 200
+                        except ValueError as exc:
+                            body = render_material_inventory_form(str(exc))
+                            status = 400
+                        except Exception as exc:
+                            body = render_material_inventory_form(f"A tétellista feldolgozása nem sikerült: {exc}")
+                            status = 500
+            self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
