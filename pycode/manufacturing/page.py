@@ -6344,7 +6344,38 @@ def render_manufacturing_page(
           for (const rowId of doneRowIds) {{
             selectionState[`${{productionNumber}}::${{rowId}}`] = "done";
           }}
-          renderAll();
+          const preservedReadyView = {{
+            currentViewKey,
+            currentSubcategoryKey,
+            secondaryViewKey,
+            layoutMode,
+            activeSearchText,
+          }};
+          try {{
+            const readyRefreshUrl = productionDataUrl(productionNumber, currentDocKey);
+            readyRefreshUrl.searchParams.set("_", String(Date.now()));
+            const refreshedResponse = await fetch(readyRefreshUrl.toString(), {{
+              cache: "no-store",
+              headers: {{ "Accept": "application/json" }},
+            }});
+            const refreshedPayload = await refreshedResponse.json().catch(() => ({{}}));
+            if (!refreshedResponse.ok || !refreshedPayload.ok) {{
+              throw new Error(refreshedPayload.error || "A készre jelentett lista frissítése nem sikerült.");
+            }}
+            productionPayloadCache.delete(productionCacheKey(currentDocKey, productionNumber));
+            cacheProductionPayload(refreshedPayload);
+            applyProductionPayload(refreshedPayload);
+            currentViewKey = preservedReadyView.currentViewKey;
+            currentSubcategoryKey = preservedReadyView.currentSubcategoryKey;
+            secondaryViewKey = preservedReadyView.secondaryViewKey;
+            layoutMode = preservedReadyView.layoutMode;
+            activeSearchText = preservedReadyView.activeSearchText;
+            searchInputNode.value = preservedReadyView.activeSearchText;
+            renderAll();
+          }} catch (refreshError) {{
+            shopfloorLog("ready-state refresh failed", refreshError);
+            renderAll();
+          }}
           const attemptedCount = Number.isFinite(Number(result.attempted_count)) ? Number(result.attempted_count) : entries.length;
           const successCount = Number.isFinite(Number(result.success_count)) ? Number(result.success_count) : doneRowIds.size;
           const failedCount = Number.isFinite(Number(result.failed_count)) ? Number(result.failed_count) : Math.max(0, attemptedCount - successCount);

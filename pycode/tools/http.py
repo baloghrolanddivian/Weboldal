@@ -48,6 +48,26 @@ def extract_uploaded_files(headers, body: bytes) -> dict[str, tuple[str, bytes]]
     return files
 
 
+def extract_multipart_fields(headers, body: bytes) -> dict[str, str]:
+    """Extract scalar UTF-8 fields from a multipart form body."""
+    content_type = headers.get("Content-Type", "")
+    boundary_match = re.search(r'boundary="?([^";]+)"?', content_type)
+    if "multipart/form-data" not in content_type or not boundary_match:
+        return {}
+    boundary = boundary_match.group(1).encode()
+    fields: dict[str, str] = {}
+    for part in body.split(b"--" + boundary):
+        header, _, payload = part.partition(b"\r\n\r\n")
+        if not payload or b"filename=" in header:
+            continue
+        field_match = re.search(br'name="([^"]+)"', header)
+        if not field_match:
+            continue
+        name = field_match.group(1).decode("utf-8", errors="ignore")
+        fields[name] = payload.rsplit(b"\r\n", 1)[0].decode("utf-8", errors="replace")
+    return fields
+
+
 def parse_urlencoded_body(body: bytes) -> dict[str, str]:
     """Parse an application/x-www-form-urlencoded body into scalar values."""
     try:
