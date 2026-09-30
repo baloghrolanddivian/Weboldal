@@ -173,8 +173,9 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
     return f'''<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Beolvasás · {_e(code)}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"><link rel="stylesheet" href="/styles.css"></head><body class="nettfront-reader-page"><div class="site-shell"><div class="ambient ambient-one"></div><div class="ambient ambient-two"></div><div class="grid-overlay"></div><main class="reader"><header class="reader-head"><div><small>NETTFRONT SZÁMLA</small><h1>{_e(code)}</h1></div><button type="button" onclick="window.close()">Ablak bezárása</button></header>
 <section id="identity-card" class="reader-card hidden"><h2>Beolvasó azonosítása</h2><p class="muted">Ezt csak egyszer kell megadni ebben a böngésző-munkamenetben.</p><form id="identity-form"><label>Név / azonosító<input id="operator-input" maxlength="100" required autocomplete="name"></label><p><button>Beolvasás indítása</button></p></form></section>
-<section id="reader-card" class="reader-card hidden"><div class="reader-head"><div><h2>Automatikus kameraolvasás</h2><p class="muted">Felhasználó: <strong id="operator-label"></strong></p></div><label>Darabszám<input id="quantity" type="number" min="1" max="10000" value="1"></label></div><div id="status" class="status working" role="status" aria-live="assertive">Indítás…</div><p class="controls"><button id="pause" type="button">Szünet</button><button id="change-user" type="button">Felhasználó váltása</button></p></section>
-<section id="item-card" class="reader-card hidden"><h2>Legutóbbi beolvasott tétel</h2><div class="grid"><div class="value"><small>ICN</small><strong id="item-icn">—</strong></div><div class="value"><small>Modell + fronttípus</small><strong id="item-model">—</strong></div><div class="value"><small>Méret</small><strong id="item-size">—</strong></div><div class="value"><small>Szín</small><strong id="item-color">—</strong></div><div class="value"><small>Darabszám</small><strong id="item-qty">—</strong></div><div class="value"><small>Saját kód</small><strong id="item-code">—</strong></div><div class="value"><small>Saját leírás</small><strong id="item-description">API TODO</strong></div></div></section>
+<section id="feedback-card" class="reader-feedback hidden"><div id="status" class="status working" role="status" aria-live="assertive"><strong id="status-title">VÁRAKOZÁS</strong><span id="status-message">Még nincs beolvasási eredmény.</span></div><p id="camera-activity" class="reader-activity" aria-live="polite">Kamera előkészítése…</p></section>
+<section id="item-card" class="reader-card reader-last-item hidden is-empty" aria-live="polite"><header class="reader-item-head"><div><span class="reader-item-kicker">Legutóbbi beolvasott tétel</span><h2 id="item-model">—</h2></div></header><div class="reader-item-facts"><div class="reader-item-fact is-color"><small>Szín</small><strong id="item-color">—</strong></div><div class="reader-item-fact is-size"><small>Méret</small><strong id="item-size">—</strong></div></div><div class="reader-item-details"><label class="reader-item-quantity"><small>Darabszám</small><input id="item-qty" type="number" min="1" max="10000" value="1" inputmode="numeric" aria-label="A következő beolvasás darabszáma"></label><div class="value"><small>Saját kód</small><strong id="item-code">—</strong></div><div class="value reader-item-description"><small>Saját leírás</small><strong id="item-description">API TODO</strong></div><div class="value"><small>ICN</small><strong id="item-icn">—</strong></div></div></section>
+<section id="reader-card" class="reader-card reader-controls-card hidden"><div class="reader-controls-head"><div><h2>Automatikus kameraolvasás</h2><p class="muted">Felhasználó: <strong id="operator-label"></strong></p></div><p class="controls"><button id="pause" type="button">Szünet</button><button id="change-user" type="button">Felhasználó váltása</button></p></div></section>
 </main></div><script src="/script.js"></script><script>
 (() => {{
   const endpoint = {endpoint_json};
@@ -184,7 +185,12 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
   const initialOperator = {initial_operator_json};
   const identityCard = document.getElementById("identity-card");
   const readerCard = document.getElementById("reader-card");
+  const feedbackCard = document.getElementById("feedback-card");
+  const itemCard = document.getElementById("item-card");
   const status = document.getElementById("status");
+  const statusTitle = document.getElementById("status-title");
+  const statusMessage = document.getElementById("status-message");
+  const cameraActivity = document.getElementById("camera-activity");
   const pauseButton = document.getElementById("pause");
   let operator = initialOperator.trim() || sessionStorage.getItem(operatorKey) || "";
   let running = false;
@@ -192,45 +198,59 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
   let retryTimer = 0;
   if (initialOperator) history.replaceState(null, "", location.pathname);
 
-  function showIdentity() {{ running = false; clearTimeout(retryTimer); readerCard.classList.add("hidden"); identityCard.classList.remove("hidden"); document.getElementById("operator-input").value = operator; document.getElementById("operator-input").focus(); }}
-  function setStatus(message, kind) {{ status.textContent = message; status.className = "status " + kind; }}
-  function showItem(payload) {{
+  function showIdentity() {{ running = false; clearTimeout(retryTimer); readerCard.classList.add("hidden"); feedbackCard.classList.add("hidden"); itemCard.classList.add("hidden"); identityCard.classList.remove("hidden"); document.getElementById("operator-input").value = operator; document.getElementById("operator-input").focus(); }}
+  function setStatus(message, kind) {{
+    const titles = {{success:"SIKERES BEOLVASÁS", warning:"FIGYELMEZTETÉS", failed:"SIKERTELEN BEOLVASÁS", working:"VÁRAKOZÁS"}};
+    statusTitle.textContent = titles[kind] || titles.failed;
+    statusMessage.textContent = message;
+    status.className = "status " + kind;
+  }}
+  function setActivity(message) {{ cameraActivity.textContent = message; }}
+  function showItem(payload, result) {{
     if (!payload) return;
-    document.getElementById("item-card").classList.remove("hidden");
+    itemCard.classList.remove("hidden", "is-empty", "is-updated");
+    itemCard.dataset.result = result || "success";
     document.getElementById("item-icn").textContent = payload.icn || "—";
     document.getElementById("item-model").textContent = payload.model || "—";
     document.getElementById("item-size").textContent = payload.size || "—";
     document.getElementById("item-color").textContent = payload.color || "—";
-    document.getElementById("item-qty").textContent = payload.quantity || "—";
+    document.getElementById("item-qty").value = 1;
     document.getElementById("item-code").textContent = payload.our_code || "—";
     document.getElementById("item-description").textContent = payload.our_description || "API TODO";
+    void itemCard.offsetWidth;
+    itemCard.classList.add("is-updated");
   }}
   function schedule(delay) {{ clearTimeout(retryTimer); if (running) retryTimer = setTimeout(trigger, delay); }}
   async function trigger() {{
     if (!running || inFlight) return;
     inFlight = true;
-    setStatus("Kamera trigger elküldve — várakozás az ICN-re…", "working");
+    setActivity("Kamera trigger elküldve — várakozás az ICN-re…");
     try {{
-      const response = await fetch(endpoint, {{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{operator,quantity:document.getElementById("quantity").value,invoice_code:invoiceCode}})}});
+      const response = await fetch(endpoint, {{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{operator,quantity:document.getElementById("item-qty").value,invoice_code:invoiceCode}})}});
       const payload = await response.json();
       const scan = payload.scan || {{}};
-      setStatus(scan.message || payload.error || "Ismeretlen kamera-válasz.", scan.result === "success" ? "success" : scan.result === "warning" ? "warning" : "failed");
-      showItem(payload.item);
+      if (scan.result === "waiting") setActivity(scan.message || "Várakozás a következő ICN-re…");
+      else {{
+        setStatus(scan.message || payload.error || "Ismeretlen kamera-válasz.", scan.result === "success" ? "success" : scan.result === "warning" ? "warning" : "failed");
+        setActivity("Az automatikus beolvasás folytatódik.");
+      }}
+      if (payload.item && (scan.result === "success" || scan.result === "warning")) showItem(payload.item, scan.result);
       schedule(response.ok ? 700 : 1800);
     }} catch (error) {{
       setStatus("A modul nem érhető el. A beolvasás megállt, újrapróbálkozás folyamatban; ne folytasd kézzel.", "failed");
+      setActivity("Kapcsolódási hiba — automatikus újrapróbálkozás…");
       schedule(2000);
     }} finally {{ inFlight = false; }}
   }}
   function start() {{
     operator = operator.trim(); if (!operator) return showIdentity();
-    sessionStorage.setItem(operatorKey, operator); identityCard.classList.add("hidden"); readerCard.classList.remove("hidden"); document.getElementById("operator-label").textContent = operator; running = true; pauseButton.textContent = "Szünet"; trigger();
+    sessionStorage.setItem(operatorKey, operator); identityCard.classList.add("hidden"); feedbackCard.classList.remove("hidden"); itemCard.classList.remove("hidden"); readerCard.classList.remove("hidden"); document.getElementById("operator-label").textContent = operator; running = true; pauseButton.textContent = "Szünet"; trigger();
   }}
   document.getElementById("identity-form").addEventListener("submit", event => {{ event.preventDefault(); operator = document.getElementById("operator-input").value; start(); }});
-  pauseButton.addEventListener("click", () => {{ running = !running; pauseButton.textContent = running ? "Szünet" : "Folytatás"; if (running) trigger(); else setStatus("A beolvasás szünetel.", "warning"); }});
+  pauseButton.addEventListener("click", () => {{ running = !running; pauseButton.textContent = running ? "Szünet" : "Folytatás"; setActivity(running ? "Beolvasás folytatása…" : "A beolvasás szünetel."); if (running) trigger(); }});
   document.getElementById("change-user").addEventListener("click", () => {{ sessionStorage.removeItem(operatorKey); operator = ""; showIdentity(); }});
   window.addEventListener("beforeunload", () => clearTimeout(retryTimer));
-  if (!canRead) {{ readerCard.classList.remove("hidden"); setStatus("Ez a számla le van zárva; a kamera nem indítható.", "failed"); pauseButton.disabled = true; }}
+  if (!canRead) {{ feedbackCard.classList.remove("hidden"); readerCard.classList.remove("hidden"); setStatus("Ez a számla le van zárva; a kamera nem indítható.", "failed"); pauseButton.disabled = true; }}
   else if (operator) start(); else showIdentity();
 }})();
 </script></body></html>'''.encode("utf-8")

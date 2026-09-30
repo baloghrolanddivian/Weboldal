@@ -200,7 +200,7 @@ def report_con_ready(
             con_text,
             json.loads(request_body.decode("utf-8")),
         )
-        if not 200 <= int(validate_status_code) < 300:
+        if not shopfloor_response_succeeded(validate_status_code, validate_response_body):
             return validate_status_code, validate_response_body, "validatescan"
         validate_data = _shopfloor_extract_validate_data(validate_response_body)
         process_body = _shopfloor_process_payload(con_id, validate_data)
@@ -524,6 +524,52 @@ def _shopfloor_extract_validate_data(response_body: str) -> object | None:
     return payload
 
 
+def shopfloor_response_error(response_body: str) -> str:
+    """Return an application-level Shopfloor error reported in a JSON body.
+
+    Shopfloor can return HTTP 200 while the body contains a severity-16
+    message. Those responses must not be treated as successful scans.
+    """
+    try:
+        payload = json.loads(response_body or "null")
+    except json.JSONDecodeError:
+        return ""
+
+    def find_error(value: object) -> str:
+        if isinstance(value, dict):
+            try:
+                severity = int(value.get("severity", 0) or 0)
+            except (TypeError, ValueError):
+                severity = 0
+            if severity >= 16:
+                message = value.get("message", "")
+                if isinstance(message, dict):
+                    nested_message = find_error(message)
+                    if nested_message:
+                        return nested_message
+                clean_message = str(message or "").strip()
+                number = str(value.get("number", "") or "").strip()
+                suffix = f" (severity {severity}{', number ' + number if number else ''})"
+                return f"{clean_message}{suffix}" if clean_message else suffix.strip()
+            for nested in value.values():
+                error = find_error(nested)
+                if error:
+                    return error
+        elif isinstance(value, list):
+            for nested in value:
+                error = find_error(nested)
+                if error:
+                    return error
+        return ""
+
+    return find_error(payload)
+
+
+def shopfloor_response_succeeded(status_code: int, response_body: str) -> bool:
+    """Return whether both HTTP and Shopfloor application status succeeded."""
+    return 200 <= int(status_code) < 300 and not shopfloor_response_error(response_body)
+
+
 def _topfloor_create_box(client: ShopfloorApiClient, *, con_description: str = "") -> dict[str, object]:
     """Run the Topfloor create/update sequence for a new box."""
     _topfloor_require_no_other_open_box("")
@@ -761,9 +807,10 @@ def _shopfloor_scan_text(value: object) -> str:
 
 def _shopfloor_require_success(status_code: int, response_body: str, action: str) -> None:
     """Raise when a Shopfloor step returns a non-success response."""
-    if 200 <= int(status_code) < 300:
+    application_error = shopfloor_response_error(response_body)
+    if 200 <= int(status_code) < 300 and not application_error:
         return
-    error = str(response_body or "").strip()[:300]
+    error = application_error or str(response_body or "").strip()[:300]
     raise RuntimeError(f"{action} sikertelen ({int(status_code)}): {error}")
 
 

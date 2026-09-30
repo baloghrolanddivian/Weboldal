@@ -47,6 +47,7 @@ from manufacturing import (
     _manufacturing_operation_state_keys,
     _manufacturing_query_params,
     _manufacturing_ready_endpoint_key,
+    _manufacturing_ready_scan_groups,
     _manufacturing_selection_state_payload,
     _manufacturing_topfloor_aggregate_bundle,
     _manufacturing_view_bundle,
@@ -274,6 +275,7 @@ from nettfront_invoice import (
     NETTFRONT_INVOICE_XML_PREFIX,
     DuplicateInvoiceError,
     CameraBusyError,
+    CameraNoReadError,
     CameraReadError,
     attach_batch_xml,
     build_invoice_from_batch,
@@ -331,6 +333,7 @@ from tools.login import (
 from tools.shopfloor import extract_con_code as _extract_con_code
 from tools.shopfloor import ShopfloorApiClient as _ShopfloorApiClient
 from tools.shopfloor import report_con_ready as _shopfloor_report_con_ready
+from tools.shopfloor import shopfloor_response_error as _shopfloor_response_error
 from tools.shopfloor import (
     create_closed_topfloor_category_box as _topfloor_create_category_box,
     issue_topfloor_storage_box as _topfloor_issue_storage_box,
@@ -6632,6 +6635,20 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             except CameraBusyError as exc:
                 self.respond_json(409, {"ok": False, "error": str(exc), "retry": True})
                 return
+            except CameraNoReadError as exc:
+                self.respond_json(
+                    200,
+                    {
+                        "ok": True,
+                        "scan": {
+                            "result": "waiting",
+                            "message": f"{exc} Várakozás a következő beolvasásra…",
+                        },
+                        "item": None,
+                        "retry": True,
+                    },
+                )
+                return
             except CameraReadError as exc:
                 try:
                     _record, scan_result = record_scan_failure(code, operator, str(exc), reason="camera_connection")
@@ -7355,17 +7372,29 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 )
                 if not row_id or _manufacturing_is_virtual_unit_row_id(row_id) or not state_key or not code:
                     continue
-                entries.append(
-                    {
-                        "row_id": row_id,
-                        "state_key": state_key,
-                        "state_storage_key": state_storage_key,
-                        "code": code,
-                        "category_key": entry_category_key,
-                        "document_key": entry_document_key,
-                        "source_row_ids": source_row_ids,
-                    }
-                )
+                scan_groups = _manufacturing_ready_scan_groups(code, source_row_ids) or [
+                    {"code": code, "source_row_ids": source_row_ids}
+                ]
+                for scan_group in scan_groups:
+                    group_code = _extract_con_code(scan_group.get("code", ""))
+                    group_source_row_ids = [
+                        str(value).strip()
+                        for value in scan_group.get("source_row_ids", [])
+                        if str(value).strip()
+                    ]
+                    if not group_code:
+                        continue
+                    entries.append(
+                        {
+                            "row_id": row_id,
+                            "state_key": state_key,
+                            "state_storage_key": group_source_row_ids[0] if group_source_row_ids else state_storage_key,
+                            "code": group_code,
+                            "category_key": entry_category_key,
+                            "document_key": entry_document_key,
+                            "source_row_ids": group_source_row_ids,
+                        }
+                    )
             if not entries:
                 self.respond_json(400, {"ok": False, "error": "Nem találtam érvényes CON kódot a zöld sorokban."})
                 return
@@ -7405,7 +7434,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         }
                     )
                     continue
-                if 200 <= int(status_code) < 300:
+                application_error = _shopfloor_response_error(response_body)
+                if 200 <= int(status_code) < 300 and not application_error:
                     success_targets.add((code, ready_endpoint))
                 else:
                     failures.append(
@@ -7413,7 +7443,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                             "code": code,
                             "endpoint": endpoint_name,
                             "status": int(status_code),
-                            "error": str(response_body or "").strip()[:300],
+                            "error": application_error or str(response_body or "").strip()[:300],
                         }
                     )
 

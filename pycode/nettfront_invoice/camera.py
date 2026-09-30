@@ -23,6 +23,10 @@ class CameraBusyError(CameraReadError):
     """Raised when another request is already using the single camera."""
 
 
+class CameraNoReadError(CameraReadError):
+    """Raised when the camera is reachable but no new code is read in time."""
+
+
 def trigger_camera_read() -> dict[str, str]:
     """Trigger one camera read and return its decoded ICN and raw response."""
     if not _CAMERA_LOCK.acquire(blocking=False):
@@ -43,7 +47,9 @@ def trigger_camera_read() -> dict[str, str]:
                     if b"\r" in chunk or total_size >= 64 * 1024:
                         break
         except socket.timeout as exc:
-            raise CameraReadError("A kamera nem válaszolt 10 másodpercen belül.") from exc
+            raise CameraNoReadError(
+                f"Nem érkezett új ICN {CAMERA_TIMEOUT_SECONDS:g} másodpercen belül."
+            ) from exc
         except OSError as exc:
             raise CameraReadError(f"A kamerakapcsolat nem sikerült: {exc}") from exc
         raw_bytes = b"".join(chunks)
