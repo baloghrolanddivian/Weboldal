@@ -47,6 +47,7 @@ from manufacturing import (
     _manufacturing_operation_state_keys,
     _manufacturing_query_params,
     _manufacturing_ready_endpoint_key,
+    _manufacturing_ready_scan_groups,
     _manufacturing_selection_state_payload,
     _manufacturing_topfloor_aggregate_bundle,
     _manufacturing_view_bundle,
@@ -288,6 +289,49 @@ from invoice_translator import (
     extract_invoice_upload,
     render_form,
 )
+from nettfront_invoice import (
+    NETTFRONT_INVOICE_ACCESS_USER_IDS,
+    NETTFRONT_INVOICE_ADMIN_ACCESS_USER_IDS,
+    NETTFRONT_INVOICE_ADMIN_EXPORT_PREFIX,
+    NETTFRONT_INVOICE_ADMIN_REOPEN_PREFIX,
+    NETTFRONT_INVOICE_ADMIN_ROUTE,
+    NETTFRONT_INVOICE_CAMERA_PREFIX,
+    NETTFRONT_INVOICE_CHECK_ACCESS_USER_IDS,
+    NETTFRONT_INVOICE_CHECK_ROUTE,
+    NETTFRONT_INVOICE_CLOSE_PREFIX,
+    NETTFRONT_INVOICE_IMPORT_ROUTE,
+    NETTFRONT_INVOICE_OPEN_ROUTE,
+    NETTFRONT_INVOICE_READ_PREFIX,
+    NETTFRONT_INVOICE_ROUTE,
+    NETTFRONT_INVOICE_SCAN_PREFIX,
+    NETTFRONT_INVOICE_VIEW_PREFIX,
+    NETTFRONT_INVOICE_XML_PREFIX,
+    DuplicateInvoiceError,
+    CameraBusyError,
+    CameraNoReadError,
+    CameraReadError,
+    attach_batch_xml,
+    build_invoice_from_batch,
+    build_invoice_workbook,
+    close_invoice,
+    configure_nettfront_invoice,
+    create_invoice,
+    list_invoices,
+    load_invoice,
+    invoice_item_display,
+    normalize_invoice_code,
+    parse_batch_xml,
+    record_open,
+    record_scan_failure,
+    render_admin as render_nettfront_invoice_admin,
+    render_check as render_nettfront_invoice_check,
+    render_home as render_nettfront_invoice_home,
+    render_invoice as render_nettfront_invoice,
+    render_reader as render_nettfront_invoice_reader,
+    reopen_invoice,
+    scan_invoice_icn,
+    trigger_camera_read,
+)
 from hr import (
     APP_ROUTE as HR_APP_ROUTE,
     CONFIRM_ROUTE as HR_CONFIRM_ROUTE,
@@ -304,6 +348,7 @@ from tools.html_helpers import json_script_payload as _json_script_payload
 from tools.html_helpers import render_file_bind_script as _render_file_bind_script
 from tools.http import extract_multipart_fields as _extract_multipart_fields
 from tools.http import extract_uploaded_files as _extract_uploaded_files
+from tools.http import extract_multipart_fields as _extract_multipart_fields
 from tools.http import normalize_path as _normalize_path
 from tools.http import parse_urlencoded_body as _parse_urlencoded_body
 from tools.inventory_sort import inventory_sort_key as _unified_inventory_sort_key
@@ -322,6 +367,7 @@ from tools.login import (
 from tools.shopfloor import extract_con_code as _extract_con_code
 from tools.shopfloor import ShopfloorApiClient as _ShopfloorApiClient
 from tools.shopfloor import report_con_ready as _shopfloor_report_con_ready
+from tools.shopfloor import shopfloor_response_error as _shopfloor_response_error
 from tools.shopfloor import (
     create_closed_topfloor_category_box as _topfloor_create_category_box,
     issue_topfloor_storage_box as _topfloor_issue_storage_box,
@@ -347,6 +393,7 @@ RUNTIME_DIR = BASE_DIR / "runtime"
 LOGIN_ROUTE = "/login"
 configure_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_admin_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
+configure_nettfront_invoice(RUNTIME_DIR / "nettfront-szamla")
 configure_foil_rolls(RUNTIME_DIR / "folia-tekercs")
 configure_cutting_inventory(RUNTIME_DIR / "szabaszat-leltar")
 ensure_login_database(LOGIN_DB_PATH)
@@ -465,6 +512,9 @@ SEMIFINISHED_FRONT_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RU
 
 
 AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
+    (NETTFRONT_INVOICE_ADMIN_ROUTE, NETTFRONT_INVOICE_ADMIN_ACCESS_USER_IDS),
+    (NETTFRONT_INVOICE_CHECK_ROUTE, NETTFRONT_INVOICE_CHECK_ACCESS_USER_IDS),
+    (NETTFRONT_INVOICE_ROUTE, NETTFRONT_INVOICE_ACCESS_USER_IDS),
     (APP_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
     (GENERATE_ROUTE, INVOICE_TRANSLATOR_ACCESS_USER_IDS),
     (HR_APP_ROUTE, HR_ACCESS_USER_IDS),
@@ -5926,6 +5976,88 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == NETTFRONT_INVOICE_ROUTE:
+            body = render_nettfront_invoice_home(list_invoices())
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == NETTFRONT_INVOICE_CHECK_ROUTE:
+            body = render_nettfront_invoice_check(list_invoices())
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == NETTFRONT_INVOICE_ADMIN_ROUTE:
+            raw_query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+            query = {key: values[-1] for key, values in raw_query.items() if values}
+            body = render_nettfront_invoice_admin(list_invoices(), query)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_READ_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_READ_PREFIX) + 1 :]
+            record = load_invoice(code)
+            if record is None:
+                self.send_error(404)
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            initial_operator = str(query.get("operator", [""])[-1])
+            body = render_nettfront_invoice_reader(record, initial_operator=initial_operator)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_VIEW_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_VIEW_PREFIX) + 1 :]
+            record = load_invoice(code)
+            if record is None:
+                self.send_error(404)
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            body = render_nettfront_invoice(record, read_only=str(query.get("readonly", [""])[-1]) == "1")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_ADMIN_EXPORT_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_ADMIN_EXPORT_PREFIX) + 1 :]
+            record = load_invoice(code)
+            if record is None:
+                self.send_error(404)
+                return
+            body = build_invoice_workbook(record)
+            download_name = f"nettfront-szamla-{normalize_invoice_code(code)}.xlsx"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{urllib.parse.quote(download_name)}")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path in {
             FRONT_INVENTORY_RECOUNT_ROUTE,
             MATERIAL_INVENTORY_RECOUNT_ROUTE,
@@ -6690,6 +6822,250 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         if self.reject_unauthorized_module():
             return
 
+        if path.startswith(NETTFRONT_INVOICE_CAMERA_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_CAMERA_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            try:
+                request_payload = json.loads(self.rfile.read(content_length).decode("utf-8") or "{}")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self.respond_json(400, {"ok": False, "error": "Hibás kamera-kérés."})
+                return
+            operator = str(request_payload.get("operator", "")).strip()
+            quantity = request_payload.get("quantity", "1")
+            if not operator:
+                self.respond_json(400, {"ok": False, "error": "Az azonosítás kötelező."})
+                return
+            record = load_invoice(code)
+            if record is None:
+                self.respond_json(404, {"ok": False, "error": "A számla nem található."})
+                return
+            if record.get("status") != "opened":
+                self.respond_json(409, {"ok": False, "error": "A számla le van zárva; a kamera nem indítható."})
+                return
+            try:
+                camera_result = trigger_camera_read()
+            except CameraBusyError as exc:
+                self.respond_json(409, {"ok": False, "error": str(exc), "retry": True})
+                return
+            except CameraNoReadError as exc:
+                self.respond_json(
+                    200,
+                    {
+                        "ok": True,
+                        "scan": {
+                            "result": "waiting",
+                            "message": f"{exc} Várakozás a következő beolvasásra…",
+                        },
+                        "item": None,
+                        "retry": True,
+                    },
+                )
+                return
+            except CameraReadError as exc:
+                try:
+                    _record, scan_result = record_scan_failure(code, operator, str(exc), reason="camera_connection")
+                except Exception:
+                    scan_result = {"result": "failed", "message": str(exc)}
+                self.respond_json(503, {"ok": False, "error": str(exc), "scan": scan_result, "retry": True})
+                return
+            try:
+                record, scan_result = scan_invoice_icn(code, camera_result.get("icn", ""), quantity, operator)
+            except (ValueError, FileNotFoundError) as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            item_payload = None
+            item_index = record.get("icn_index", {}).get(str(camera_result.get("icn", "")))
+            if item_index is not None:
+                try:
+                    item = record.get("items", [])[int(item_index)]
+                    item_payload = invoice_item_display(
+                        item,
+                        icn=camera_result.get("icn", ""),
+                        quantity=scan_result.get("quantity", quantity),
+                    )
+                except (IndexError, TypeError, ValueError):
+                    item_payload = None
+            is_success = scan_result.get("result") in {"success", "warning"}
+            self.respond_json(
+                200 if is_success else 400,
+                {
+                    "ok": is_success,
+                    "scan": scan_result,
+                    "item": item_payload,
+                    "camera_raw": camera_result.get("raw", ""),
+                },
+            )
+            return
+
+        if path == NETTFRONT_INVOICE_IMPORT_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            fields = _extract_multipart_fields(self.headers, raw_body)
+            upload = _extract_uploaded_files(self.headers, raw_body).get("batch_xml")
+            try:
+                if upload is None or not upload[0].lower().endswith(".xml"):
+                    raise ValueError("NettFront batch XML feltöltése kötelező.")
+                file_name, file_data = upload
+                batch_data = parse_batch_xml(file_data)
+                parsed = build_invoice_from_batch(
+                    batch_data,
+                    invoice_code=fields.get("invoice_code", ""),
+                    invoice_date=fields.get("invoice_date", ""),
+                )
+                record = create_invoice(parsed, file_data, fields.get("operator", ""), file_name)
+            except (ValueError, DuplicateInvoiceError) as exc:
+                body = render_nettfront_invoice_home(list_invoices(), str(exc))
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            except Exception as exc:
+                body = render_nettfront_invoice_home(list_invoices(), f"A számla feldolgozása nem sikerült: {exc}")
+                self.send_response(500)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_response(303)
+            operator_query = urllib.parse.urlencode({"operator": fields.get("operator", "")})
+            self.send_header("Location", f"{NETTFRONT_INVOICE_READ_PREFIX}/{urllib.parse.quote(record['invoice_code'])}?{operator_query}")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if path == NETTFRONT_INVOICE_OPEN_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                code = normalize_invoice_code(form.get("invoice_code", ""))
+                record_open(code, form.get("operator", ""))
+            except (ValueError, FileNotFoundError) as exc:
+                body = render_nettfront_invoice_home(list_invoices(), str(exc))
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_response(303)
+            operator_query = urllib.parse.urlencode({"operator": form.get("operator", "")})
+            self.send_header("Location", f"{NETTFRONT_INVOICE_READ_PREFIX}/{urllib.parse.quote(code)}?{operator_query}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_XML_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_XML_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            fields = _extract_multipart_fields(self.headers, raw_body)
+            upload = _extract_uploaded_files(self.headers, raw_body).get("batch_xml")
+            try:
+                if upload is None or not upload[0].lower().endswith(".xml"):
+                    raise ValueError("Batch XML feltöltése kötelező.")
+                _file_name, xml_data = upload
+                batch_data = parse_batch_xml(xml_data)
+                record = attach_batch_xml(code, batch_data, xml_data, fields.get("operator", ""))
+                batch_meta = record.get("batch_xml", {})
+                message = (
+                    f"Az XML csatolva: {batch_meta.get('matched_line_count', 0)}/{batch_meta.get('line_count', 0)} sor, "
+                    f"{batch_meta.get('icn_count', 0)} ICN."
+                )
+                if batch_meta.get("unmatched_lines"):
+                    message += f" Figyelem: {len(batch_meta['unmatched_lines'])} XML-sor nem illeszkedett számlatételhez."
+            except (ValueError, FileNotFoundError) as exc:
+                record = load_invoice(code)
+                if record is None:
+                    self.send_error(404)
+                    return
+                body = render_nettfront_invoice(record, str(exc))
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            body = render_nettfront_invoice(record, message)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_SCAN_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_SCAN_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                record, scan_result = scan_invoice_icn(code, form.get("icn", ""), form.get("quantity", "1"), form.get("operator", ""))
+                status_code = 200 if scan_result.get("result") in {"success", "warning"} else 400
+                message = str(scan_result.get("message", ""))
+            except (ValueError, FileNotFoundError) as exc:
+                record = load_invoice(code)
+                if record is None:
+                    self.send_error(404)
+                    return
+                status_code = 400
+                message = str(exc)
+            body = render_nettfront_invoice(record, message)
+            self.send_response(status_code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_CLOSE_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_CLOSE_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                record = close_invoice(code, form.get("operator", ""))
+            except (ValueError, FileNotFoundError) as exc:
+                current = load_invoice(code)
+                if current is None:
+                    self.send_error(404)
+                    return
+                body = render_nettfront_invoice(current, str(exc))
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            body = render_nettfront_invoice(record, "A számla sikeresen lezárva.")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_INVOICE_ADMIN_REOPEN_PREFIX + "/"):
+            code = path[len(NETTFRONT_INVOICE_ADMIN_REOPEN_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                reopen_invoice(code, form.get("operator", "admin"))
+            except (ValueError, FileNotFoundError) as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.send_response(303)
+            self.send_header("Location", NETTFRONT_INVOICE_ADMIN_ROUTE)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         if path == ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
@@ -7208,17 +7584,29 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 )
                 if not row_id or _manufacturing_is_virtual_unit_row_id(row_id) or not state_key or not code:
                     continue
-                entries.append(
-                    {
-                        "row_id": row_id,
-                        "state_key": state_key,
-                        "state_storage_key": state_storage_key,
-                        "code": code,
-                        "category_key": entry_category_key,
-                        "document_key": entry_document_key,
-                        "source_row_ids": source_row_ids,
-                    }
-                )
+                scan_groups = _manufacturing_ready_scan_groups(code, source_row_ids) or [
+                    {"code": code, "source_row_ids": source_row_ids}
+                ]
+                for scan_group in scan_groups:
+                    group_code = _extract_con_code(scan_group.get("code", ""))
+                    group_source_row_ids = [
+                        str(value).strip()
+                        for value in scan_group.get("source_row_ids", [])
+                        if str(value).strip()
+                    ]
+                    if not group_code:
+                        continue
+                    entries.append(
+                        {
+                            "row_id": row_id,
+                            "state_key": state_key,
+                            "state_storage_key": group_source_row_ids[0] if group_source_row_ids else state_storage_key,
+                            "code": group_code,
+                            "category_key": entry_category_key,
+                            "document_key": entry_document_key,
+                            "source_row_ids": group_source_row_ids,
+                        }
+                    )
             if not entries:
                 self.respond_json(400, {"ok": False, "error": "Nem találtam érvényes CON kódot a zöld sorokban."})
                 return
@@ -7258,7 +7646,8 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                         }
                     )
                     continue
-                if 200 <= int(status_code) < 300:
+                application_error = _shopfloor_response_error(response_body)
+                if 200 <= int(status_code) < 300 and not application_error:
                     success_targets.add((code, ready_endpoint))
                 else:
                     failures.append(
@@ -7266,7 +7655,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                             "code": code,
                             "endpoint": endpoint_name,
                             "status": int(status_code),
-                            "error": str(response_body or "").strip()[:300],
+                            "error": application_error or str(response_body or "").strip()[:300],
                         }
                     )
 

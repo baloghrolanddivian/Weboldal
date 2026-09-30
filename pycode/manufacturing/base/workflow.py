@@ -188,8 +188,13 @@ def _manufacturing_apply_row_data_overrides(bundle: dict, fallback_number: str =
                             category["hasIssuedRowEdit"] = True
 
 
-def _manufacturing_merge_default_korpusz_rows(bundle: dict) -> None:
-    """Merge equal Osszekeszito rows for the default manufacturing view."""
+def _manufacturing_merge_default_korpusz_rows(bundle: dict, view_state: dict[str, str] | None = None) -> None:
+    """Merge equal Osszekeszito rows only when their visible states also match."""
+
+    current_view_state = view_state if isinstance(view_state, dict) else {}
+    bundle_production_number = _manufacturing_normalize_number(
+        bundle.get("production_number", "") if isinstance(bundle, dict) else ""
+    )
 
     def source_row_ids(row: dict) -> list[str]:
         values = row.get("sourceRowIds", []) if isinstance(row.get("sourceRowIds"), list) else []
@@ -200,7 +205,7 @@ def _manufacturing_merge_default_korpusz_rows(bundle: dict) -> None:
         return result
 
     def merge_rows(rows: list[dict]) -> list[dict]:
-        merged_by_key: dict[tuple[str, str, str, str, str], dict] = {}
+        merged_by_key: dict[tuple[str, str, str, str, str, str], dict] = {}
         output: list[dict] = []
         for row in rows:
             if not isinstance(row, dict):
@@ -208,10 +213,12 @@ def _manufacturing_merge_default_korpusz_rows(bundle: dict) -> None:
             if str(row.get("doc_key", "") or "").strip() != "osszekeszito":
                 output.append(row)
                 continue
-            merge_key = tuple(
+            display_key = tuple(
                 str(row.get(field, "") or "").strip()
                 for field in ("name", "detail", "size", "color", "edge")
             )
+            row_state = _manufacturing_view_row_state(row, current_view_state, bundle_production_number)
+            merge_key = (*display_key, row_state)
             existing = merged_by_key.get(merge_key)
             if existing is None:
                 row["sourceRowIds"] = source_row_ids(row)
@@ -1083,6 +1090,41 @@ def _manufacturing_ready_endpoint_key(document_key: object, category_key: object
         return "assembly"
     return "default"
 
+
+def _manufacturing_ready_scan_groups(code: object, source_row_ids: object) -> list[dict[str, object]]:
+    """Split a merged ready row into one scan group for every source CON.
+
+    Korpusz display rows can merge multiple XML rows. Their source state keys
+    retain each original CON, so grouping by those keys prevents one displayed
+    barcode from marking the other, unscanned source rows done.
+    """
+    primary_code = _manufacturing_normalize_con_code(code)
+    clean_source_ids = [
+        str(value or "").strip()
+        for value in source_row_ids
+        if str(value or "").strip() and not _manufacturing_is_virtual_unit_row_id(value)
+    ] if isinstance(source_row_ids, (list, tuple)) else []
+
+    grouped_sources: dict[str, list[str]] = {}
+    sources_without_con: list[str] = []
+    for source_id in clean_source_ids:
+        source_code = _manufacturing_normalize_con_code(source_id)
+        if not source_code:
+            sources_without_con.append(source_id)
+            continue
+        grouped_sources.setdefault(source_code, []).append(source_id)
+
+    if primary_code:
+        grouped_sources.setdefault(primary_code, [])
+        grouped_sources[primary_code].extend(sources_without_con)
+    elif sources_without_con:
+        return []
+
+    return [
+        {"code": scan_code, "source_row_ids": list(dict.fromkeys(group_sources))}
+        for scan_code, group_sources in grouped_sources.items()
+    ]
+
 def _manufacturing_document_sections(bundle: dict, production_number: str, allowed_document_keys: tuple[str, ...], include_source_prefix: bool = True) -> tuple[list[dict], int]:
     """Flatten selected source documents into generic manufacturing sections."""
     sections: list[dict] = []
@@ -1936,7 +1978,7 @@ def manufacturing_module_payload(
     if selected_operation != "topfloor":
         _manufacturing_apply_row_data_overrides(bundle, selected_number)
     if not is_admin_view and selected_operation == "korpusz_osszekeszites":
-        _manufacturing_merge_default_korpusz_rows(bundle)
+        _manufacturing_merge_default_korpusz_rows(bundle, selection_state)
     _manufacturing_apply_row_edit_alerts(bundle, selected_number)
 
     production_client_cache: list[dict[str, object]] = []
@@ -1969,7 +2011,7 @@ def manufacturing_module_payload(
                     )
                     _manufacturing_apply_row_data_overrides(cache_bundle, cache_number)
                     if not is_admin_view and selected_operation == "korpusz_osszekeszites":
-                        _manufacturing_merge_default_korpusz_rows(cache_bundle)
+                        _manufacturing_merge_default_korpusz_rows(cache_bundle, cache_selection_state)
                     _manufacturing_apply_row_edit_alerts(cache_bundle, cache_number)
                 cache_payload = {
                             "route": module_route,
