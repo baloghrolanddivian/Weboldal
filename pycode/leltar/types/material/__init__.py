@@ -1,6 +1,8 @@
 """Material, semifinished, and semifinished-front inventory engine exports."""
 
 from .engine import (
+    add_material_inventory_row,
+    add_material_inventory_rows_from_file,
     build_material_inventory_insight_workbook,
     build_material_inventory_session,
     build_material_inventory_summary_workbook,
