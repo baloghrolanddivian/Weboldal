@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from tools.excel import normalize_excel_payload
+from leltar.frozen_stock import read_frozen_stock_quantities
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -94,6 +95,118 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
         "inventory_style": "simple-size",
         "rows": rows,
     }
+
+
+def refresh_front_inventory_stock_quantities(session: dict, file_name: str, payload: bytes) -> dict[str, int]:
+    """Refresh only frozen system quantities in an existing front inventory session."""
+    raw_quantities = read_frozen_stock_quantities(file_name, payload)
+    quantities: dict[str, int] = {}
+    for part_key, value in raw_quantities.items():
+        number = float(value)
+        if not number.is_integer():
+            raise ValueError("A front befagyasztott készlet csak egész darabszámokat tartalmazhat.")
+        quantities[part_key] = int(number)
+    result = {"source_rows": len(quantities), "matched": 0, "changed": 0, "missing": 0}
+    for row in session.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        part_key = str(row.get("part_number", "")).strip().casefold()
+        if part_key not in quantities:
+            result["missing"] += 1
+            continue
+        next_qty = quantities[part_key]
+        result["matched"] += 1
+        if int(row.get("stock_qty", 0) or 0) != next_qty:
+            row["stock_qty"] = next_qty
+            result["changed"] += 1
+
+    if not result["matched"]:
+        raise ValueError("A feltöltött listában egyetlen aktív leltári tételt sem találtam.")
+    session["frozen_stock_source_name"] = Path(file_name).name
+    session["frozen_stock_updated_at"] = datetime.now().isoformat(timespec="seconds")
+    return result
+
+
+def add_front_inventory_row(session: dict, part_number: str, description: str, stock_qty: str = "0", color: str = "") -> dict:
+    """Add a front without changing any existing inventory row."""
+    if str(session.get("phase", "")).lower() == "finalized":
+        raise ValueError("A lezárt leltárhoz már nem adható új tétel.")
+    part_number = _normalize_part_number(part_number)
+    description = str(description or "").strip()
+    if not part_number or not description:
+        raise ValueError("Az alkatrészszám és az alkatrészleírás kötelező.")
+    if any(str(row.get("part_number", "")).strip().casefold() == part_number.casefold()
+           for row in session.get("rows", []) if isinstance(row, dict)):
+        raise ValueError("Ez az alkatrészszám már szerepel a front leltárban.")
+    try:
+        number = float(str(stock_qty or "0").strip().replace(" ", "").replace(",", "."))
+    except ValueError as exc:
+        raise ValueError("A befagyasztott készlet csak egész darabszám lehet.") from exc
+    if not number.is_integer():
+        raise ValueError("A befagyasztott készlet csak egész darabszám lehet.")
+    serial_sizes = {str(value) for value in session.get("serial_sizes", [])}
+    row = _build_inventory_session_row(
+        {"part_number": part_number, "description": description, "quantity": int(number), "color": color},
+        serial_sizes,
+    )
+    row["manually_added"] = True
+    row["review_level"] = int(session.get("phase", 0) or 0)
+    session.setdefault("rows", []).append(row)
+    session["rows"].sort(key=_row_sort_key)
+    _touch_session(session)
+    return row
+
+
+def add_front_inventory_rows_from_file(session: dict, file_name: str, payload: bytes) -> dict[str, int]:
+    """Append new front rows from a compact Excel or CSV list."""
+    if str(session.get("phase", "")).lower() == "finalized":
+        raise ValueError("A lezárt leltárhoz már nem adható új tétel.")
+    raw_rows = _read_rows(file_name, payload)
+    if not raw_rows:
+        raise ValueError("A kiegészítő tétellista üres.")
+    header_map = _build_header_map(raw_rows[0])
+    part_index = _find_header_index(header_map, ("alkatr", "szam"))
+    desc_index = _find_header_index(header_map, ("alkatr", "leiras"))
+    qty_index = (_find_header_index(header_map, ("befagyott", "keszlet", "menny"))
+                 or _find_header_index(header_map, ("rend", "all", "rakt", "keszl")))
+    color_index = _find_header_index(header_map, ("szin", "desc")) or _find_header_index(header_map, ("szin",))
+    exclude_index = _find_header_index(header_map, ("leltarbol", "ki"))
+    if part_index is None or desc_index is None:
+        raise ValueError("A kiegészítő listában Alkatr.-szám és Alkatr.-leírás oszlop kell.")
+    result = {"added": 0, "duplicate": 0, "excluded": 0, "invalid": 0}
+    existing = {str(row.get("part_number", "")).strip().casefold()
+                for row in session.get("rows", []) if isinstance(row, dict)}
+    candidates = []
+    for values in raw_rows[1:]:
+        get = lambda index: values[index] if index is not None and index < len(values) else ""
+        if _is_inventory_excluded_flag(get(exclude_index)):
+            result["excluded"] += 1
+            continue
+        part_number = _normalize_part_number(get(part_index))
+        description = str(get(desc_index) or "").strip()
+        if not part_number or not description:
+            result["invalid"] += 1
+            continue
+        if part_number.casefold() in existing:
+            result["duplicate"] += 1
+            continue
+        raw_qty = get(qty_index)
+        try:
+            number = float(str(raw_qty if raw_qty not in (None, "") else 0).strip().replace(" ", "").replace(",", "."))
+        except ValueError:
+            result["invalid"] += 1
+            continue
+        if not number.is_integer():
+            result["invalid"] += 1
+            continue
+        candidates.append((part_number, description, int(number), str(get(color_index) or "")))
+        existing.add(part_number.casefold())
+    if not candidates:
+        raise ValueError("A fájlban nem találtam hozzáadható új fronttételt.")
+    for part_number, description, quantity, color in candidates:
+        add_front_inventory_row(session, part_number, description, str(quantity), color)
+        result["added"] += 1
+    return result
 
 
 def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "add") -> tuple[bool, str]:

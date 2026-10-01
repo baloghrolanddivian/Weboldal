@@ -12,6 +12,7 @@ from .engine import (
     file_name_allowed,
     finalize_material_inventory,
     load_session_from_path,
+    refresh_material_inventory_book_quantities,
     save_session_to_path,
     update_material_row_input,
     write_runtime_upload,

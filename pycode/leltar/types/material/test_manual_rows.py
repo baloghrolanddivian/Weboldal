@@ -71,6 +71,28 @@ class ManualMaterialRowsTests(unittest.TestCase):
         self.assertEqual(added["icg_code"], "Élzáró")
         self.assertEqual(added["book_unit"], "m")
 
+    def test_adds_semifinished_list_by_color_without_changing_existing_count(self) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["alkatresz szam", "alkatresz leiras", "SZIN.Desc", "konyvelesi mennyiseg"])
+        sheet.append(["F2", "Uj felkesz tetel", "Antracit", 12])
+        sheet.append(["F3", "Masik felkesz tetel", "Feher", 8])
+        output = BytesIO()
+        workbook.save(output)
+        session = self._session()
+        session["category_label"] = "Szín"
+
+        result = add_material_inventory_rows_from_file(
+            session, "felkesz-plusz.xlsx", output.getvalue(), "", "db"
+        )
+
+        self.assertEqual(result["added"], 2)
+        self.assertEqual(next(row for row in session["rows"] if row["row_id"] == "existing")["input_qty"], "4")
+        added = next(row for row in session["rows"] if row["part_number"] == "F2")
+        self.assertEqual(added["icg_code"], "Antracit")
+        self.assertEqual(added["input_qty"], "")
+        self.assertEqual(next(row for row in session["rows"] if row["part_number"] == "F3")["icg_code"], "Feher")
+
 
 if __name__ == "__main__":
     unittest.main()

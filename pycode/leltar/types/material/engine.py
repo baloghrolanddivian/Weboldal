@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from tools.excel import normalize_excel_payload
+from leltar.frozen_stock import read_frozen_stock_quantities
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -113,6 +114,35 @@ def build_semifinished_front_inventory_session(file_name: str, payload: bytes) -
     return _build_color_inventory_session(file_name, payload, "felkesz-front")
 
 
+def refresh_material_inventory_book_quantities(
+    session: dict,
+    file_name: str,
+    payload: bytes,
+    inventory_kind: str = "material",
+) -> dict[str, int]:
+    """Refresh only frozen bookkeeping quantities in an existing inventory session."""
+    quantities = read_frozen_stock_quantities(file_name, payload)
+    result = {"source_rows": len(quantities), "matched": 0, "changed": 0, "missing": 0}
+    for row in session.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        part_key = _clean_text(row.get("part_number")).casefold()
+        if part_key not in quantities:
+            result["missing"] += 1
+            continue
+        next_qty = quantities[part_key]
+        result["matched"] += 1
+        if _clean_number_text(row.get("book_qty")) != next_qty:
+            row["book_qty"] = next_qty
+            result["changed"] += 1
+
+    if not result["matched"]:
+        raise ValueError("A feltöltött listában egyetlen aktív leltári tételt sem találtam.")
+    session["frozen_stock_source_name"] = Path(file_name).name
+    session["frozen_stock_updated_at"] = datetime.now().isoformat(timespec="seconds")
+    return result
+
+
 def _build_color_inventory_session(file_name: str, payload: bytes, export_prefix: str) -> dict:
     """Create a color-grouped stock counting session from source rows."""
     source_rows = _read_semifinished_rows(file_name, payload)
@@ -202,12 +232,13 @@ def add_material_inventory_row(
     clean_category = _clean_text(icg_code)
     clean_book_unit = _clean_text(book_unit).lower()
     clean_book_qty = _clean_number_text(book_qty)
+    category_label = _clean_text(session.get("category_label")) or "ICG kód"
     if not clean_part_number:
         raise ValueError("Az alkatrészszám megadása kötelező.")
     if not clean_description:
         raise ValueError("Az alkatrészleírás megadása kötelező.")
     if not clean_category:
-        raise ValueError("Az ICG kód megadása kötelező.")
+        raise ValueError(f"A(z) {category_label} megadása kötelező.")
     if str(book_qty or "").strip() and _parse_non_negative_number(book_qty) is None:
         raise ValueError("A könyvelési mennyiség csak nem negatív szám lehet.")
 
@@ -221,7 +252,7 @@ def add_material_inventory_row(
         None,
     )
     if duplicate is not None:
-        raise ValueError("Ez az alkatrész ebben az ICG kategóriában már szerepel a leltárban.")
+        raise ValueError("Ez az alkatrész ebben a kategóriában már szerepel a leltárban.")
 
     row = {
         "row_id": _row_id(clean_part_number, clean_category, f"manual-{secrets.token_hex(5)}"),
@@ -253,11 +284,14 @@ def add_material_inventory_rows_from_file(
     if str(session.get("phase", "")).lower() == "finalized":
         raise ValueError("A lezárt leltár már nem egészíthető ki új tételekkel.")
     clean_default_category = _clean_text(default_icg_code)
-    if not clean_default_category:
-        raise ValueError("Add meg, melyik ICG kategóriába kerüljenek a tételek.")
     clean_default_unit = _clean_text(default_book_unit).lower() or "m"
 
     source_rows = _read_material_supplement_rows(file_name, payload)
+    if not clean_default_category and not any(_clean_text(item.get("icg_code")) for item in source_rows):
+        category_label = _clean_text(session.get("category_label")) or "kategória"
+        raise ValueError(
+            f"A fájlban nincs {category_label} oszlop vagy érték. Add meg a közös kategóriát a feltöltésnél."
+        )
     existing = {
         (_clean_text(row.get("part_number")).casefold(), _clean_text(row.get("icg_code")).casefold())
         for row in session.get("rows", []) if isinstance(row, dict)
@@ -270,7 +304,7 @@ def add_material_inventory_rows_from_file(
         part_number = _clean_text(item.get("part_number"))
         description = _clean_text(item.get("description"))
         category = _clean_text(item.get("icg_code")) or clean_default_category
-        if not part_number or not description:
+        if not part_number or not description or not category:
             result["invalid"] += 1
             continue
         key = (part_number.casefold(), category.casefold())
@@ -636,7 +670,7 @@ def _row_from_values(header_map: dict[str, int], values: tuple | list) -> dict:
         "description": get_value("description"),
         "book_qty": get_value("book_qty"),
         "book_unit": get_value("book_unit"),
-        "icg_code": get_value("icg_code"),
+        "icg_code": get_value("icg_code") or get_value("color_desc") or get_value("color_code"),
         "exclude": get_value("exclude"),
     }
 
