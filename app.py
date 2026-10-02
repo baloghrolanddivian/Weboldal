@@ -2684,8 +2684,13 @@ def _material_inventory_hydrate_book_qty(session: dict | None) -> bool:
     return changed
 
 
-def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
-    """Backfill bookkeeping units from the material unit catalog and source workbook."""
+def _material_inventory_hydrate_book_units(
+    session: dict | None,
+    meta_path: Path,
+    runtime_dir: Path,
+    session_builder,
+) -> bool:
+    """Backfill bookkeeping units from the material catalog and saved source workbook."""
     if not isinstance(session, dict):
         return False
     rows = session.get("rows")
@@ -2694,6 +2699,7 @@ def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
     if all(str(row.get("book_unit", "")).strip() for row in rows if isinstance(row, dict)):
         return False
 
+    units_by_key: dict[tuple[str, str], str] = {}
     units_by_part: dict[str, str] = {}
     if MATERIAL_INVENTORY_BOOK_UNITS_PATH.is_file():
         try:
@@ -2701,34 +2707,37 @@ def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
         except (OSError, json.JSONDecodeError):
             stored_units = {}
         if isinstance(stored_units, dict):
-            units_by_part = {
-                str(part_number).strip(): str(raw_unit or "").strip().lower()
-                for part_number, raw_unit in stored_units.items()
-                if str(part_number).strip() and str(raw_unit or "").strip()
-            }
+            for part_number, raw_unit in stored_units.items():
+                unit = str(raw_unit or "").strip().lower()
+                if unit:
+                    units_by_part.setdefault(str(part_number).strip(), unit)
 
-    meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_STOCK_META_PATH)
+    meta = _matt_inventory_read_meta(meta_path)
     stored_name = str(meta.get("stored_name", "")).strip()
     original_name = str(meta.get("original_name", "")).strip() or stored_name
-    stock_path = MATERIAL_INVENTORY_RUNTIME_DIR / stored_name
+    stock_path = runtime_dir / stored_name
     if stored_name and stock_path.is_file():
         try:
-            source_session = build_material_inventory_session(original_name, stock_path.read_bytes())
+            source_session = session_builder(original_name, stock_path.read_bytes())
         except Exception:
             source_session = {}
         for source_row in source_session.get("rows", []):
             if not isinstance(source_row, dict):
                 continue
             part_number = str(source_row.get("part_number", "")).strip()
+            category = str(source_row.get("icg_code", ""))
             unit = str(source_row.get("book_unit", "")).strip().lower()
             if part_number and unit:
+                units_by_key[(part_number, category)] = unit
                 units_by_part[part_number] = unit
 
     changed = False
     for row in rows:
         if not isinstance(row, dict) or str(row.get("book_unit", "")).strip():
             continue
-        unit = units_by_part.get(str(row.get("part_number", "")).strip(), "")
+        part_number = str(row.get("part_number", "")).strip()
+        category = str(row.get("icg_code", ""))
+        unit = units_by_key.get((part_number, category), units_by_part.get(part_number, ""))
         if unit:
             row["book_unit"] = unit
             changed = True
@@ -2923,10 +2932,15 @@ def render_material_inventory_form(
     session_changed = False
     if not is_semifinished and _material_inventory_hydrate_book_qty(session):
         session_changed = True
-    if not is_semifinished and _material_inventory_hydrate_book_units(session):
+    if not is_semifinished and _material_inventory_hydrate_book_units(
+        session,
+        MATERIAL_INVENTORY_STOCK_META_PATH,
+        MATERIAL_INVENTORY_RUNTIME_DIR,
+        build_material_inventory_session,
+    ):
         session_changed = True
     if session_changed and session is not None:
-        save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
+        save_material_inventory_session_to_path(session_path, session)
     active_view = _material_inventory_normalize_view(view_mode)
     show_book_qty = not is_semifinished and active_view == "admin"
     color_page_title = "Félkész front leltár" if is_semifinished_front else "Félkész raktár leltár"
@@ -3290,6 +3304,7 @@ def render_material_inventory_form(
     .matinv-table .is-description {{ width:auto; }}
     .matinv-table .is-color {{ color:#0f766e; font-weight:900; }}
     .matinv-table .is-book-qty {{ color:#475569; font-weight:900; }}
+    .matinv-table .is-book-unit {{ color:#0f766e; font-weight:900; text-transform:lowercase; }}
     .matinv-table .is-total {{ }}
     .matinv-table .is-total span {{ display:inline-flex; align-items:center; justify-content:center; min-width:58px; min-height:34px; padding:0 10px; border-radius:999px; background:#0f172a; color:#fff; font-weight:900; }}
     .matinv-table .is-adjust {{ }}
@@ -3588,7 +3603,12 @@ def _unified_inventory_build_view_model(config: dict, selected_category: str, so
         return {"session": None, "categories": [], "selected_category": "all", "visible_rows": [], "finalized": False}
     if config.get("kind") == "material":
         session_changed = _material_inventory_hydrate_book_qty(session)
-        if _material_inventory_hydrate_book_units(session):
+        if _material_inventory_hydrate_book_units(
+            session,
+            MATERIAL_INVENTORY_STOCK_META_PATH,
+            MATERIAL_INVENTORY_RUNTIME_DIR,
+            build_material_inventory_session,
+        ):
             session_changed = True
         if session_changed:
             save_material_inventory_session_to_path(config["session_path"], session)
