@@ -605,7 +605,7 @@ def _topfloor_open_box(client: ShopfloorApiClient, con_id: int) -> None:
         TOPFLOOR_BOXING_CHECKPOINT_ID,
         TOPFLOOR_BOXING_TAB_ID,
         2,
-        {"scan": str(int(con_id))},
+        {"scan": f"CON{int(con_id)}"},
     )
     _shopfloor_require_success(status_code, response_body, "topfloor open box")
     _topfloor_update_box(client, con_id)
