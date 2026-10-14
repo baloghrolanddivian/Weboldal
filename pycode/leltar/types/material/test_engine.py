@@ -44,18 +44,20 @@ class SemifinishedInventoryImportTests(unittest.TestCase):
                 self.assertEqual(session["rows"][0]["icg_code"], "Antracit kr.")
 
     def test_accepts_bookkeeping_unit_without_treating_it_as_stock_quantity(self) -> None:
-        workbook = Workbook()
-        sheet = workbook.active
-        sheet.append(["Alkatr.-szám", "Alkatr.-leírás", "Könyvelés ME", "ICG kód"])
-        sheet.append(["P1", "Tesztanyag", "KG", "ANYAG"])
-        output = BytesIO()
-        workbook.save(output)
+        for unit_header in ("Könyvelés ME", "Elsődleges ME"):
+            with self.subTest(unit_header=unit_header):
+                workbook = Workbook()
+                sheet = workbook.active
+                sheet.append(["Alkatr.-szám", "Alkatr.-leírás", unit_header, "ICG kód"])
+                sheet.append(["P1", "Tesztanyag", "KG", "ANYAG"])
+                output = BytesIO()
+                workbook.save(output)
 
-        session = build_material_inventory_session("könyvelési mennyiség.xlsx", output.getvalue())
+                session = build_material_inventory_session("Anyag raktár leltár.xlsx", output.getvalue())
 
-        self.assertEqual(len(session["rows"]), 1)
-        self.assertEqual(session["rows"][0]["book_qty"], "")
-        self.assertEqual(session["rows"][0]["book_unit"], "kg")
+                self.assertEqual(len(session["rows"]), 1)
+                self.assertEqual(session["rows"][0]["book_qty"], "")
+                self.assertEqual(session["rows"][0]["book_unit"], "kg")
 
 
 if __name__ == "__main__":
