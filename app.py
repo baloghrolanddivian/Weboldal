@@ -14,6 +14,7 @@ import threading
 import urllib.parse
 import zipfile
 import csv
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -117,9 +118,11 @@ from leltar.foil_rolls import (
     save_session as save_foil_roll_session,
 )
 from leltar.recount import (
+    inventory_row_values,
     recount_groups,
     recount_rows,
     send_group_to_recount,
+    set_recount_closed,
     set_recount_selection,
     update_recount_input,
 )
@@ -232,6 +235,7 @@ from leltar.types.front import (
     read_bytes_if_exists as front_inventory_read_bytes_if_exists,
     run_inventory_check,
     save_session_to_path as save_front_inventory_session_to_path,
+    session_transaction as front_inventory_session_transaction,
     update_row_input,
     write_runtime_upload as write_front_inventory_runtime_upload,
 )
@@ -3493,12 +3497,12 @@ def _front_inventory_touch_presence(token: str, category: str, view_mode: str, c
     return sorted(set(active_categories))
 
 
-def _front_inventory_build_sync_payload(selected_category: str) -> dict:
+def _front_inventory_build_sync_payload(selected_category: str, hide_closed: bool = True) -> dict:
     """Return the front worker polling payload for category and row state."""
     session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
     if session is None:
         return {"category_states": {}, "row_inputs": {}, "updated_at": ""}
-    view_model = build_front_inventory_view_model(session, selected_category)
+    view_model = build_front_inventory_view_model(session, selected_category, hide_closed=hide_closed)
     row_inputs: dict[str, str] = {}
     for row in view_model.get("visible_rows", []):
         row_inputs[str(row.get("row_id", ""))] = str(row.get("input_qty", "") or "")
@@ -3592,7 +3596,7 @@ def _unified_inventory_build_view_model(config: dict, selected_category: str, so
             session_changed = True
         if session_changed:
             save_material_inventory_session_to_path(config["session_path"], session)
-    view_model = build_material_inventory_view_model(session, selected_category)
+    view_model = build_material_inventory_view_model(session, selected_category, hide_closed=True)
     active_sort = _unified_inventory_normalize_sort(sort_mode)
     rows = list(view_model.get("visible_rows", []))
     if active_sort != "default":
@@ -3712,18 +3716,19 @@ def render_inventory_recount_admin(kind: str, view: str = "check", message: str 
     else:
         rows = recount_rows(session, config["kind"], active_view)
         body_rows = "".join(
-            f'''<tr class="frontinv-row{' is-mismatch' if row['mismatch'] else ''}" data-inventory-group="{html.escape(str(row['group']), quote=True)}">
+            f'''<tr class="frontinv-row{' is-mismatch' if row['mismatch'] else ''}{' is-closed' if row.get('closed') else ''}" data-inventory-group="{html.escape(str(row['group']), quote=True)}">
               <td><strong>{html.escape(str(row.get('description', '')))}</strong><small>{html.escape(str(row.get('part_number', '')))}</small></td>
               <td>{html.escape(str(row['group']))}</td>
               <td>{html.escape(row['book_qty'] or '-')}</td>
               <td>{html.escape(row['counted_qty'] or '-')}</td>
               {f"<td>{html.escape(row['recount_qty'] or '-')}</td>" if active_view == 'recount' else ''}
-              <td><span class="inventory-status {'is-done' if (row['recounted'] if active_view == 'recount' else row['is_counted']) else ''}">{'Újraszámolva' if active_view == 'recount' and row['recounted'] else 'Újraszámolásra vár' if active_view == 'recount' else 'Megszámolt' if row['is_counted'] else 'Még nem számolt'}</span></td>
+              <td><span class="inventory-status {'is-done' if row['closed'] or (row['recounted'] if active_view == 'recount' else row['is_counted']) else ''}">{'Lezárva' if row['closed'] else 'Újraszámolva' if active_view == 'recount' and row['recounted'] else 'Újraszámolásra vár' if active_view == 'recount' else 'Megszámolt' if row['is_counted'] else 'Még nem számolt'}</span></td>
               <td>{row['send_count']}</td>
-              <td><input class="rc-check" type="checkbox" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" {'checked' if row['selected'] else ''} {'disabled' if str(session.get('phase', '')).lower() == 'finalized' else ''} aria-label="Újraszámolásra kijelölés" /></td>
+              <td><input class="rc-closed" type="checkbox" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" {'checked' if row.get('closed') else ''} {'disabled' if str(session.get('phase', '')).lower() == 'finalized' or row.get('auto_closed') else ''} aria-label="Lezárva" /></td>
+              <td><input class="rc-check" type="checkbox" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" {'checked' if row['selected'] else ''} {'disabled' if str(session.get('phase', '')).lower() == 'finalized' or row.get('closed') else ''} aria-label="Újraszámolásra kijelölés" /></td>
             </tr>'''
             for row in rows
-        ) or f'<tr><td colspan="{8 if active_view == "recount" else 7}" class="frontinv-empty-row">{"Még nem volt újraszámolásra küldött tétel." if active_view == "recount" else "Nincs leltározandó tétel."}</td></tr>'
+        ) or f'<tr><td colspan="{9 if active_view == "recount" else 8}" class="frontinv-empty-row">{"Még nem volt újraszámolásra küldött tétel." if active_view == "recount" else "Nincs leltározandó tétel."}</td></tr>'
         options = "".join(f'<option value="{html.escape(item["key"], quote=True)}">{html.escape(item["key"])} · {item["count"]} tétel</option>' for item in recount_groups(session, config["kind"]))
         action = ""
         if str(session.get("phase", "")).lower() != "finalized":
@@ -3735,16 +3740,17 @@ def render_inventory_recount_admin(kind: str, view: str = "check", message: str 
         content = f'''<section class="frontinv-board inventory-admin-board{' is-recount' if active_view == 'recount' else ''}">
           <div class="frontinv-board-head"><div><span class="frontinv-tag">Adminisztráció</span><strong>{'Újraszámolások ellenőrzése' if active_view == 'recount' else 'Leltárellenőrző'}</strong><p>{html.escape(config['title'])} · befagyasztott készlet, számolási állapot és újraszámolási előzmény.</p></div><div class="frontinv-board-stamp"><span data-visible-count>{len(rows)}</span>&nbsp;tétel</div></div>
           {action}
-          <div class="frontinv-table-wrap"><table class="frontinv-table inventory-admin-table"><thead><tr><th>Tétel</th><th>{config['group_label']}</th><th>Rendszerkészlet</th><th>Számolt</th>{'<th>Újraszámolt</th>' if active_view == 'recount' else ''}<th>Állapot</th><th>Küldések</th><th>Kijelölés</th></tr></thead><tbody>{body_rows}</tbody></table></div>
+          <div class="frontinv-table-wrap"><table class="frontinv-table inventory-admin-table"><thead><tr><th>Tétel</th><th>{config['group_label']}</th><th>Rendszerkészlet</th><th>Számolt</th>{'<th>Újraszámolt</th>' if active_view == 'recount' else ''}<th>Állapot</th><th>Küldések</th><th>Lezárva</th><th>Kijelölés</th></tr></thead><tbody>{body_rows}</tbody></table></div>
         </section>'''
     admin_style = """<style>
-      .inventory-admin-shell{width:min(1500px,calc(100% - 28px));margin:16px auto 42px;display:grid;gap:16px}.inventory-admin-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;border-radius:24px;background:#fff;border:1px solid rgba(15,23,42,.08)}.inventory-admin-top h1{margin:5px 0 0;font:800 1.5rem/1.1 "Space Grotesk",sans-serif}.inventory-admin-top>a{color:#0f172a;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-switch{display:inline-flex;gap:7px;width:max-content;padding:6px;border:1px solid #d8e0ea;border-radius:999px;background:#fff}.inventory-admin-page .frontinv-view-tab{display:inline-flex;align-items:center;min-height:40px;padding:0 17px;border-radius:999px;color:#334155;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-tab.is-active{background:#0c8d57;color:#fff}.inventory-admin-page .frontinv-view-tab.is-active.is-recount{background:#ea580c;color:#fff}.inventory-admin-page .frontinv-view-tab.is-recount:not(.is-active){background:#fff7ed;color:#c2410c}.inventory-admin-board{padding:20px}.inventory-admin-table{min-width:960px}.inventory-admin-table td strong{display:block}.inventory-admin-table td small{display:block;margin-top:4px;color:#64748b}.inventory-admin-table tr.is-mismatch{background:#fff7ed}.inventory-status{display:inline-flex;padding:7px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:.78rem;font-weight:900;white-space:nowrap}.inventory-status.is-done{background:#dcfce7;color:#166534}.rc-check{width:22px;height:22px;accent-color:#ea580c}.inventory-group-action{display:flex;justify-content:flex-end;align-items:end;gap:10px;margin:18px 0}.inventory-group-action label{display:grid;gap:5px;color:#475569;font-size:.78rem;font-weight:900;text-transform:uppercase}.inventory-group-action select,.inventory-group-action button{min-height:44px;padding:0 14px;border-radius:14px;border:1px solid #d8e0ea;background:#fff;font-weight:900}.inventory-group-action button{background:#0c8d57;border-color:#0c8d57;color:#fff;cursor:pointer}.inventory-admin-board.is-recount::before{background:linear-gradient(90deg,#ea580c,#fb923c,#fed7aa)!important}.inventory-admin-board.is-recount .frontinv-tag{background:#fff7ed!important;color:#c2410c!important}.inventory-admin-board.is-recount .inventory-group-action button{background:#ea580c;border-color:#ea580c}.inventory-admin-notice{padding:13px 16px;border-radius:16px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-weight:800}.inventory-admin-notice.is-success{background:#ecfdf5;color:#047857;border-color:#bbf7d0}@media(max-width:760px){.inventory-admin-shell{width:calc(100% - 16px);margin:8px auto 24px}.inventory-admin-top{align-items:flex-start}.inventory-group-action{display:grid}.inventory-admin-board{padding:12px}}
+      .inventory-admin-shell{width:min(1500px,calc(100% - 28px));margin:16px auto 42px;display:grid;gap:16px}.inventory-admin-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;border-radius:24px;background:#fff;border:1px solid rgba(15,23,42,.08)}.inventory-admin-top h1{margin:5px 0 0;font:800 1.5rem/1.1 "Space Grotesk",sans-serif}.inventory-admin-top>a{color:#0f172a;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-switch{display:inline-flex;gap:7px;width:max-content;padding:6px;border:1px solid #d8e0ea;border-radius:999px;background:#fff}.inventory-admin-page .frontinv-view-tab{display:inline-flex;align-items:center;min-height:40px;padding:0 17px;border-radius:999px;color:#334155;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-tab.is-active{background:#0c8d57;color:#fff}.inventory-admin-page .frontinv-view-tab.is-active.is-recount{background:#ea580c;color:#fff}.inventory-admin-page .frontinv-view-tab.is-recount:not(.is-active){background:#fff7ed;color:#c2410c}.inventory-admin-board{padding:20px}.inventory-admin-table{min-width:1060px}.inventory-admin-table td strong{display:block}.inventory-admin-table td small{display:block;margin-top:4px;color:#64748b}.inventory-admin-table tr.is-mismatch{background:#fff7ed}.inventory-admin-table tr.is-closed{background:#f8fafc;color:#64748b}.inventory-status{display:inline-flex;padding:7px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:.78rem;font-weight:900;white-space:nowrap}.inventory-status.is-done{background:#dcfce7;color:#166534}.rc-check,.rc-closed{width:22px;height:22px;accent-color:#ea580c}.rc-closed{accent-color:#0c8d57}.inventory-group-action{display:flex;justify-content:flex-end;align-items:end;gap:10px;margin:18px 0}.inventory-group-action label{display:grid;gap:5px;color:#475569;font-size:.78rem;font-weight:900;text-transform:uppercase}.inventory-group-action select,.inventory-group-action button{min-height:44px;padding:0 14px;border-radius:14px;border:1px solid #d8e0ea;background:#fff;font-weight:900}.inventory-group-action button{background:#0c8d57;border-color:#0c8d57;color:#fff;cursor:pointer}.inventory-admin-board.is-recount::before{background:linear-gradient(90deg,#ea580c,#fb923c,#fed7aa)!important}.inventory-admin-board.is-recount .frontinv-tag{background:#fff7ed!important;color:#c2410c!important}.inventory-admin-board.is-recount .inventory-group-action button{background:#ea580c;border-color:#ea580c}.inventory-admin-notice{padding:13px 16px;border-radius:16px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-weight:800}.inventory-admin-notice.is-success{background:#ecfdf5;color:#047857;border-color:#bbf7d0}@media(max-width:760px){.inventory-admin-shell{width:calc(100% - 16px);margin:8px auto 24px}.inventory-admin-top{align-items:flex-start}.inventory-group-action{display:grid}.inventory-admin-board{padding:12px}}
     </style>"""
     page = f'''<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Divian-HUB | Leltárellenőrző</title><link rel="stylesheet" href="/styles.css">{_unified_inventory_style()}{admin_style}</head><body class="frontinv-worker-stage inventory-admin-page" data-theme-scope="default"><main class="inventory-admin-shell">
       <header class="inventory-admin-top"><div><span class="frontinv-tag">Divian-HUB</span><h1>{html.escape(config['title'])}</h1></div><a href="{config['admin_route']}">Vissza a kezelőhöz</a></header>{notice}
       <nav class="frontinv-view-switch"><a class="frontinv-view-tab{' is-active' if active_view == 'check' else ''}" href="{config['checker_route']}">Leltárellenőrző</a><a class="frontinv-view-tab{' is-active is-recount' if active_view == 'recount' else ' is-recount'}" href="{config['review_route']}">Újraszámolások ellenőrzése</a></nav>{content}
     </main><script>(()=>{{
-      document.querySelectorAll('.rc-check').forEach((box)=>box.addEventListener('change',()=>{{const body=new URLSearchParams();body.set('row_id',box.dataset.rowId||'');body.set('selected',box.checked?'1':'0');fetch('{config['selection_route']}',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}},body:body.toString(),credentials:'same-origin'}}).then(r=>{{if(!r.ok)throw new Error();}}).catch(()=>{{box.checked=!box.checked;}});}}));
+      document.querySelectorAll('.rc-check').forEach((box)=>box.addEventListener('change',()=>{{const body=new URLSearchParams();body.set('row_id',box.dataset.rowId||'');body.set('selected',box.checked?'1':'0');body.set('view','{active_view}');fetch('{config['selection_route']}',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}},body:body.toString(),credentials:'same-origin'}}).then(r=>{{if(!r.ok)throw new Error();}}).catch(()=>{{box.checked=!box.checked;}});}}));
+      document.querySelectorAll('.rc-closed').forEach((box)=>box.addEventListener('change',()=>{{const row=box.closest('tr');const selectBox=row?row.querySelector('.rc-check'):null;const status=row?row.querySelector('.inventory-status'):null;const next=box.checked;const body=new URLSearchParams();body.set('row_id',box.dataset.rowId||'');body.set('closed',next?'1':'0');if(selectBox&&next){{selectBox.checked=false;selectBox.disabled=true;}}if(selectBox&&!next){{selectBox.disabled=false;}}fetch('{config['selection_route']}',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}},body:body.toString(),credentials:'same-origin'}}).then(r=>{{if(!r.ok)throw new Error();return r.json();}}).then(()=>{{if(row)row.classList.toggle('is-closed',next);if(status&&next){{status.textContent='Lezárva';status.classList.add('is-done');}}if(!next)window.location.reload();}}).catch(()=>{{box.checked=!next;if(selectBox)selectBox.disabled=box.checked;}});}}));
       const groupFilter=document.querySelector('[data-group-filter]');
       const countLabel=document.querySelector('[data-visible-count]');
       const filterRows=()=>{{
@@ -3768,7 +3774,7 @@ def render_inventory_recount_worker(kind: str, selected_group: str = "") -> byte
     config = _inventory_recount_config(kind)
     session = config["load"](config["session_path"])
     rows = recount_rows(session, config["kind"], "recount") if session else []
-    pending = [row for row in rows if row["pending"]]
+    pending = [row for row in rows if row["pending"] and not row["closed"]]
     groups = sorted({str(row["group"]) for row in pending})
     active = selected_group if selected_group in groups else "all"
     visible = pending if active == "all" else [row for row in pending if row["group"] == active]
@@ -4099,7 +4105,7 @@ def _unified_inventory_script() -> str:
   const categoryValue = root.getAttribute("data-category") || "";
   const storagePrefix = root.getAttribute("data-storage-prefix") || "unifiedinv";
   const categoryRow = root.querySelector(".frontinv-category-row");
-  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
+  let rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
   const searchInput = root.querySelector("[data-frontinv-search]");
   const selectedCategoryStorageKey = `${storagePrefix}-selected-category`;
   const categoryFromLink = (link) => {
@@ -4140,6 +4146,11 @@ def _unified_inventory_script() -> str:
     const total = row.querySelector("[data-frontinv-total]");
     if (total) total.textContent = nextValue || "0";
     row.classList.toggle("is-counted", nextValue !== "");
+  };
+  const removeClosedRow = (row) => {
+    if (!row) return;
+    row.remove();
+    rowElements = rowElements.filter((item) => item !== row);
   };
   const saveAdjustment = (input) => {
     const rowId = input.getAttribute("data-row-id") || input.closest("[data-frontinv-row]")?.getAttribute("data-row-id") || "";
@@ -4218,9 +4229,13 @@ def _unified_inventory_script() -> str:
         chip.classList.toggle("is-complete", Boolean(categoryStates[chipCategory]));
       });
       const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object" ? payload.row_inputs : {};
-      rowElements.forEach((row) => {
+      rowElements.slice().forEach((row) => {
         const rowId = row.getAttribute("data-row-id") || "";
-        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) setRowValue(row, remoteRowInputs[rowId]);
+        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) {
+          setRowValue(row, remoteRowInputs[rowId]);
+        } else {
+          removeClosedRow(row);
+        }
       });
     };
     const touchPresence = (clear = false) => {
@@ -4317,7 +4332,12 @@ def render_front_inventory_form(
       </section>
     """
     if session:
-        view_model = build_front_inventory_view_model(session, selected_category, sort_mode)
+        view_model = build_front_inventory_view_model(
+            session,
+            selected_category,
+            sort_mode,
+            hide_closed=active_view == "leltar",
+        )
         phase_value = str(session.get("phase", "0"))
         finalized = view_model["finalized"]
         if not finalized:
@@ -4616,7 +4636,7 @@ def render_front_inventory_form(
         """
 
         inventory_html = f"""
-          <section class="frontinv-board is-worker" data-front-inventory-root data-state-route="{FRONT_INVENTORY_STATE_ROUTE}" data-presence-route="{FRONT_INVENTORY_PRESENCE_ROUTE}" data-alert-clear-route="{FRONT_INVENTORY_ALERT_CLEAR_ROUTE}" data-category="{html.escape(view_model['selected_category'])}">
+          <section class="frontinv-board is-worker" data-front-inventory-root data-state-route="{FRONT_INVENTORY_STATE_ROUTE}" data-presence-route="{FRONT_INVENTORY_PRESENCE_ROUTE}" data-alert-clear-route="{FRONT_INVENTORY_ALERT_CLEAR_ROUTE}" data-category="{html.escape(view_model['selected_category'])}" data-view="{html.escape(active_view)}">
             <div class="frontinv-board-head">
               <div>
                 <span class="frontinv-tag">Leltár nézet</span>
@@ -5487,13 +5507,14 @@ def render_front_inventory_form(
   const presenceRoute = root.getAttribute("data-presence-route");
   const alertClearRoute = root.getAttribute("data-alert-clear-route");
   const categoryValue = root.getAttribute("data-category") || "";
+  const activeView = root.getAttribute("data-view") || "admin";
   if (!stateRoute) {
     return;
   }
 
   const categoryRow = root.querySelector(".frontinv-category-row");
   const categoryChips = Array.from(root.querySelectorAll(".frontinv-chip"));
-  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
+  let rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
   const inputFields = Array.from(root.querySelectorAll("[data-frontinv-input]"));
   const searchInput = root.querySelector("[data-frontinv-search]");
   const scrollStorageKey = "frontinv-category-scroll";
@@ -5656,6 +5677,17 @@ def render_front_inventory_form(
     syncRowState(row);
   };
 
+  const removeClosedRow = (row) => {
+    if (!row) {
+      return;
+    }
+    if (row.dataset.frontinvCounted === "1") {
+      countedRowCount -= 1;
+    }
+    row.remove();
+    rowElements = rowElements.filter((item) => item !== row);
+  };
+
   const syncCurrentCategoryState = () => {
     if (!currentCategoryChip) {
       return;
@@ -5695,6 +5727,9 @@ def render_front_inventory_form(
         const row = input.closest("[data-frontinv-row]");
         setRowValue(row, payload && Object.prototype.hasOwnProperty.call(payload, "value") ? payload.value : "");
         input.value = "";
+        if (activeView === "leltar" && payload && payload.closed) {
+          removeClosedRow(row);
+        }
         syncCurrentCategoryState();
       })
       .catch(() => {
@@ -5751,10 +5786,13 @@ def render_front_inventory_form(
       const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object"
         ? payload.row_inputs
         : {};
-      rowElements.forEach((row) => {
+      rowElements.slice().forEach((row) => {
         const rowId = row.getAttribute("data-row-id") || "";
-        const nextValue = Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId) ? String(remoteRowInputs[rowId] || "") : "";
-        setRowValue(row, nextValue);
+        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) {
+          setRowValue(row, String(remoteRowInputs[rowId] || ""));
+        } else if (activeView === "leltar") {
+          removeClosedRow(row);
+        }
       });
       syncCurrentCategoryState();
       showAlert(payload && payload.worker_alert && typeof payload.worker_alert === "object" ? payload.worker_alert : null);
@@ -5765,7 +5803,7 @@ def render_front_inventory_form(
       const formData = new URLSearchParams();
       formData.set("token", presenceToken || "");
       formData.set("category", categoryValue);
-      formData.set("view", "leltar");
+      formData.set("view", activeView);
       if (clear) {
         formData.set("clear", "1");
       }
@@ -8644,27 +8682,51 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 else "semifinished"
             )
             config = _inventory_recount_config(kind)
-            session = config["load"](config["session_path"])
-            if session is None:
-                self.send_error(404)
-                return
             content_length = int(self.headers.get("Content-Length", "0"))
             form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            session_context = (
+                front_inventory_session_transaction(config["session_path"])
+                if kind == "front"
+                else nullcontext(config["load"](config["session_path"]))
+            )
             if path in {
                 ADMIN_FRONT_INVENTORY_SELECTION_ROUTE,
                 ADMIN_MATERIAL_INVENTORY_SELECTION_ROUTE,
                 ADMIN_SEMIFINISHED_INVENTORY_SELECTION_ROUTE,
                 ADMIN_SEMIFINISHED_FRONT_INVENTORY_SELECTION_ROUTE,
             }:
-                success, message = set_recount_selection(session, form_data.get("row_id", ""), form_data.get("selected", "") == "1")
-                if success:
-                    config["save"](config["session_path"], session)
+                with session_context as session:
+                    if session is None:
+                        self.send_error(404)
+                        return
+                    if "closed" in form_data:
+                        success, message = set_recount_closed(
+                            session,
+                            form_data.get("row_id", ""),
+                            form_data.get("closed", "") == "1",
+                            kind,
+                        )
+                    else:
+                        selection_view = "recount" if form_data.get("view") == "recount" else "check"
+                        success, message = set_recount_selection(
+                            session,
+                            form_data.get("row_id", ""),
+                            form_data.get("selected", "") == "1",
+                            selection_view,
+                            kind,
+                        )
+                    if success:
+                        config["save"](config["session_path"], session)
                 self.respond_json(200 if success else 400, {"ok": success, "error": message})
                 return
-            success, message, _ = send_group_to_recount(session, form_data.get("group", ""), kind)
-            if success:
-                config["save"](config["session_path"], session)
             return_view = "recount" if form_data.get("return_view") == "recount" else "check"
+            with session_context as session:
+                if session is None:
+                    self.send_error(404)
+                    return
+                success, message, _ = send_group_to_recount(session, form_data.get("group", ""), kind, return_view)
+                if success:
+                    config["save"](config["session_path"], session)
             body = render_inventory_recount_admin(kind, return_view, message, success)
             self.send_response(200 if success else 400)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -8801,25 +8863,42 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
         if path == FRONT_INVENTORY_STATE_ROUTE:
-            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
-            if session is None:
-                self.send_error(404)
-                return
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
             form_data = _parse_urlencoded_body(raw_body)
-            if form_data.get("recount") == "1":
-                success, message, recount_value = update_recount_input(
-                    session, form_data.get("row_id", ""), form_data.get("value", ""), form_data.get("mode", "set"), "front"
-                )
-            else:
-                success, message = update_row_input(
-                    session,
-                    form_data.get("row_id", ""),
-                    form_data.get("value", ""),
-                    form_data.get("mode", ""),
-                )
-                recount_value = ""
+            with front_inventory_session_transaction(FRONT_INVENTORY_SESSION_PATH) as session:
+                if session is None:
+                    self.send_error(404)
+                    return
+                if form_data.get("recount") == "1":
+                    success, message, recount_value = update_recount_input(
+                        session, form_data.get("row_id", ""), form_data.get("value", ""), form_data.get("mode", "set"), "front"
+                    )
+                else:
+                    success, message = update_row_input(
+                        session,
+                        form_data.get("row_id", ""),
+                        form_data.get("value", ""),
+                        form_data.get("mode", ""),
+                    )
+                    recount_value = ""
+                if success:
+                    save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+                    updated_row = next(
+                        (
+                            row
+                            for row in session.get("rows", [])
+                            if isinstance(row, dict) and str(row.get("row_id", "")) == str(form_data.get("row_id", ""))
+                        ),
+                        {},
+                    )
+                    payload = json.dumps(
+                        {
+                            "value": recount_value if form_data.get("recount") == "1" else str(updated_row.get("input_qty", "")),
+                            "closed": form_data.get("recount") != "1" and inventory_row_values(updated_row, "front")["closed"],
+                        },
+                        ensure_ascii=False,
+                    ).encode("utf-8")
             if not success:
                 self.send_response(400)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -8828,16 +8907,6 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(payload)
                 return
-            save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
-            updated_row = next(
-                (
-                    row
-                    for row in session.get("rows", [])
-                    if isinstance(row, dict) and str(row.get("row_id", "")) == str(form_data.get("row_id", ""))
-                ),
-                {},
-            )
-            payload = json.dumps({"value": recount_value if form_data.get("recount") == "1" else str(updated_row.get("input_qty", ""))}, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -8856,7 +8925,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 form_data.get("view", "leltar"),
                 clear=form_data.get("clear", "") == "1",
             )
-            sync_payload = _front_inventory_build_sync_payload(form_data.get("category", ""))
+            sync_payload = _front_inventory_build_sync_payload(
+                form_data.get("category", ""),
+                hide_closed=form_data.get("view", "leltar") == "leltar",
+            )
             self.respond_json(200, {"ok": True, "active_categories": active_categories, **sync_payload})
             return
 
