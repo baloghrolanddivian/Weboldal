@@ -63,9 +63,15 @@ def _html_party(lines: list[str], mark_bank_values: bool = False) -> str:
     return "<br>".join(html_lines)
 
 
-def _html_table_rows(rows: list[tuple[str, str]]) -> str:
+def _html_table_rows(rows: list[tuple[str, str]], highlight_label: str = "") -> str:
     """Render label/value rows for the printable invoice summary tables."""
-    return "".join(f"<tr><th>{html.escape(label)}</th><td>{_html_text(value)}</td></tr>" for label, value in rows)
+    rendered_rows = []
+    for label, value in rows:
+        row_class = ' class="discounted-total"' if label == highlight_label else ""
+        rendered_rows.append(
+            f"<tr{row_class}><th>{html.escape(label)}</th><td>{_html_text(value)}</td></tr>"
+        )
+    return "".join(rendered_rows)
 
 
 def _non_empty_rows(rows: list[tuple[str, str]], keep_labels: set[str] | None = None) -> list[tuple[str, str]]:
@@ -347,7 +353,7 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
             else {"Pénznem", "Összeg", "Kedvezményes összeg"}
         ),
     )
-    summary_rows = _html_table_rows(summary_fields)
+    summary_rows = _html_table_rows(summary_fields, highlight_label="Kedvezményes összeg")
     secondary_field_rows.extend(
         [
             ("Nettó tömeg (kg)", rounded_net_weight),
@@ -693,7 +699,14 @@ def create_printable_html(parsed: InvoiceData | dict[str, str], source_filename:
       white-space: nowrap;
     }}
     .meta-card .kv td {{
-      font-weight: 600;
+      font-weight: 400;
+    }}
+    .sheet, .sheet * {{
+      font-weight: 400;
+    }}
+    .sheet .meta-card .kv .discounted-total td {{
+      font-size: 1.1rem;
+      font-weight: 900;
     }}
     .items td:nth-child(4) {{ line-height: 1.2; }}
     .items tbody tr:nth-child(even) {{

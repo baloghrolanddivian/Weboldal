@@ -772,10 +772,6 @@ def render_manufacturing_page(
       white-space: nowrap;
       flex: 0 0 auto;
     }}
-    /* The chip layout sets display explicitly, so reinforce the HTML hidden state. */
-    .mfg-chip-link[hidden] {{
-      display: none;
-    }}
     .mfg-chip-link[data-mfg-all-shipments] {{
       position: sticky;
       left: 0;
@@ -864,20 +860,10 @@ def render_manufacturing_page(
       background: #fecaca;
       color: #991b1b;
     }}
-    .mfg-chip-link.is-done.has-shipment-date {{
-      border-color: var(--mfg-done-line);
-      background: var(--mfg-done-bg);
-      color: var(--mfg-done-text);
-    }}
     .mfg-chip-link.has-shipment-date.is-active {{
       box-shadow:
         inset 0 0 0 2px #111827,
         0 1px 3px rgba(17, 24, 39, 0.24);
-    }}
-    .mfg-chip-link.is-done.has-shipment-date.is-active {{
-      border-color: #064e3b;
-      background: #047857;
-      color: #ffffff;
     }}
     .mfg-chip-link.is-date-yellow .mfg-chip-number,
     .mfg-chip-link.is-date-yellow .mfg-chip-shipment-date {{
@@ -890,14 +876,6 @@ def render_manufacturing_page(
     .mfg-chip-link.is-date-red .mfg-chip-number,
     .mfg-chip-link.is-date-red .mfg-chip-shipment-date {{
       color: #991b1b;
-    }}
-    .mfg-chip-link.is-done.has-shipment-date .mfg-chip-number,
-    .mfg-chip-link.is-done.has-shipment-date .mfg-chip-shipment-date {{
-      color: rgba(244, 255, 248, 0.86);
-    }}
-    .mfg-chip-link.is-done.has-shipment-date.is-active .mfg-chip-number,
-    .mfg-chip-link.is-done.has-shipment-date.is-active .mfg-chip-shipment-date {{
-      color: rgba(255, 255, 255, 0.92);
     }}
     .mfg-chip-shipment-date {{
       margin-top: 2px;
@@ -4140,8 +4118,8 @@ def render_manufacturing_page(
         `;
       }};
 
-      const tabStateClassForRows = (rows, emptyIsDone = false) => {{
-        if (!rows.length) return emptyIsDone ? " is-done" : "";
+      const tabStateClassForRows = (rows) => {{
+        if (!rows.length) return "";
         const states = rows.map((row) => rowStateValue(row));
         if (states.some((state) => !state || state === "mixed")) return "";
         if (states.some((state) => state === "red")) return " is-alert";
@@ -4304,7 +4282,7 @@ def render_manufacturing_page(
               .filter(Boolean)
               .map((view) => {{
                 const sections = orderedSectionsForTabs(Array.isArray(view?.sections) ? view.sections : []);
-                return statusFromTabStateClass(tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []), true));
+                return statusFromTabStateClass(tabStateClassForRows(sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : [])));
               }})
           );
         }}
@@ -4643,7 +4621,7 @@ def render_manufacturing_page(
           const currentKorpuszSections = orderedSectionsForTabs(Array.isArray(currentKorpuszView?.sections) ? currentKorpuszView.sections : []);
           const korpuszAllRows = currentKorpuszSections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
           const korpuszSubTabs = [
-            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows, korpuszViewEmptyIsDone(currentKorpuszView)) }},
+            {{ key: "all", label: "Összes", count: countRowsInSections(currentKorpuszSections), stateClass: tabStateClassForRows(korpuszAllRows) }},
             {{ key: "plain", label: "Simák", count: countRowsInSections(currentKorpuszSections, (row) => !rowStateValue(row)), stateClass: "" }},
             {{ key: "green", label: "Zöldek", count: countRowsInSections(currentKorpuszSections, (row) => isReadyGreenState(rowStateValue(row))), stateClass: "" }},
             {{ key: "red", label: "Pirosak", count: countRowsInSections(currentKorpuszSections, (row) => rowStateValue(row) === "red"), stateClass: "" }},

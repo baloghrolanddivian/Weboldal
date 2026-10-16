@@ -326,7 +326,7 @@ def add_material_inventory_rows_from_file(
     return result
 
 
-def build_material_inventory_view_model(session: dict, selected_category: str = "") -> dict:
+def build_material_inventory_view_model(session: dict, selected_category: str = "", hide_closed: bool = False) -> dict:
     """Build category summaries and visible rows for material-like inventory."""
     rows = [row for row in session.get("rows", []) if isinstance(row, dict)]
     categories = _category_summaries(rows)
@@ -335,6 +335,9 @@ def build_material_inventory_view_model(session: dict, selected_category: str = 
     visible_rows = rows if selected == "all" else [row for row in rows if _category_key(row.get("icg_code")) == selected]
     visible_rows = sorted(visible_rows, key=_row_sort_key)
     finalized = str(session.get("phase", "")).lower() == "finalized"
+    if hide_closed and not finalized:
+        from leltar.recount import inventory_row_values
+        visible_rows = [row for row in visible_rows if not inventory_row_values(row, "material")["closed"]]
     return {
         "source_name": str(session.get("source_name", "")),
         "updated_at": str(session.get("updated_at", "")),

@@ -1095,14 +1095,14 @@ def _parse_gamet_items(lines: list[str]) -> list[InvoiceItem]:
                 continue
 
             qty_match = re.match(
-                r"^([0-9]+(?:\.[0-9]+)?)\s+(\S+)\s+([0-9]+(?:\.[0-9]+)?)\s+([A-Z]{3})\s+([0-9]+(?:\.[0-9]+)?)\s+([0-9]+%)\s+([0-9]+(?:\.[0-9]+)?)\s+([0-9]+(?:\.[0-9]+)?)$",
+                r"^([0-9][0-9,]*(?:\.[0-9]+)?)\s+(\S+)\s+([0-9][0-9,]*(?:\.[0-9]+)?)\s+([A-Z]{3})\s+([0-9][0-9,]*(?:\.[0-9]+)?)\s+([0-9]+%)\s+([0-9][0-9,]*(?:\.[0-9]+)?)\s+([0-9][0-9,]*(?:\.[0-9]+)?)$",
                 next_line,
             )
             if qty_match:
-                total_qty = qty_match.group(1)
-                unit = qty_match.group(2)
-                unit_price = qty_match.group(3)
-                net_value = qty_match.group(5)
+                total_qty = qty_match.group(1).replace(",", "")
+                unit = "db" if qty_match.group(2).lower() == "szt." else qty_match.group(2)
+                unit_price = qty_match.group(3).replace(",", "")
+                net_value = qty_match.group(5).replace(",", "")
                 j += 1
                 continue
 
@@ -1137,13 +1137,19 @@ def _parse_gamet_invoice_data(lines: list[str], text: str) -> InvoiceData:
     data.invoice_date = _match_first(normalized_text, [r"Invoice date\s*\n\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})"])
     data.due_date = _match_first(normalized_text, [r"Due date:\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})"])
     data.payment_method = _match_first(normalized_text, [r"Payment:\s*\n\s*(.+)"])
+    data.payment_method = re.sub(
+        r"^Bank transfer(?: (\d+) days)?$",
+        lambda match: "Banki átutalás" + (f", {match.group(1)} nap" if match.group(1) else ""),
+        data.payment_method,
+        flags=re.IGNORECASE,
+    )
     data.payment_term = data.payment_method
     data.delivery_term = _match_first(normalized_text, [r"Delivery Terms:\s*(.+)"])
     data.transport_mode = _match_first(normalized_text, [r"Ship Via:\s*(.+)"])
-    data.currency = _match_first(normalized_text, [r"Total\s*\n\s*([A-Z]{3})\s+[0-9.]+\s+[0-9.]+\s+[0-9.]+"])
-    data.total_net = _match_first(normalized_text, [r"Total\s*\n\s*[A-Z]{3}\s+([0-9.]+)\s+[0-9.]+\s+[0-9.]+"])
-    data.total_gross = _match_first(normalized_text, [r"Total\s*\n\s*[A-Z]{3}\s+[0-9.]+\s+[0-9.]+\s+([0-9.]+)"])
-    data.vat_0 = _match_first(normalized_text, [r"0%\s+[A-Z]{3}\s+[0-9.]+\s+([0-9.]+)\s+[0-9.]+"])
+    data.currency = _match_first(normalized_text, [r"Total\s*\n\s*([A-Z]{3})\s+[0-9.,]+\s+[0-9.,]+\s+[0-9.,]+"])
+    data.total_net = _match_first(normalized_text, [r"Total\s*\n\s*[A-Z]{3}\s+([0-9.,]+)\s+[0-9.,]+\s+[0-9.,]+"])
+    data.total_gross = _match_first(normalized_text, [r"Total\s*\n\s*[A-Z]{3}\s+[0-9.,]+\s+[0-9.,]+\s+([0-9.,]+)"])
+    data.vat_0 = _match_first(normalized_text, [r"0%\s+[A-Z]{3}\s+[0-9.,]+\s+([0-9.,]+)\s+[0-9.,]+"])
     data.total_gross_weight = _match_first(normalized_text, [r"Gross weight including transport packaging:\s*([0-9]+)\s*kgs"])
     data.order_confirmation_no = _match_first(normalized_text, [r"Order Number:\s*([A-Z0-9/\-]+)"])
 
@@ -1157,6 +1163,24 @@ def _parse_gamet_invoice_data(lines: list[str], text: str) -> InvoiceData:
     if buyer_block:
         data.buyer_lines = [lines[_find_index(lines, r"^Buyer:")]] + buyer_block
 
+    for field_name in ("total_net", "total_gross", "vat_0"):
+        setattr(data, field_name, getattr(data, field_name).replace(",", ""))
+    data.delivery_note_no = _match_first(normalized_text, [r"Delivery Note\(s\):\s*([A-Z0-9/\-]+)"])
+    party_labels = {
+        "Seller:": "Eladó:",
+        "Buyer:": "Vevő:",
+        "Address:": "Cím:",
+        "Tax Identity No:": "Adószám:",
+        "Customer Number": "Vevőazonosító:",
+        "PL - POLSKA": "PL – Lengyelország",
+        "HU - HUNGARY": "HU – Magyarország",
+    }
+    for party_lines in (data.supplier_lines, data.buyer_lines):
+        for index, line in enumerate(party_lines):
+            for original, translated in party_labels.items():
+                if line.startswith(original):
+                    party_lines[index] = translated + line[len(original):]
+                    break
     data.items = _parse_gamet_items(lines)
     return data
 

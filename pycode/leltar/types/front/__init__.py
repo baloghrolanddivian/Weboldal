@@ -14,6 +14,7 @@ from .engine import (
     read_bytes_if_exists,
     run_inventory_check,
     save_session_to_path,
+    session_transaction,
     summarize_missing_inputs,
     update_row_input,
     write_runtime_upload,

@@ -15,7 +15,7 @@ from nettfront.engine import (
 
 from .config import procurement_runtime_dir
 from .import_helper import launch_procurement_helper, stop_procurement_helper
-from .jobs import persist_procurement_job, read_procurement_job, write_procurement_job
+from .jobs import persist_procurement_job, read_procurement_job, remove_procurement_row, write_procurement_job
 from .pages import render_nettfront_procurement_form, render_nettfront_procurement_result
 
 
@@ -117,6 +117,25 @@ def rebuild_procurement_parts(job_id: str, files: dict[str, tuple[str, bytes]]) 
             success = False
 
     return 200, render_nettfront_procurement_result(job_id, metadata, message=message, success=success)
+
+
+def remove_procurement_job_row(job_id: str, form_data: dict[str, str]) -> tuple[int, bytes] | None:
+    """Remove a missing-code row so the remaining procurement can be imported."""
+    job_dir, metadata = read_procurement_job(job_id)
+    if job_dir is None or metadata is None:
+        return None
+
+    try:
+        row_index = int(str(form_data.get("row_index", "")))
+        metadata, removed_code = remove_procurement_row(job_dir, metadata, row_index)
+    except (TypeError, ValueError) as exc:
+        return 400, render_nettfront_procurement_result(job_id, metadata, message=str(exc))
+
+    if metadata.get("missing_codes"):
+        message = f"A(z) {removed_code} kódú sor kikerült. Még {len(metadata['missing_codes'])} hiányzó kód maradt."
+    else:
+        message = f"A(z) {removed_code} kódú sor kikerült. A többi tétel bevételezése most már indítható."
+    return 200, render_nettfront_procurement_result(job_id, metadata, message=message, success=True)
 
 
 def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:

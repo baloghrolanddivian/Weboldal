@@ -15,12 +15,18 @@ def inventory_row_values(row: dict, kind: str) -> dict:
     mismatch = is_counted and book is not None and counted != book
     selected = bool(row.get("recount_selected")) if "recount_selected" in row else mismatch
     recount_raw = row.get("recount_input_qty", "")
+    recount = _number(recount_raw)
+    effective_count = recount if recount is not None else counted
+    auto_closed = book is not None and effective_count is not None and effective_count == book
+    closed = auto_closed or bool(row.get("recount_closed"))
     return {
+        "closed": closed,
+        "auto_closed": auto_closed,
         "book_qty": _display_number(book),
         "counted_qty": _display_number(counted),
         "is_counted": is_counted,
         "mismatch": mismatch,
-        "selected": selected,
+        "selected": selected and not closed,
         "send_count": int(row.get("recount_send_count", 0) or 0),
         "pending": bool(row.get("recount_pending")),
         "recount_qty": _display_number(_number(recount_raw)),
@@ -28,19 +34,39 @@ def inventory_row_values(row: dict, kind: str) -> dict:
     }
 
 
-def set_recount_selection(session: dict, row_id: str, selected: bool) -> tuple[bool, str]:
+def set_recount_selection(session: dict, row_id: str, selected: bool, view: str = "check", kind: str = "front") -> tuple[bool, str]:
     """Persist an administrator's explicit recount selection."""
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott tétel nem található."
     if _is_finalized(session):
         return False, "A leltár már le van zárva."
-    row["recount_selected"] = bool(selected)
+    if selected and inventory_row_values(row, kind)["closed"]:
+        return False, "Lezárt tétel nem jelölhető ki újraszámolásra."
+    key = "recount_review_selected" if view == "recount" else "recount_selected"
+    row[key] = bool(selected)
     _touch(session)
     return True, ""
 
 
-def send_group_to_recount(session: dict, group: str, kind: str) -> tuple[bool, str, int]:
+def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str) -> tuple[bool, str]:
+    """Set manual closure without reopening matching or finalized rows."""
+    row = _find_row(session, row_id)
+    if row is None:
+        return False, "A kiválasztott tétel nem található."
+    if _is_finalized(session):
+        return False, "A leltár már le van zárva."
+    if not closed and inventory_row_values(row, kind)["auto_closed"]:
+        return False, "Az egyező mennyiségű tétel automatikusan lezárt."
+    row["recount_closed"] = bool(closed)
+    if closed:
+        row["recount_selected"] = False
+        row["recount_review_selected"] = False
+    _touch(session)
+    return True, ""
+
+
+def send_group_to_recount(session: dict, group: str, kind: str, view: str = "check") -> tuple[bool, str, int]:
     """Send selected rows from exactly one size/color group to recounting."""
     if _is_finalized(session):
         return False, "A leltár már le van zárva.", 0
@@ -53,7 +79,8 @@ def send_group_to_recount(session: dict, group: str, kind: str) -> tuple[bool, s
         if not isinstance(row, dict) or row_group(row, kind) != target_group:
             continue
         values = inventory_row_values(row, kind)
-        if values["selected"]:
+        selected = bool(row.get("recount_review_selected")) if view == "recount" else values["selected"]
+        if selected and not values["closed"]:
             matches.append(row)
     if not matches:
         return False, "A kiválasztott csoportban nincs újraszámolásra jelölt tétel.", 0
@@ -70,6 +97,7 @@ def send_group_to_recount(session: dict, group: str, kind: str) -> tuple[bool, s
         row["recount_pending"] = True
         row["recount_input_qty"] = ""
         row["recount_selected"] = False
+        row["recount_review_selected"] = False
         row["recount_sent_at"] = stamp
     _touch(session)
     return True, f"{len(matches)} tétel újraszámolásra elküldve: {target_group}.", len(matches)
@@ -135,6 +163,8 @@ def recount_rows(session: dict, kind: str, view: str = "check") -> list[dict]:
         values = inventory_row_values(row, kind)
         if view == "recount" and values["send_count"] < 1:
             continue
+        if view == "recount":
+            values["selected"] = bool(row.get("recount_review_selected")) and not values["closed"]
         result.append({**row, **values, "group": row_group(row, kind)})
     return sorted(result, key=lambda row: (_natural_key(str(row.get("group", ""))), str(row.get("description", "")).casefold()))
 

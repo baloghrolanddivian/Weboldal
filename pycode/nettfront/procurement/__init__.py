@@ -16,6 +16,7 @@ from .jobs import (
 from .operations import (
     launch_procurement_job,
     process_procurement_upload,
+    remove_procurement_job_row,
     rebuild_procurement_parts,
     stop_procurement_job,
 )
@@ -25,6 +26,7 @@ from .routes import (
     NETTFRONT_PROCUREMENT_LAUNCH_PREFIX,
     NETTFRONT_PROCUREMENT_PARTS_PREFIX,
     NETTFRONT_PROCUREMENT_PROCESS_ROUTE,
+    NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX,
     NETTFRONT_PROCUREMENT_ROUTE,
     NETTFRONT_PROCUREMENT_STOP_PREFIX,
 )
@@ -34,6 +36,7 @@ __all__ = [
     "NETTFRONT_PROCUREMENT_LAUNCH_PREFIX",
     "NETTFRONT_PROCUREMENT_PARTS_PREFIX",
     "NETTFRONT_PROCUREMENT_PROCESS_ROUTE",
+    "NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX",
     "NETTFRONT_PROCUREMENT_ROUTE",
     "NETTFRONT_PROCUREMENT_STOP_PREFIX",
     "NETTFRONT_PROCUREMENT_ACCESS_USER_IDS",
@@ -43,6 +46,7 @@ __all__ = [
     "procurement_download_payload",
     "procurement_runtime_dir",
     "process_procurement_upload",
+    "remove_procurement_job_row",
     "read_procurement_job",
     "rebuild_procurement_parts",
     "render_nettfront_procurement_form",

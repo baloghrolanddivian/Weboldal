@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv
+import threading
+from contextlib import contextmanager
 import io
 import json
 import re
@@ -27,6 +29,16 @@ SERIAL_SIZES_DATA_PATH = REPO_ROOT / "data" / "front-inventory-serial-sizes.json
 NETTFRONT_TRANSLATIONS_DATA_PATH = REPO_ROOT / "data" / "nettfront-translations.json"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = REPO_ROOT / "runtime" / "front-leltar" / "insight-minta.xlsx"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = REPO_ROOT / "data" / "nettfront-alkatreszek.xlsx"
+
+
+_session_lock = threading.RLock()
+
+
+@contextmanager
+def session_transaction(path: Path):
+    """Serialize front inventory read-modify-write requests."""
+    with _session_lock:
+        yield load_session_from_path(path)
 
 
 def file_name_allowed(file_name: str) -> bool:
@@ -692,7 +704,7 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
             sheet.column_dimensions[column].width = width
 
 
-def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default") -> dict:
+def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default", hide_closed: bool = False) -> dict:
     """Build the browser view model for front counting categories and rows."""
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
@@ -747,6 +759,9 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
         base_sort = active_sort[:-5] if reverse else active_sort
         visible_rows = sorted(visible_rows, key=lambda row: _inventory_sort_key(row, base_sort, finalized), reverse=reverse)
 
+    if hide_closed and not finalized:
+        from leltar.recount import inventory_row_values
+        visible_rows = [row for row in visible_rows if not inventory_row_values(row, "front")["closed"]]
     finalized_rows = _finalized_rows(session) if finalized else []
 
     return {

@@ -99,6 +99,48 @@ from matt_inventory import (
     process_matt_inventory_upload,
     render_matt_inventory_form,
 )
+from inventory_analytics import (
+    INVENTORY_ANALYTICS_DISCONTINUED_ROUTE,
+    INVENTORY_ANALYTICS_DOORS_DISCONTINUED_ROUTE,
+    INVENTORY_ANALYTICS_DOORS_ROUTE,
+    INVENTORY_ANALYTICS_DOORS_UPLOAD_ROUTE,
+    INVENTORY_ANALYTICS_ROUTE,
+    INVENTORY_ANALYTICS_TEMPLATE_ROUTE,
+    INVENTORY_ANALYTICS_UPLOAD_ROUTE,
+    configure_inventory_analytics,
+    import_erp_exports,
+    import_workbook as import_inventory_analytics_workbook,
+    render_inventory_analytics,
+    set_discontinued as set_inventory_item_discontinued,
+)
+from damaged_items import (
+    ADMIN_ACCESS_USER_IDS as DAMAGED_ITEMS_ADMIN_ACCESS_USER_IDS,
+    ADMIN_DELETE_PREFIX as DAMAGED_ITEMS_ADMIN_DELETE_PREFIX,
+    ADMIN_ROUTE as DAMAGED_ITEMS_ADMIN_ROUTE,
+    CREATE_ROUTE as DAMAGED_ITEMS_CREATE_ROUTE,
+    IMAGE_PREFIX as DAMAGED_ITEMS_IMAGE_PREFIX,
+    WORKER_ACCESS_USER_IDS as DAMAGED_ITEMS_WORKER_ACCESS_USER_IDS,
+    WORKER_ROUTE as DAMAGED_ITEMS_WORKER_ROUTE,
+    configure_damaged_items,
+    create_report as create_damaged_item_report,
+    delete_report as delete_damaged_item_report,
+    list_reports as list_damaged_item_reports,
+    parse_multipart as parse_damaged_item_multipart,
+    render_admin_page as render_damaged_items_admin_page,
+    render_worker_page as render_damaged_items_worker_page,
+    report_image as damaged_item_report_image,
+)
+from part_workstation import (
+    ACCESS_USER_IDS as PART_WORKSTATION_ACCESS_USER_IDS,
+    RESET_ROUTE as PART_WORKSTATION_RESET_ROUTE,
+    ROUTE as PART_WORKSTATION_ROUTE,
+    SCAN_ROUTE as PART_WORKSTATION_SCAN_ROUTE,
+    configure_part_workstation,
+    load_user_state as load_part_workstation_state,
+    register_scan as register_part_workstation_scan,
+    reset_user_state as reset_part_workstation_state,
+    render_page as render_part_workstation_page,
+)
 from leltar.group_pages import render_inventory_group_page
 from leltar.cutting_inventory import (
     apply_active_action as apply_cutting_inventory_action,
@@ -262,12 +304,14 @@ from nettfront.procurement import (
     NETTFRONT_PROCUREMENT_LAUNCH_PREFIX,
     NETTFRONT_PROCUREMENT_PARTS_PREFIX,
     NETTFRONT_PROCUREMENT_PROCESS_ROUTE,
+    NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX,
     NETTFRONT_PROCUREMENT_ROUTE,
     NETTFRONT_PROCUREMENT_STOP_PREFIX,
     configure_nettfront_procurement,
     launch_procurement_job,
     procurement_download_payload,
     process_procurement_upload,
+    remove_procurement_job_row,
     rebuild_procurement_parts,
     render_nettfront_procurement_form,
     stop_procurement_job,
@@ -412,6 +456,9 @@ LOGIN_ROUTE = "/login"
 configure_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_admin_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_nettfront_invoice(RUNTIME_DIR / "nettfront-szamla")
+configure_inventory_analytics(RUNTIME_DIR / "keszlet-elemzes")
+configure_damaged_items(RUNTIME_DIR / "serult-elemek")
+configure_part_workstation(RUNTIME_DIR / "alkatresz-munkalap")
 configure_foil_rolls(RUNTIME_DIR / "folia-tekercs")
 configure_cutting_inventory(RUNTIME_DIR / "szabaszat-leltar")
 ensure_login_database(LOGIN_DB_PATH)
@@ -570,6 +617,9 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (PART_WORKSTATION_ROUTE, PART_WORKSTATION_ACCESS_USER_IDS),
+    (DAMAGED_ITEMS_ADMIN_ROUTE, DAMAGED_ITEMS_ADMIN_ACCESS_USER_IDS),
+    (DAMAGED_ITEMS_WORKER_ROUTE, DAMAGED_ITEMS_WORKER_ACCESS_USER_IDS),
     (ADMIN_INVENTORY_GROUP_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (CUTTING_INVENTORY_START_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (CUTTING_INVENTORY_CLOSE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
@@ -605,6 +655,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (NETTFRONT_PROCUREMENT_DOWNLOAD_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_LAUNCH_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_PARTS_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_STOP_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_COMPARE_ROUTE, NETTFRONT_COMPARE_ACCESS_USER_IDS),
     (NETTFRONT_COMPARE_PROCESS_ROUTE, NETTFRONT_COMPARE_ACCESS_USER_IDS),
@@ -1978,6 +2029,42 @@ def _render_nettfront_layout(
     }}
     .procurement-preview-table tbody tr:last-child td {{
       border-bottom: 0;
+    }}
+    .procurement-preview-table tr.is-missing td {{
+      background: rgba(255, 139, 100, 0.045);
+    }}
+    .procurement-preview-action {{
+      width: 54px;
+      padding-left: 6px !important;
+      padding-right: 10px !important;
+      text-align: right !important;
+    }}
+    .procurement-remove-row-form {{
+      display: flex;
+      justify-content: flex-end;
+      margin: 0;
+    }}
+    .procurement-remove-row-button {{
+      display: inline-grid;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      place-items: center;
+      border: 1px solid rgba(255, 139, 100, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 139, 100, 0.1);
+      color: #ffb097;
+      font: inherit;
+      font-size: 1.35rem;
+      line-height: 1;
+      cursor: pointer;
+    }}
+    .procurement-remove-row-button:hover,
+    .procurement-remove-row-button:focus-visible {{
+      border-color: rgba(255, 139, 100, 0.62);
+      background: rgba(255, 139, 100, 0.2);
+      color: #fff;
+      outline: none;
     }}
     .procurement-preview-empty {{
       padding: 16px;
@@ -6126,6 +6213,121 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == INVENTORY_ANALYTICS_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                period_days = int(str(query.get("period", ["90"])[0] or "90"))
+            except ValueError:
+                period_days = 90
+            body = render_inventory_analytics(period_days=period_days)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == INVENTORY_ANALYTICS_DOORS_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                period_days = int(str(query.get("period", ["90"])[0] or "90"))
+            except ValueError:
+                period_days = 90
+            body = render_inventory_analytics(period_days=period_days, dataset="doors")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+
+
+        if path == PART_WORKSTATION_ROUTE:
+            user = self.current_user()
+            body = render_part_workstation_page(
+                load_part_workstation_state(user.user_id),
+                user.display_name,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(DAMAGED_ITEMS_IMAGE_PREFIX + "/"):
+            image_path_parts = path[len(DAMAGED_ITEMS_IMAGE_PREFIX):].strip("/").split("/")
+            report_id = image_path_parts[0] if image_path_parts else ""
+            try:
+                image_index = int(image_path_parts[1]) if len(image_path_parts) > 1 else 0
+            except ValueError:
+                image_index = -1
+            image_payload = damaged_item_report_image(report_id, image_index)
+            if image_payload is None:
+                self.send_error(404)
+                return
+            body, content_type = image_payload
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "private, max-age=300")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == DAMAGED_ITEMS_WORKER_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            created = str(query.get("created", [""])[0] or "") == "1"
+            body = render_damaged_items_worker_page(
+                list_damaged_item_reports(),
+                self.current_user().display_name,
+                "A sérült elem bejelentése elkészült." if created else "",
+                created,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == DAMAGED_ITEMS_ADMIN_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            deleted = str(query.get("deleted", [""])[0] or "") == "1"
+            body = render_damaged_items_admin_page(
+                list_damaged_item_reports(),
+                self.current_user().display_name,
+                "A bejelentés törölve lett." if deleted else "",
+                deleted,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == INVENTORY_ANALYTICS_TEMPLATE_ROUTE:
+            template_path = DATA_DIR / "keszlet-elemzes-sablon.xlsx"
+            if not template_path.exists():
+                self.send_error(404)
+                return
+            body = template_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Content-Disposition", "attachment; filename*=UTF-8''keszlet-elemzes-sablon.xlsx")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path in {FOIL_ROLL_INVENTORY_ROUTE, ADMIN_FOIL_ROLL_INVENTORY_ROUTE}:
             body = render_foil_roll_page(admin=True)
             self.send_response(200)
@@ -7276,6 +7478,81 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        if path in {PART_WORKSTATION_SCAN_ROUTE, PART_WORKSTATION_RESET_ROUTE}:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 4096:
+                self.respond_json(413, {"ok": False, "error": "A kérés túl nagy."})
+                return
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8") or "{}")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            if not isinstance(payload, dict):
+                self.respond_json(400, {"ok": False, "error": "Hibás kérés."})
+                return
+            user_id = self.current_user().user_id
+            try:
+                state = (
+                    register_part_workstation_scan(user_id, payload.get("barcode", ""))
+                    if path == PART_WORKSTATION_SCAN_ROUTE
+                    else reset_part_workstation_state(user_id)
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.respond_json(200, {"ok": True, "state": state})
+            return
+
+        if path == DAMAGED_ITEMS_CREATE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            fields, files = parse_damaged_item_multipart(self.headers, raw_body)
+            try:
+                create_damaged_item_report(
+                    created_by=fields.get("recorded_by", ""),
+                    note=fields.get("note", ""),
+                    responsible_person=fields.get("responsible_person", ""),
+                    images=files.get("damage_image", []),
+                    barcode=fields.get("barcode", ""),
+                    part_number=fields.get("part_number", ""),
+                    description=fields.get("description", ""),
+                    order_number=fields.get("order_number", ""),
+                    production_number=fields.get("production_number", ""),
+                )
+            except ValueError as exc:
+                body = render_damaged_items_worker_page(
+                    list_damaged_item_reports(),
+                    self.current_user().display_name,
+                    str(exc),
+                    False,
+                )
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_response(303)
+            self.send_header("Location", DAMAGED_ITEMS_WORKER_ROUTE + "?created=1")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if path.startswith(DAMAGED_ITEMS_ADMIN_DELETE_PREFIX + "/"):
+            report_id = path.rsplit("/", 1)[-1]
+            if not delete_damaged_item_report(report_id):
+                self.send_error(404)
+                return
+            self.send_response(303)
+            self.send_header("Location", DAMAGED_ITEMS_ADMIN_ROUTE + "?deleted=1")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         if path == ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
@@ -7964,9 +8241,69 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path in {INVENTORY_ANALYTICS_UPLOAD_ROUTE, INVENTORY_ANALYTICS_DOORS_UPLOAD_ROUTE}:
+            inventory_dataset = "doors" if path == INVENTORY_ANALYTICS_DOORS_UPLOAD_ROUTE else "parts"
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 31 * 1024 * 1024:
+                body = render_inventory_analytics("A feltöltés legfeljebb 30 MB lehet.", dataset=inventory_dataset)
+                self.send_response(413)
+            else:
+                raw_body = self.rfile.read(content_length)
+                uploaded_files = _extract_uploaded_files(self.headers, raw_body)
+                standard_upload = uploaded_files.get("inventory_file")
+                if standard_upload is None and not any(
+                    uploaded_files.get(key)
+                    for key in ("stock_file", "consumption_365_file", "consumption_90_file", "consumption_7_file")
+                ):
+                    body = render_inventory_analytics("Válassz ki legalább egy ERP-exportot.", dataset=inventory_dataset)
+                    self.send_response(400)
+                else:
+                    try:
+                        if standard_upload is not None:
+                            result = import_inventory_analytics_workbook(standard_upload[0], standard_upload[1])
+                            if result.get("duplicate"):
+                                message = result["warnings"][0]
+                            else:
+                                message = (
+                                    f"Sikeres adatfrissítés: {result['products']} cikk, {result['stock']} készletsor, "
+                                    f"{result['movements']} új mozgás és {result['orders']} nyitott rendelés."
+                                )
+                                if result.get("warnings"):
+                                    message += " " + " ".join(result["warnings"])
+                        else:
+                            result = import_erp_exports(uploaded_files, dataset=inventory_dataset)
+                            parts = [
+                                f"{item['type']}: {item['rows']} sor"
+                                + (" (már feldolgozva)" if item["duplicate"] else "")
+                                for item in result["reports"]
+                            ]
+                            message = "Sikeres ERP-adatfrissítés. " + " · ".join(parts)
+                        body = render_inventory_analytics(message, success=True, dataset=inventory_dataset)
+                        self.send_response(200)
+                    except Exception as exc:
+                        body = render_inventory_analytics(f"A feldolgozás nem sikerült: {exc}", dataset=inventory_dataset)
+                        self.send_response(400)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
-
-
+        if path in {INVENTORY_ANALYTICS_DISCONTINUED_ROUTE, INVENTORY_ANALYTICS_DOORS_DISCONTINUED_ROUTE}:
+            inventory_dataset = "doors" if path == INVENTORY_ANALYTICS_DOORS_DISCONTINUED_ROUTE else "parts"
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                set_inventory_item_discontinued(
+                    form_data.get("sku", ""),
+                    form_data.get("discontinued", "") in {"1", "true", "on"},
+                    dataset=inventory_dataset,
+                )
+                self.respond_json(200, {"ok": True})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            return
 
 
 
@@ -9164,6 +9501,24 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
             result = rebuild_procurement_parts(job_id, _extract_uploaded_files(self.headers, raw_body))
+            if result is None:
+                self.send_error(404)
+                return
+
+            status_code, body = result
+            self.send_response(status_code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX + "/"):
+            job_id = path[len(NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            result = remove_procurement_job_row(job_id, _parse_urlencoded_body(raw_body))
             if result is None:
                 self.send_error(404)
                 return

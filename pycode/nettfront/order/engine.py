@@ -12,8 +12,8 @@ import math
 import re
 import unicodedata as ud
 import warnings
-from collections import defaultdict
-from dataclasses import dataclass
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import openpyxl as ox
@@ -31,6 +31,8 @@ ANT_VARIANT_RULES = (
     ("KAF", "KAFS", "KAFU"),
     ("PRA", "PRAS", "PRAU"),
 )
+
+PLAIN_ANT_COLOR_PATTERN = re.compile(r"^NFA[^_]*_ANT_(?:KAF|PRA)_")
 
 SUGGESTION_HEADERS = [
     "Alkatr.-leírás",
@@ -61,6 +63,8 @@ class NettfrontOrderRow:
     length: float
     width: float
     is_super_matt: bool = False
+    review_reasons: list[str] = field(default_factory=list)
+    suggested_qty: float = 0.0
 
 
 @dataclass
@@ -85,7 +89,7 @@ def norm(value) -> str:
     return "".join(c for c in text.lower() if c.isalnum())
 
 
-def _safe_number(value) -> float:
+def _safe_number(value, *, invalid_default: float = 0.0) -> float:
     """Handle safe number logic for the NettFront workflows.
 
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
@@ -106,7 +110,7 @@ def _safe_number(value) -> float:
     try:
         return float(text)
     except ValueError:
-        return 0.0
+        return invalid_default
 
 
 def _display_number(value):
@@ -242,7 +246,9 @@ def is_custom_y_item(part=None, desc=None) -> bool:
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
     part_text = "" if part is None else str(part).strip().upper()
     desc_text = "" if desc is None else str(desc).strip().lower()
-    return part_text.startswith("NFAY_") or desc_text.startswith("egyedi f.")
+    if part_text.startswith("NFAYB_") or "blende" in desc_text or "mellvéd" in desc_text:
+        return False
+    return bool(re.match(r"^NFAY(?:U|E|EG)?_", part_text)) or desc_text.startswith("egyedi f")
 
 
 def is_legacy_matt_to_exclude(desc, part=None) -> bool:
@@ -260,6 +266,25 @@ def is_legacy_matt_to_exclude(desc, part=None) -> bool:
     text = str(desc).lower()
     cleaned = "".join(c if c.isalnum() else " " for c in text)
     return "matt" in {token for token in cleaned.split() if token}
+
+
+def is_requested_review_row(row: NettfrontOrderRow) -> bool:
+    """Keep custom fronts with uncovered demand or negative stock, and negative-stock legacy matt fronts."""
+    if row.part_number.upper().startswith("NFAYB_") or re.search(r"blende|mellvéd", row.description, re.IGNORECASE):
+        return False
+    stock = _safe_number(row.stock_unit, invalid_default=float("nan"))
+    current = _safe_number(row.current_stock, invalid_default=float("nan"))
+    negative_stock = stock < 0 or current < 0
+    if is_custom_y_item(row.part_number, row.description):
+        demand = _safe_number(row.confirmed_demand)
+        available_stock = stock if math.isfinite(stock) else 0
+        return negative_stock or (demand > 0 and demand > available_stock)
+    return is_legacy_matt_to_exclude(row.description, row.part_number) and negative_stock
+
+
+def has_positive_order_quantity(row: NettfrontOrderRow) -> bool:
+    """Return whether a row has a positive calculated or entered order quantity."""
+    return _safe_number(row.suggested_qty) > 0 or _safe_number(row.order_qty) > 0
 
 
 def collect_replaced_ant_variant_parts(parts) -> set[str]:
@@ -305,6 +330,12 @@ def calculate_order_qty(current: float, capacity: float, desc=None, safe_stock: 
         return 0
     if safe_stock is not None and _is_fill_storage_rule(safe_stock, capacity):
         return int(math.ceil(diff))
+    if capacity == 10 and safe_stock is not None and current < safe_stock:
+        rounded_up = int(math.ceil(diff / 5)) * 5
+        # A ten-piece bin may exceed capacity by up to two fronts when
+        # replenishing below safety stock in supplier packs of five.
+        if current + rounded_up <= capacity + 2:
+            return rounded_up
     return int(diff // 5) * 5
 
 
@@ -416,6 +447,8 @@ def rows_to_suggestion_workbook(rows: list[NettfrontOrderRow]) -> bytes:
     ws.title = "rendeles"
     ws.append(SUGGESTION_HEADERS)
     for row in rows:
+        if row.review_reasons:
+            continue
         ws.append(
             [
                 row.description,
@@ -437,6 +470,19 @@ def rows_to_suggestion_workbook(rows: list[NettfrontOrderRow]) -> bytes:
                 if len(value) > max_len:
                     max_len = len(value)
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 42)
+
+    review_rows = [row for row in rows if row.review_reasons]
+    if review_rows:
+        review = wb.create_sheet("Egyedi döntés")
+        review.append(["Cikkszám", "Megnevezés", "Ellenőrzés oka", "Rend.áll", "Visszaigazolt igény", "Nyitott beszerzés", "Biztonsági készlet", "Tárolható", "Számított mennyiség", "Rendelendő mennyiség"])
+        for row in review_rows:
+            review.append([row.part_number, row.description, "; ".join(row.review_reasons), row.current_stock,
+                           row.confirmed_demand, row.open_procurement, row.safe_stock, row.capacity,
+                           row.suggested_qty, row.order_qty])
+        review.freeze_panes = "A2"
+        review.auto_filter.ref = review.dimensions
+        for column in range(1, 11):
+            review.column_dimensions[get_column_letter(column)].width = 48 if column <= 3 else 22
 
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -500,7 +546,6 @@ def build_order_suggestions(
 
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
     headers, stock_rows = _load_stock_headers_and_rows(stock_bytes)
-    stock_rows, merged_variant_count = _merge_ant_variant_rows(headers, stock_rows)
     avg_by_part = load_avg_by_part(avg_bytes, default_avg_path)
 
     norm_headers = {norm(name): idx for idx, name in enumerate(headers)}
@@ -514,82 +559,92 @@ def build_order_suggestions(
     if idx_current is None or idx_safe is None or idx_capacity is None:
         raise ValueError("A raktárfájlban hiányzik a Rend.áll, Biztonsági készlet vagy Tárolh.menny. oszlop.")
 
-    replaced_parts = collect_replaced_ant_variant_parts(
-        row[idx_part]
-        for row in stock_rows
-        if idx_part < len(row) and row[idx_part] not in (None, "")
-    )
-
-    filtered_rows: list[tuple] = []
-    order_by_part: dict[str, int] = {}
-    for row in stock_rows:
-        part = row[idx_part] if idx_part < len(row) else None
-        desc = row[idx_desc] if idx_desc < len(row) else None
-        stock_unit = row[idx_stock_unit] if idx_stock_unit is not None and idx_stock_unit < len(row) else None
-        current_value = row[idx_current] if idx_current < len(row) else None
-        safe_value = row[idx_safe] if idx_safe < len(row) else None
-
-        if part in replaced_parts:
-            continue
-        if desc is not None and is_super_matt(desc):
-            continue
-        if is_legacy_matt_to_exclude(desc, part):
-            continue
-        current = _safe_number(current_value)
-        safe_stock = _safe_number(safe_value)
-        capacity = _safe_number(row[idx_capacity])
-        should_fill_storage = _is_fill_storage_rule(safe_stock, capacity) and current < capacity
-        if current < safe_stock or should_fill_storage:
-            filtered_rows.append(row)
-            order_by_part[str(part)] = calculate_order_qty(current, capacity, desc, safe_stock)
-
     suggestion_rows: list[NettfrontOrderRow] = []
-    existing_descs: set[str] = set()
-    row_index = 1
-    for row in stock_rows:
-        part = row[idx_part] if idx_part < len(row) else None
-        if part in (None, ""):
-            continue
-        order_qty = order_by_part.get(str(part))
-        if order_qty is None:
-            continue
-        suggestion = _row_to_suggestion(row, headers, order_qty, row_index)
-        suggestion_rows.append(suggestion)
-        existing_descs.add(norm(suggestion.description))
-        row_index += 1
+    idx_demand = norm_headers.get("visszaigazoltigeny")
+    idx_procurement = norm_headers.get("nyitottbeszerzes")
 
+    def value(row, index):
+        return row[index] if index is not None and index < len(row) else None
+
+    def part_key(row):
+        return re.sub(r"\s+", "", str(value(row, idx_part) or "").upper())
+
+    part_counts = Counter(part_key(row) for row in stock_rows if part_key(row))
+    desc_parts: dict[str, set[str]] = defaultdict(set)
+    for row in stock_rows:
+        if value(row, idx_desc):
+            desc_parts[norm(value(row, idx_desc))].add(part_key(row))
+
+    merged_variant_count = 0
+    filtered_stock_count = 0
     added_super_matt_count = 0
-    for row in stock_rows:
-        part = row[idx_part] if idx_part < len(row) else None
-        desc = row[idx_desc] if idx_desc < len(row) else None
-        if part in (None, "") or desc in (None, ""):
+    for row_index, row in enumerate(stock_rows, 1):
+        if all(cell in (None, "") for cell in row):
             continue
-        if str(part) in replaced_parts:
-            continue
-        if not is_super_matt(desc):
-            continue
-        if norm(desc) in existing_descs:
-            continue
+        part = part_key(row)
+        desc = str(value(row, idx_desc) or "").strip()
+        description_words = "".join(c for c in ud.normalize("NFD", desc.lower()) if ud.category(c) != "Mn")
+        reasons = []
+        if is_custom_y_item(part, desc):
+            reasons.append("Egyedi ajtófront")
+        if PLAIN_ANT_COLOR_PATTERN.match(part):
+            reasons.append("Régi Antónia KAF/PRA cikkszám – az igény cikkszámát ellenőrizni kell")
+            merged_variant_count += 1
+        if is_legacy_matt_to_exclude(desc, part):
+            reasons.append("A normál rendelésből kizárt matt szín")
+        if re.search(r"\b(regi|kifuto|megszunt)\b", description_words):
+            reasons.append("Régi vagy kifutó tétel a megnevezés alapján")
+        if not part or not desc:
+            reasons.append("Hiányzó cikkszám vagy megnevezés")
+        if part_counts[part] > 1:
+            reasons.append("Ismétlődő cikkszám a forrásban")
+        if len(desc_parts[norm(desc)]) > 1:
+            reasons.append("Azonos megnevezés több cikkszámon")
 
-        current = _safe_number(row[idx_current])
-        safe_stock = _safe_number(row[idx_safe])
-        capacity = _safe_number(row[idx_capacity])
+        numeric_values = [value(row, idx) for idx in (idx_current, idx_safe, idx_capacity)]
+        numbers = [_safe_number(item, invalid_default=float("nan")) for item in numeric_values]
+        invalid_numbers = any(not math.isfinite(number) for number in numbers)
+        current, safe_stock, capacity = [number if math.isfinite(number) else 0 for number in numbers]
+        if invalid_numbers:
+            reasons.append("Hibás készletadat – számként nem értelmezhető")
+        if capacity <= 0 or safe_stock < 0 or safe_stock > capacity or value(row, idx_safe) in (None, ""):
+            reasons.append("Hiányzó, nulla vagy ellentmondó készletparaméter")
         should_fill_storage = _is_fill_storage_rule(safe_stock, capacity) and current < capacity
-        if current >= safe_stock and not should_fill_storage:
+        below_threshold = current < safe_stock or should_fill_storage
+        order_qty = calculate_order_qty(current, capacity, desc, safe_stock) if below_threshold and not invalid_numbers else 0
+        if below_threshold and order_qty <= 0:
+            reasons.append("Készletküszöb alatt van, de a normál rendelés 0 db")
+        if current + order_qty < 0:
+            reasons.append("A normál rendelés után is hiány maradna")
+        if (not below_threshold and _safe_number(value(row, idx_procurement)) > 0
+                and _safe_number(value(row, idx_stock_unit)) < _safe_number(value(row, idx_demand))):
+            reasons.append("A hiányt nyitott beszerzés fedezi – beérkezés ellenőrzendő")
+        if not reasons and not below_threshold:
             continue
-
-        order_qty = calculate_order_qty(current, capacity, desc, safe_stock)
-        suggestion = _row_to_suggestion(row, headers, order_qty, row_index, is_super_matt_row=True)
+        suggestion = _row_to_suggestion(row, headers, 0 if reasons else order_qty, row_index, is_super_matt_row=is_super_matt(desc))
+        suggestion.review_reasons = reasons
+        suggestion.suggested_qty = float(order_qty)
+        if not has_positive_order_quantity(suggestion):
+            continue
+        if reasons and not is_requested_review_row(suggestion):
+            continue
         suggestion_rows.append(suggestion)
-        existing_descs.add(norm(suggestion.description))
-        added_super_matt_count += 1
-        row_index += 1
+        filtered_stock_count += int(below_threshold)
+        added_super_matt_count += int(suggestion.is_super_matt)
 
+    normal_rows = [row for row in suggestion_rows if not row.review_reasons]
+    review_rows = sorted(
+        (row for row in suggestion_rows if row.review_reasons),
+        key=lambda row: (_safe_number(row.current_stock) >= 0,
+                         _safe_number(row.confirmed_demand) <= 0,
+                         row.description.casefold(), row.part_number),
+    )
+    suggestion_rows = normal_rows + review_rows
     suggestion_workbook = rows_to_suggestion_workbook(suggestion_rows)
     return NettfrontOrderBuildResult(
         rows=suggestion_rows,
         merged_variant_count=merged_variant_count,
-        filtered_stock_count=len(filtered_rows),
+        filtered_stock_count=filtered_stock_count,
         added_super_matt_count=added_super_matt_count,
         total_m2=calc_total_m2_from_rows(suggestion_rows),
         avg_row_count=len(avg_by_part),

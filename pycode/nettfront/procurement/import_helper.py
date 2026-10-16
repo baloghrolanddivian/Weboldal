@@ -268,8 +268,11 @@ public static class DivianKeyboardState {{
 "@
 
 $csvPath = '{csv_literal}'
-$stepDelayMs = 220
+$stepDelayMs = 350
 $insertDelayMs = 2800
+$saveDelayMs = 1500
+$logPath = Join-Path (Split-Path -Parent $csvPath) 'nettfront-import.log'
+$rowNumber = 0
 $hotkeyPollDelayMs = 90
 $postHotkeyDelayMs = 420
 $lastStartHotkeyState = $false
@@ -282,6 +285,28 @@ function Test-StopRequested {{
     return Test-KeyDown 0x1B
 }}
 
+function Write-ImportLog([string]$message) {{
+    Add-Content -LiteralPath $logPath -Encoding UTF8 -Value "$(Get-Date -Format o) $message"
+}}
+
+function Set-ImportClipboard([string]$value) {{
+    # The receiving application can briefly lock the clipboard after pasting.
+    # Retry only the clipboard operation, never a partially entered row.
+    for ($attempt = 1; $attempt -le 20; $attempt++) {{
+        if (Test-StopRequested) {{ exit }}
+        try {{
+            [System.Windows.Forms.Clipboard]::SetText($value)
+            if ([System.Windows.Forms.Clipboard]::GetText() -ceq $value) {{ return }}
+        }} catch {{
+            if ($attempt -eq 20) {{ throw }}
+        }}
+        Start-Sleep -Milliseconds 150
+    }}
+    throw 'Nem sikerult beallitani a vagolapot.'
+}}
+
+try {{
+Write-ImportLog 'WAITING Shift+Space'
 while ($true) {{
     if (Test-StopRequested) {{
         exit
@@ -303,8 +328,10 @@ while (Test-KeyDown 0x10 -or Test-KeyDown 0x20) {{
 }}
 Start-Sleep -Milliseconds $postHotkeyDelayMs
 
-$rows = Get-Content -Path $csvPath -Encoding UTF8 | Where-Object {{ $_.Trim() -ne "" }}
+$rows = @(Get-Content -LiteralPath $csvPath -Encoding UTF8 | Where-Object {{ $_.Trim() -ne "" }})
+Write-ImportLog "START rows=$($rows.Count)"
 foreach ($row in $rows) {{
+    $rowNumber++
     if (Test-StopRequested) {{
         exit
     }}
@@ -323,7 +350,8 @@ foreach ($row in $rows) {{
     if (Test-StopRequested) {{
         exit
     }}
-    Set-Clipboard -Value $articleCode
+    Write-ImportLog "ROW $rowNumber/$($rows.Count) code=$articleCode"
+    Set-ImportClipboard $articleCode
     [System.Windows.Forms.SendKeys]::SendWait('{{INSERT}}')
     Start-Sleep -Milliseconds $insertDelayMs
 
@@ -348,7 +376,7 @@ foreach ($row in $rows) {{
     if (Test-StopRequested) {{
         exit
     }}
-    Set-Clipboard -Value $quantity
+    Set-ImportClipboard $quantity
     [System.Windows.Forms.SendKeys]::SendWait('^v')
     Start-Sleep -Milliseconds $stepDelayMs
 
@@ -358,7 +386,14 @@ foreach ($row in $rows) {{
     [System.Windows.Forms.SendKeys]::SendWait('{{TAB}}')
     Start-Sleep -Milliseconds 140
     [System.Windows.Forms.SendKeys]::SendWait('{{ENTER}}')
-    Start-Sleep -Milliseconds $stepDelayMs
+    Start-Sleep -Milliseconds $saveDelayMs
+    Write-ImportLog "SENT $rowNumber/$($rows.Count)"
+}}
+Write-ImportLog "FINISHED rows=$($rows.Count)"
+}} catch {{
+    Write-ImportLog "ERROR row=$rowNumber $($_.Exception.Message)"
+    [System.Windows.Forms.MessageBox]::Show("Az import megallt a(z) $rowNumber. sornal. A rendeles sorai megmaradtak. Hiba: $($_.Exception.Message)", 'NettFront import') | Out-Null
+    exit 1
 }}
 """
 
@@ -395,6 +430,7 @@ def launch_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
             [
                 "powershell",
                 "-NoProfile",
+                "-STA",
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
