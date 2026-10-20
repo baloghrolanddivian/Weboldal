@@ -13,6 +13,7 @@ from .routes import (
     NETTFRONT_INVOICE_CHECK_ROUTE,
     NETTFRONT_INVOICE_CLOSE_PREFIX,
     NETTFRONT_INVOICE_IMPORT_ROUTE,
+    NETTFRONT_INVOICE_FETCH_ROUTE,
     NETTFRONT_INVOICE_OPEN_ROUTE,
     NETTFRONT_INVOICE_CAMERA_PREFIX,
     NETTFRONT_INVOICE_READ_PREFIX,
@@ -103,8 +104,8 @@ def render_home(records: list[dict], message: str = "") -> bytes:
     opened = [row for row in records if row.get("status") == "opened"]
     options = "".join(f'<option value="{_e(row.get("invoice_code"))}">{_e(row.get("invoice_code"))} · {_e(row.get("created_at"))}</option>' for row in opened)
     notice = f'<div class="notice">{_e(message)}</div>' if message else ""
-    content = f"""{notice}<section class="nf-grid"><article class="nf-card"><h2>Számla lekérése</h2><p class="muted">Az API-kapcsolat előkészítve; a külső végpont még TODO.</p><label>Számlakód<input name="invoice_code" placeholder="NF2026-…" disabled></label><button disabled>Lekérés API-ból</button></article>
-<article class="nf-card"><h2>Ideiglenes batch XML-feltöltés</h2><p class="muted">Az API elkészültéig a batch XML közvetlenül hozza létre a számlát és az ICN-kapcsolatokat.</p><form action="{NETTFRONT_INVOICE_IMPORT_ROUTE}" method="post" enctype="multipart/form-data" target="_blank"><label>Azonosító / név<input name="operator" required maxlength="100" autocomplete="name"></label><label>Teljes számlakód<input name="invoice_code" placeholder="NF2026-34056" required maxlength="80"></label><label>Számla dátuma<input type="date" name="invoice_date" required></label><label>NettFront batch XML<input type="file" name="batch_xml" accept=".xml,text/xml,application/xml" required></label><button>Feldolgozás és beolvasó megnyitása</button></form></article></section>
+    content = f"""{notice}<section class="nf-grid"><article class="nf-card"><h2>Számla lekérése</h2><p class="muted">A NettFront API-ból lekérjük a számlatételeket és a hozzájuk tartozó ICN-kódokat.</p><form action="{NETTFRONT_INVOICE_FETCH_ROUTE}" method="post" target="_blank"><label>Azonosító / név<input name="operator" required maxlength="100" autocomplete="name"></label><label>Számlaszám vagy teljes számlakód<input name="invoice_code" placeholder="34727 vagy NF2026-34727" required maxlength="80"></label><label>Számla dátuma<input type="date" name="invoice_date" required></label><button>Lekérés és beolvasó megnyitása</button></form></article>
+<article class="nf-card"><h2>Batch XML-feltöltés</h2><p class="muted">Mentett NettFront XML-fájlból is létrehozható a számla és az ICN-kapcsolatok.</p><form action="{NETTFRONT_INVOICE_IMPORT_ROUTE}" method="post" enctype="multipart/form-data" target="_blank"><label>Azonosító / név<input name="operator" required maxlength="100" autocomplete="name"></label><label>Teljes számlakód<input name="invoice_code" placeholder="NF2026-34056" required maxlength="80"></label><label>Számla dátuma<input type="date" name="invoice_date" required></label><label>NettFront batch XML<input type="file" name="batch_xml" accept=".xml,text/xml,application/xml" required></label><button>Feldolgozás és beolvasó megnyitása</button></form></article></section>
 <section class="nf-card"><h2>Nyitott számlák</h2>{'<form action="'+NETTFRONT_INVOICE_OPEN_ROUTE+'" method="post" target="_blank"><label>Számla<select name="invoice_code" required><option value="">Válassz…</option>'+options+'</select></label><label>Azonosító / név<input name="operator" required maxlength="100"></label><button>Beolvasó megnyitása új ablakban</button></form>' if opened else '<p class="muted">Nincs nyitott számla.</p>'}<p><a class="nf-link" href="{NETTFRONT_INVOICE_CHECK_ROUTE}">Csak ellenőrzés / számlák megtekintése →</a></p></section>"""
     return _layout("Nettfront számla", content)
 
