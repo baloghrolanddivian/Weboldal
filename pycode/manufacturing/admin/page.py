@@ -1922,6 +1922,9 @@ def render_manufacturing_page(
     .mfg-row.is-model-violet {{
       background: #f4efff;
     }}
+    .mfg-row.is-model-indigo {{
+      background: #e8e4ff;
+    }}
     .mfg-row.is-model-amber {{
       background: #fff6e8;
     }}
@@ -1948,6 +1951,9 @@ def render_manufacturing_page(
     }}
     .mfg-row.is-cnc-fiokelo.is-model-violet {{
       background: #ede4ff;
+    }}
+    .mfg-row.is-cnc-fiokelo.is-model-indigo {{
+      background: #d9d2f5;
     }}
     .mfg-row.is-cnc-fiokelo.is-model-amber {{
       background: #fef0cb;
@@ -2095,6 +2101,11 @@ def render_manufacturing_page(
       background: #ebe2ff;
       color: #6d28d9;
       border: 1px solid rgba(109, 40, 217, 0.14);
+    }}
+    .mfg-row-badge.is-model-indigo {{
+      background: #d9d2f5;
+      color: #3730a3;
+      border: 1px solid rgba(55, 48, 163, 0.2);
     }}
     .mfg-row-badge.is-model-amber {{
       background: #fdecc8;
@@ -4003,8 +4014,7 @@ def render_manufacturing_page(
         const normalizedKey = normalizedSectionSortKey(sectionKey);
         return sectionSortState[normalizedKey] || defaultSortStateForSection(sectionKey);
       }};
-      const compareRowsBySort = (leftRow, rightRow, sectionKey) => {{
-        const sortState = getSectionSortState(sectionKey);
+      const compareRowsBySort = (leftRow, rightRow, sortState) => {{
         if (sortState.key === "source") return 0;
         const leftValue = rowSortValue(leftRow, sortState.key);
         const rightValue = rowSortValue(rightRow, sortState.key);
@@ -4017,9 +4027,13 @@ def render_manufacturing_page(
           primaryResult = String(leftValue).localeCompare(String(rightValue), "hu-HU", {{ numeric: true, sensitivity: "base" }});
         }}
 
-        if (primaryResult !== 0) {{
-          return sortState.direction === "desc" ? -primaryResult : primaryResult;
-        }}
+        return sortState.direction === "desc" ? -primaryResult : primaryResult;
+      }};
+      const compareRowsByDefaultSort = (leftRow, rightRow, sectionKey) => {{
+        const sortState = defaultSortStateForSection(sectionKey);
+        if (sortState.key === "source") return 0;
+        const primaryResult = compareRowsBySort(leftRow, rightRow, sortState);
+        if (primaryResult !== 0) return primaryResult;
 
         // Color sort: keep same color grouped, then size descending by default.
         if (sortState.key === "color") {{
@@ -4033,7 +4047,7 @@ def render_manufacturing_page(
               : compareArrays(rightSize, leftSize);
           if (sizeResult !== 0) return sizeResult;
         }}
-        // Fiókelő default sort: size first, color second.
+        // Size ordering uses color to break ties.
         if (sortState.key === "size") {{
           const leftColor = normalizeSortText(rowOrderingField(leftRow, "color") || "");
           const rightColor = normalizeSortText(rowOrderingField(rightRow, "color") || "");
@@ -4051,8 +4065,13 @@ def render_manufacturing_page(
       }};
       const sortedRowsForView = (rows, sectionKey) => {{
         const items = Array.isArray(rows) ? [...rows] : [];
-        if (getSectionSortState(sectionKey).key === "source") return items;
-        items.sort((leftRow, rightRow) => compareRowsBySort(leftRow, rightRow, sectionKey));
+        const sortState = getSectionSortState(sectionKey);
+        // Keep the section's default rules beneath the selected column.
+        // Stable sorting preserves source order when both comparisons tie.
+        items.sort((leftRow, rightRow) =>
+          compareRowsBySort(leftRow, rightRow, sortState) ||
+          compareRowsByDefaultSort(leftRow, rightRow, sectionKey)
+        );
         return items;
       }};
       const sortArrowFor = (sectionKey, sortKey) => {{
@@ -5876,7 +5895,19 @@ def render_manufacturing_page(
           console.log(`${{topfloorDebugLabel}} refresh took ${{((performance.now() - topfloorRefreshStartedAt) / 1000).toFixed(3)}}s`);
           documents = Array.isArray(refreshed.documents) ? refreshed.documents : documents;
           selectionState = Object.assign({{}}, refreshed.selectionState || selectionState || {{}});
-          setStatus("Anyagraktár doboz művelet kész.", "is-success");
+          const failedItems = Array.isArray(result.failed_items) ? result.failed_items : [];
+          if (failedItems.length) {{
+            const failureDetails = failedItems
+              .map((item) => {{
+                const barcode = String(item?.barcodeId || "").trim();
+                const error = String(item?.error || "Ismeretlen Shopfloor hiba.").trim();
+                return `${{barcode ? `${{barcode}}: ` : ""}}${{error}}`;
+              }})
+              .join(" | ");
+            setStatus(`A doboz lezárult, de ${{failedItems.length}} tétel sikertelen: ${{failureDetails}}`, "is-error");
+          }} else {{
+            setStatus("Anyagraktár doboz művelet kész.", "is-success");
+          }}
           renderAll();
         }} catch (error) {{
           setStatus(error instanceof Error ? error.message : "Az Anyagraktár doboz művelet nem sikerült.", "is-error");
@@ -5905,7 +5936,7 @@ def render_manufacturing_page(
           }} else if (currentSectionSortState.direction === "asc") {{
             sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "desc" }};
           }} else {{
-            sectionSortState[normalizedKey] = {{ key: "source", direction: "asc" }};
+            delete sectionSortState[normalizedKey];
           }}
           renderAll();
           return;

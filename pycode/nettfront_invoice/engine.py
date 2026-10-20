@@ -20,6 +20,8 @@ try:
 except Exception:  # pragma: no cover
     Workbook = None
 
+MAX_BATCH_XML_BYTES = 10 * 1024 * 1024
+
 def _resolve_our_code(base_code: str, parts: dict[str, str]) -> tuple[str, bool]:
     resolved = parts.get(base_code, "")
     if not resolved:
@@ -41,7 +43,7 @@ def _as_int(value: object) -> int:
 
 def parse_batch_xml(xml_data: bytes) -> dict:
     """Parse a NettFront batch XML and translate each line to our base code."""
-    if not xml_data or len(xml_data) > 10 * 1024 * 1024:
+    if not xml_data or len(xml_data) > MAX_BATCH_XML_BYTES:
         raise ValueError("Az XML hiányzik vagy túl nagy.")
     try:
         root = ET.fromstring(xml_data)

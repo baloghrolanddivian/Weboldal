@@ -362,6 +362,7 @@ from nettfront_invoice import (
     NETTFRONT_INVOICE_CHECK_ROUTE,
     NETTFRONT_INVOICE_CLOSE_PREFIX,
     NETTFRONT_INVOICE_IMPORT_ROUTE,
+    NETTFRONT_INVOICE_FETCH_ROUTE,
     NETTFRONT_INVOICE_OPEN_ROUTE,
     NETTFRONT_INVOICE_READ_PREFIX,
     NETTFRONT_INVOICE_ROUTE,
@@ -369,6 +370,7 @@ from nettfront_invoice import (
     NETTFRONT_INVOICE_VIEW_PREFIX,
     NETTFRONT_INVOICE_XML_PREFIX,
     DuplicateInvoiceError,
+    NettfrontInvoiceApiError,
     CameraBusyError,
     CameraNoReadError,
     CameraReadError,
@@ -378,6 +380,7 @@ from nettfront_invoice import (
     close_invoice,
     configure_nettfront_invoice,
     create_invoice,
+    import_invoice_from_api,
     list_invoices,
     load_invoice,
     invoice_item_display,
@@ -7309,25 +7312,40 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if path == NETTFRONT_INVOICE_IMPORT_ROUTE:
+        if path in {NETTFRONT_INVOICE_IMPORT_ROUTE, NETTFRONT_INVOICE_FETCH_ROUTE}:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
-            fields = _extract_multipart_fields(self.headers, raw_body)
-            upload = _extract_uploaded_files(self.headers, raw_body).get("batch_xml")
             try:
-                if upload is None or not upload[0].lower().endswith(".xml"):
-                    raise ValueError("NettFront batch XML feltöltése kötelező.")
-                file_name, file_data = upload
-                batch_data = parse_batch_xml(file_data)
-                parsed = build_invoice_from_batch(
-                    batch_data,
-                    invoice_code=fields.get("invoice_code", ""),
-                    invoice_date=fields.get("invoice_date", ""),
-                )
-                record = create_invoice(parsed, file_data, fields.get("operator", ""), file_name)
+                if path == NETTFRONT_INVOICE_FETCH_ROUTE:
+                    fields = _parse_urlencoded_body(raw_body)
+                    record = import_invoice_from_api(
+                        fields.get("invoice_code", ""), fields.get("invoice_date", ""), fields.get("operator", "")
+                    )
+                else:
+                    fields = _extract_multipart_fields(self.headers, raw_body)
+                    upload = _extract_uploaded_files(self.headers, raw_body).get("batch_xml")
+                    if upload is None or not upload[0].lower().endswith(".xml"):
+                        raise ValueError("NettFront batch XML feltöltése kötelező.")
+                    file_name, file_data = upload
+                    batch_data = parse_batch_xml(file_data)
+                    parsed = build_invoice_from_batch(
+                        batch_data,
+                        invoice_code=fields.get("invoice_code", ""),
+                        invoice_date=fields.get("invoice_date", ""),
+                    )
+                    record = create_invoice(parsed, file_data, fields.get("operator", ""), file_name)
             except (ValueError, DuplicateInvoiceError) as exc:
                 body = render_nettfront_invoice_home(list_invoices(), str(exc))
                 self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            except NettfrontInvoiceApiError as exc:
+                body = render_nettfront_invoice_home(list_invoices(), str(exc))
+                self.send_response(502)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
