@@ -1130,7 +1130,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "laura": "cyan",
             "zille": "slate",
             "kata": "orange",
-            "doroti": "rose",
+            "doroti": "indigo",
             "kira": "lime",
             "klio": "klio",
         }
@@ -1464,18 +1464,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         for row in rows:
             if isinstance(row, dict):
                 row["hideSubtitle"] = True
-
-    def set_kinga_anna_subtitles(rows: list[dict]) -> None:
-        """Set compact subtitles for Kinga and Anna grouped rows."""
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            row["detail"] = clean_text(" ".join(
-                part
-                for part in (clean_text(row.get("drawer_drill")), clean_text(row.get("side_type")))
-                if part and part != "-"
-            ))
-            row.pop("hideSubtitle", None)
 
     def aggregate_lower_rows(rows: list[dict], group_fields: tuple[str, ...], *, hide_subtitle: bool = False) -> list[dict]:
         """Aggregate lower-cabinet rows by display-relevant fields."""
@@ -2305,7 +2293,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         ("name", "size", "color", "side_type"),
         hide_subtitle=True,
     )
-    box1_rows.sort(key=lambda row: (folded(row.get("color")), folded(row.get("name"))))
     box1_ids = {str(row.get("row_id", "")) for row in box1_source_rows}
     if using_xml_cnc_source and box1_extra_rows:
         box1_ids.update(
@@ -2453,7 +2440,6 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             clean_text(row.get("name")),
         )
     )
-    # Kinga/Anna: keep original source row order, no merge and no additional sorting.
     box4_rows.sort(
         key=lambda row: (
             clean_text(row.get("color")),
@@ -2518,13 +2504,13 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         )
     )
 
-    set_kinga_anna_subtitles(box3_rows)
+    box1_rows.extend(box3_rows)
+    box1_rows.sort(key=lambda row: (folded(row.get("color")), folded(row.get("name"))))
     for rows_without_subtitles in (box1_rows, box2_rows, box_fvz_rows, box_avz_rows, box4_rows):
         hide_lower_subtitles(rows_without_subtitles)
 
-    add_lower_section("Normáls alsó · 724 x 505 x 18", box1_rows, "box1")
+    add_lower_section("Normáls alsó", box1_rows, "box1")
     add_lower_section("Boxosok", box2_rows, "box2")
-    add_lower_section("Kinga/Anna", box3_rows, "box3")
     add_lower_section("FVZ", box_fvz_rows, "box-fvz")
     add_lower_section("Alsó Végzáró", box_avz_rows, "box-avz")
     add_lower_section("Egyebek", box4_rows, "box4")
