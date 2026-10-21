@@ -3958,8 +3958,7 @@ def render_manufacturing_page(
 
         return sortState.direction === "desc" ? -primaryResult : primaryResult;
       }};
-      const compareRowsByDefaultSort = (leftRow, rightRow, sectionKey) => {{
-        const sortState = defaultSortStateForSection(sectionKey);
+      const compareRowsWithTieBreakers = (leftRow, rightRow, sectionKey, sortState) => {{
         if (sortState.key === "source") return 0;
         const primaryResult = compareRowsBySort(leftRow, rightRow, sortState);
         if (primaryResult !== 0) return primaryResult;
@@ -3995,12 +3994,16 @@ def render_manufacturing_page(
       const sortedRowsForView = (rows, sectionKey) => {{
         const items = Array.isArray(rows) ? [...rows] : [];
         const sortState = getSectionSortState(sectionKey);
-        // Keep the section's default rules beneath the selected column.
-        // Stable sorting preserves source order when both comparisons tie.
-        items.sort((leftRow, rightRow) =>
-          compareRowsBySort(leftRow, rightRow, sortState) ||
-          compareRowsByDefaultSort(leftRow, rightRow, sectionKey)
-        );
+        const isCncDocument = String(currentDocument()?.key || "") === "cnc_furas";
+        const defaultSortState = defaultSortStateForSection(sectionKey);
+        items.sort((leftRow, rightRow) => {{
+          if (!isCncDocument) {{
+            return compareRowsWithTieBreakers(leftRow, rightRow, sectionKey, sortState);
+          }}
+          // CNC keeps default rules and source order beneath the selected column.
+          return compareRowsBySort(leftRow, rightRow, sortState) ||
+            compareRowsWithTieBreakers(leftRow, rightRow, sectionKey, defaultSortState);
+        }});
         return items;
       }};
       const sortArrowFor = (sectionKey, sortKey) => {{
@@ -6124,8 +6127,10 @@ def render_manufacturing_page(
             sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "asc" }};
           }} else if (currentSectionSortState.direction === "asc") {{
             sectionSortState[normalizedKey] = {{ key: nextSortKey, direction: "desc" }};
-          }} else {{
+          }} else if (String(currentDocument()?.key || "") === "cnc_furas") {{
             delete sectionSortState[normalizedKey];
+          }} else {{
+            sectionSortState[normalizedKey] = {{ key: "source", direction: "asc" }};
           }}
           renderAll();
           return;

@@ -8,7 +8,7 @@ import socket
 import threading
 
 
-CAMERA_IP = os.getenv("NETTFRONT_CAMERA_IP", "192.168.2.40")
+CAMERA_IP = os.getenv("NETTFRONT_CAMERA_IP", "192.168.2.170")
 CAMERA_PORT = int(os.getenv("NETTFRONT_CAMERA_PORT", "9004"))
 CAMERA_TIMEOUT_SECONDS = float(os.getenv("NETTFRONT_CAMERA_TIMEOUT", "10"))
 CAMERA_TRIGGER = b"LON\r"
