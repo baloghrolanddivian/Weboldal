@@ -6,14 +6,16 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 
-def inventory_row_values(row: dict, kind: str) -> dict:
+def inventory_row_values(row: dict, kind: str, view: str = "check") -> dict:
     """Return normalized quantities and recount flags for an inventory row."""
     counted_raw = row.get("initial_count_qty", row.get("input_qty", row.get("counted_qty", "")))
     counted = _number(counted_raw)
     book = _number(row.get("stock_qty") if kind == "front" else row.get("book_qty"))
     is_counted = counted is not None
     mismatch = is_counted and book is not None and counted != book
-    selected = bool(row.get("recount_selected")) if "recount_selected" in row else mismatch
+    auto_closed = is_counted and book is not None and counted == book
+    closed = auto_closed or bool(row.get("recount_closed"))
+    selected = False if closed else _row_selected_for_view(row, view, mismatch)
     recount_raw = row.get("recount_input_qty", "")
     recount = _number(recount_raw)
     effective_count = recount if recount is not None else counted
@@ -26,29 +28,46 @@ def inventory_row_values(row: dict, kind: str) -> dict:
         "counted_qty": _display_number(counted),
         "is_counted": is_counted,
         "mismatch": mismatch,
+<<<<<<< Updated upstream
         "selected": selected and not closed,
+=======
+        "selected": selected,
+        "closed": closed,
+        "auto_closed": auto_closed,
+>>>>>>> Stashed changes
         "send_count": int(row.get("recount_send_count", 0) or 0),
-        "pending": bool(row.get("recount_pending")),
+        "pending": bool(row.get("recount_pending")) and not closed,
         "recount_qty": _display_number(_number(recount_raw)),
         "recounted": str(recount_raw or "").strip() != "",
     }
 
 
+<<<<<<< Updated upstream
 def set_recount_selection(session: dict, row_id: str, selected: bool, view: str = "check", kind: str = "front") -> tuple[bool, str]:
+=======
+def set_recount_selection(session: dict, row_id: str, selected: bool, view: str = "check", kind: str = "") -> tuple[bool, str]:
+>>>>>>> Stashed changes
     """Persist an administrator's explicit recount selection."""
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott tétel nem található."
     if _is_finalized(session):
         return False, "A leltár már le van zárva."
+<<<<<<< Updated upstream
     if selected and inventory_row_values(row, kind)["closed"]:
         return False, "Lezárt tétel nem jelölhető ki újraszámolásra."
     key = "recount_review_selected" if view == "recount" else "recount_selected"
     row[key] = bool(selected)
+=======
+    if selected and inventory_row_values(row, kind, view)["closed"]:
+        return False, "A lezĂˇrt tĂ©tel nem kĂĽldhetĹ‘ ĂşjraszĂˇmolĂˇsra."
+    row[_selection_key_for_view(view)] = bool(selected)
+>>>>>>> Stashed changes
     _touch(session)
     return True, ""
 
 
+<<<<<<< Updated upstream
 def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str) -> tuple[bool, str]:
     """Set manual closure without reopening matching or finalized rows."""
     row = _find_row(session, row_id)
@@ -62,6 +81,22 @@ def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str) -> t
     if closed:
         row["recount_selected"] = False
         row["recount_review_selected"] = False
+=======
+def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str = "") -> tuple[bool, str]:
+    """Persist a manual admin close flag for a recount row."""
+    row = _find_row(session, row_id)
+    if row is None:
+        return False, "A kivĂˇlasztott tĂ©tel nem talĂˇlhatĂł."
+    if _is_finalized(session):
+        return False, "A leltĂˇr mĂˇr le van zĂˇrva."
+    row["recount_closed"] = bool(closed)
+    if closed:
+        _clear_recount_selection(row)
+        row["recount_pending"] = False
+        row["recount_closed_at"] = datetime.now().isoformat(timespec="seconds")
+    else:
+        row.pop("recount_closed_at", None)
+>>>>>>> Stashed changes
     _touch(session)
     return True, ""
 
@@ -78,9 +113,16 @@ def send_group_to_recount(session: dict, group: str, kind: str, view: str = "che
     for row in session.get("rows", []):
         if not isinstance(row, dict) or row_group(row, kind) != target_group:
             continue
+<<<<<<< Updated upstream
         values = inventory_row_values(row, kind)
         selected = bool(row.get("recount_review_selected")) if view == "recount" else values["selected"]
         if selected and not values["closed"]:
+=======
+        values = inventory_row_values(row, kind, view)
+        if values["closed"]:
+            continue
+        if values["selected"]:
+>>>>>>> Stashed changes
             matches.append(row)
     if not matches:
         return False, "A kiválasztott csoportban nincs újraszámolásra jelölt tétel.", 0
@@ -96,8 +138,12 @@ def send_group_to_recount(session: dict, group: str, kind: str, view: str = "che
         row["recount_send_count"] = int(row.get("recount_send_count", 0) or 0) + 1
         row["recount_pending"] = True
         row["recount_input_qty"] = ""
+<<<<<<< Updated upstream
         row["recount_selected"] = False
         row["recount_review_selected"] = False
+=======
+        _clear_recount_selection(row)
+>>>>>>> Stashed changes
         row["recount_sent_at"] = stamp
     _touch(session)
     return True, f"{len(matches)} tétel újraszámolásra elküldve: {target_group}.", len(matches)
@@ -140,13 +186,13 @@ def update_recount_input(session: dict, row_id: str, raw_value: str, mode: str, 
     return True, "", display
 
 
-def recount_groups(session: dict, kind: str, only_selected: bool = False) -> list[dict]:
+def recount_groups(session: dict, kind: str, only_selected: bool = False, view: str = "check") -> list[dict]:
     """Return sorted size/color group summaries for admin actions."""
     buckets: dict[str, int] = {}
     for row in session.get("rows", []):
         if not isinstance(row, dict):
             continue
-        if only_selected and not inventory_row_values(row, kind)["selected"]:
+        if only_selected and not inventory_row_values(row, kind, view)["selected"]:
             continue
         group = row_group(row, kind)
         if group:
@@ -160,13 +206,32 @@ def recount_rows(session: dict, kind: str, view: str = "check") -> list[dict]:
     for row in session.get("rows", []):
         if not isinstance(row, dict):
             continue
-        values = inventory_row_values(row, kind)
+        values = inventory_row_values(row, kind, view)
         if view == "recount" and values["send_count"] < 1:
             continue
         if view == "recount":
             values["selected"] = bool(row.get("recount_review_selected")) and not values["closed"]
         result.append({**row, **values, "group": row_group(row, kind)})
     return sorted(result, key=lambda row: (_natural_key(str(row.get("group", ""))), str(row.get("description", "")).casefold()))
+
+
+def _selection_key_for_view(view: str) -> str:
+    return "recount_review_selected" if str(view or "").strip().lower() == "recount" else "recount_check_selected"
+
+
+def _row_selected_for_view(row: dict, view: str, mismatch: bool) -> bool:
+    key = _selection_key_for_view(view)
+    if key in row:
+        return bool(row.get(key))
+    if key == "recount_check_selected" and "recount_selected" in row:
+        return bool(row.get("recount_selected"))
+    return bool(mismatch) if key == "recount_check_selected" else False
+
+
+def _clear_recount_selection(row: dict) -> None:
+    row["recount_selected"] = False
+    row["recount_check_selected"] = False
+    row["recount_review_selected"] = False
 
 
 def row_group(row: dict, kind: str) -> str:

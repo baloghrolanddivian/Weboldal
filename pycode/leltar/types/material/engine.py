@@ -13,6 +13,7 @@ from pathlib import Path
 
 from tools.excel import normalize_excel_payload
 from leltar.frozen_stock import read_frozen_stock_quantities
+from leltar.recount import inventory_row_values
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -326,9 +327,22 @@ def add_material_inventory_rows_from_file(
     return result
 
 
+<<<<<<< Updated upstream
 def build_material_inventory_view_model(session: dict, selected_category: str = "", hide_closed: bool = False) -> dict:
+=======
+def build_material_inventory_view_model(
+    session: dict,
+    selected_category: str = "",
+    hide_closed: bool = False,
+) -> dict:
+>>>>>>> Stashed changes
     """Build category summaries and visible rows for material-like inventory."""
-    rows = [row for row in session.get("rows", []) if isinstance(row, dict)]
+    rows = [
+        row
+        for row in session.get("rows", [])
+        if isinstance(row, dict)
+        and (not hide_closed or not inventory_row_values(row, "material")["closed"])
+    ]
     categories = _category_summaries(rows)
     valid_keys = {item["key"] for item in categories}
     selected = selected_category if selected_category in valid_keys else "all"

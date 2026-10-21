@@ -7,14 +7,18 @@ import threading
 from contextlib import contextmanager
 import io
 import json
+import os
 import re
 import secrets
+import threading
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 from tools.excel import normalize_excel_payload
 from leltar.frozen_stock import read_frozen_stock_quantities
+from leltar.recount import inventory_row_values
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -29,6 +33,14 @@ SERIAL_SIZES_DATA_PATH = REPO_ROOT / "data" / "front-inventory-serial-sizes.json
 NETTFRONT_TRANSLATIONS_DATA_PATH = REPO_ROOT / "data" / "nettfront-translations.json"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = REPO_ROOT / "runtime" / "front-leltar" / "insight-minta.xlsx"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = REPO_ROOT / "data" / "nettfront-alkatreszek.xlsx"
+_FRONT_SESSION_FILE_LOCK = threading.RLock()
+
+
+@contextmanager
+def session_transaction(path: Path):
+    """Keep one front session read-modify-write cycle under the file lock."""
+    with _FRONT_SESSION_FILE_LOCK:
+        yield load_session_from_path(path)
 
 
 _session_lock = threading.RLock()
@@ -66,21 +78,65 @@ def load_session_from_path(path: Path) -> dict | None:
     """Load and repair a persisted front inventory session if possible."""
     if not path.exists():
         return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    if _repair_session(payload, path):
-        save_session_to_path(path, payload)
-    return payload
+    with _FRONT_SESSION_FILE_LOCK:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            payload = _recover_front_session_payload(path)
+            if payload is None:
+                return None
+            save_session_to_path(path, payload)
+        if not isinstance(payload, dict):
+            return None
+        if _repair_session(payload, path):
+            save_session_to_path(path, payload)
+        return payload
 
 
 def save_session_to_path(path: Path, payload: dict) -> None:
     """Persist a front inventory session as formatted JSON."""
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+    json.loads(serialized)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    with _FRONT_SESSION_FILE_LOCK:
+        try:
+            with temp_path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(serialized)
+                handle.flush()
+                os.fsync(handle.fileno())
+            json.loads(temp_path.read_text(encoding="utf-8"))
+            os.replace(str(temp_path), str(path))
+        finally:
+            try:
+                if temp_path.exists():
+                    temp_path.unlink()
+            except OSError:
+                pass
+
+
+def _recover_front_session_payload(path: Path) -> dict | None:
+    """Recover a session that has one stray closing brace after the JSON object."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+        payload, end_index = json.JSONDecoder().raw_decode(text)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if text[end_index:].strip() != "}":
+        return None
+    _backup_corrupted_front_session(path)
+    return payload
+
+
+def _backup_corrupted_front_session(path: Path) -> None:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = path.with_name(f"{path.name}.corrupt_{stamp}.bak")
+    try:
+        backup_path.write_bytes(path.read_bytes())
+    except OSError:
+        pass
 
 
 def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
@@ -704,7 +760,16 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
             sheet.column_dimensions[column].width = width
 
 
+<<<<<<< Updated upstream
 def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default", hide_closed: bool = False) -> dict:
+=======
+def build_front_inventory_view_model(
+    session: dict,
+    selected_category: str = "",
+    sort_mode: str = "default",
+    hide_closed: bool = False,
+) -> dict:
+>>>>>>> Stashed changes
     """Build the browser view model for front counting categories and rows."""
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
@@ -726,7 +791,9 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
     active_rows = [
         row
         for row in source_rows
-        if _is_visible_inventory_row(row) and (finalized or row.get("status") != "resolved")
+        if _is_visible_inventory_row(row)
+        and (finalized or row.get("status") != "resolved")
+        and (not hide_closed or not inventory_row_values(row, "front")["closed"])
     ]
 
     serial_rows = active_rows
