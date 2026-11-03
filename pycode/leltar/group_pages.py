@@ -6,10 +6,14 @@ import html
 
 from .routes import (
     ADMIN_FRONT_INVENTORY_ROUTE,
+    ADMIN_FOIL_ROLL_INVENTORY_ROUTE,
+    ADMIN_CUTTING_INVENTORY_ROUTE,
     ADMIN_MATERIAL_INVENTORY_ROUTE,
     ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE,
     ADMIN_SEMIFINISHED_INVENTORY_ROUTE,
     FRONT_INVENTORY_WORKER_ROUTE,
+    FOIL_ROLL_INVENTORY_WORKER_ROUTE,
+    CUTTING_INVENTORY_WORKER_ROUTE,
     MATERIAL_INVENTORY_WORKER_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
     SEMIFINISHED_INVENTORY_WORKER_ROUTE,
@@ -31,6 +35,8 @@ def render_inventory_group_page(group: str) -> bytes:
         (
             ("Front leltár", "Fóliás frontok számolása méret és szín alapján.", "Front -> számolás", FRONT_INVENTORY_WORKER_ROUTE),
             ("Anyag raktár leltár", "Anyagraktári tételek számolása ICG kód szerinti kategóriákban.", "Anyag -> számolás", MATERIAL_INVENTORY_WORKER_ROUTE),
+            ("Fóliatekercs-számító", "Élfóliák méterének becslése a tekercsek külső és belső átmérőjéből.", "Fólia -> mérés", FOIL_ROLL_INVENTORY_WORKER_ROUTE),
+            ("Szabászat leltár", "Bútorlapok, munkalapok és falipanelek méretpontos felmérése.", "Szabászat -> számolás", CUTTING_INVENTORY_WORKER_ROUTE),
             ("Félkész raktár leltár", "Félkész raktári tételek számolása szín szerinti kategóriákban.", "Félkész -> számolás", SEMIFINISHED_INVENTORY_WORKER_ROUTE),
             ("Félkész front leltár", "Félkész frontok számolása szín szerinti kategóriákban.", "Félkész front -> számolás", SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE),
         )
@@ -38,6 +44,8 @@ def render_inventory_group_page(group: str) -> bytes:
         else (
             ("Front leltár", "Front készletleltár feltöltése, lezárása és exportjai.", "Admin -> front", ADMIN_FRONT_INVENTORY_ROUTE),
             ("Anyag raktár leltár", "Anyagraktári leltár indítása, követése és InSight exportja.", "Admin -> anyag", ADMIN_MATERIAL_INVENTORY_ROUTE),
+            ("Fóliatekercs-számító", "Az aktuális fóliák feltöltése és a tekercsmérések követése.", "Admin -> fólia", ADMIN_FOIL_ROLL_INVENTORY_ROUTE),
+            ("Szabászat leltár", "Dátumozott szabászati leltárak indítása, követése és lezárása.", "Admin -> szabászat", ADMIN_CUTTING_INVENTORY_ROUTE),
             ("Félkész raktár leltár", "Félkész raktári leltár indítása, követése és exportja.", "Admin -> félkész", ADMIN_SEMIFINISHED_INVENTORY_ROUTE),
             ("Félkész front leltár", "Félkész front leltár indítása, követése és exportja.", "Admin -> félkész front", ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE),
         )

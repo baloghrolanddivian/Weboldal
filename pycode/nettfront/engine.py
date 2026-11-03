@@ -329,6 +329,8 @@ def apply_translations(rows: list[dict[str, str]], table: dict) -> list[dict[str
         model_code = product_code.split("_")[-1]
         is_standard_size = meret in standard_sizes
 
+        if model_code == "ANT" and color_code in {"KAF", "PRA"}:
+            color_code = f"{color_code}S"
         if model_code == "LU" and color_meta.get("name") == "Dune Beige":
             color_code = "KAFS"
         if model_code == "LU" and color_meta.get("name") == "Cedar Green":
@@ -519,6 +521,15 @@ PROCUREMENT_CODE_ALIASES = {
 }
 
 
+def _normalize_antonia_color_code(value: object) -> str:
+    """Replace the retired Antonia KAF/PRA segment with KAFS/PRAS."""
+    code = str(value or "").strip()
+    parts = code.split("_")
+    if len(parts) >= 3 and parts[1] == "ANT" and parts[2] in {"KAF", "PRA"}:
+        parts[2] = f"{parts[2]}S"
+    return "_".join(parts)
+
+
 def _procurement_code_fallbacks(kod: str) -> list[str]:
     """Handle procurement code fallbacks logic for the NettFront workflows.
 
@@ -533,7 +544,11 @@ def _procurement_code_fallbacks(kod: str) -> list[str]:
     parts = kod.split("_")
     if len(parts) >= 4:
         color_code = parts[2]
-        fallback_color = COLOR_FALLBACK_CODES.get(color_code)
+        # KAF/PRA are retired for Antonia.  A KAFS/PRAS receipt must never be
+        # redirected to the old stock item, even when that is the only entry in
+        # an outdated parts list.
+        is_permanent_antonia_color = parts[1] == "ANT" and color_code in {"KAFS", "PRAS"}
+        fallback_color = None if is_permanent_antonia_color else COLOR_FALLBACK_CODES.get(color_code)
         if fallback_color:
             swapped_parts = parts[:]
             swapped_parts[2] = fallback_color
@@ -562,7 +577,7 @@ def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, s
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
 
     for row in rows:
-        kod = row.get("kod", "")
+        kod = _normalize_antonia_color_code(row.get("kod", ""))
         mennyiseg = row.get("db", "")
         resolved = mapping.get(kod)
         if not resolved:
@@ -572,8 +587,8 @@ def build_procurement_csv(rows: list[dict[str, str]], alkatresz_map: dict[str, s
                 if resolved:
                     break
 
-        if not resolved and kod == "NFAY_ANT_PRA_357x197":
-            resolved = "NFAY_ANT_PRA_357x197_KA_NO_U_NFA"
+        if not resolved and kod == "NFAY_ANT_PRAS_357x197":
+            resolved = "NFAY_ANT_PRAS_357x197_KA_NO_U_NFA"
         if not resolved:
             missing.append(kod)
             resolved = kod
@@ -616,6 +631,18 @@ def _normalize_order_text(value: object) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+COMPARE_COLOR_CODE_REPLACEMENTS = {
+    "KAF": "KAFS",
+    "PRA": "PRAS",
+}
+
+
+def _normalize_compare_code(value: object) -> str:
+    """Use the permanent KAFS/PRAS color codes in NettFront comparisons."""
+    code = _normalize_order_text(value)
+    return "_".join(COMPARE_COLOR_CODE_REPLACEMENTS.get(part, part) for part in code.split("_"))
 
 
 def _normalize_order_numeric(value: object) -> Decimal | None:
@@ -661,7 +688,7 @@ def _build_invoice_index(rows: Iterable[dict[str, str]]) -> dict[str, deque[dict
     This function is part of the pydoc-documented shared NettFront workflow layer."""
     index: dict[str, deque[dict[str, str]]] = defaultdict(deque)
     for row in rows:
-        code = _normalize_order_text(row.get("kod"))
+        code = _normalize_compare_code(row.get("kod"))
         index[code].append(row)
     return index
 
@@ -672,16 +699,72 @@ def _build_order_index(order_rows: list[list[object]]) -> dict[str, deque[list[o
     This function is part of the pydoc-documented shared NettFront workflow layer."""
     index: dict[str, deque[list[object]]] = defaultdict(deque)
     for row in order_rows[1:]:
-        code = left_until_underscore(_get_column(row, 4))
+        code = _normalize_compare_code(left_until_underscore(_get_column(row, 4)))
         index[code].append(row)
     return index
+
+
+def _compare_order_code(row: Sequence[object]) -> str:
+    code = _normalize_compare_code(_get_column(row, 4))
+    parts = code.split("_")
+    if len(parts) >= 5 and parts[0] == "NFAIF" and parts[3] == "718x297" and parts[4] in {"J", "B"}:
+        return "_".join(parts[:5])
+    return left_until_underscore(code)
+
+
+def _compare_values_match(order_row: Sequence[object], invoice_row: dict[str, str]) -> bool:
+    pairs = [( _get_column(order_row, column), invoice_row.get(field))
+             for column, field in ((6, "db"), (9, "egyseg_ar"), (10, "netto_ar"))]
+    return all(_normalize_order_numeric(left) is not None
+               and _normalize_order_numeric(right) is not None
+               and _numbers_equal(left, right) for left, right in pairs)
+
+
+def _pair_compare_rows(order_rows: list[list[object]], invoice_rows: list[dict[str, str]]) -> dict[int, int]:
+    """Reserve exact matches before matching unlabelled handed 718x297 fronts."""
+    orders = order_rows[1:]
+    order_codes = [_compare_order_code(row) for row in orders]
+    invoice_codes = [_normalize_compare_code(row.get("kod")) for row in invoice_rows]
+    pairs: dict[int, int] = {}
+    used: set[int] = set()
+
+    # Match quantities/prices first so repeated codes work in either row order.
+    for require_values in (True, False):
+        for oi, code in enumerate(order_codes):
+            if oi in pairs:
+                continue
+            for ii, invoice_code in enumerate(invoice_codes):
+                if ii in used or code != invoice_code:
+                    continue
+                if require_values and not _compare_values_match(orders[oi], invoice_rows[ii]):
+                    continue
+                pairs[oi] = ii
+                used.add(ii)
+                break
+
+    for oi, code in enumerate(order_codes):
+        parts = code.split("_")
+        if oi in pairs or len(parts) != 5 or parts[0] != "NFAIF" or parts[3] != "718x297" or parts[4] not in {"J", "B"}:
+            continue
+        plain_code = "_".join(["NFA", *parts[1:4]])
+        for ii, invoice_code in enumerate(invoice_codes):
+            if ii in used or invoice_code != plain_code:
+                continue
+            invoice = invoice_rows[ii]
+            if detect_handedness(invoice.get("termek", ""), invoice.get("meret", "")):
+                continue
+            if _compare_values_match(orders[oi], invoice):
+                pairs[oi] = ii
+                used.add(ii)
+                break
+    return pairs
 
 
 def compare_rows(order_rows: list[list[object]], invoice_rows: list[dict[str, str]], invoice_header: list[str]) -> tuple[list[list[object]], list[bool]]:
     """Handle compare rows logic for the NettFront workflows.
 
     This function is part of the pydoc-documented shared NettFront workflow layer."""
-    invoice_index = _build_invoice_index(invoice_rows)
+    pairs = _pair_compare_rows(order_rows, invoice_rows)
     output_rows: list[list[object]] = []
     row_matches: list[bool] = []
 
@@ -692,21 +775,18 @@ def compare_rows(order_rows: list[list[object]], invoice_rows: list[dict[str, st
     output_rows.append(header)
     row_matches.append(True)
 
-    for row in order_rows[1:]:
-        order_kod = left_until_underscore(_get_column(row, 4))
+    for order_index, row in enumerate(order_rows[1:]):
+        order_kod = _compare_order_code(row)
         order_qty = _get_column(row, 6)
         order_unit = _get_column(row, 9)
         order_net = _get_column(row, 10)
 
-        invoice_queue = invoice_index.get(order_kod)
-        invoice_row = invoice_queue.popleft() if invoice_queue else None
+        invoice_row = invoice_rows[pairs[order_index]] if order_index in pairs else None
 
         mismatches: list[str] = []
         if invoice_row is None:
             mismatches.append("missing_invoice_row")
         else:
-            if _normalize_order_text(order_kod) != _normalize_order_text(invoice_row.get("kod")):
-                mismatches.append("kod")
             if not _numbers_equal(order_qty, invoice_row.get("db")):
                 mismatches.append("db")
             if not _numbers_equal(order_unit, invoice_row.get("egyseg_ar")):
@@ -725,15 +805,13 @@ def compare_invoice_rows(order_rows: list[list[object]], invoice_rows: list[dict
     """Handle compare invoice rows logic for the NettFront workflows.
 
     This function is part of the pydoc-documented shared NettFront workflow layer."""
-    order_index = _build_order_index(order_rows)
+    pairs = {ii: oi for oi, ii in _pair_compare_rows(order_rows, invoice_rows).items()}
     header = list(invoice_header) + ["status", "mismatch_details"]
     output_rows: list[list[object]] = [header]
     row_matches: list[bool] = [True]
 
-    for invoice_row in invoice_rows:
-        invoice_code = _normalize_order_text(invoice_row.get("kod"))
-        order_queue = order_index.get(invoice_code)
-        order_row = order_queue.popleft() if order_queue else None
+    for invoice_index, invoice_row in enumerate(invoice_rows):
+        order_row = order_rows[pairs[invoice_index] + 1] if invoice_index in pairs else None
 
         mismatches: list[str] = []
         if order_row is None:
@@ -856,11 +934,20 @@ def build_compare_artifacts(pdf_bytes: bytes, order_bytes: bytes) -> CompareArti
     """Build comparison workbook output from invoice and order files.
 
     This function is part of the pydoc-documented shared NettFront workflow layer."""
-    invoice_rows = build_invoice_rows(pdf_bytes)
+    invoice_rows = [
+        {**row, "kod": _normalize_compare_code(row.get("kod"))}
+        for row in build_invoice_rows(pdf_bytes)
+    ]
     invoice_csv = build_invoice_csv(invoice_rows)
     order_rows = read_order_rows_from_bytes(order_bytes)
     if not order_rows:
         raise ValueError("A feltöltött megrendelés fájl üres.")
+
+    # Column D contains the NettFront item code in the uploaded order. Keep the
+    # exported comparison workbook on the same permanent KAFS/PRAS codes too.
+    for order_row in order_rows[1:]:
+        if len(order_row) >= 4:
+            order_row[3] = _normalize_compare_code(order_row[3])
 
     compare_workbook = build_compare_workbook(order_rows, invoice_rows)
     return CompareArtifacts(

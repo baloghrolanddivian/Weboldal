@@ -15,6 +15,7 @@ from .routes import (
     NETTFRONT_PROCUREMENT_LAUNCH_PREFIX,
     NETTFRONT_PROCUREMENT_PARTS_PREFIX,
     NETTFRONT_PROCUREMENT_PROCESS_ROUTE,
+    NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX,
     NETTFRONT_PROCUREMENT_ROUTE,
     NETTFRONT_PROCUREMENT_STOP_PREFIX,
 )
@@ -275,10 +276,25 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
 
     preview_html = '<div class="procurement-preview-empty">A Beszerzés most nem elérhető.</div>'
     if preview_rows:
-        preview_rows_html = "".join(
-            f"<tr><td>{html.escape(row[0] if len(row) > 0 else '')}</td><td>{html.escape(row[1] if len(row) > 1 else '')}</td></tr>"
-            for row in preview_rows
-        )
+        missing_code_set = {str(code).strip() for code in missing_codes}
+        preview_row_parts: list[str] = []
+        for row_index, row in enumerate(preview_rows):
+            code = row[0] if len(row) > 0 else ""
+            quantity = row[1] if len(row) > 1 else ""
+            remove_html = ""
+            row_class = ""
+            if code in missing_code_set:
+                row_class = ' class="is-missing"'
+                remove_html = f"""
+                  <form class="procurement-remove-row-form" method="post" action="{NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX}/{job_id}">
+                    <input type="hidden" name="row_index" value="{row_index}" />
+                    <button class="procurement-remove-row-button" type="submit" aria-label="{html.escape(code)} sor eltávolítása" title="Sor eltávolítása">&times;</button>
+                  </form>
+                """
+            preview_row_parts.append(
+                f"<tr{row_class}><td>{html.escape(code)}</td><td>{html.escape(quantity)}</td><td class=\"procurement-preview-action\">{remove_html}</td></tr>"
+            )
+        preview_rows_html = "".join(preview_row_parts)
         preview_html = f"""
           <div class="procurement-preview-table-wrap">
             <table class="procurement-preview-table">
@@ -286,6 +302,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
                 <tr>
                   <th>Cikkszám</th>
                   <th>Mennyiség</th>
+                  <th class="procurement-preview-action" aria-label="Művelet"></th>
                 </tr>
               </thead>
               <tbody>
@@ -310,11 +327,11 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
         if uploaded_parts_name:
             uploaded_meta_html = f'<div class="procurement-remap-meta">Utolsó feltöltött lista: {html.escape(uploaded_parts_name)}</div>'
         helper_status_pill = f'<span class="procurement-result-pill is-alert">{len(missing_codes)} hiányzó kód</span>'
-        helper_status_copy = "Hiányzó kódokat találtunk. Tölts fel alkatrészlistát, és újraépítjük a Beszerzést."
+        helper_status_copy = "Tölts fel alkatrészlistát, vagy töröld a hiányzó tételt a sor végi × gombbal."
         action_html = f"""
           <article class="procurement-remap-card">
-            <strong>Alkatrészlista feltöltése</strong>
-            <p>Hiányzó kódokat találtunk. Tölts fel egy friss alkatrészlistát, és újraépítjük a Beszerzést.</p>
+            <strong>Hiányzó kódok kezelése</strong>
+            <p>Tölts fel egy friss alkatrészlistát, vagy töröld a kihagyandó tételt a fenti lista sorvégi × gombjával.</p>
             {uploaded_meta_html}
             <form class="procurement-remap-form" method="post" action="{NETTFRONT_PROCUREMENT_PARTS_PREFIX}/{job_id}" enctype="multipart/form-data">
               <input class="procurement-remap-input" type="file" name="parts_file" accept=".xls,.xlsx,.xlsm,.csv,application/vnd.ms-excel,text/csv" required />
@@ -339,7 +356,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
 
     lead_copy = "A Beszerzés elkészült. Ha minden kód megvan, a segéd automatikusan elindul."
     if missing_codes:
-        lead_copy = "Hiányzó kódokat találtunk. Tölts fel alkatrészlistát, és újraépítjük a Beszerzést."
+        lead_copy = "A hiányzó tétel a sor végi × gombbal kihagyható, így a többi sor bevételezhető marad."
     elif helper_running:
         lead_copy = "A segéd fut: Shift + Space indítja az importot, a Leállítás gomb azonnal megállítja."
     elif message and "automatikus indítása nem sikerült" in message:
@@ -433,7 +450,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
 
     layout_lead = "A kész Beszerzésnél a segéd automatikusan indul. Ha baj van, a Leállítás gombbal azonnal megállítható."
     if missing_codes:
-        layout_lead = "Hiányzó kódoknál tölts fel alkatrészlistát, és a rendszer újraépíti a Beszerzést."
+        layout_lead = "Hiányzó kódnál tölts fel alkatrészlistát, vagy hagyd ki a tételt a sor végi × gombbal."
     elif helper_running:
         layout_lead = "A segéd fut. Shift + Space indítja az importot, a Leállítás gomb azonnal megállítja."
 

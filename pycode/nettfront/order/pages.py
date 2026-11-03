@@ -478,6 +478,7 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
     job_dir, _ = read_order_job(job_id)
     rows = _read_nettfront_order_rows(job_dir) if job_dir is not None else []
     suggestion_count = len(rows)
+    review_count = sum(bool(row.review_reasons) for row in rows)
     positive_count = _count_positive_order_rows(rows)
     total_m2 = calc_total_m2_from_rows(rows)
     approved_file = str(metadata.get("approved_file", "")).strip()
@@ -498,6 +499,7 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
     """
     if rows:
         row_html = []
+        review_row_html = []
         for row in rows:
             description = html.escape(row.description or "Megnevezés nélkül")
             display_part_number = _nettfront_order_display_part_number(row.part_number)
@@ -508,7 +510,8 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
             capacity = html.escape(_format_order_metric(row.capacity))
             qty_value = html.escape(_format_order_input_value(row.order_qty))
             super_matt_html = '<span class="order-inline-badge">SM</span>' if row.is_super_matt else ""
-            row_html.append(
+            target_html = review_row_html if row.review_reasons else row_html
+            target_html.append(
                 f"""
                 <tr>
                   <td>
@@ -532,14 +535,26 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
                       type="text"
                       inputmode="decimal"
                       name="qty__{html.escape(row.row_id)}"
+                      aria-label="Rendelési mennyiség: {description}"
                       value="{qty_value}"
                     />
                   </td>
                 </tr>
                 """
             )
+        review_table_html = ""
+        if review_row_html:
+            review_table_html = f"""
+                <tbody class="order-review-rows">
+                  <tr class="order-review-divider">
+                    <th colspan="6" scope="rowgroup">Egyedi döntést igénylő frontok</th>
+                  </tr>
+                  {''.join(review_row_html)}
+                </tbody>
+            """
         table_html = f"""
           <form method="post" action="{NETTFRONT_ORDER_APPROVE_PREFIX}/{job_id}">
+            <h3>Rendelési javaslat ({len(rows)})</h3>
             <div class="order-table-wrap">
               <table class="order-table">
                 <thead>
@@ -555,9 +570,9 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
                 <tbody>
                   {''.join(row_html)}
                 </tbody>
+                {review_table_html}
               </table>
             </div>
-
             <div class="order-approve-bar">
               <span class="inline-note">A 0 mennyiség azt jelenti, hogy az adott tétel nem kerül be a kész rendelésbe.</span>
               <button class="button button-primary" type="submit">Jóváhagyás és kész rendelés</button>
@@ -594,8 +609,8 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
 
           <div class="order-summary-grid">
             <article class="order-summary-card">
-              <strong>{suggestion_count}</strong>
-              <span>javasolt tétel</span>
+              <strong>{suggestion_count - review_count}</strong>
+              <span>normál javaslat · {review_count} egyedi döntés</span>
             </article>
             <article class="order-summary-card">
               <strong>{positive_count}</strong>
@@ -605,15 +620,6 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
               <strong>{html.escape(_format_order_metric(total_m2))}</strong>
               <span>becsült összes m²</span>
             </article>
-          </div>
-
-          <div class="order-meta-strip">
-            <span>Összevont variánsok: {metadata.get("merged_variant_count", 0)}</span>
-            <span>Küszöb alatti tételek: {metadata.get("filtered_stock_count", 0)}</span>
-            <span>SM sorok: {metadata.get("added_super_matt_count", 0)}</span>
-            <span>Átlagolt alkatrészek: {metadata.get("avg_row_count", 0)}</span>
-            {"<span>Friss alkatrészlista: " + html.escape(source_parts_name) + (f' • {source_parts_count} tétel' if source_parts_count else '') + "</span>" if source_parts_name else ""}
-            {"<span>Bevételezési segéd fut</span>" if helper_running else ""}
           </div>
 
           <div class="order-toolbar">
@@ -627,7 +633,7 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
           {helper_hint_html}
         </section>
 
-        <section class="order-table-card" id="order-table-card" hidden>
+        <section class="order-table-card" id="order-table-card">
           <div class="order-result-head">
             <strong>Rendelési javaslat</strong>
             <p>Itt módosíthatod a mennyiségeket, majd jóváhagyhatod a kész rendelést.</p>
@@ -822,6 +828,13 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
     margin-top: 14px;
     padding-top: 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .order-table .order-review-divider th {
+    padding: 14px 16px;
+    text-align: left;
+    color: #f4cd8c;
+    background: rgba(238, 184, 91, .06);
+    border-top: 1px solid rgba(238, 184, 91, .45);
   }
   @media (max-width: 960px) {
     .order-summary-grid {

@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 
 from tools.excel import normalize_excel_payload
+from leltar.frozen_stock import read_frozen_stock_quantities
+from leltar.recount import inventory_row_values
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -82,6 +84,7 @@ def build_material_inventory_session(file_name: str, payload: bytes) -> dict:
                 "part_number": part_number,
                 "description": _clean_text(item.get("description")),
                 "book_qty": _clean_number_text(item.get("book_qty")),
+                "book_unit": _clean_text(item.get("book_unit")).lower(),
                 "icg_code": category,
                 "input_qty": "",
             }
@@ -110,6 +113,35 @@ def build_semifinished_inventory_session(file_name: str, payload: bytes) -> dict
 def build_semifinished_front_inventory_session(file_name: str, payload: bytes) -> dict:
     """Create a semifinished-front counting session."""
     return _build_color_inventory_session(file_name, payload, "felkesz-front")
+
+
+def refresh_material_inventory_book_quantities(
+    session: dict,
+    file_name: str,
+    payload: bytes,
+    inventory_kind: str = "material",
+) -> dict[str, int]:
+    """Refresh only frozen bookkeeping quantities in an existing inventory session."""
+    quantities = read_frozen_stock_quantities(file_name, payload)
+    result = {"source_rows": len(quantities), "matched": 0, "changed": 0, "missing": 0}
+    for row in session.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        part_key = _clean_text(row.get("part_number")).casefold()
+        if part_key not in quantities:
+            result["missing"] += 1
+            continue
+        next_qty = quantities[part_key]
+        result["matched"] += 1
+        if _clean_number_text(row.get("book_qty")) != next_qty:
+            row["book_qty"] = next_qty
+            result["changed"] += 1
+
+    if not result["matched"]:
+        raise ValueError("A feltöltött listában egyetlen aktív leltári tételt sem találtam.")
+    session["frozen_stock_source_name"] = Path(file_name).name
+    session["frozen_stock_updated_at"] = datetime.now().isoformat(timespec="seconds")
+    return result
 
 
 def _build_color_inventory_session(file_name: str, payload: bytes, export_prefix: str) -> dict:
@@ -184,9 +216,129 @@ def update_material_row_input(session: dict, row_id: str, raw_value: str, mode: 
     return True, ""
 
 
-def build_material_inventory_view_model(session: dict, selected_category: str = "") -> dict:
-    """Build category summaries and visible rows for material-like inventory."""
+def add_material_inventory_row(
+    session: dict,
+    part_number: str,
+    description: str,
+    icg_code: str,
+    book_qty: str = "",
+    book_unit: str = "",
+) -> dict:
+    """Add one manually supplied item to an open material inventory session."""
+    if str(session.get("phase", "")).lower() == "finalized":
+        raise ValueError("A lezárt leltár már nem egészíthető ki új tétellel.")
+
+    clean_part_number = _clean_text(part_number)
+    clean_description = _clean_text(description)
+    clean_category = _clean_text(icg_code)
+    clean_book_unit = _clean_text(book_unit).lower()
+    clean_book_qty = _clean_number_text(book_qty)
+    category_label = _clean_text(session.get("category_label")) or "ICG kód"
+    if not clean_part_number:
+        raise ValueError("Az alkatrészszám megadása kötelező.")
+    if not clean_description:
+        raise ValueError("Az alkatrészleírás megadása kötelező.")
+    if not clean_category:
+        raise ValueError(f"A(z) {category_label} megadása kötelező.")
+    if str(book_qty or "").strip() and _parse_non_negative_number(book_qty) is None:
+        raise ValueError("A könyvelési mennyiség csak nem negatív szám lehet.")
+
     rows = [row for row in session.get("rows", []) if isinstance(row, dict)]
+    duplicate = next(
+        (
+            row for row in rows
+            if _clean_text(row.get("part_number")).casefold() == clean_part_number.casefold()
+            and _clean_text(row.get("icg_code")).casefold() == clean_category.casefold()
+        ),
+        None,
+    )
+    if duplicate is not None:
+        raise ValueError("Ez az alkatrész ebben a kategóriában már szerepel a leltárban.")
+
+    row = {
+        "row_id": _row_id(clean_part_number, clean_category, f"manual-{secrets.token_hex(5)}"),
+        "part_number": clean_part_number,
+        "description": clean_description,
+        "book_qty": clean_book_qty,
+        "book_unit": clean_book_unit,
+        "icg_code": clean_category,
+        "input_qty": "",
+        "manually_added": True,
+    }
+    rows.append(row)
+    rows.sort(key=_row_sort_key)
+    session["rows"] = rows
+    _touch_session(session)
+    return row
+
+
+def add_material_inventory_rows_from_file(
+    session: dict,
+    file_name: str,
+    payload: bytes,
+    default_icg_code: str,
+    default_book_unit: str = "m",
+) -> dict[str, int]:
+    """Append non-excluded rows from a compact Excel/CSV list to an open inventory."""
+    if not file_name_allowed(file_name):
+        raise ValueError("A kiegészítő lista csak XLS, XLSX, XLSM vagy CSV lehet.")
+    if str(session.get("phase", "")).lower() == "finalized":
+        raise ValueError("A lezárt leltár már nem egészíthető ki új tételekkel.")
+    clean_default_category = _clean_text(default_icg_code)
+    clean_default_unit = _clean_text(default_book_unit).lower() or "m"
+
+    source_rows = _read_material_supplement_rows(file_name, payload)
+    if not clean_default_category and not any(_clean_text(item.get("icg_code")) for item in source_rows):
+        category_label = _clean_text(session.get("category_label")) or "kategória"
+        raise ValueError(
+            f"A fájlban nincs {category_label} oszlop vagy érték. Add meg a közös kategóriát a feltöltésnél."
+        )
+    existing = {
+        (_clean_text(row.get("part_number")).casefold(), _clean_text(row.get("icg_code")).casefold())
+        for row in session.get("rows", []) if isinstance(row, dict)
+    }
+    result = {"added": 0, "duplicate": 0, "excluded": 0, "invalid": 0}
+    for item in source_rows:
+        if _is_excluded(item.get("exclude")):
+            result["excluded"] += 1
+            continue
+        part_number = _clean_text(item.get("part_number"))
+        description = _clean_text(item.get("description"))
+        category = _clean_text(item.get("icg_code")) or clean_default_category
+        if not part_number or not description or not category:
+            result["invalid"] += 1
+            continue
+        key = (part_number.casefold(), category.casefold())
+        if key in existing:
+            result["duplicate"] += 1
+            continue
+        add_material_inventory_row(
+            session,
+            part_number,
+            description,
+            category,
+            _clean_number_text(item.get("book_qty")),
+            _clean_text(item.get("book_unit")) or clean_default_unit,
+        )
+        existing.add(key)
+        result["added"] += 1
+    if result["added"] == 0 and not result["duplicate"]:
+        raise ValueError("A fájlban nem találtam hozzáadható tételt.")
+    return result
+
+
+def build_material_inventory_view_model(
+    session: dict,
+    selected_category: str = "",
+    hide_closed: bool = False,
+) -> dict:
+    """Build category summaries and visible rows for material-like inventory."""
+    rows = [
+        row
+        for row in session.get("rows", [])
+        if isinstance(row, dict)
+        and (not hide_closed or not inventory_row_values(row, "material")["closed"])
+    ]
     categories = _category_summaries(rows)
     valid_keys = {item["key"] for item in categories}
     selected = selected_category if selected_category in valid_keys else "all"
@@ -296,6 +448,35 @@ def _read_material_rows(file_name: str, payload: bytes) -> list[dict]:
     if suffix == ".csv":
         return _read_csv_rows(payload)
     return _read_xlsx_rows(payload)
+
+
+def _read_material_supplement_rows(file_name: str, payload: bytes) -> list[dict]:
+    """Read a compact supplement list where category and unit may be omitted."""
+    suffix = Path(file_name or "").suffix.lower()
+    if suffix == ".csv":
+        text = payload.decode("utf-8-sig", errors="replace")
+        sample = text[:2048]
+        dialect = csv.Sniffer().sniff(sample, delimiters=";,\t,")
+        rows_iter = iter(csv.reader(io.StringIO(text), dialect))
+    else:
+        if load_workbook is None:
+            raise RuntimeError("Az Excel olvasásához hiányzik az openpyxl csomag.")
+        workbook = load_workbook(io.BytesIO(normalize_excel_payload(payload)), read_only=True, data_only=True)
+        rows_iter = workbook.active.iter_rows(values_only=True)
+    try:
+        header_row = next(rows_iter)
+    except StopIteration as exc:
+        raise ValueError("A feltöltött kiegészítő lista üres.") from exc
+    header_map = _header_map(header_row)
+    missing = [label for key, label in (("part_number", "Alkatr.-szám"), ("description", "Alkatr.-leírás")) if key not in header_map]
+    if missing:
+        raise ValueError("Hiányzó kötelező oszlop: " + ", ".join(missing))
+    rows: list[dict] = []
+    for values in rows_iter:
+        item = _row_from_values(header_map, values)
+        if any(str(value or "").strip() for value in item.values()):
+            rows.append(item)
+    return rows
 
 
 def _read_xlsx_rows(payload: bytes) -> list[dict]:
@@ -409,6 +590,23 @@ def _header_map(header_row: tuple | list) -> dict[str, int]:
             "konyv. menny.",
             "konyv mennyiseg",
             "konyv menny",
+            "rend.áll.rakt.készl.",
+            "rend.all.rakt.keszl.",
+            "rend.\ufffdll.rakt.k\ufffdszl.",
+        },
+        "book_unit": {
+            "könyvelési mértékegység",
+            "konyvelesi mertekegyseg",
+            "könyvelési me",
+            "konyvelesi me",
+            "könyvelés me",
+            "konyveles me",
+            "elsődleges me",
+            "elsodleges me",
+            "raktári me",
+            "raktari me",
+            "mértékegység",
+            "mertekegyseg",
         },
         "icg_code": {"icg kód", "icg kod", "icg"},
         "color_code": {"szin", "szín", "color", "szinkod", "színkód", "szin kod", "szín kód"},
@@ -438,7 +636,7 @@ def _apply_material_book_qty_fallback(header_map: dict[str, int], header_row: tu
     used_by_required = {
         key: index
         for key, index in header_map.items()
-        if key in {"part_number", "description", "icg_code", "exclude"}
+        if key in {"part_number", "description", "book_unit", "icg_code", "exclude"}
     }
     if fallback_index not in used_by_required.values():
         header_map["book_qty"] = fallback_index
@@ -481,7 +679,8 @@ def _row_from_values(header_map: dict[str, int], values: tuple | list) -> dict:
         "part_number": get_value("part_number"),
         "description": get_value("description"),
         "book_qty": get_value("book_qty"),
-        "icg_code": get_value("icg_code"),
+        "book_unit": get_value("book_unit"),
+        "icg_code": get_value("icg_code") or get_value("color_desc") or get_value("color_code"),
         "exclude": get_value("exclude"),
     }
 
