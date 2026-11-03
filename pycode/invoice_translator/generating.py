@@ -186,6 +186,8 @@ def _detect_product_type(description: str, article_code: str = "", invoice_profi
     if normalized_profile == "gamet":
         return "fogantyú"
     if normalized_profile == "kronospan":
+        if "PET LAMINATED MDF" in text:
+            return "minta"
         if "WORKTOP" in text or "WORK TOP" in text or "KITCHEN TOP" in text:
             return "munkalap"
         if "SPLASHBACK" in text:

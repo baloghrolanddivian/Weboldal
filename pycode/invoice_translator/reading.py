@@ -727,12 +727,14 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
             continue
 
         upper_line = line.upper()
-        if not any(token in upper_line for token in ("P2EN", "WORKTOP", "SPLASHBACK", "MF PB", "VP P2")):
+        if not any(token in upper_line for token in ("P2EN", "WORKTOP", "SPLASHBACK", "MF PB", "VP P2", "PET LAMINATED MDF")):
             i += 1
             continue
 
         kronospan_marker = ""
-        if "SPLASHBACK" in upper_line:
+        if "PET LAMINATED MDF" in upper_line:
+            kronospan_marker = "PET Laminated MDF"
+        elif "SPLASHBACK" in upper_line:
             kronospan_marker = "SPLASHBACK"
         elif "WORKTOP" in upper_line or "WORK TOP" in upper_line or "KITCHEN TOP" in upper_line:
             kronospan_marker = "WORKTOP"
@@ -812,7 +814,7 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
         if description_lines:
             description_parts = description_lines + ([code_line] if code_line else [])
             description_text = " | ".join(description_parts)
-            if kronospan_marker and kronospan_marker not in description_text.upper():
+            if kronospan_marker and kronospan_marker.upper() not in description_text.upper():
                 description_text = f"{kronospan_marker} | {description_text}"
             item.description = description_text
         else:
@@ -827,7 +829,11 @@ def _parse_kronospan_items(lines: list[str], total_net_fallback: str = "") -> li
             parts = pcs_line.split()
             if len(parts) in (2, 3):
                 if not item.package_qty:
-                    item.package_qty = parts[-2]
+                    compact_match = re.fullmatch(r"(-?\d[\d.]*,\d{2})(\d+)", parts[-2]) if len(parts) == 2 else None
+                    if compact_match:
+                        item.package_qty = compact_match.group(2)
+                    else:
+                        item.package_qty = parts[-2]
                 item.pcs_total = parts[-1]
 
         if not item.total_qty and compact_quantity_line:
