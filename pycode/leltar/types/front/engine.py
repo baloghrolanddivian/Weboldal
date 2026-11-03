@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 import csv
+import threading
+from contextlib import contextmanager
 import io
 import json
+import os
 import re
 import secrets
+import threading
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 from tools.excel import normalize_excel_payload
+from leltar.frozen_stock import read_frozen_stock_quantities
+from leltar.recount import inventory_row_values
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -26,6 +33,24 @@ SERIAL_SIZES_DATA_PATH = REPO_ROOT / "data" / "front-inventory-serial-sizes.json
 NETTFRONT_TRANSLATIONS_DATA_PATH = REPO_ROOT / "data" / "nettfront-translations.json"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_OVERRIDE_PATH = REPO_ROOT / "runtime" / "front-leltar" / "insight-minta.xlsx"
 FRONT_INVENTORY_INSIGHT_TEMPLATE_PATH = REPO_ROOT / "data" / "nettfront-alkatreszek.xlsx"
+_FRONT_SESSION_FILE_LOCK = threading.RLock()
+
+
+@contextmanager
+def session_transaction(path: Path):
+    """Keep one front session read-modify-write cycle under the file lock."""
+    with _FRONT_SESSION_FILE_LOCK:
+        yield load_session_from_path(path)
+
+
+_session_lock = threading.RLock()
+
+
+@contextmanager
+def session_transaction(path: Path):
+    """Serialize front inventory read-modify-write requests."""
+    with _session_lock:
+        yield load_session_from_path(path)
 
 
 def file_name_allowed(file_name: str) -> bool:
@@ -53,21 +78,65 @@ def load_session_from_path(path: Path) -> dict | None:
     """Load and repair a persisted front inventory session if possible."""
     if not path.exists():
         return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    if _repair_session(payload, path):
-        save_session_to_path(path, payload)
-    return payload
+    with _FRONT_SESSION_FILE_LOCK:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            payload = _recover_front_session_payload(path)
+            if payload is None:
+                return None
+            save_session_to_path(path, payload)
+        if not isinstance(payload, dict):
+            return None
+        if _repair_session(payload, path):
+            save_session_to_path(path, payload)
+        return payload
 
 
 def save_session_to_path(path: Path, payload: dict) -> None:
     """Persist a front inventory session as formatted JSON."""
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+    json.loads(serialized)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    with _FRONT_SESSION_FILE_LOCK:
+        try:
+            with temp_path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(serialized)
+                handle.flush()
+                os.fsync(handle.fileno())
+            json.loads(temp_path.read_text(encoding="utf-8"))
+            os.replace(str(temp_path), str(path))
+        finally:
+            try:
+                if temp_path.exists():
+                    temp_path.unlink()
+            except OSError:
+                pass
+
+
+def _recover_front_session_payload(path: Path) -> dict | None:
+    """Recover a session that has one stray closing brace after the JSON object."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+        payload, end_index = json.JSONDecoder().raw_decode(text)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if text[end_index:].strip() != "}":
+        return None
+    _backup_corrupted_front_session(path)
+    return payload
+
+
+def _backup_corrupted_front_session(path: Path) -> None:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = path.with_name(f"{path.name}.corrupt_{stamp}.bak")
+    try:
+        backup_path.write_bytes(path.read_bytes())
+    except OSError:
+        pass
 
 
 def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
@@ -94,6 +163,118 @@ def build_front_inventory_session(file_name: str, payload: bytes) -> dict:
         "inventory_style": "simple-size",
         "rows": rows,
     }
+
+
+def refresh_front_inventory_stock_quantities(session: dict, file_name: str, payload: bytes) -> dict[str, int]:
+    """Refresh only frozen system quantities in an existing front inventory session."""
+    raw_quantities = read_frozen_stock_quantities(file_name, payload)
+    quantities: dict[str, int] = {}
+    for part_key, value in raw_quantities.items():
+        number = float(value)
+        if not number.is_integer():
+            raise ValueError("A front befagyasztott készlet csak egész darabszámokat tartalmazhat.")
+        quantities[part_key] = int(number)
+    result = {"source_rows": len(quantities), "matched": 0, "changed": 0, "missing": 0}
+    for row in session.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        part_key = str(row.get("part_number", "")).strip().casefold()
+        if part_key not in quantities:
+            result["missing"] += 1
+            continue
+        next_qty = quantities[part_key]
+        result["matched"] += 1
+        if int(row.get("stock_qty", 0) or 0) != next_qty:
+            row["stock_qty"] = next_qty
+            result["changed"] += 1
+
+    if not result["matched"]:
+        raise ValueError("A feltöltött listában egyetlen aktív leltári tételt sem találtam.")
+    session["frozen_stock_source_name"] = Path(file_name).name
+    session["frozen_stock_updated_at"] = datetime.now().isoformat(timespec="seconds")
+    return result
+
+
+def add_front_inventory_row(session: dict, part_number: str, description: str, stock_qty: str = "0", color: str = "") -> dict:
+    """Add a front without changing any existing inventory row."""
+    if str(session.get("phase", "")).lower() == "finalized":
+        raise ValueError("A lezárt leltárhoz már nem adható új tétel.")
+    part_number = _normalize_part_number(part_number)
+    description = str(description or "").strip()
+    if not part_number or not description:
+        raise ValueError("Az alkatrészszám és az alkatrészleírás kötelező.")
+    if any(str(row.get("part_number", "")).strip().casefold() == part_number.casefold()
+           for row in session.get("rows", []) if isinstance(row, dict)):
+        raise ValueError("Ez az alkatrészszám már szerepel a front leltárban.")
+    try:
+        number = float(str(stock_qty or "0").strip().replace(" ", "").replace(",", "."))
+    except ValueError as exc:
+        raise ValueError("A befagyasztott készlet csak egész darabszám lehet.") from exc
+    if not number.is_integer():
+        raise ValueError("A befagyasztott készlet csak egész darabszám lehet.")
+    serial_sizes = {str(value) for value in session.get("serial_sizes", [])}
+    row = _build_inventory_session_row(
+        {"part_number": part_number, "description": description, "quantity": int(number), "color": color},
+        serial_sizes,
+    )
+    row["manually_added"] = True
+    row["review_level"] = int(session.get("phase", 0) or 0)
+    session.setdefault("rows", []).append(row)
+    session["rows"].sort(key=_row_sort_key)
+    _touch_session(session)
+    return row
+
+
+def add_front_inventory_rows_from_file(session: dict, file_name: str, payload: bytes) -> dict[str, int]:
+    """Append new front rows from a compact Excel or CSV list."""
+    if str(session.get("phase", "")).lower() == "finalized":
+        raise ValueError("A lezárt leltárhoz már nem adható új tétel.")
+    raw_rows = _read_rows(file_name, payload)
+    if not raw_rows:
+        raise ValueError("A kiegészítő tétellista üres.")
+    header_map = _build_header_map(raw_rows[0])
+    part_index = _find_header_index(header_map, ("alkatr", "szam"))
+    desc_index = _find_header_index(header_map, ("alkatr", "leiras"))
+    qty_index = (_find_header_index(header_map, ("befagyott", "keszlet", "menny"))
+                 or _find_header_index(header_map, ("rend", "all", "rakt", "keszl")))
+    color_index = _find_header_index(header_map, ("szin", "desc")) or _find_header_index(header_map, ("szin",))
+    exclude_index = _find_header_index(header_map, ("leltarbol", "ki"))
+    if part_index is None or desc_index is None:
+        raise ValueError("A kiegészítő listában Alkatr.-szám és Alkatr.-leírás oszlop kell.")
+    result = {"added": 0, "duplicate": 0, "excluded": 0, "invalid": 0}
+    existing = {str(row.get("part_number", "")).strip().casefold()
+                for row in session.get("rows", []) if isinstance(row, dict)}
+    candidates = []
+    for values in raw_rows[1:]:
+        get = lambda index: values[index] if index is not None and index < len(values) else ""
+        if _is_inventory_excluded_flag(get(exclude_index)):
+            result["excluded"] += 1
+            continue
+        part_number = _normalize_part_number(get(part_index))
+        description = str(get(desc_index) or "").strip()
+        if not part_number or not description:
+            result["invalid"] += 1
+            continue
+        if part_number.casefold() in existing:
+            result["duplicate"] += 1
+            continue
+        raw_qty = get(qty_index)
+        try:
+            number = float(str(raw_qty if raw_qty not in (None, "") else 0).strip().replace(" ", "").replace(",", "."))
+        except ValueError:
+            result["invalid"] += 1
+            continue
+        if not number.is_integer():
+            result["invalid"] += 1
+            continue
+        candidates.append((part_number, description, int(number), str(get(color_index) or "")))
+        existing.add(part_number.casefold())
+    if not candidates:
+        raise ValueError("A fájlban nem találtam hozzáadható új fronttételt.")
+    for part_number, description, quantity, color in candidates:
+        add_front_inventory_row(session, part_number, description, str(quantity), color)
+        result["added"] += 1
+    return result
 
 
 def update_row_input(session: dict, row_id: str, raw_value: str, mode: str = "add") -> tuple[bool, str]:
@@ -579,7 +760,16 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
             sheet.column_dimensions[column].width = width
 
 
-def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default") -> dict:
+<<<<<<< Updated upstream
+def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default", hide_closed: bool = False) -> dict:
+=======
+def build_front_inventory_view_model(
+    session: dict,
+    selected_category: str = "",
+    sort_mode: str = "default",
+    hide_closed: bool = False,
+) -> dict:
+>>>>>>> Stashed changes
     """Build the browser view model for front counting categories and rows."""
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
@@ -601,7 +791,9 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
     active_rows = [
         row
         for row in source_rows
-        if _is_visible_inventory_row(row) and (finalized or row.get("status") != "resolved")
+        if _is_visible_inventory_row(row)
+        and (finalized or row.get("status") != "resolved")
+        and (not hide_closed or not inventory_row_values(row, "front")["closed"])
     ]
 
     serial_rows = active_rows
@@ -634,6 +826,9 @@ def build_front_inventory_view_model(session: dict, selected_category: str = "",
         base_sort = active_sort[:-5] if reverse else active_sort
         visible_rows = sorted(visible_rows, key=lambda row: _inventory_sort_key(row, base_sort, finalized), reverse=reverse)
 
+    if hide_closed and not finalized:
+        from leltar.recount import inventory_row_values
+        visible_rows = [row for row in visible_rows if not inventory_row_values(row, "front")["closed"]]
     finalized_rows = _finalized_rows(session) if finalized else []
 
     return {

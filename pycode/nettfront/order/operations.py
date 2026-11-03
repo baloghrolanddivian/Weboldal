@@ -93,12 +93,14 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
     invalid_rows: list[str] = []
     for row in rows:
         field_name = f"qty__{row.row_id}"
-        raw_value = form_data.get(field_name, "")
+        raw_value = form_data.get(field_name, str(row.order_qty))
         parsed_value, ok = _order_parse_quantity_input(raw_value)
         if not ok:
             invalid_rows.append(row.description or row.part_number or row.row_id)
             continue
         row.order_qty = parsed_value
+        if parsed_value > 0 and (not row.part_number.strip() or not row.description.strip()):
+            invalid_rows.append(row.description or row.part_number or row.row_id)
 
     if invalid_rows:
         invalid_preview = ", ".join(invalid_rows[:3])

@@ -30,6 +30,9 @@ except Exception:  # pragma: no cover - optional dependency handling
 
 
 MATT_INVENTORY_ALLOWED_EXTENSIONS = {".xls", ".xlsx", ".xlsm", ".csv"}
+MATT_INVENTORY_REPORT_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / "matt-keszlet-riport-sablon.xlsx"
+)
 FAMILY_STOPWORDS = {
     "folias",
     "foliasfr",
@@ -280,25 +283,42 @@ def build_matt_inventory_alert_workbook(
     if Workbook is None:
         raise RuntimeError("Az Excel riport készítéséhez hiányzik az openpyxl csomag.")
 
-    price_map = _read_price_map(price_name, price_bytes)
     stock_rows = _read_stock_rows(stock_name, stock_bytes)
+    if MATT_INVENTORY_REPORT_TEMPLATE_PATH.exists():
+        return _build_matt_inventory_workbook_from_template(stock_rows)
+
+    price_map = _read_price_map(price_name, price_bytes)
     family_code_map = _derive_family_code_map(stock_rows)
     element_map = _load_element_map()
 
     safety_rows: list[dict] = []
     storage_rows: list[dict] = []
+    full_database_rows: list[dict] = []
 
     for row in stock_rows:
+        family = _family_display_name(row["family_code"], row["description"], row["color"], family_code_map)
+        color = _normalize_color_name(row["color"])
+        front_size = _extract_front_size(row["description"], row["part_number"])
+        related_elements = element_map.get(front_size, [])
+        full_database_entry = {
+            "part_number": row["part_number"],
+            "description": row["description"],
+            "family": family,
+            "color": color,
+            "front_size": front_size,
+            "elements": "",
+            "quantity": None,
+            "threshold": None,
+            "material_cost": None,
+        }
+        full_database_rows.append(full_database_entry)
+
         if row["quantity"] <= 0:
             continue
         price_info = _lookup_price(row["part_number"], price_map)
         if price_info is None:
             continue
 
-        family = _family_display_name(row["family_code"], row["description"], row["color"], family_code_map)
-        color = _normalize_color_name(row["color"])
-        front_size = _extract_front_size(row["description"], row["part_number"])
-        related_elements = element_map.get(front_size, [])
         value = _money_round(row["quantity"] * price_info.cost)
         base = {
             "part_number": row["part_number"],
@@ -313,11 +333,18 @@ def build_matt_inventory_alert_workbook(
         }
 
         if price_info.safety_stock > 1 and row["quantity"] > price_info.safety_stock:
-            safety_rows.append(
+            safety_entry = {
+                **base,
+                "threshold": _money_round(price_info.safety_stock),
+                "excess": _money_round(row["quantity"] - price_info.safety_stock),
+            }
+            safety_rows.append(safety_entry)
+            full_database_entry.update(
                 {
-                    **base,
-                    "threshold": _money_round(price_info.safety_stock),
-                    "excess": _money_round(row["quantity"] - price_info.safety_stock),
+                    "elements": safety_entry["elements"],
+                    "quantity": safety_entry["quantity"],
+                    "threshold": safety_entry["threshold"],
+                    "material_cost": safety_entry["material_cost"],
                 }
             )
         if price_info.safety_stock > 1 and row["quantity"] > price_info.storage_limit:
@@ -335,7 +362,52 @@ def build_matt_inventory_alert_workbook(
     _populate_alert_sheet(first_sheet, safety_rows, "Biztonsági készlet felett")
     second_sheet = workbook.create_sheet("Tárolható felett")
     _populate_alert_sheet(second_sheet, storage_rows, "Tárolható mennyiség felett")
+    full_database_sheet = workbook.create_sheet("Teljes adatbázis")
+    _populate_full_database_sheet(full_database_sheet, full_database_rows)
+    workbook.calculation.calcMode = "auto"
+    workbook.calculation.fullCalcOnLoad = True
+    workbook.calculation.forceFullCalc = True
 
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _build_matt_inventory_workbook_from_template(stock_rows: list[dict]) -> bytes:
+    """Refresh only daily quantities and their formulas in the fixed Matt report."""
+    if load_workbook is None:
+        raise RuntimeError("Az Excel riport készítéséhez hiányzik az openpyxl csomag.")
+
+    quantities: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for row in stock_rows:
+        part_number = _normalize_part_number(row.get("part_number"))
+        if part_number:
+            quantities[part_number] += _decimal_from_value(row.get("quantity"))
+
+    workbook = load_workbook(MATT_INVENTORY_REPORT_TEMPLATE_PATH, data_only=False)
+    expected_sheets = {"Biztonsági felett", "Tárolható felett", "Teljes adatbázis"}
+    missing_sheets = expected_sheets.difference(workbook.sheetnames)
+    if missing_sheets:
+        raise ValueError(
+            "A Matt riport sablonból hiányzik: " + ", ".join(sorted(missing_sheets))
+        )
+
+    for sheet_name in ("Biztonsági felett", "Tárolható felett", "Teljes adatbázis"):
+        sheet = workbook[sheet_name]
+        for row_number in range(3, sheet.max_row + 1):
+            part_number = _normalize_part_number(sheet.cell(row=row_number, column=1).value)
+            quantity = quantities.get(part_number, Decimal("0"))
+            sheet.cell(row=row_number, column=7).value = float(quantity) if quantity > 0 else None
+            sheet.cell(row=row_number, column=9).value = (
+                f'=IF(OR(G{row_number}="",H{row_number}=""),"",G{row_number}-H{row_number})'
+            )
+            sheet.cell(row=row_number, column=11).value = (
+                f'=IF(OR(G{row_number}="",J{row_number}=""),"",G{row_number}*J{row_number})'
+            )
+
+    workbook.calculation.calcMode = "auto"
+    workbook.calculation.fullCalcOnLoad = True
+    workbook.calculation.forceFullCalc = True
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -727,6 +799,99 @@ def _populate_alert_sheet(sheet, rows: list[dict], title: str) -> None:
             cell.number_format = '#,##0.00'
 
     sheet.freeze_panes = "A3"
+
+
+def _populate_full_database_sheet(sheet, rows: list[dict]) -> None:
+    """Fill the complete Matt item database in the reference workbook layout."""
+    title_fill = PatternFill(fill_type="solid", fgColor="0F172A")
+    title_font = Font(name="Calibri", color="FFFFFF", bold=True, size=12)
+    header_fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
+    header_font = Font(name="Calibri", color="0F172A", bold=True, size=11)
+    body_font = Font(name="Calibri", color="000000", size=11)
+    text_alignment = Alignment(horizontal="left", vertical="center")
+    number_alignment = Alignment(horizontal="right", vertical="center")
+
+    headers = [
+        "Alkatrész-szám",
+        "Leírás",
+        "Modell",
+        "Szín",
+        "Front méret",
+        "Elemek",
+        "Készlet",
+        "Küszöb",
+        "Eltérés",
+        "Anyagköltség",
+        "Készletérték",
+    ]
+
+    sheet.append(["Teljes adatbázis", *([None] * (len(headers) - 1))])
+    sheet.append(headers)
+
+    for column_index in range(1, len(headers) + 1):
+        title_cell = sheet.cell(row=1, column=column_index)
+        title_cell.fill = title_fill
+        title_cell.font = title_font
+        title_cell.alignment = text_alignment
+
+        header_cell = sheet.cell(row=2, column=column_index)
+        header_cell.fill = header_fill
+        header_cell.font = header_font
+        header_cell.alignment = text_alignment
+
+    for entry in rows:
+        row_number = sheet.max_row + 1
+        sheet.append(
+            [
+                entry["part_number"],
+                entry["description"],
+                entry["family"],
+                entry["color"],
+                entry["front_size"],
+                entry["elements"] or None,
+                _optional_decimal_as_float(entry["quantity"]),
+                _optional_decimal_as_float(entry["threshold"]),
+                f'=IF(OR(G{row_number}="",H{row_number}=""),"",G{row_number}-H{row_number})',
+                _optional_decimal_as_float(entry["material_cost"]),
+                f'=IF(OR(G{row_number}="",J{row_number}=""),"",G{row_number}*J{row_number})',
+            ]
+        )
+
+        for column_index in range(1, 7):
+            cell = sheet.cell(row=row_number, column=column_index)
+            cell.font = body_font
+            cell.alignment = text_alignment
+        for column_index in range(7, 12):
+            cell = sheet.cell(row=row_number, column=column_index)
+            cell.font = body_font
+            cell.alignment = number_alignment
+            cell.number_format = "#,##0.00"
+        sheet.row_dimensions[row_number].height = 15
+
+    widths = {
+        1: 42.14,
+        2: 75,
+        3: 16.43,
+        4: 22.14,
+        5: 15,
+        6: 35,
+        7: 12.14,
+        10: 16.43,
+    }
+    for column_index, width in widths.items():
+        sheet.column_dimensions[_excel_column_name(column_index)].width = width
+
+    sheet.row_dimensions[1].height = 16.5
+    sheet.row_dimensions[2].height = 16.5
+    if rows:
+        sheet.auto_filter.ref = f"A2:K{len(rows) + 2}"
+
+
+def _optional_decimal_as_float(value: object) -> float | None:
+    """Return a Decimal-like value as float while preserving empty cells."""
+    if value is None:
+        return None
+    return float(value)
 
 
 def _load_element_map() -> dict[str, list[str]]:

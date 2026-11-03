@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import mimetypes
 import re
 import uuid
@@ -28,6 +29,8 @@ from .config import order_runtime_dir
 from .engine import (
     NettfrontOrderRow,
     calc_total_m2_from_rows,
+    has_positive_order_quantity,
+    is_requested_review_row,
     rows_to_approved_workbook,
     rows_to_suggestion_workbook,
 )
@@ -129,7 +132,8 @@ def _order_parse_quantity_input(value: str) -> tuple[float, bool]:
     elif "," in sanitized:
         sanitized = sanitized.replace(",", ".")
     try:
-        return max(0.0, float(sanitized)), True
+        number = float(sanitized)
+        return (max(0.0, number), True) if math.isfinite(number) else (0.0, False)
     except ValueError:
         return 0.0, False
 
@@ -186,6 +190,8 @@ def _nettfront_order_row_to_dict(row: NettfrontOrderRow) -> dict:
         "length": row.length,
         "width": row.width,
         "is_super_matt": row.is_super_matt,
+        "review_reasons": row.review_reasons,
+        "suggested_qty": row.suggested_qty,
     }
 
 
@@ -208,6 +214,8 @@ def _nettfront_order_row_from_dict(payload: dict) -> NettfrontOrderRow:
         length=_order_safe_number(payload.get("length")),
         width=_order_safe_number(payload.get("width")),
         is_super_matt=bool(payload.get("is_super_matt")),
+        review_reasons=list(payload.get("review_reasons") or []),
+        suggested_qty=_order_safe_number(payload.get("suggested_qty")),
     )
 
 
@@ -224,7 +232,12 @@ def _read_nettfront_order_rows(job_dir: Path) -> list[NettfrontOrderRow]:
         return []
     if not isinstance(payload, list):
         return []
-    return [_nettfront_order_row_from_dict(item) for item in payload if isinstance(item, dict)]
+    rows = [_nettfront_order_row_from_dict(item) for item in payload if isinstance(item, dict)]
+    return [
+        row for row in rows
+        if has_positive_order_quantity(row)
+        and (not row.review_reasons or is_requested_review_row(row))
+    ]
 
 
 def _write_nettfront_order_rows(job_dir: Path, rows: list[NettfrontOrderRow]) -> None:
@@ -294,14 +307,17 @@ def _nettfront_order_part_number_aliases(value: object) -> list[str]:
 
 
 def _nettfront_order_display_part_number(value: object) -> str:
-    """Handle nettfront order display part number logic for the NettFront workflows.
+    """Return the purchasing part number for a NettFront order row.
 
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
     aliases = _nettfront_order_part_number_aliases(value)
     if not aliases:
         return ""
-    if len(aliases) >= 2 and aliases[0] != aliases[1]:
-        return aliases[1]
+    # Merged Antonia rows retain their KAFU/PRAU internal identifiers and both
+    # source aliases for validation.  The last alias is the purchasing variant:
+    # KAFS for KAFU and PRAS for PRAU.
+    if len(aliases) >= 3:
+        return aliases[2]
     return aliases[0]
 
 
@@ -452,6 +468,7 @@ def _write_nettfront_order_job(
         "source_stock_name": stock_name,
         "source_stock_file": source_stock_file,
         "suggestion_row_count": len(result.rows),
+        "review_row_count": sum(bool(row.review_reasons) for row in result.rows),
         "merged_variant_count": result.merged_variant_count,
         "filtered_stock_count": result.filtered_stock_count,
         "added_super_matt_count": result.added_super_matt_count,
@@ -493,6 +510,7 @@ def _persist_nettfront_order_approval(job_dir: Path, metadata: dict, rows: list[
     updated_metadata = {
         **metadata,
         "suggestion_row_count": len(rows),
+        "review_row_count": sum(bool(row.review_reasons) for row in rows),
         "total_m2": calc_total_m2_from_rows(rows),
         "approved_row_count": _count_positive_order_rows(rows),
         "approved_total_m2": calc_total_m2_from_rows(rows),

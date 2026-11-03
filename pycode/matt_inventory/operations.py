@@ -107,5 +107,5 @@ def matt_inventory_alert_download_payload() -> tuple[bytes, str, str] | None:
     return (
         path.read_bytes(),
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "matt-keszlet-kuszobriport.xlsx",
+        "matt-keszlet-kuszobriport-teljes-adatbazis.xlsx",
     )

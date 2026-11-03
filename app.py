@@ -14,6 +14,7 @@ import threading
 import urllib.parse
 import zipfile
 import csv
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -98,6 +99,48 @@ from matt_inventory import (
     process_matt_inventory_upload,
     render_matt_inventory_form,
 )
+from inventory_analytics import (
+    INVENTORY_ANALYTICS_DISCONTINUED_ROUTE,
+    INVENTORY_ANALYTICS_DOORS_DISCONTINUED_ROUTE,
+    INVENTORY_ANALYTICS_DOORS_ROUTE,
+    INVENTORY_ANALYTICS_DOORS_UPLOAD_ROUTE,
+    INVENTORY_ANALYTICS_ROUTE,
+    INVENTORY_ANALYTICS_TEMPLATE_ROUTE,
+    INVENTORY_ANALYTICS_UPLOAD_ROUTE,
+    configure_inventory_analytics,
+    import_erp_exports,
+    import_workbook as import_inventory_analytics_workbook,
+    render_inventory_analytics,
+    set_discontinued as set_inventory_item_discontinued,
+)
+from damaged_items import (
+    ADMIN_ACCESS_USER_IDS as DAMAGED_ITEMS_ADMIN_ACCESS_USER_IDS,
+    ADMIN_DELETE_PREFIX as DAMAGED_ITEMS_ADMIN_DELETE_PREFIX,
+    ADMIN_ROUTE as DAMAGED_ITEMS_ADMIN_ROUTE,
+    CREATE_ROUTE as DAMAGED_ITEMS_CREATE_ROUTE,
+    IMAGE_PREFIX as DAMAGED_ITEMS_IMAGE_PREFIX,
+    WORKER_ACCESS_USER_IDS as DAMAGED_ITEMS_WORKER_ACCESS_USER_IDS,
+    WORKER_ROUTE as DAMAGED_ITEMS_WORKER_ROUTE,
+    configure_damaged_items,
+    create_report as create_damaged_item_report,
+    delete_report as delete_damaged_item_report,
+    list_reports as list_damaged_item_reports,
+    parse_multipart as parse_damaged_item_multipart,
+    render_admin_page as render_damaged_items_admin_page,
+    render_worker_page as render_damaged_items_worker_page,
+    report_image as damaged_item_report_image,
+)
+from part_workstation import (
+    ACCESS_USER_IDS as PART_WORKSTATION_ACCESS_USER_IDS,
+    RESET_ROUTE as PART_WORKSTATION_RESET_ROUTE,
+    ROUTE as PART_WORKSTATION_ROUTE,
+    SCAN_ROUTE as PART_WORKSTATION_SCAN_ROUTE,
+    configure_part_workstation,
+    load_user_state as load_part_workstation_state,
+    register_scan as register_part_workstation_scan,
+    reset_user_state as reset_part_workstation_state,
+    render_page as render_part_workstation_page,
+)
 from leltar.group_pages import render_inventory_group_page
 from leltar.cutting_inventory import (
     apply_active_action as apply_cutting_inventory_action,
@@ -117,9 +160,11 @@ from leltar.foil_rolls import (
     save_session as save_foil_roll_session,
 )
 from leltar.recount import (
+    inventory_row_values,
     recount_groups,
     recount_rows,
     send_group_to_recount,
+    set_recount_closed,
     set_recount_selection,
     update_recount_input,
 )
@@ -158,6 +203,9 @@ from leltar.routes import (
     FRONT_INVENTORY_PRESENCE_ROUTE,
     FRONT_INVENTORY_RECOUNT_ROUTE,
     FRONT_INVENTORY_PROCESS_ROUTE,
+    FRONT_INVENTORY_REFRESH_STOCK_ROUTE,
+    FRONT_INVENTORY_ADD_ROUTE,
+    FRONT_INVENTORY_ADD_FILE_ROUTE,
     FRONT_INVENTORY_ROUTE,
     FRONT_INVENTORY_STATE_ROUTE,
     FRONT_INVENTORY_WORKER_ROUTE,
@@ -171,14 +219,15 @@ from leltar.routes import (
     FOIL_ROLL_INVENTORY_ROUTE,
     FOIL_ROLL_INVENTORY_STATE_ROUTE,
     FOIL_ROLL_INVENTORY_WORKER_ROUTE,
-    MATERIAL_INVENTORY_ADD_FILE_ROUTE,
-    MATERIAL_INVENTORY_ADD_ROUTE,
     MATERIAL_INVENTORY_FINALIZE_ROUTE,
+    MATERIAL_INVENTORY_ADD_ROUTE,
+    MATERIAL_INVENTORY_ADD_FILE_ROUTE,
     MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE,
     MATERIAL_INVENTORY_LEGACY_WORKER_ROUTE,
     MATERIAL_INVENTORY_PRESENCE_ROUTE,
     MATERIAL_INVENTORY_RECOUNT_ROUTE,
     MATERIAL_INVENTORY_PROCESS_ROUTE,
+    MATERIAL_INVENTORY_REFRESH_STOCK_ROUTE,
     MATERIAL_INVENTORY_ROUTE,
     MATERIAL_INVENTORY_STATE_ROUTE,
     MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE,
@@ -192,22 +241,30 @@ from leltar.routes import (
     SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_RECOUNT_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_PROCESS_ROUTE,
+    SEMIFINISHED_FRONT_INVENTORY_REFRESH_STOCK_ROUTE,
+    SEMIFINISHED_FRONT_INVENTORY_ADD_ROUTE,
+    SEMIFINISHED_FRONT_INVENTORY_ADD_FILE_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_SUMMARY_DOWNLOAD_ROUTE,
     SEMIFINISHED_FRONT_INVENTORY_WORKER_ROUTE,
     SEMIFINISHED_INVENTORY_FINALIZE_ROUTE,
+    SEMIFINISHED_INVENTORY_ADD_ROUTE,
+    SEMIFINISHED_INVENTORY_ADD_FILE_ROUTE,
     SEMIFINISHED_INVENTORY_INSIGHT_DOWNLOAD_ROUTE,
     SEMIFINISHED_INVENTORY_LEGACY_WORKER_ROUTE,
     SEMIFINISHED_INVENTORY_PRESENCE_ROUTE,
     SEMIFINISHED_INVENTORY_RECOUNT_ROUTE,
     SEMIFINISHED_INVENTORY_PROCESS_ROUTE,
+    SEMIFINISHED_INVENTORY_REFRESH_STOCK_ROUTE,
     SEMIFINISHED_INVENTORY_ROUTE,
     SEMIFINISHED_INVENTORY_STATE_ROUTE,
     SEMIFINISHED_INVENTORY_SUMMARY_DOWNLOAD_ROUTE,
     SEMIFINISHED_INVENTORY_WORKER_ROUTE,
 )
 from leltar.types.front import (
+    add_front_inventory_row,
+    add_front_inventory_rows_from_file,
     build_front_inventory_insight_artifacts,
     build_inventory_check_workbook,
     build_front_inventory_session,
@@ -216,9 +273,11 @@ from leltar.types.front import (
     file_name_allowed as front_inventory_file_name_allowed,
     finalize_inventory,
     load_session_from_path as load_front_inventory_session_from_path,
+    refresh_front_inventory_stock_quantities,
     read_bytes_if_exists as front_inventory_read_bytes_if_exists,
     run_inventory_check,
     save_session_to_path as save_front_inventory_session_to_path,
+    session_transaction as front_inventory_session_transaction,
     update_row_input,
     write_runtime_upload as write_front_inventory_runtime_upload,
 )
@@ -234,6 +293,7 @@ from leltar.types.material import (
     file_name_allowed as material_inventory_file_name_allowed,
     finalize_material_inventory,
     load_session_from_path as load_material_inventory_session_from_path,
+    refresh_material_inventory_book_quantities,
     save_session_to_path as save_material_inventory_session_to_path,
     update_material_row_input,
     write_runtime_upload as write_material_inventory_runtime_upload,
@@ -244,12 +304,14 @@ from nettfront.procurement import (
     NETTFRONT_PROCUREMENT_LAUNCH_PREFIX,
     NETTFRONT_PROCUREMENT_PARTS_PREFIX,
     NETTFRONT_PROCUREMENT_PROCESS_ROUTE,
+    NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX,
     NETTFRONT_PROCUREMENT_ROUTE,
     NETTFRONT_PROCUREMENT_STOP_PREFIX,
     configure_nettfront_procurement,
     launch_procurement_job,
     procurement_download_payload,
     process_procurement_upload,
+    remove_procurement_job_row,
     rebuild_procurement_parts,
     render_nettfront_procurement_form,
     stop_procurement_job,
@@ -397,6 +459,9 @@ LOGIN_ROUTE = "/login"
 configure_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_admin_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_nettfront_invoice(RUNTIME_DIR / "nettfront-szamla")
+configure_inventory_analytics(RUNTIME_DIR / "keszlet-elemzes")
+configure_damaged_items(RUNTIME_DIR / "serult-elemek")
+configure_part_workstation(RUNTIME_DIR / "alkatresz-munkalap")
 configure_foil_rolls(RUNTIME_DIR / "folia-tekercs")
 configure_cutting_inventory(RUNTIME_DIR / "szabaszat-leltar")
 ensure_login_database(LOGIN_DB_PATH)
@@ -555,6 +620,9 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (PART_WORKSTATION_ROUTE, PART_WORKSTATION_ACCESS_USER_IDS),
+    (DAMAGED_ITEMS_ADMIN_ROUTE, DAMAGED_ITEMS_ADMIN_ACCESS_USER_IDS),
+    (DAMAGED_ITEMS_WORKER_ROUTE, DAMAGED_ITEMS_WORKER_ACCESS_USER_IDS),
     (ADMIN_INVENTORY_GROUP_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (CUTTING_INVENTORY_START_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (CUTTING_INVENTORY_CLOSE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
@@ -562,8 +630,12 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (CUTTING_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_CUTTING_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_REFRESH_STOCK_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_ADD_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (FRONT_INVENTORY_ADD_FILE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (MATERIAL_INVENTORY_REFRESH_STOCK_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_ADD_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (MATERIAL_INVENTORY_ADD_FILE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_MATERIAL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
@@ -571,8 +643,14 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (FOIL_ROLL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_FOIL_ROLL_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_REFRESH_STOCK_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_ADD_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_INVENTORY_ADD_FILE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_SEMIFINISHED_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_REFRESH_STOCK_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_ADD_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
+    (SEMIFINISHED_FRONT_INVENTORY_ADD_FILE_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (ADMIN_SEMIFINISHED_FRONT_INVENTORY_ROUTE, ADMIN_INVENTORY_ACCESS_USER_IDS),
     (NETTFRONT_ROUTE, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_ROUTE, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
@@ -580,6 +658,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (NETTFRONT_PROCUREMENT_DOWNLOAD_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_LAUNCH_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_PARTS_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
+    (NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_PROCUREMENT_STOP_PREFIX, NETTFRONT_PROCUREMENT_ACCESS_USER_IDS),
     (NETTFRONT_COMPARE_ROUTE, NETTFRONT_COMPARE_ACCESS_USER_IDS),
     (NETTFRONT_COMPARE_PROCESS_ROUTE, NETTFRONT_COMPARE_ACCESS_USER_IDS),
@@ -1954,6 +2033,42 @@ def _render_nettfront_layout(
     .procurement-preview-table tbody tr:last-child td {{
       border-bottom: 0;
     }}
+    .procurement-preview-table tr.is-missing td {{
+      background: rgba(255, 139, 100, 0.045);
+    }}
+    .procurement-preview-action {{
+      width: 54px;
+      padding-left: 6px !important;
+      padding-right: 10px !important;
+      text-align: right !important;
+    }}
+    .procurement-remove-row-form {{
+      display: flex;
+      justify-content: flex-end;
+      margin: 0;
+    }}
+    .procurement-remove-row-button {{
+      display: inline-grid;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      place-items: center;
+      border: 1px solid rgba(255, 139, 100, 0.28);
+      border-radius: 10px;
+      background: rgba(255, 139, 100, 0.1);
+      color: #ffb097;
+      font: inherit;
+      font-size: 1.35rem;
+      line-height: 1;
+      cursor: pointer;
+    }}
+    .procurement-remove-row-button:hover,
+    .procurement-remove-row-button:focus-visible {{
+      border-color: rgba(255, 139, 100, 0.62);
+      background: rgba(255, 139, 100, 0.2);
+      color: #fff;
+      outline: none;
+    }}
     .procurement-preview-empty {{
       padding: 16px;
       border-radius: 18px;
@@ -2663,8 +2778,13 @@ def _material_inventory_hydrate_book_qty(session: dict | None) -> bool:
     return changed
 
 
-def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
-    """Backfill bookkeeping units from the material unit catalog and source workbook."""
+def _material_inventory_hydrate_book_units(
+    session: dict | None,
+    meta_path: Path,
+    runtime_dir: Path,
+    session_builder,
+) -> bool:
+    """Backfill bookkeeping units from the material catalog and saved source workbook."""
     if not isinstance(session, dict):
         return False
     rows = session.get("rows")
@@ -2673,6 +2793,7 @@ def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
     if all(str(row.get("book_unit", "")).strip() for row in rows if isinstance(row, dict)):
         return False
 
+    units_by_key: dict[tuple[str, str], str] = {}
     units_by_part: dict[str, str] = {}
     if MATERIAL_INVENTORY_BOOK_UNITS_PATH.is_file():
         try:
@@ -2680,34 +2801,37 @@ def _material_inventory_hydrate_book_units(session: dict | None) -> bool:
         except (OSError, json.JSONDecodeError):
             stored_units = {}
         if isinstance(stored_units, dict):
-            units_by_part = {
-                str(part_number).strip(): str(raw_unit or "").strip().lower()
-                for part_number, raw_unit in stored_units.items()
-                if str(part_number).strip() and str(raw_unit or "").strip()
-            }
+            for part_number, raw_unit in stored_units.items():
+                unit = str(raw_unit or "").strip().lower()
+                if unit:
+                    units_by_part.setdefault(str(part_number).strip(), unit)
 
-    meta = _matt_inventory_read_meta(MATERIAL_INVENTORY_STOCK_META_PATH)
+    meta = _matt_inventory_read_meta(meta_path)
     stored_name = str(meta.get("stored_name", "")).strip()
     original_name = str(meta.get("original_name", "")).strip() or stored_name
-    stock_path = MATERIAL_INVENTORY_RUNTIME_DIR / stored_name
+    stock_path = runtime_dir / stored_name
     if stored_name and stock_path.is_file():
         try:
-            source_session = build_material_inventory_session(original_name, stock_path.read_bytes())
+            source_session = session_builder(original_name, stock_path.read_bytes())
         except Exception:
             source_session = {}
         for source_row in source_session.get("rows", []):
             if not isinstance(source_row, dict):
                 continue
             part_number = str(source_row.get("part_number", "")).strip()
+            category = str(source_row.get("icg_code", ""))
             unit = str(source_row.get("book_unit", "")).strip().lower()
             if part_number and unit:
+                units_by_key[(part_number, category)] = unit
                 units_by_part[part_number] = unit
 
     changed = False
     for row in rows:
         if not isinstance(row, dict) or str(row.get("book_unit", "")).strip():
             continue
-        unit = units_by_part.get(str(row.get("part_number", "")).strip(), "")
+        part_number = str(row.get("part_number", "")).strip()
+        category = str(row.get("icg_code", ""))
+        unit = units_by_key.get((part_number, category), units_by_part.get(part_number, ""))
         if unit:
             row["book_unit"] = unit
             changed = True
@@ -2861,6 +2985,9 @@ def render_material_inventory_form(
         process_route = SEMIFINISHED_FRONT_INVENTORY_PROCESS_ROUTE
         state_route = SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE
         finalize_route = SEMIFINISHED_FRONT_INVENTORY_FINALIZE_ROUTE
+        refresh_stock_route = SEMIFINISHED_FRONT_INVENTORY_REFRESH_STOCK_ROUTE
+        add_route = SEMIFINISHED_FRONT_INVENTORY_ADD_ROUTE
+        add_file_route = SEMIFINISHED_FRONT_INVENTORY_ADD_FILE_ROUTE
         insight_download_route = SEMIFINISHED_FRONT_INVENTORY_INSIGHT_DOWNLOAD_ROUTE
         summary_download_route = SEMIFINISHED_FRONT_INVENTORY_SUMMARY_DOWNLOAD_ROUTE
         session_path = SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH
@@ -2872,6 +2999,9 @@ def render_material_inventory_form(
         process_route = SEMIFINISHED_INVENTORY_PROCESS_ROUTE
         state_route = SEMIFINISHED_INVENTORY_STATE_ROUTE
         finalize_route = SEMIFINISHED_INVENTORY_FINALIZE_ROUTE
+        refresh_stock_route = SEMIFINISHED_INVENTORY_REFRESH_STOCK_ROUTE
+        add_route = SEMIFINISHED_INVENTORY_ADD_ROUTE
+        add_file_route = SEMIFINISHED_INVENTORY_ADD_FILE_ROUTE
         insight_download_route = SEMIFINISHED_INVENTORY_INSIGHT_DOWNLOAD_ROUTE
         summary_download_route = SEMIFINISHED_INVENTORY_SUMMARY_DOWNLOAD_ROUTE
         session_path = SEMIFINISHED_INVENTORY_SESSION_PATH
@@ -2883,6 +3013,9 @@ def render_material_inventory_form(
         process_route = MATERIAL_INVENTORY_PROCESS_ROUTE
         state_route = MATERIAL_INVENTORY_STATE_ROUTE
         finalize_route = MATERIAL_INVENTORY_FINALIZE_ROUTE
+        refresh_stock_route = MATERIAL_INVENTORY_REFRESH_STOCK_ROUTE
+        add_route = MATERIAL_INVENTORY_ADD_ROUTE
+        add_file_route = MATERIAL_INVENTORY_ADD_FILE_ROUTE
         insight_download_route = MATERIAL_INVENTORY_INSIGHT_DOWNLOAD_ROUTE
         summary_download_route = MATERIAL_INVENTORY_SUMMARY_DOWNLOAD_ROUTE
         session_path = MATERIAL_INVENTORY_SESSION_PATH
@@ -2893,10 +3026,15 @@ def render_material_inventory_form(
     session_changed = False
     if not is_semifinished and _material_inventory_hydrate_book_qty(session):
         session_changed = True
-    if not is_semifinished and _material_inventory_hydrate_book_units(session):
+    if not is_semifinished and _material_inventory_hydrate_book_units(
+        session,
+        MATERIAL_INVENTORY_STOCK_META_PATH,
+        MATERIAL_INVENTORY_RUNTIME_DIR,
+        build_material_inventory_session,
+    ):
         session_changed = True
     if session_changed and session is not None:
-        save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
+        save_material_inventory_session_to_path(session_path, session)
     active_view = _material_inventory_normalize_view(view_mode)
     show_book_qty = not is_semifinished and active_view == "admin"
     color_page_title = "Félkész front leltár" if is_semifinished_front else "Félkész raktár leltár"
@@ -2936,6 +3074,7 @@ def render_material_inventory_form(
 
     admin_session_html = ""
     add_item_html = ""
+    frozen_stock_html = ""
     inventory_html = f"""
       <section class="matinv-board is-empty">
         <strong>Még nincs aktív {html.escape(page_title.lower())}.</strong>
@@ -2955,7 +3094,46 @@ def render_material_inventory_form(
             for item in view_model["categories"]
         )
         finalized = bool(view_model.get("finalized"))
-        if not is_semifinished and not finalized:
+        frozen_columns = "Alkatr.-szám · Alkatr.-leírás · Befagyott készlet menny."
+        frozen_meta = ""
+        if session.get("frozen_stock_updated_at"):
+            frozen_meta = (
+                f'<span class="matinv-meta-chip">Utolsó frissítés: '
+                f'{html.escape(_front_inventory_format_timestamp(str(session.get("frozen_stock_updated_at", ""))))} · '
+                f'{html.escape(str(session.get("frozen_stock_source_name", "")))}</span>'
+            )
+        frozen_stock_html = f"""
+          <section class="matinv-board matinv-add-card" id="matinv-refresh-stock">
+            <div class="matinv-board-head">
+              <div>
+                <span class="matinv-tag">Befagyasztott rendszerkészlet</span>
+                <strong>Darabszámfeltöltés meglévő tételekhez</strong>
+                <p>Ez a funkció nem ad hozzá új elemet. A teljes, rendszerből újra lehúzott listából kizárólag a már létező alkatrészszámok könyvelési mennyiségét írjuk át; minden leltári számolás és újraszámolás változatlan marad.</p>
+              </div>
+            </div>
+            <div class="matinv-meta-row">{frozen_meta}</div>
+            <form class="matinv-upload-form" method="post" action="{refresh_stock_route}" enctype="multipart/form-data">
+              <label class="matinv-field">
+                <span>Új befagyasztott teljes lista</span>
+                <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
+                <small>Szükséges oszlopok: {frozen_columns}</small>
+              </label>
+              <button class="button button-primary" type="submit">Darabszámok frissítése</button>
+            </form>
+          </section>
+        """
+        can_add_items = True
+        if can_add_items and not finalized:
+            category_name = "Szín" if is_semifinished else "ICG kategória"
+            category_field_label = "Színkategória" if is_semifinished else "ICG kód"
+            default_category = "" if is_semifinished else "Élzáró"
+            default_unit = "db" if is_semifinished else "m"
+            list_help = (
+                "Tölts fel egy Excel-listát Alkatr.-szám, Alkatr.-leírás és opcionális SZIN vagy SZIN.Desc, "
+                "Könyvelési mennyiség, illetve Leltarbol_ki oszlopokkal."
+                if is_semifinished
+                else "Tölts fel egy Excel-listát Alkatr.-szám, Alkatr.-leírás és opcionális Leltarbol_ki oszlopokkal."
+            )
             category_options = "".join(
                 f'<option value="{html.escape(str(item.get("label", "")), quote=True)}"></option>'
                 for item in view_model["categories"]
@@ -2965,26 +3143,26 @@ def render_material_inventory_form(
               <section class="matinv-board matinv-add-card" id="matinv-add-item">
                 <div class="matinv-board-head">
                   <div>
-                    <span class="matinv-tag">Futó leltár bővítése</span>
-                    <strong>Kimaradt tételek hozzáadása</strong>
-                    <p>Tölts fel egy Excel-listát Alkatr.-szám, Alkatr.-leírás és opcionális Leltarbol_ki oszlopokkal. Az új anyagok azonnal megjelennek a dolgozói leltárnézetben.</p>
+                    <span class="matinv-tag">Plusz elemek</span>
+                    <strong>Új tételek hozzáadása</strong>
+                    <p>{list_help} A már rögzített leltári mennyiségek nem változnak; az új tételek üres számolási értékkel jelennek meg.</p>
                   </div>
                 </div>
-                <datalist id="matinv-icg-options">{category_options}</datalist>
-                <form class="matinv-bulk-add-form" method="post" action="{MATERIAL_INVENTORY_ADD_FILE_ROUTE}" enctype="multipart/form-data">
+                <datalist id="matinv-category-options">{category_options}</datalist>
+                <form class="matinv-bulk-add-form" method="post" action="{add_file_route}" enctype="multipart/form-data">
                   <label class="is-wide"><span>Kiegészítő tétellista</span><input type="file" name="item_file" accept=".xls,.xlsx,.xlsm,.csv" required></label>
-                  <label><span>ICG kategória</span><input name="icg_code" list="matinv-icg-options" value="Élzáró" required></label>
-                  <label><span>Könyvelési ME</span><input name="book_unit" value="m" required></label>
+                  <label><span>{category_name}{' (csak ha a fájlból hiányzik)' if is_semifinished else ''}</span><input name="icg_code" list="matinv-category-options" value="{default_category}" placeholder="{'A fájl SZIN értéke lesz használva' if is_semifinished else 'Válassz vagy írj újat'}" {'required' if not is_semifinished else ''}></label>
+                  <label><span>Könyvelési ME</span><input name="book_unit" value="{default_unit}" required></label>
                   <button class="button button-primary" type="submit">Lista hozzáadása</button>
                 </form>
                 <details class="matinv-manual-add">
                   <summary>Egyetlen tétel kézi felvétele</summary>
-                  <form class="matinv-add-form" method="post" action="{MATERIAL_INVENTORY_ADD_ROUTE}">
+                  <form class="matinv-add-form" method="post" action="{add_route}">
                     <label><span>Alkatrészszám</span><input name="part_number" placeholder="pl. NATB3856GXY2104" required></label>
                     <label class="is-wide"><span>Alkatrészleírás</span><input name="description" placeholder="pl. Élzáró - Antracit - 21x0,4mm" required></label>
-                    <label><span>ICG kód</span><input name="icg_code" list="matinv-icg-options" placeholder="Válassz vagy írj újat" required></label>
+                    <label><span>{category_field_label}</span><input name="icg_code" list="matinv-category-options" placeholder="Válassz vagy írj újat" required></label>
                     <label><span>Könyvelési mennyiség</span><input name="book_qty" inputmode="decimal" placeholder="Nem kötelező"></label>
-                    <label><span>Könyvelési ME</span><input name="book_unit" value="m" placeholder="pl. m vagy db"></label>
+                    <label><span>Könyvelési ME</span><input name="book_unit" value="{default_unit}" placeholder="pl. m vagy db"></label>
                     <button class="button button-primary" type="submit">Tétel hozzáadása</button>
                   </form>
                 </details>
@@ -3057,7 +3235,8 @@ def render_material_inventory_form(
               <a class="button button-secondary" href="{inventory_href}">Leltár nézet megnyitása</a>
               <a class="button button-secondary" href="{recount_config['checker_route']}">Leltárellenőrző</a>
               <a class="button button-secondary" href="{recount_config['review_route']}">Újraszámolások</a>
-              {f'<a class="button button-secondary" href="#matinv-add-item">Tétel hozzáadása</a>' if not is_semifinished and not finalized else ''}
+              {f'<a class="button button-secondary" href="#matinv-add-item">Plusz elem hozzáadása</a>' if can_add_items and not finalized else ''}
+              <a class="button button-secondary" href="#matinv-refresh-stock">Darabszámfeltöltés</a>
               {download_html}
               {finalize_html}
             </div>
@@ -3219,6 +3398,7 @@ def render_material_inventory_form(
     .matinv-table .is-description {{ width:auto; }}
     .matinv-table .is-color {{ color:#0f766e; font-weight:900; }}
     .matinv-table .is-book-qty {{ color:#475569; font-weight:900; }}
+    .matinv-table .is-book-unit {{ color:#0f766e; font-weight:900; text-transform:lowercase; }}
     .matinv-table .is-total {{ }}
     .matinv-table .is-total span {{ display:inline-flex; align-items:center; justify-content:center; min-width:58px; min-height:34px; padding:0 10px; border-radius:999px; background:#0f172a; color:#fff; font-weight:900; }}
     .matinv-table .is-adjust {{ }}
@@ -3255,6 +3435,7 @@ def render_material_inventory_form(
       .matinv-add-form {{ grid-template-columns:1fr 1fr; }}
       .matinv-bulk-add-form {{ grid-template-columns:1fr 1fr; }}
       .matinv-bulk-add-form .is-wide {{ grid-column:1/-1; }}
+      .matinv-add-form .is-wide {{ grid-column:1/-1; }}
     }}
     @media (max-width: 780px) {{ .matinv-upload-head,.matinv-board-head,.matinv-upload-form {{ grid-template-columns:1fr; }} .matinv-top {{ align-items:flex-start; flex-direction:column; }} .matinv-stats {{ grid-template-columns:1fr 1fr; }} .button {{ width:100%; }} }}
   </style>
@@ -3273,6 +3454,7 @@ def render_material_inventory_form(
     {upload_html if active_view == 'admin' else ''}
     {admin_session_html if active_view == 'admin' and session else ''}
     {add_item_html if active_view == 'admin' and session else ''}
+    {frozen_stock_html if active_view == 'admin' and session else ''}
     {inventory_html if active_view == 'leltar' else ''}
   </main>
   {f'<iframe hidden src="{html.escape(auto_download_href)}"></iframe>' if auto_download_href and active_view == 'admin' else ''}
@@ -3420,12 +3602,12 @@ def _front_inventory_touch_presence(token: str, category: str, view_mode: str, c
     return sorted(set(active_categories))
 
 
-def _front_inventory_build_sync_payload(selected_category: str) -> dict:
+def _front_inventory_build_sync_payload(selected_category: str, hide_closed: bool = True) -> dict:
     """Return the front worker polling payload for category and row state."""
     session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
     if session is None:
         return {"category_states": {}, "row_inputs": {}, "updated_at": ""}
-    view_model = build_front_inventory_view_model(session, selected_category)
+    view_model = build_front_inventory_view_model(session, selected_category, hide_closed=hide_closed)
     row_inputs: dict[str, str] = {}
     for row in view_model.get("visible_rows", []):
         row_inputs[str(row.get("row_id", ""))] = str(row.get("input_qty", "") or "")
@@ -3515,11 +3697,16 @@ def _unified_inventory_build_view_model(config: dict, selected_category: str, so
         return {"session": None, "categories": [], "selected_category": "all", "visible_rows": [], "finalized": False}
     if config.get("kind") == "material":
         session_changed = _material_inventory_hydrate_book_qty(session)
-        if _material_inventory_hydrate_book_units(session):
+        if _material_inventory_hydrate_book_units(
+            session,
+            MATERIAL_INVENTORY_STOCK_META_PATH,
+            MATERIAL_INVENTORY_RUNTIME_DIR,
+            build_material_inventory_session,
+        ):
             session_changed = True
         if session_changed:
             save_material_inventory_session_to_path(config["session_path"], session)
-    view_model = build_material_inventory_view_model(session, selected_category)
+    view_model = build_material_inventory_view_model(session, selected_category, hide_closed=True)
     active_sort = _unified_inventory_normalize_sort(sort_mode)
     rows = list(view_model.get("visible_rows", []))
     if active_sort != "default":
@@ -3639,18 +3826,19 @@ def render_inventory_recount_admin(kind: str, view: str = "check", message: str 
     else:
         rows = recount_rows(session, config["kind"], active_view)
         body_rows = "".join(
-            f'''<tr class="frontinv-row{' is-mismatch' if row['mismatch'] else ''}" data-inventory-group="{html.escape(str(row['group']), quote=True)}">
+            f'''<tr class="frontinv-row{' is-mismatch' if row['mismatch'] else ''}{' is-closed' if row.get('closed') else ''}" data-inventory-group="{html.escape(str(row['group']), quote=True)}">
               <td><strong>{html.escape(str(row.get('description', '')))}</strong><small>{html.escape(str(row.get('part_number', '')))}</small></td>
               <td>{html.escape(str(row['group']))}</td>
               <td>{html.escape(row['book_qty'] or '-')}</td>
               <td>{html.escape(row['counted_qty'] or '-')}</td>
               {f"<td>{html.escape(row['recount_qty'] or '-')}</td>" if active_view == 'recount' else ''}
-              <td><span class="inventory-status {'is-done' if (row['recounted'] if active_view == 'recount' else row['is_counted']) else ''}">{'Újraszámolva' if active_view == 'recount' and row['recounted'] else 'Újraszámolásra vár' if active_view == 'recount' else 'Megszámolt' if row['is_counted'] else 'Még nem számolt'}</span></td>
+              <td><span class="inventory-status {'is-done' if row['closed'] or (row['recounted'] if active_view == 'recount' else row['is_counted']) else ''}">{'Lezárva' if row['closed'] else 'Újraszámolva' if active_view == 'recount' and row['recounted'] else 'Újraszámolásra vár' if active_view == 'recount' else 'Megszámolt' if row['is_counted'] else 'Még nem számolt'}</span></td>
               <td>{row['send_count']}</td>
-              <td><input class="rc-check" type="checkbox" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" {'checked' if row['selected'] else ''} {'disabled' if str(session.get('phase', '')).lower() == 'finalized' else ''} aria-label="Újraszámolásra kijelölés" /></td>
+              <td><input class="rc-closed" type="checkbox" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" {'checked' if row.get('closed') else ''} {'disabled' if str(session.get('phase', '')).lower() == 'finalized' or row.get('auto_closed') else ''} aria-label="Lezárva" /></td>
+              <td><input class="rc-check" type="checkbox" data-row-id="{html.escape(str(row.get('row_id', '')), quote=True)}" {'checked' if row['selected'] else ''} {'disabled' if str(session.get('phase', '')).lower() == 'finalized' or row.get('closed') else ''} aria-label="Újraszámolásra kijelölés" /></td>
             </tr>'''
             for row in rows
-        ) or f'<tr><td colspan="{8 if active_view == "recount" else 7}" class="frontinv-empty-row">{"Még nem volt újraszámolásra küldött tétel." if active_view == "recount" else "Nincs leltározandó tétel."}</td></tr>'
+        ) or f'<tr><td colspan="{9 if active_view == "recount" else 8}" class="frontinv-empty-row">{"Még nem volt újraszámolásra küldött tétel." if active_view == "recount" else "Nincs leltározandó tétel."}</td></tr>'
         options = "".join(f'<option value="{html.escape(item["key"], quote=True)}">{html.escape(item["key"])} · {item["count"]} tétel</option>' for item in recount_groups(session, config["kind"]))
         action = ""
         if str(session.get("phase", "")).lower() != "finalized":
@@ -3662,16 +3850,17 @@ def render_inventory_recount_admin(kind: str, view: str = "check", message: str 
         content = f'''<section class="frontinv-board inventory-admin-board{' is-recount' if active_view == 'recount' else ''}">
           <div class="frontinv-board-head"><div><span class="frontinv-tag">Adminisztráció</span><strong>{'Újraszámolások ellenőrzése' if active_view == 'recount' else 'Leltárellenőrző'}</strong><p>{html.escape(config['title'])} · befagyasztott készlet, számolási állapot és újraszámolási előzmény.</p></div><div class="frontinv-board-stamp"><span data-visible-count>{len(rows)}</span>&nbsp;tétel</div></div>
           {action}
-          <div class="frontinv-table-wrap"><table class="frontinv-table inventory-admin-table"><thead><tr><th>Tétel</th><th>{config['group_label']}</th><th>Rendszerkészlet</th><th>Számolt</th>{'<th>Újraszámolt</th>' if active_view == 'recount' else ''}<th>Állapot</th><th>Küldések</th><th>Kijelölés</th></tr></thead><tbody>{body_rows}</tbody></table></div>
+          <div class="frontinv-table-wrap"><table class="frontinv-table inventory-admin-table"><thead><tr><th>Tétel</th><th>{config['group_label']}</th><th>Rendszerkészlet</th><th>Számolt</th>{'<th>Újraszámolt</th>' if active_view == 'recount' else ''}<th>Állapot</th><th>Küldések</th><th>Lezárva</th><th>Kijelölés</th></tr></thead><tbody>{body_rows}</tbody></table></div>
         </section>'''
     admin_style = """<style>
-      .inventory-admin-shell{width:min(1500px,calc(100% - 28px));margin:16px auto 42px;display:grid;gap:16px}.inventory-admin-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;border-radius:24px;background:#fff;border:1px solid rgba(15,23,42,.08)}.inventory-admin-top h1{margin:5px 0 0;font:800 1.5rem/1.1 "Space Grotesk",sans-serif}.inventory-admin-top>a{color:#0f172a;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-switch{display:inline-flex;gap:7px;width:max-content;padding:6px;border:1px solid #d8e0ea;border-radius:999px;background:#fff}.inventory-admin-page .frontinv-view-tab{display:inline-flex;align-items:center;min-height:40px;padding:0 17px;border-radius:999px;color:#334155;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-tab.is-active{background:#0c8d57;color:#fff}.inventory-admin-page .frontinv-view-tab.is-active.is-recount{background:#ea580c;color:#fff}.inventory-admin-page .frontinv-view-tab.is-recount:not(.is-active){background:#fff7ed;color:#c2410c}.inventory-admin-board{padding:20px}.inventory-admin-table{min-width:960px}.inventory-admin-table td strong{display:block}.inventory-admin-table td small{display:block;margin-top:4px;color:#64748b}.inventory-admin-table tr.is-mismatch{background:#fff7ed}.inventory-status{display:inline-flex;padding:7px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:.78rem;font-weight:900;white-space:nowrap}.inventory-status.is-done{background:#dcfce7;color:#166534}.rc-check{width:22px;height:22px;accent-color:#ea580c}.inventory-group-action{display:flex;justify-content:flex-end;align-items:end;gap:10px;margin:18px 0}.inventory-group-action label{display:grid;gap:5px;color:#475569;font-size:.78rem;font-weight:900;text-transform:uppercase}.inventory-group-action select,.inventory-group-action button{min-height:44px;padding:0 14px;border-radius:14px;border:1px solid #d8e0ea;background:#fff;font-weight:900}.inventory-group-action button{background:#0c8d57;border-color:#0c8d57;color:#fff;cursor:pointer}.inventory-admin-board.is-recount::before{background:linear-gradient(90deg,#ea580c,#fb923c,#fed7aa)!important}.inventory-admin-board.is-recount .frontinv-tag{background:#fff7ed!important;color:#c2410c!important}.inventory-admin-board.is-recount .inventory-group-action button{background:#ea580c;border-color:#ea580c}.inventory-admin-notice{padding:13px 16px;border-radius:16px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-weight:800}.inventory-admin-notice.is-success{background:#ecfdf5;color:#047857;border-color:#bbf7d0}@media(max-width:760px){.inventory-admin-shell{width:calc(100% - 16px);margin:8px auto 24px}.inventory-admin-top{align-items:flex-start}.inventory-group-action{display:grid}.inventory-admin-board{padding:12px}}
+      .inventory-admin-shell{width:min(1500px,calc(100% - 28px));margin:16px auto 42px;display:grid;gap:16px}.inventory-admin-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;border-radius:24px;background:#fff;border:1px solid rgba(15,23,42,.08)}.inventory-admin-top h1{margin:5px 0 0;font:800 1.5rem/1.1 "Space Grotesk",sans-serif}.inventory-admin-top>a{color:#0f172a;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-switch{display:inline-flex;gap:7px;width:max-content;padding:6px;border:1px solid #d8e0ea;border-radius:999px;background:#fff}.inventory-admin-page .frontinv-view-tab{display:inline-flex;align-items:center;min-height:40px;padding:0 17px;border-radius:999px;color:#334155;text-decoration:none;font-weight:900}.inventory-admin-page .frontinv-view-tab.is-active{background:#0c8d57;color:#fff}.inventory-admin-page .frontinv-view-tab.is-active.is-recount{background:#ea580c;color:#fff}.inventory-admin-page .frontinv-view-tab.is-recount:not(.is-active){background:#fff7ed;color:#c2410c}.inventory-admin-board{padding:20px}.inventory-admin-table{min-width:1060px}.inventory-admin-table td strong{display:block}.inventory-admin-table td small{display:block;margin-top:4px;color:#64748b}.inventory-admin-table tr.is-mismatch{background:#fff7ed}.inventory-admin-table tr.is-closed{background:#f8fafc;color:#64748b}.inventory-status{display:inline-flex;padding:7px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:.78rem;font-weight:900;white-space:nowrap}.inventory-status.is-done{background:#dcfce7;color:#166534}.rc-check,.rc-closed{width:22px;height:22px;accent-color:#ea580c}.rc-closed{accent-color:#0c8d57}.inventory-group-action{display:flex;justify-content:flex-end;align-items:end;gap:10px;margin:18px 0}.inventory-group-action label{display:grid;gap:5px;color:#475569;font-size:.78rem;font-weight:900;text-transform:uppercase}.inventory-group-action select,.inventory-group-action button{min-height:44px;padding:0 14px;border-radius:14px;border:1px solid #d8e0ea;background:#fff;font-weight:900}.inventory-group-action button{background:#0c8d57;border-color:#0c8d57;color:#fff;cursor:pointer}.inventory-admin-board.is-recount::before{background:linear-gradient(90deg,#ea580c,#fb923c,#fed7aa)!important}.inventory-admin-board.is-recount .frontinv-tag{background:#fff7ed!important;color:#c2410c!important}.inventory-admin-board.is-recount .inventory-group-action button{background:#ea580c;border-color:#ea580c}.inventory-admin-notice{padding:13px 16px;border-radius:16px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-weight:800}.inventory-admin-notice.is-success{background:#ecfdf5;color:#047857;border-color:#bbf7d0}@media(max-width:760px){.inventory-admin-shell{width:calc(100% - 16px);margin:8px auto 24px}.inventory-admin-top{align-items:flex-start}.inventory-group-action{display:grid}.inventory-admin-board{padding:12px}}
     </style>"""
     page = f'''<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Divian-HUB | Leltárellenőrző</title><link rel="stylesheet" href="/styles.css">{_unified_inventory_style()}{admin_style}</head><body class="frontinv-worker-stage inventory-admin-page" data-theme-scope="default"><main class="inventory-admin-shell">
       <header class="inventory-admin-top"><div><span class="frontinv-tag">Divian-HUB</span><h1>{html.escape(config['title'])}</h1></div><a href="{config['admin_route']}">Vissza a kezelőhöz</a></header>{notice}
       <nav class="frontinv-view-switch"><a class="frontinv-view-tab{' is-active' if active_view == 'check' else ''}" href="{config['checker_route']}">Leltárellenőrző</a><a class="frontinv-view-tab{' is-active is-recount' if active_view == 'recount' else ' is-recount'}" href="{config['review_route']}">Újraszámolások ellenőrzése</a></nav>{content}
     </main><script>(()=>{{
-      document.querySelectorAll('.rc-check').forEach((box)=>box.addEventListener('change',()=>{{const body=new URLSearchParams();body.set('row_id',box.dataset.rowId||'');body.set('selected',box.checked?'1':'0');fetch('{config['selection_route']}',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}},body:body.toString(),credentials:'same-origin'}}).then(r=>{{if(!r.ok)throw new Error();}}).catch(()=>{{box.checked=!box.checked;}});}}));
+      document.querySelectorAll('.rc-check').forEach((box)=>box.addEventListener('change',()=>{{const body=new URLSearchParams();body.set('row_id',box.dataset.rowId||'');body.set('selected',box.checked?'1':'0');body.set('view','{active_view}');fetch('{config['selection_route']}',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}},body:body.toString(),credentials:'same-origin'}}).then(r=>{{if(!r.ok)throw new Error();}}).catch(()=>{{box.checked=!box.checked;}});}}));
+      document.querySelectorAll('.rc-closed').forEach((box)=>box.addEventListener('change',()=>{{const row=box.closest('tr');const selectBox=row?row.querySelector('.rc-check'):null;const status=row?row.querySelector('.inventory-status'):null;const next=box.checked;const body=new URLSearchParams();body.set('row_id',box.dataset.rowId||'');body.set('closed',next?'1':'0');if(selectBox&&next){{selectBox.checked=false;selectBox.disabled=true;}}if(selectBox&&!next){{selectBox.disabled=false;}}fetch('{config['selection_route']}',{{method:'POST',headers:{{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}},body:body.toString(),credentials:'same-origin'}}).then(r=>{{if(!r.ok)throw new Error();return r.json();}}).then(()=>{{if(row)row.classList.toggle('is-closed',next);if(status&&next){{status.textContent='Lezárva';status.classList.add('is-done');}}if(!next)window.location.reload();}}).catch(()=>{{box.checked=!next;if(selectBox)selectBox.disabled=box.checked;}});}}));
       const groupFilter=document.querySelector('[data-group-filter]');
       const countLabel=document.querySelector('[data-visible-count]');
       const filterRows=()=>{{
@@ -3695,7 +3884,7 @@ def render_inventory_recount_worker(kind: str, selected_group: str = "") -> byte
     config = _inventory_recount_config(kind)
     session = config["load"](config["session_path"])
     rows = recount_rows(session, config["kind"], "recount") if session else []
-    pending = [row for row in rows if row["pending"]]
+    pending = [row for row in rows if row["pending"] and not row["closed"]]
     groups = sorted({str(row["group"]) for row in pending})
     active = selected_group if selected_group in groups else "all"
     visible = pending if active == "all" else [row for row in pending if row["group"] == active]
@@ -4026,7 +4215,7 @@ def _unified_inventory_script() -> str:
   const categoryValue = root.getAttribute("data-category") || "";
   const storagePrefix = root.getAttribute("data-storage-prefix") || "unifiedinv";
   const categoryRow = root.querySelector(".frontinv-category-row");
-  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
+  let rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
   const searchInput = root.querySelector("[data-frontinv-search]");
   const selectedCategoryStorageKey = `${storagePrefix}-selected-category`;
   const categoryFromLink = (link) => {
@@ -4067,6 +4256,11 @@ def _unified_inventory_script() -> str:
     const total = row.querySelector("[data-frontinv-total]");
     if (total) total.textContent = nextValue || "0";
     row.classList.toggle("is-counted", nextValue !== "");
+  };
+  const removeClosedRow = (row) => {
+    if (!row) return;
+    row.remove();
+    rowElements = rowElements.filter((item) => item !== row);
   };
   const saveAdjustment = (input) => {
     const rowId = input.getAttribute("data-row-id") || input.closest("[data-frontinv-row]")?.getAttribute("data-row-id") || "";
@@ -4145,9 +4339,13 @@ def _unified_inventory_script() -> str:
         chip.classList.toggle("is-complete", Boolean(categoryStates[chipCategory]));
       });
       const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object" ? payload.row_inputs : {};
-      rowElements.forEach((row) => {
+      rowElements.slice().forEach((row) => {
         const rowId = row.getAttribute("data-row-id") || "";
-        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) setRowValue(row, remoteRowInputs[rowId]);
+        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) {
+          setRowValue(row, remoteRowInputs[rowId]);
+        } else {
+          removeClosedRow(row);
+        }
       });
     };
     const touchPresence = (clear = false) => {
@@ -4233,6 +4431,8 @@ def render_front_inventory_form(
         """
 
     admin_session_html = ""
+    add_item_html = ""
+    frozen_stock_html = ""
     inventory_html = """
       <section class="frontinv-board is-empty">
         <div class="frontinv-empty">
@@ -4242,9 +4442,44 @@ def render_front_inventory_form(
       </section>
     """
     if session:
-        view_model = build_front_inventory_view_model(session, selected_category, sort_mode)
+        view_model = build_front_inventory_view_model(
+            session,
+            selected_category,
+            sort_mode,
+            hide_closed=active_view == "leltar",
+        )
         phase_value = str(session.get("phase", "0"))
         finalized = view_model["finalized"]
+        if not finalized:
+            add_item_html = f"""
+              <section class="frontinv-upload-card" id="frontinv-add-item">
+                <div class="frontinv-upload-head">
+                  <div class="frontinv-copy">
+                    <span class="frontinv-tag">Plusz elemek</span>
+                    <strong>Új fronttételek hozzáadása</strong>
+                    <p>A kiegészítő lista új alkatrészszámai bekerülnek a futó leltárba. A meglévő tételek számolása változatlan marad.</p>
+                  </div>
+                </div>
+                <form class="frontinv-upload-form" method="post" action="{FRONT_INVENTORY_ADD_FILE_ROUTE}" enctype="multipart/form-data">
+                  <label class="frontinv-field">
+                    <span>Kiegészítő tétellista</span>
+                    <input type="file" name="item_file" accept=".xls,.xlsx,.xlsm,.csv" required />
+                    <small>Alkatr.-szám és Alkatr.-leírás szükséges; Befagyott készlet menny. és SZIN.Desc opcionális.</small>
+                  </label>
+                  <div class="frontinv-action-row"><button class="button button-primary" type="submit">Plusz lista hozzáadása</button></div>
+                </form>
+                <details class="frontinv-manual-add">
+                  <summary>Egyetlen tétel kézi felvétele</summary>
+                  <form class="frontinv-add-form" method="post" action="{FRONT_INVENTORY_ADD_ROUTE}">
+                    <label><span>Alkatrészszám</span><input name="part_number" required /></label>
+                    <label><span>Alkatrészleírás</span><input name="description" required /></label>
+                    <label><span>Befagyott készlet</span><input name="stock_qty" inputmode="numeric" value="0" required /></label>
+                    <label><span>Szín (opcionális)</span><input name="color" /></label>
+                    <button class="button button-primary" type="submit">Plusz elem hozzáadása</button>
+                  </form>
+                </details>
+              </section>
+            """
         categories_html = "".join(
             f"""
               <a class="frontinv-chip{' is-complete' if item.get('complete') else ''}{' is-live' if item['key'] in active_presence_categories else ''}{' is-active' if item['key'] == view_model['selected_category'] else ''}"
@@ -4356,6 +4591,7 @@ def render_front_inventory_form(
                 part
                 for part in (
                     f'<a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>',
+                    '<a class="button button-secondary frontinv-open-button" href="#frontinv-refresh-stock">Darabszámfeltöltés</a>',
                     f'<a class="button button-secondary frontinv-open-button" href="{ADMIN_FRONT_INVENTORY_CHECKER_ROUTE}">Leltárellenőrző</a>',
                     f'<a class="button button-secondary frontinv-open-button" href="{ADMIN_FRONT_INVENTORY_RECOUNT_ROUTE}">Újraszámolások</a>',
                     f'<a class="button button-secondary frontinv-open-button" href="{FRONT_INVENTORY_CHECK_DOWNLOAD_ROUTE}">Végleges riport</a>' if saved_check_report_name else "",
@@ -4437,6 +4673,8 @@ def render_front_inventory_form(
                 </div>
                 <div class="frontinv-admin-actions">
                   <a class="button button-secondary frontinv-open-button" href="{inventory_open_href}">Leltár nézet</a>
+                  <a class="button button-secondary frontinv-open-button" href="#frontinv-add-item">Plusz elem hozzáadása</a>
+                  <a class="button button-secondary frontinv-open-button" href="#frontinv-refresh-stock">Darabszámfeltöltés</a>
                   <a class="button button-secondary frontinv-open-button" href="{ADMIN_FRONT_INVENTORY_CHECKER_ROUTE}">Leltárellenőrző</a>
                   <a class="button button-secondary frontinv-open-button" href="{ADMIN_FRONT_INVENTORY_RECOUNT_ROUTE}">Újraszámolások</a>
                   <form method="post" action="{action_route}">
@@ -4475,8 +4713,40 @@ def render_front_inventory_form(
           </section>
         """
 
+        frozen_meta = ""
+        if session.get("frozen_stock_updated_at"):
+            frozen_meta = (
+                f'<div class="frontinv-meta-chip">Utolsó frissítés: '
+                f'{html.escape(_front_inventory_format_timestamp(str(session.get("frozen_stock_updated_at", ""))))} · '
+                f'{html.escape(str(session.get("frozen_stock_source_name", "")))}</div>'
+            )
+        frozen_stock_html = f"""
+          <section class="frontinv-upload-card" id="frontinv-refresh-stock">
+            <div class="frontinv-upload-head">
+              <div class="frontinv-copy">
+                <span class="frontinv-tag">Befagyasztott rendszerkészlet</span>
+                <strong>Darabszámfeltöltés meglévő tételekhez</strong>
+                <p>Ez a funkció nem ad hozzá új elemet. Alkatrészszám alapján kizárólag a már létező tételek befagyasztott készletét írja át; minden leltári számolás és újraszámolás változatlan marad.</p>
+              </div>
+            </div>
+            <div class="frontinv-meta-row">{frozen_meta}</div>
+            <form class="frontinv-upload-form" method="post" action="{FRONT_INVENTORY_REFRESH_STOCK_ROUTE}" enctype="multipart/form-data">
+              <label class="frontinv-field">
+                <span>Új befagyasztott teljes lista</span>
+                <strong>Fóliás front készletfájl</strong>
+                <input type="file" name="stock_file" accept=".xls,.xlsx,.xlsm,.csv" required />
+                <small>Szükséges oszlopok: Alkatr.-szám, Alkatr.-leírás, Befagyott készlet menny.</small>
+              </label>
+              <div class="frontinv-action-row">
+                <span class="inline-note">A feltöltés nem indít új leltárt és egyetlen megszámolt értéket sem töröl.</span>
+                <button class="button button-primary frontinv-submit-button" type="submit">Darabszámok frissítése</button>
+              </div>
+            </form>
+          </section>
+        """
+
         inventory_html = f"""
-          <section class="frontinv-board is-worker" data-front-inventory-root data-state-route="{FRONT_INVENTORY_STATE_ROUTE}" data-presence-route="{FRONT_INVENTORY_PRESENCE_ROUTE}" data-alert-clear-route="{FRONT_INVENTORY_ALERT_CLEAR_ROUTE}" data-category="{html.escape(view_model['selected_category'])}">
+          <section class="frontinv-board is-worker" data-front-inventory-root data-state-route="{FRONT_INVENTORY_STATE_ROUTE}" data-presence-route="{FRONT_INVENTORY_PRESENCE_ROUTE}" data-alert-clear-route="{FRONT_INVENTORY_ALERT_CLEAR_ROUTE}" data-category="{html.escape(view_model['selected_category'])}" data-view="{html.escape(active_view)}">
             <div class="frontinv-board-head">
               <div>
                 <span class="frontinv-tag">Leltár nézet</span>
@@ -4566,6 +4836,8 @@ def render_front_inventory_form(
         {view_switch_html}
         {admin_html if active_view == 'admin' else ''}
         {admin_session_html if active_view == 'admin' and session else ''}
+        {add_item_html if active_view == 'admin' and session else ''}
+        {frozen_stock_html if active_view == 'admin' and session else ''}
         {missing_html if active_view == 'admin' and session else ''}
         {inventory_html if active_view == 'leltar' else ''}
       </div>
@@ -4590,6 +4862,13 @@ def render_front_inventory_form(
     color: var(--frontinv-text);
     font-family: Manrope, sans-serif;
   }
+  .frontinv-manual-add { margin-top:16px; padding-top:14px; border-top:1px solid #d8e0ea; }
+  .frontinv-manual-add summary { font-weight:900; cursor:pointer; }
+  .frontinv-add-form { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-items:end; margin-top:14px; }
+  .frontinv-add-form label { display:grid; gap:6px; color:#475569; font-size:.78rem; font-weight:800; }
+  .frontinv-add-form input { width:100%; min-height:44px; padding:0 12px; border:1px solid #cbd8e4; border-radius:12px; font:inherit; }
+  .frontinv-add-form button { grid-column:1/-1; justify-self:end; }
+  @media (max-width:800px) { .frontinv-add-form { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   .frontinv-admin-stage {
     width: min(1280px, calc(100% - 28px));
     margin: 16px auto 42px;
@@ -5338,13 +5617,14 @@ def render_front_inventory_form(
   const presenceRoute = root.getAttribute("data-presence-route");
   const alertClearRoute = root.getAttribute("data-alert-clear-route");
   const categoryValue = root.getAttribute("data-category") || "";
+  const activeView = root.getAttribute("data-view") || "admin";
   if (!stateRoute) {
     return;
   }
 
   const categoryRow = root.querySelector(".frontinv-category-row");
   const categoryChips = Array.from(root.querySelectorAll(".frontinv-chip"));
-  const rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
+  let rowElements = Array.from(root.querySelectorAll("[data-frontinv-row]"));
   const inputFields = Array.from(root.querySelectorAll("[data-frontinv-input]"));
   const searchInput = root.querySelector("[data-frontinv-search]");
   const scrollStorageKey = "frontinv-category-scroll";
@@ -5507,6 +5787,17 @@ def render_front_inventory_form(
     syncRowState(row);
   };
 
+  const removeClosedRow = (row) => {
+    if (!row) {
+      return;
+    }
+    if (row.dataset.frontinvCounted === "1") {
+      countedRowCount -= 1;
+    }
+    row.remove();
+    rowElements = rowElements.filter((item) => item !== row);
+  };
+
   const syncCurrentCategoryState = () => {
     if (!currentCategoryChip) {
       return;
@@ -5546,6 +5837,9 @@ def render_front_inventory_form(
         const row = input.closest("[data-frontinv-row]");
         setRowValue(row, payload && Object.prototype.hasOwnProperty.call(payload, "value") ? payload.value : "");
         input.value = "";
+        if (activeView === "leltar" && payload && payload.closed) {
+          removeClosedRow(row);
+        }
         syncCurrentCategoryState();
       })
       .catch(() => {
@@ -5602,10 +5896,13 @@ def render_front_inventory_form(
       const remoteRowInputs = payload && payload.row_inputs && typeof payload.row_inputs === "object"
         ? payload.row_inputs
         : {};
-      rowElements.forEach((row) => {
+      rowElements.slice().forEach((row) => {
         const rowId = row.getAttribute("data-row-id") || "";
-        const nextValue = Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId) ? String(remoteRowInputs[rowId] || "") : "";
-        setRowValue(row, nextValue);
+        if (Object.prototype.hasOwnProperty.call(remoteRowInputs, rowId)) {
+          setRowValue(row, String(remoteRowInputs[rowId] || ""));
+        } else if (activeView === "leltar") {
+          removeClosedRow(row);
+        }
       });
       syncCurrentCategoryState();
       showAlert(payload && payload.worker_alert && typeof payload.worker_alert === "object" ? payload.worker_alert : null);
@@ -5616,7 +5913,7 @@ def render_front_inventory_form(
       const formData = new URLSearchParams();
       formData.set("token", presenceToken || "");
       formData.set("category", categoryValue);
-      formData.set("view", "leltar");
+      formData.set("view", activeView);
       if (clear) {
         formData.set("clear", "1");
       }
@@ -5913,6 +6210,121 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             body = render_matt_inventory_form()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == INVENTORY_ANALYTICS_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                period_days = int(str(query.get("period", ["90"])[0] or "90"))
+            except ValueError:
+                period_days = 90
+            body = render_inventory_analytics(period_days=period_days)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == INVENTORY_ANALYTICS_DOORS_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                period_days = int(str(query.get("period", ["90"])[0] or "90"))
+            except ValueError:
+                period_days = 90
+            body = render_inventory_analytics(period_days=period_days, dataset="doors")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+
+
+        if path == PART_WORKSTATION_ROUTE:
+            user = self.current_user()
+            body = render_part_workstation_page(
+                load_part_workstation_state(user.user_id),
+                user.display_name,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(DAMAGED_ITEMS_IMAGE_PREFIX + "/"):
+            image_path_parts = path[len(DAMAGED_ITEMS_IMAGE_PREFIX):].strip("/").split("/")
+            report_id = image_path_parts[0] if image_path_parts else ""
+            try:
+                image_index = int(image_path_parts[1]) if len(image_path_parts) > 1 else 0
+            except ValueError:
+                image_index = -1
+            image_payload = damaged_item_report_image(report_id, image_index)
+            if image_payload is None:
+                self.send_error(404)
+                return
+            body, content_type = image_payload
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "private, max-age=300")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == DAMAGED_ITEMS_WORKER_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            created = str(query.get("created", [""])[0] or "") == "1"
+            body = render_damaged_items_worker_page(
+                list_damaged_item_reports(),
+                self.current_user().display_name,
+                "A sérült elem bejelentése elkészült." if created else "",
+                created,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == DAMAGED_ITEMS_ADMIN_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            deleted = str(query.get("deleted", [""])[0] or "") == "1"
+            body = render_damaged_items_admin_page(
+                list_damaged_item_reports(),
+                self.current_user().display_name,
+                "A bejelentés törölve lett." if deleted else "",
+                deleted,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == INVENTORY_ANALYTICS_TEMPLATE_ROUTE:
+            template_path = DATA_DIR / "keszlet-elemzes-sablon.xlsx"
+            if not template_path.exists():
+                self.send_error(404)
+                return
+            body = template_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.send_header("Content-Disposition", "attachment; filename*=UTF-8''keszlet-elemzes-sablon.xlsx")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -7084,6 +7496,81 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        if path in {PART_WORKSTATION_SCAN_ROUTE, PART_WORKSTATION_RESET_ROUTE}:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 4096:
+                self.respond_json(413, {"ok": False, "error": "A kérés túl nagy."})
+                return
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8") or "{}")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self.respond_json(400, {"ok": False, "error": "Hibás JSON kérés."})
+                return
+            if not isinstance(payload, dict):
+                self.respond_json(400, {"ok": False, "error": "Hibás kérés."})
+                return
+            user_id = self.current_user().user_id
+            try:
+                state = (
+                    register_part_workstation_scan(user_id, payload.get("barcode", ""))
+                    if path == PART_WORKSTATION_SCAN_ROUTE
+                    else reset_part_workstation_state(user_id)
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.respond_json(200, {"ok": True, "state": state})
+            return
+
+        if path == DAMAGED_ITEMS_CREATE_ROUTE:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            fields, files = parse_damaged_item_multipart(self.headers, raw_body)
+            try:
+                create_damaged_item_report(
+                    created_by=fields.get("recorded_by", ""),
+                    note=fields.get("note", ""),
+                    responsible_person=fields.get("responsible_person", ""),
+                    images=files.get("damage_image", []),
+                    barcode=fields.get("barcode", ""),
+                    part_number=fields.get("part_number", ""),
+                    description=fields.get("description", ""),
+                    order_number=fields.get("order_number", ""),
+                    production_number=fields.get("production_number", ""),
+                )
+            except ValueError as exc:
+                body = render_damaged_items_worker_page(
+                    list_damaged_item_reports(),
+                    self.current_user().display_name,
+                    str(exc),
+                    False,
+                )
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.send_response(303)
+            self.send_header("Location", DAMAGED_ITEMS_WORKER_ROUTE + "?created=1")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if path.startswith(DAMAGED_ITEMS_ADMIN_DELETE_PREFIX + "/"):
+            report_id = path.rsplit("/", 1)[-1]
+            if not delete_damaged_item_report(report_id):
+                self.send_error(404)
+                return
+            self.send_response(303)
+            self.send_header("Location", DAMAGED_ITEMS_ADMIN_ROUTE + "?deleted=1")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         if path == ADMIN_MANUFACTURING_SHIPMENT_DATE_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
@@ -7772,9 +8259,69 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path in {INVENTORY_ANALYTICS_UPLOAD_ROUTE, INVENTORY_ANALYTICS_DOORS_UPLOAD_ROUTE}:
+            inventory_dataset = "doors" if path == INVENTORY_ANALYTICS_DOORS_UPLOAD_ROUTE else "parts"
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length > 31 * 1024 * 1024:
+                body = render_inventory_analytics("A feltöltés legfeljebb 30 MB lehet.", dataset=inventory_dataset)
+                self.send_response(413)
+            else:
+                raw_body = self.rfile.read(content_length)
+                uploaded_files = _extract_uploaded_files(self.headers, raw_body)
+                standard_upload = uploaded_files.get("inventory_file")
+                if standard_upload is None and not any(
+                    uploaded_files.get(key)
+                    for key in ("stock_file", "consumption_365_file", "consumption_90_file", "consumption_7_file")
+                ):
+                    body = render_inventory_analytics("Válassz ki legalább egy ERP-exportot.", dataset=inventory_dataset)
+                    self.send_response(400)
+                else:
+                    try:
+                        if standard_upload is not None:
+                            result = import_inventory_analytics_workbook(standard_upload[0], standard_upload[1])
+                            if result.get("duplicate"):
+                                message = result["warnings"][0]
+                            else:
+                                message = (
+                                    f"Sikeres adatfrissítés: {result['products']} cikk, {result['stock']} készletsor, "
+                                    f"{result['movements']} új mozgás és {result['orders']} nyitott rendelés."
+                                )
+                                if result.get("warnings"):
+                                    message += " " + " ".join(result["warnings"])
+                        else:
+                            result = import_erp_exports(uploaded_files, dataset=inventory_dataset)
+                            parts = [
+                                f"{item['type']}: {item['rows']} sor"
+                                + (" (már feldolgozva)" if item["duplicate"] else "")
+                                for item in result["reports"]
+                            ]
+                            message = "Sikeres ERP-adatfrissítés. " + " · ".join(parts)
+                        body = render_inventory_analytics(message, success=True, dataset=inventory_dataset)
+                        self.send_response(200)
+                    except Exception as exc:
+                        body = render_inventory_analytics(f"A feldolgozás nem sikerült: {exc}", dataset=inventory_dataset)
+                        self.send_response(400)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
-
-
+        if path in {INVENTORY_ANALYTICS_DISCONTINUED_ROUTE, INVENTORY_ANALYTICS_DOORS_DISCONTINUED_ROUTE}:
+            inventory_dataset = "doors" if path == INVENTORY_ANALYTICS_DOORS_DISCONTINUED_ROUTE else "parts"
+            content_length = int(self.headers.get("Content-Length", "0"))
+            form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            try:
+                set_inventory_item_discontinued(
+                    form_data.get("sku", ""),
+                    form_data.get("discontinued", "") in {"1", "true", "on"},
+                    dataset=inventory_dataset,
+                )
+                self.respond_json(200, {"ok": True})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            return
 
 
 
@@ -7869,6 +8416,54 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
             return
 
+        if path in {FRONT_INVENTORY_ADD_ROUTE, FRONT_INVENTORY_ADD_FILE_ROUTE}:
+            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
+            if session is None:
+                body = render_front_inventory_form("Nincs aktív frontleltár, amelyhez tételt lehetne hozzáadni.")
+                status = 404
+            else:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                limit = 16 * 1024 * 1024 if path == FRONT_INVENTORY_ADD_FILE_ROUTE else 16 * 1024
+                if content_length > limit:
+                    body = render_front_inventory_form("A kiegészítő kérés túl nagy.")
+                    status = 413
+                else:
+                    raw_body = self.rfile.read(content_length)
+                    try:
+                        if path == FRONT_INVENTORY_ADD_FILE_ROUTE:
+                            uploaded = _extract_uploaded_files(self.headers, raw_body).get("item_file")
+                            if uploaded is None:
+                                raise ValueError("Válassz ki egy Excel- vagy CSV-fájlt.")
+                            result = add_front_inventory_rows_from_file(session, uploaded[0], uploaded[1])
+                            message = f"{result['added']} új fronttétel hozzáadva."
+                            if result["duplicate"]:
+                                message += f" {result['duplicate']} már szerepelt."
+                            if result["invalid"]:
+                                message += f" {result['invalid']} hiányos vagy hibás sor kimaradt."
+                        else:
+                            fields = _parse_urlencoded_body(raw_body)
+                            row = add_front_inventory_row(
+                                session, fields.get("part_number", ""), fields.get("description", ""),
+                                fields.get("stock_qty", "0"), fields.get("color", ""),
+                            )
+                            message = f"A fronttétel hozzáadva: {row['part_number']}."
+                        save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+                        body = render_front_inventory_form(message, success=True)
+                        status = 200
+                    except ValueError as exc:
+                        body = render_front_inventory_form(str(exc))
+                        status = 400
+                    except Exception as exc:
+                        body = render_front_inventory_form(f"A kiegészítés nem sikerült: {exc}")
+                        status = 500
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == FOIL_ROLL_INVENTORY_PROCESS_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length > 31 * 1024 * 1024:
@@ -7921,6 +8516,94 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_json(500, {"ok": False, "error": f"A mentés nem sikerült: {exc}"})
             return
 
+        frozen_refresh_routes = {
+            FRONT_INVENTORY_REFRESH_STOCK_ROUTE: ("front", FRONT_INVENTORY_SESSION_PATH),
+            MATERIAL_INVENTORY_REFRESH_STOCK_ROUTE: ("material", MATERIAL_INVENTORY_SESSION_PATH),
+            SEMIFINISHED_INVENTORY_REFRESH_STOCK_ROUTE: ("semifinished", SEMIFINISHED_INVENTORY_SESSION_PATH),
+            SEMIFINISHED_FRONT_INVENTORY_REFRESH_STOCK_ROUTE: (
+                "semifinished_front", SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH
+            ),
+        }
+        if path in frozen_refresh_routes:
+            refresh_kind, refresh_session_path = frozen_refresh_routes[path]
+            is_front_refresh = refresh_kind == "front"
+            session = (
+                load_front_inventory_session_from_path(refresh_session_path)
+                if is_front_refresh
+                else load_material_inventory_session_from_path(refresh_session_path)
+            )
+
+            def render_refresh_page(refresh_message: str, refresh_success: bool = False) -> bytes:
+                if is_front_refresh:
+                    return render_front_inventory_form(message=refresh_message, success=refresh_success)
+                return render_material_inventory_form(
+                    message=refresh_message,
+                    success=refresh_success,
+                    inventory_kind=refresh_kind,
+                )
+
+            if session is None:
+                body = render_refresh_page("Nincs aktív leltár, amelynek a befagyasztott készletét frissíteni lehetne.")
+                status = 404
+            else:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length > 31 * 1024 * 1024:
+                    body = render_refresh_page("A feltöltött fájl legfeljebb 30 MB lehet.")
+                    status = 413
+                else:
+                    raw_body = self.rfile.read(content_length)
+                    files = _extract_uploaded_files(self.headers, raw_body)
+                    stock_file = files.get("stock_file")
+                    if stock_file is None:
+                        body = render_refresh_page("Válassz ki egy Excel- vagy CSV-fájlt.")
+                        status = 400
+                    else:
+                        stock_name, stock_bytes = stock_file
+                        allowed = (
+                            front_inventory_file_name_allowed(stock_name)
+                            if is_front_refresh
+                            else material_inventory_file_name_allowed(stock_name)
+                        )
+                        if not allowed:
+                            body = render_refresh_page("A befagyasztott készlet csak XLS, XLSX, XLSM vagy CSV lehet.")
+                            status = 400
+                        else:
+                            try:
+                                if is_front_refresh:
+                                    result = refresh_front_inventory_stock_quantities(
+                                        session, stock_name, stock_bytes
+                                    )
+                                    save_front_inventory_session_to_path(refresh_session_path, session)
+                                else:
+                                    result = refresh_material_inventory_book_quantities(
+                                        session, stock_name, stock_bytes, refresh_kind
+                                    )
+                                    save_material_inventory_session_to_path(refresh_session_path, session)
+                                message = (
+                                    f"A befagyasztott készlet frissítve: {result['matched']} egyező tétel, "
+                                    f"{result['changed']} módosított darabszám."
+                                )
+                                if result["missing"]:
+                                    message += (
+                                        f" {result['missing']} meglévő tétel nem szerepelt a fájlban; "
+                                        "ezek korábbi értékét változatlanul hagytuk."
+                                    )
+                                body = render_refresh_page(message, True)
+                                status = 200
+                            except ValueError as exc:
+                                body = render_refresh_page(str(exc))
+                                status = 400
+                            except Exception as exc:
+                                body = render_refresh_page(f"A befagyasztott készlet frissítése nem sikerült: {exc}")
+                                status = 500
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == MATERIAL_INVENTORY_PROCESS_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
@@ -7971,15 +8654,23 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MATERIAL_INVENTORY_ADD_ROUTE:
-            session = load_material_inventory_session_from_path(MATERIAL_INVENTORY_SESSION_PATH)
+        if path in {MATERIAL_INVENTORY_ADD_ROUTE, SEMIFINISHED_INVENTORY_ADD_ROUTE, SEMIFINISHED_FRONT_INVENTORY_ADD_ROUTE}:
+            add_inventory_kind, add_session_path, add_inventory_name = {
+                MATERIAL_INVENTORY_ADD_ROUTE: ("material", MATERIAL_INVENTORY_SESSION_PATH, "anyagraktár"),
+                SEMIFINISHED_INVENTORY_ADD_ROUTE: ("semifinished", SEMIFINISHED_INVENTORY_SESSION_PATH, "félkész raktár"),
+                SEMIFINISHED_FRONT_INVENTORY_ADD_ROUTE: ("semifinished_front", SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH, "félkész front raktár"),
+            }[path]
+            session = load_material_inventory_session_from_path(add_session_path)
             if session is None:
-                body = render_material_inventory_form("Nincs aktív anyagraktár-leltár, amit ki lehetne egészíteni.")
+                body = render_material_inventory_form(
+                    f"Nincs aktív {add_inventory_name}-leltár, amit ki lehetne egészíteni.",
+                    inventory_kind=add_inventory_kind,
+                )
                 status = 404
             else:
                 content_length = int(self.headers.get("Content-Length", "0"))
                 if content_length > 16 * 1024:
-                    body = render_material_inventory_form("A kérés túl nagy.")
+                    body = render_material_inventory_form("A kérés túl nagy.", inventory_kind=add_inventory_kind)
                     status = 413
                 else:
                     form_data = _parse_urlencoded_body(self.rfile.read(content_length))
@@ -7992,14 +8683,15 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                             form_data.get("book_qty", ""),
                             form_data.get("book_unit", ""),
                         )
-                        save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
+                        save_material_inventory_session_to_path(add_session_path, session)
                         body = render_material_inventory_form(
                             f"A tétel hozzáadva: {row['description']} ({row['part_number']}).",
                             success=True,
+                            inventory_kind=add_inventory_kind,
                         )
                         status = 200
                     except ValueError as exc:
-                        body = render_material_inventory_form(str(exc))
+                        body = render_material_inventory_form(str(exc), inventory_kind=add_inventory_kind)
                         status = 400
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -8009,15 +8701,25 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if path == MATERIAL_INVENTORY_ADD_FILE_ROUTE:
-            session = load_material_inventory_session_from_path(MATERIAL_INVENTORY_SESSION_PATH)
+        if path in {MATERIAL_INVENTORY_ADD_FILE_ROUTE, SEMIFINISHED_INVENTORY_ADD_FILE_ROUTE, SEMIFINISHED_FRONT_INVENTORY_ADD_FILE_ROUTE}:
+            add_inventory_kind, add_session_path, add_inventory_name = {
+                MATERIAL_INVENTORY_ADD_FILE_ROUTE: ("material", MATERIAL_INVENTORY_SESSION_PATH, "anyagraktár"),
+                SEMIFINISHED_INVENTORY_ADD_FILE_ROUTE: ("semifinished", SEMIFINISHED_INVENTORY_SESSION_PATH, "félkész raktár"),
+                SEMIFINISHED_FRONT_INVENTORY_ADD_FILE_ROUTE: ("semifinished_front", SEMIFINISHED_FRONT_INVENTORY_SESSION_PATH, "félkész front raktár"),
+            }[path]
+            session = load_material_inventory_session_from_path(add_session_path)
             if session is None:
-                body = render_material_inventory_form("Nincs aktív anyagraktár-leltár, amit ki lehetne egészíteni.")
+                body = render_material_inventory_form(
+                    f"Nincs aktív {add_inventory_name}-leltár, amit ki lehetne egészíteni.",
+                    inventory_kind=add_inventory_kind,
+                )
                 status = 404
             else:
                 content_length = int(self.headers.get("Content-Length", "0"))
                 if content_length > 16 * 1024 * 1024:
-                    body = render_material_inventory_form("A kiegészítő lista legfeljebb 15 MB lehet.")
+                    body = render_material_inventory_form(
+                        "A kiegészítő lista legfeljebb 15 MB lehet.", inventory_kind=add_inventory_kind
+                    )
                     status = 413
                 else:
                     raw_body = self.rfile.read(content_length)
@@ -8025,7 +8727,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     fields = _extract_multipart_fields(self.headers, raw_body)
                     uploaded = files.get("item_file")
                     if uploaded is None:
-                        body = render_material_inventory_form("Válassz ki egy Excel- vagy CSV-fájlt.")
+                        body = render_material_inventory_form(
+                            "Válassz ki egy Excel- vagy CSV-fájlt.", inventory_kind=add_inventory_kind
+                        )
                         status = 400
                     else:
                         try:
@@ -8036,7 +8740,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                                 fields.get("icg_code", ""),
                                 fields.get("book_unit", "m"),
                             )
-                            save_material_inventory_session_to_path(MATERIAL_INVENTORY_SESSION_PATH, session)
+                            save_material_inventory_session_to_path(add_session_path, session)
                             message = f"{result['added']} új tétel hozzáadva."
                             if result["duplicate"]:
                                 message += f" {result['duplicate']} már szerepelt, ezért kimaradt."
@@ -8044,13 +8748,18 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                                 message += f" {result['excluded']} kizárt sor kimaradt."
                             if result["invalid"]:
                                 message += f" {result['invalid']} hiányos sor kimaradt."
-                            body = render_material_inventory_form(message, success=True)
+                            body = render_material_inventory_form(
+                                message, success=True, inventory_kind=add_inventory_kind
+                            )
                             status = 200
                         except ValueError as exc:
-                            body = render_material_inventory_form(str(exc))
+                            body = render_material_inventory_form(str(exc), inventory_kind=add_inventory_kind)
                             status = 400
                         except Exception as exc:
-                            body = render_material_inventory_form(f"A tétellista feldolgozása nem sikerült: {exc}")
+                            body = render_material_inventory_form(
+                                f"A tétellista feldolgozása nem sikerült: {exc}",
+                                inventory_kind=add_inventory_kind,
+                            )
                             status = 500
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -8348,27 +9057,51 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 else "semifinished"
             )
             config = _inventory_recount_config(kind)
-            session = config["load"](config["session_path"])
-            if session is None:
-                self.send_error(404)
-                return
             content_length = int(self.headers.get("Content-Length", "0"))
             form_data = _parse_urlencoded_body(self.rfile.read(content_length))
+            session_context = (
+                front_inventory_session_transaction(config["session_path"])
+                if kind == "front"
+                else nullcontext(config["load"](config["session_path"]))
+            )
             if path in {
                 ADMIN_FRONT_INVENTORY_SELECTION_ROUTE,
                 ADMIN_MATERIAL_INVENTORY_SELECTION_ROUTE,
                 ADMIN_SEMIFINISHED_INVENTORY_SELECTION_ROUTE,
                 ADMIN_SEMIFINISHED_FRONT_INVENTORY_SELECTION_ROUTE,
             }:
-                success, message = set_recount_selection(session, form_data.get("row_id", ""), form_data.get("selected", "") == "1")
-                if success:
-                    config["save"](config["session_path"], session)
+                with session_context as session:
+                    if session is None:
+                        self.send_error(404)
+                        return
+                    if "closed" in form_data:
+                        success, message = set_recount_closed(
+                            session,
+                            form_data.get("row_id", ""),
+                            form_data.get("closed", "") == "1",
+                            kind,
+                        )
+                    else:
+                        selection_view = "recount" if form_data.get("view") == "recount" else "check"
+                        success, message = set_recount_selection(
+                            session,
+                            form_data.get("row_id", ""),
+                            form_data.get("selected", "") == "1",
+                            selection_view,
+                            kind,
+                        )
+                    if success:
+                        config["save"](config["session_path"], session)
                 self.respond_json(200 if success else 400, {"ok": success, "error": message})
                 return
-            success, message, _ = send_group_to_recount(session, form_data.get("group", ""), kind)
-            if success:
-                config["save"](config["session_path"], session)
             return_view = "recount" if form_data.get("return_view") == "recount" else "check"
+            with session_context as session:
+                if session is None:
+                    self.send_error(404)
+                    return
+                success, message, _ = send_group_to_recount(session, form_data.get("group", ""), kind, return_view)
+                if success:
+                    config["save"](config["session_path"], session)
             body = render_inventory_recount_admin(kind, return_view, message, success)
             self.send_response(200 if success else 400)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -8505,25 +9238,42 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
         if path == FRONT_INVENTORY_STATE_ROUTE:
-            session = load_front_inventory_session_from_path(FRONT_INVENTORY_SESSION_PATH)
-            if session is None:
-                self.send_error(404)
-                return
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
             form_data = _parse_urlencoded_body(raw_body)
-            if form_data.get("recount") == "1":
-                success, message, recount_value = update_recount_input(
-                    session, form_data.get("row_id", ""), form_data.get("value", ""), form_data.get("mode", "set"), "front"
-                )
-            else:
-                success, message = update_row_input(
-                    session,
-                    form_data.get("row_id", ""),
-                    form_data.get("value", ""),
-                    form_data.get("mode", ""),
-                )
-                recount_value = ""
+            with front_inventory_session_transaction(FRONT_INVENTORY_SESSION_PATH) as session:
+                if session is None:
+                    self.send_error(404)
+                    return
+                if form_data.get("recount") == "1":
+                    success, message, recount_value = update_recount_input(
+                        session, form_data.get("row_id", ""), form_data.get("value", ""), form_data.get("mode", "set"), "front"
+                    )
+                else:
+                    success, message = update_row_input(
+                        session,
+                        form_data.get("row_id", ""),
+                        form_data.get("value", ""),
+                        form_data.get("mode", ""),
+                    )
+                    recount_value = ""
+                if success:
+                    save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
+                    updated_row = next(
+                        (
+                            row
+                            for row in session.get("rows", [])
+                            if isinstance(row, dict) and str(row.get("row_id", "")) == str(form_data.get("row_id", ""))
+                        ),
+                        {},
+                    )
+                    payload = json.dumps(
+                        {
+                            "value": recount_value if form_data.get("recount") == "1" else str(updated_row.get("input_qty", "")),
+                            "closed": form_data.get("recount") != "1" and inventory_row_values(updated_row, "front")["closed"],
+                        },
+                        ensure_ascii=False,
+                    ).encode("utf-8")
             if not success:
                 self.send_response(400)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -8532,16 +9282,6 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(payload)
                 return
-            save_front_inventory_session_to_path(FRONT_INVENTORY_SESSION_PATH, session)
-            updated_row = next(
-                (
-                    row
-                    for row in session.get("rows", [])
-                    if isinstance(row, dict) and str(row.get("row_id", "")) == str(form_data.get("row_id", ""))
-                ),
-                {},
-            )
-            payload = json.dumps({"value": recount_value if form_data.get("recount") == "1" else str(updated_row.get("input_qty", ""))}, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -8560,7 +9300,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 form_data.get("view", "leltar"),
                 clear=form_data.get("clear", "") == "1",
             )
-            sync_payload = _front_inventory_build_sync_payload(form_data.get("category", ""))
+            sync_payload = _front_inventory_build_sync_payload(
+                form_data.get("category", ""),
+                hide_closed=form_data.get("view", "leltar") == "leltar",
+            )
             self.respond_json(200, {"ok": True, "active_categories": active_categories, **sync_payload})
             return
 
@@ -8776,6 +9519,24 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
             result = rebuild_procurement_parts(job_id, _extract_uploaded_files(self.headers, raw_body))
+            if result is None:
+                self.send_error(404)
+                return
+
+            status_code, body = result
+            self.send_response(status_code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path.startswith(NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX + "/"):
+            job_id = path[len(NETTFRONT_PROCUREMENT_REMOVE_ROW_PREFIX) + 1 :]
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length)
+            result = remove_procurement_job_row(job_id, _parse_urlencoded_body(raw_body))
             if result is None:
                 self.send_error(404)
                 return

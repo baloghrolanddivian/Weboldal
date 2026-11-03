@@ -7,6 +7,8 @@ This module is included in the pydoc surface for the NettFront procurement workf
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import uuid
 from pathlib import Path
@@ -42,6 +44,42 @@ def procurement_download_payload(job_id: str, artifact: str) -> tuple[bytes, str
         ),
     }
     return download_payload(procurement_runtime_dir(), job_id, artifact, artifact_map)
+
+
+def remove_procurement_row(job_dir: Path, metadata: dict, row_index: int) -> tuple[dict, str]:
+    """Remove one row from the persisted procurement CSV and rebuild its bundle."""
+    csv_path = job_dir / "rendeles_sima.csv"
+    if not csv_path.exists():
+        raise ValueError("A Beszerzés fájl nem található.")
+
+    text = csv_path.read_bytes().decode("utf-8-sig", errors="strict")
+    rows = [row for row in csv.reader(io.StringIO(text), delimiter=";") if any(str(value).strip() for value in row)]
+    if row_index < 0 or row_index >= len(rows):
+        raise ValueError("A kiválasztott beszerzési sor már nem található.")
+
+    removed_row = rows.pop(row_index)
+    removed_code = str(removed_row[0]).strip() if removed_row else ""
+    missing_codes = {str(code).strip() for code in metadata.get("missing_codes", []) if str(code).strip()}
+    if removed_code not in missing_codes:
+        raise ValueError("Csak hiányzó kódot tartalmazó sor távolítható el.")
+
+    remaining_codes = {str(row[0]).strip() for row in rows if row}
+    updated_metadata = {
+        **metadata,
+        "missing_codes": sorted(code for code in missing_codes if code in remaining_codes),
+    }
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+    writer.writerows(rows)
+    csv_path.write_bytes(buffer.getvalue().encode("utf-8-sig"))
+
+    metadata_path = job_dir / "metadata.json"
+    metadata_path.write_text(json.dumps(updated_metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    bundle_name = str(updated_metadata.get("bundle_name", "procurement-output.zip"))
+    bundle_files = ["invoice-output.csv", "rendeles_sima.csv", "metadata.json"]
+    (job_dir / bundle_name).write_bytes(create_bundle_archive(job_dir, bundle_files))
+    return updated_metadata, removed_code
 
 def persist_procurement_job(job_dir: Path, metadata: dict, artifacts, uploaded_parts_name: str = "", uploaded_parts_bytes: bytes | None = None) -> dict:
     """Handle persist procurement job logic for the NettFront workflows.
