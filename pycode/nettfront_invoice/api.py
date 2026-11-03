@@ -14,7 +14,7 @@ from .store import DuplicateInvoiceError, create_invoice, load_invoice, normaliz
 
 
 NETTFRONT_INVOICE_API_URL = os.getenv(
-    "NETTFRONT_INVOICE_API_URL", "http://2020.nettfront.hu:19000/api/invoices/Info"
+    "NETTFRONT_INVOICE_API_URL", "http://2020.nettfront.hu:56081/api/invoices/Info"
 )
 NETTFRONT_INVOICE_VENDOR_CODE = os.getenv("NETTFRONT_INVOICE_VENDOR_CODE", "DIVIAN-SZ")
 NETTFRONT_INVOICE_VENDOR_ID = os.getenv("NETTFRONT_INVOICE_VENDOR_ID", "105")
