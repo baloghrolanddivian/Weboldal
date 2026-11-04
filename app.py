@@ -384,6 +384,7 @@ from nettfront_invoice import (
     list_invoices,
     load_invoice,
     invoice_item_display,
+    invoice_reader_state,
     normalize_invoice_code,
     parse_batch_xml,
     record_open,
@@ -7307,6 +7308,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                     "ok": is_success,
                     "scan": scan_result,
                     "item": item_payload,
+                    "reader_state": invoice_reader_state(record),
                     "camera_raw": camera_result.get("raw", ""),
                 },
             )

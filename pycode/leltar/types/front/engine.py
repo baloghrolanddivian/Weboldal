@@ -760,16 +760,12 @@ def _fill_finalize_workbook(workbook: Workbook, report_rows: list[dict]) -> None
             sheet.column_dimensions[column].width = width
 
 
-<<<<<<< Updated upstream
-def build_front_inventory_view_model(session: dict, selected_category: str = "", sort_mode: str = "default", hide_closed: bool = False) -> dict:
-=======
 def build_front_inventory_view_model(
     session: dict,
     selected_category: str = "",
     sort_mode: str = "default",
     hide_closed: bool = False,
 ) -> dict:
->>>>>>> Stashed changes
     """Build the browser view model for front counting categories and rows."""
     finalized = str(session.get("phase")) == "finalized"
     source_rows = session.get("rows", [])
