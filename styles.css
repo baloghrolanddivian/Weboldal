@@ -1843,9 +1843,13 @@ body.nettfront-reader-page .site-shell {
 
 .reader {
   display: flex;
-  min-height: 100svh;
   flex-direction: column;
   padding: 24px 0;
+}
+
+.reader > * {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .reader > .reader-head {
@@ -1863,6 +1867,23 @@ body.nettfront-reader-page .site-shell {
 .reader-head h1 {
   margin-top: 5px;
   font-size: clamp(2rem, 6vw, 3.5rem);
+  overflow-wrap: anywhere;
+}
+
+.reader-head > div:first-child {
+  min-width: 0;
+}
+
+.reader-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.reader-operator {
+  margin: 8px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .reader-card {
@@ -1885,9 +1906,7 @@ body.nettfront-reader-page .site-shell {
 .reader-last-item {
   display: flex;
   min-height: 0;
-  flex: 1 1 auto;
   flex-direction: column;
-  justify-content: center;
   padding: clamp(22px, 3.2vw, 32px);
   background:
     radial-gradient(circle at 100% 0, color-mix(in srgb, var(--accent) 15%, transparent), transparent 38%),
@@ -2014,6 +2033,7 @@ body.nettfront-reader-page .site-shell {
   font-family: "Space Grotesk", sans-serif;
   font-size: clamp(1.25rem, 2.6vw, 1.75rem);
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .reader-item-fact.is-color strong {
@@ -2063,7 +2083,7 @@ body.nettfront-reader-page .site-shell {
 
 .reader .status strong {
   font-family: "Space Grotesk", sans-serif;
-  font-size: 0.78rem;
+  font-size: clamp(1rem, 2vw, 1.25rem);
   letter-spacing: 0.12em;
 }
 
@@ -2113,33 +2133,21 @@ body.nettfront-reader-page .site-shell {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-.reader-controls-card {
-  flex: 0 0 auto;
-  margin-top: 12px;
-  padding: 14px 18px;
+.reader-recent-scans .nf-scroll table {
+  min-width: 620px;
+  font-size: 0.85rem;
 }
 
-.reader-controls-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+.reader-invoice-items .ok {
+  color: var(--accent);
 }
 
-.reader-controls-head h2 {
-  font-size: 1rem;
+.reader-invoice-items .warn {
+  color: var(--accent-warm);
 }
 
-.reader-controls-head p {
-  margin: 3px 0 0;
-}
-
-.reader-controls-card .controls {
-  margin: 0;
-}
-
-.reader-controls-card button {
-  min-height: 40px;
+.reader-invoice-items .bad {
+  color: color-mix(in srgb, #ff5252 76%, var(--text));
 }
 
 .reader .value {
@@ -2190,6 +2198,16 @@ body.nettfront-reader-page .site-shell {
   }
 }
 
+@media (max-width: 1024px) {
+  .reader-item-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reader-item-description {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 760px) {
   .nf-stage {
     padding: 48px 0 64px;
@@ -2216,14 +2234,12 @@ body.nettfront-reader-page .site-shell {
     grid-column: 1 / -1;
   }
 
-  .reader > .reader-head button,
   .reader-card .reader-head > label {
     width: 100%;
   }
 
-  .reader-controls-head {
-    align-items: stretch;
-    flex-direction: column;
+  .reader-actions button {
+    flex: 1;
   }
 }
 

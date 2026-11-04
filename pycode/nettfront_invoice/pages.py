@@ -127,6 +127,36 @@ def _item_rows(record: dict) -> str:
     return "".join(result)
 
 
+def _invoice_items_section(record: dict, *, reader: bool = False) -> str:
+    classes = "reader-card reader-invoice-items" if reader else "nf-card"
+    rows = _item_rows(record) or '<tr><td colspan="10" class="muted">Nincs számlatétel.</td></tr>'
+    return f'''<section class="{classes}" aria-labelledby="invoice-items-title"><h2 id="invoice-items-title">Számlatételek</h2><div class="nf-scroll" role="region" aria-label="Számlatételek" tabindex="0"><table><thead><tr><th>Batch</th><th>Modell + fronttípus</th><th>Méret</th><th>Szín</th><th>Várt db</th><th>Olvasott db</th><th>Eltérés</th><th>Saját kód</th><th>Saját leírás</th><th>ICN-ek</th></tr></thead><tbody id="invoice-items">{rows}</tbody></table></div></section>'''
+
+
+def invoice_reader_state(record: dict) -> dict[str, str]:
+    """Render live reader tables without exposing the detailed scan log."""
+    recent = []
+    for entry in reversed(record.get("scan_history", [])):
+        if not isinstance(entry, dict) or entry.get("result") not in {"success", "warning"}:
+            continue
+        item_index = record.get("icn_index", {}).get(str(entry.get("icn", "")))
+        try:
+            item = record.get("items", [])[int(item_index)] if item_index is not None else {}
+        except (IndexError, TypeError, ValueError):
+            item = {}
+        recent.append(
+            f'<tr><td>{_e(entry.get("time"))}</td><td>{_e(_display_model(item))}</td>'
+            f'<td>{_e(item.get("meret"))}</td><td>{_e(_display_color(item))}</td>'
+            f'<td>{_e(entry.get("quantity"))}</td><td>{_e(entry.get("icn"))}</td></tr>'
+        )
+        if len(recent) == 3:
+            break
+    return {
+        "recent_scans": "".join(recent) or '<tr><td colspan="6" class="muted">Még nincs sikeres beolvasás.</td></tr>',
+        "invoice_items": _item_rows(record) or '<tr><td colspan="10" class="muted">Nincs számlatétel.</td></tr>',
+    }
+
+
 def render_invoice(record: dict, message: str = "", *, read_only: bool = False) -> bytes:
     code = str(record.get("invoice_code", ""))
     missing = len(record.get("missing_codes", []))
@@ -159,7 +189,7 @@ def render_invoice(record: dict, message: str = "", *, read_only: bool = False) 
     content = f"""{notice}{mode_notice}<section class="nf-card"><span class="nf-pill">{_e(record.get('status'))}</span><h2>{_e(code)}</h2><p>Számla dátuma: {_e(record.get('invoice_date')) or 'nincs adat'} · Létrehozva: {_e(record.get('created_at'))} · Megnyitotta: {_e(record.get('opened_by'))}</p><p class="muted">Mentett fájl: {_e(record.get('saved_file_name'))}</p></section>
 <section class="nf-card"><h2>Batch XML és ICN-k</h2>{xml_summary}</section>
 <section class="nf-card"><h2>ICN beolvasás</h2><p class="muted">A beolvasás külön ablakban fut. A kamera automatikusan kapja a triggert; külön megerősítés nincs.</p>{scanner_link}</section>
-<section class="nf-card"><h2>Számlatételek</h2><div class="nf-scroll"><table><thead><tr><th>Batch</th><th>Modell + fronttípus</th><th>Méret</th><th>Szín</th><th>Várt db</th><th>Olvasott db</th><th>Eltérés</th><th>Saját kód</th><th>Saját leírás</th><th>ICN-ek</th></tr></thead><tbody>{_item_rows(record)}</tbody></table></div></section>{history_section}{close}"""
+{_invoice_items_section(record)}{history_section}{close}"""
     return _layout(f"Nettfront számla · {code}", content)
 
 
@@ -171,12 +201,14 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
     endpoint_json = json.dumps(endpoint).replace("<", "\\u003c")
     code_json = json.dumps(code, ensure_ascii=False).replace("<", "\\u003c")
     can_read_json = "true" if record.get("status") == "opened" else "false"
+    reader_state = invoice_reader_state(record)
     return f'''<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Beolvasás · {_e(code)}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"><link rel="stylesheet" href="/styles.css"></head><body class="nettfront-reader-page"><div class="site-shell"><div class="ambient ambient-one"></div><div class="ambient ambient-two"></div><div class="grid-overlay"></div><main class="reader"><header class="reader-head"><div><small>NETTFRONT SZÁMLA</small><h1>{_e(code)}</h1></div><button type="button" onclick="window.close()">Ablak bezárása</button></header>
+<title>Beolvasás · {_e(code)}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"><link rel="stylesheet" href="/styles.css"></head><body class="nettfront-reader-page"><div class="site-shell"><div class="ambient ambient-one"></div><div class="ambient ambient-two"></div><div class="grid-overlay"></div><main class="reader"><header class="reader-head"><div><small>NETTFRONT SZÁMLA</small><h1>{_e(code)}</h1><p id="operator-info" class="reader-operator hidden">Felhasználó: <strong id="operator-label"></strong></p></div><div class="reader-actions"><button id="pause" class="hidden" type="button" aria-pressed="false">Szünet</button><button type="button" onclick="window.close()">Ablak bezárása</button></div></header>
 <section id="identity-card" class="reader-card hidden"><h2>Beolvasó azonosítása</h2><p class="muted">Ezt csak egyszer kell megadni ebben a böngésző-munkamenetben.</p><form id="identity-form"><label>Név / azonosító<input id="operator-input" maxlength="100" required autocomplete="name"></label><p><button>Beolvasás indítása</button></p></form></section>
-<section id="feedback-card" class="reader-feedback hidden"><div id="status" class="status working" role="status" aria-live="assertive"><strong id="status-title">VÁRAKOZÁS</strong><span id="status-message">Még nincs beolvasási eredmény.</span></div><p id="camera-activity" class="reader-activity" aria-live="polite">Kamera előkészítése…</p></section>
+<section id="feedback-card" class="reader-feedback hidden"><div id="status" class="status working" role="status" aria-live="assertive"><strong id="status-title">VÁRAKOZÁS</strong></div><p id="camera-activity" class="reader-activity" aria-live="polite">Kamera előkészítése…</p></section>
 <section id="item-card" class="reader-card reader-last-item hidden is-empty" aria-live="polite"><header class="reader-item-head"><div><span class="reader-item-kicker">Legutóbbi beolvasott tétel</span><h2 id="item-model">—</h2></div></header><div class="reader-item-facts"><div class="reader-item-fact is-color"><small>Szín</small><strong id="item-color">—</strong></div><div class="reader-item-fact is-size"><small>Méret</small><strong id="item-size">—</strong></div></div><div class="reader-item-details"><label class="reader-item-quantity"><small>Darabszám</small><input id="item-qty" type="number" min="1" max="10000" value="1" inputmode="numeric" aria-label="A következő beolvasás darabszáma"></label><div class="value"><small>Saját kód</small><strong id="item-code">—</strong></div><div class="value reader-item-description"><small>Saját leírás</small><strong id="item-description">API TODO</strong></div><div class="value"><small>ICN</small><strong id="item-icn">—</strong></div></div></section>
-<section id="reader-card" class="reader-card reader-controls-card hidden"><div class="reader-controls-head"><div><h2>Automatikus kameraolvasás</h2><p class="muted">Felhasználó: <strong id="operator-label"></strong></p></div><p class="controls"><button id="pause" type="button">Szünet</button><button id="change-user" type="button">Felhasználó váltása</button></p></div></section>
+<section class="reader-card reader-recent-scans" aria-labelledby="recent-scans-title"><h2 id="recent-scans-title">Legutóbbi 3 sikeres beolvasás</h2><div class="nf-scroll" role="region" aria-label="Legutóbbi sikeres beolvasások" tabindex="0"><table><thead><tr><th>Idő</th><th>Modell + fronttípus</th><th>Méret</th><th>Szín</th><th>Db</th><th>ICN</th></tr></thead><tbody id="recent-scans">{reader_state["recent_scans"]}</tbody></table></div></section>
+{_invoice_items_section(record, reader=True)}
 </main></div><script src="/script.js"></script><script>
 (() => {{
   const endpoint = {endpoint_json};
@@ -185,12 +217,10 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
   const operatorKey = "nettfront_invoice_operator";
   const initialOperator = {initial_operator_json};
   const identityCard = document.getElementById("identity-card");
-  const readerCard = document.getElementById("reader-card");
   const feedbackCard = document.getElementById("feedback-card");
   const itemCard = document.getElementById("item-card");
   const status = document.getElementById("status");
   const statusTitle = document.getElementById("status-title");
-  const statusMessage = document.getElementById("status-message");
   const cameraActivity = document.getElementById("camera-activity");
   const pauseButton = document.getElementById("pause");
   let operator = initialOperator.trim() || sessionStorage.getItem(operatorKey) || "";
@@ -199,18 +229,17 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
   let retryTimer = 0;
   if (initialOperator) history.replaceState(null, "", location.pathname);
 
-  function showIdentity() {{ running = false; clearTimeout(retryTimer); readerCard.classList.add("hidden"); feedbackCard.classList.add("hidden"); itemCard.classList.add("hidden"); identityCard.classList.remove("hidden"); document.getElementById("operator-input").value = operator; document.getElementById("operator-input").focus(); }}
-  function setStatus(message, kind) {{
-    const titles = {{success:"SIKERES BEOLVASÁS", warning:"FIGYELMEZTETÉS", failed:"SIKERTELEN BEOLVASÁS", working:"VÁRAKOZÁS"}};
-    statusTitle.textContent = titles[kind] || titles.failed;
-    statusMessage.textContent = message;
-    status.className = "status " + kind;
+  function showIdentity() {{ running = false; clearTimeout(retryTimer); pauseButton.classList.add("hidden"); feedbackCard.classList.add("hidden"); itemCard.classList.add("hidden"); identityCard.classList.remove("hidden"); document.getElementById("operator-input").value = operator; document.getElementById("operator-input").focus(); }}
+  function setStatus(kind) {{
+    const success = kind === "success" || kind === "warning";
+    statusTitle.textContent = success ? "SIKERES" : "SIKERTELEN";
+    status.className = "status " + (success ? "success" : "failed");
   }}
   function setActivity(message) {{ cameraActivity.textContent = message; }}
-  function showItem(payload, result) {{
+  function showItem(payload) {{
     if (!payload) return;
     itemCard.classList.remove("hidden", "is-empty", "is-updated");
-    itemCard.dataset.result = result || "success";
+    itemCard.dataset.result = "success";
     document.getElementById("item-icn").textContent = payload.icn || "—";
     document.getElementById("item-model").textContent = payload.model || "—";
     document.getElementById("item-size").textContent = payload.size || "—";
@@ -225,33 +254,41 @@ def render_reader(record: dict, initial_operator: str = "") -> bytes:
   async function trigger() {{
     if (!running || inFlight) return;
     inFlight = true;
+    let retryDelay = 2000;
     setActivity("Kamera trigger elküldve — várakozás az ICN-re…");
     try {{
       const response = await fetch(endpoint, {{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{operator,quantity:document.getElementById("item-qty").value,invoice_code:invoiceCode}})}});
       const payload = await response.json();
       const scan = payload.scan || {{}};
-      if (scan.result === "waiting") setActivity(scan.message || "Várakozás a következő ICN-re…");
+      if (scan.result === "waiting") setActivity("Várakozás a következő ICN-re…");
       else {{
-        setStatus(scan.message || payload.error || "Ismeretlen kamera-válasz.", scan.result === "success" ? "success" : scan.result === "warning" ? "warning" : "failed");
+        setStatus(scan.result);
         setActivity("Az automatikus beolvasás folytatódik.");
       }}
-      if (payload.item && (scan.result === "success" || scan.result === "warning")) showItem(payload.item, scan.result);
-      schedule(response.ok ? 700 : 1800);
+      if (payload.item && (scan.result === "success" || scan.result === "warning")) showItem(payload.item);
+      if (payload.reader_state) {{
+        document.getElementById("recent-scans").innerHTML = payload.reader_state.recent_scans;
+        document.getElementById("invoice-items").innerHTML = payload.reader_state.invoice_items;
+      }}
+      retryDelay = response.ok ? 700 : 1800;
     }} catch (error) {{
-      setStatus("A modul nem érhető el. A beolvasás megállt, újrapróbálkozás folyamatban; ne folytasd kézzel.", "failed");
-      setActivity("Kapcsolódási hiba — automatikus újrapróbálkozás…");
-      schedule(2000);
-    }} finally {{ inFlight = false; }}
+      console.error("NettFront beolvasási hiba", error);
+      setStatus("failed");
+      setActivity("Automatikus újrapróbálkozás…");
+    }} finally {{
+      inFlight = false;
+      if (!running) setActivity("A beolvasás szünetel.");
+      schedule(retryDelay);
+    }}
   }}
   function start() {{
     operator = operator.trim(); if (!operator) return showIdentity();
-    sessionStorage.setItem(operatorKey, operator); identityCard.classList.add("hidden"); feedbackCard.classList.remove("hidden"); itemCard.classList.remove("hidden"); readerCard.classList.remove("hidden"); document.getElementById("operator-label").textContent = operator; running = true; pauseButton.textContent = "Szünet"; trigger();
+    sessionStorage.setItem(operatorKey, operator); identityCard.classList.add("hidden"); feedbackCard.classList.remove("hidden"); itemCard.classList.remove("hidden"); pauseButton.classList.remove("hidden"); document.getElementById("operator-info").classList.remove("hidden"); document.getElementById("operator-label").textContent = operator; running = true; pauseButton.textContent = "Szünet"; trigger();
   }}
   document.getElementById("identity-form").addEventListener("submit", event => {{ event.preventDefault(); operator = document.getElementById("operator-input").value; start(); }});
-  pauseButton.addEventListener("click", () => {{ running = !running; pauseButton.textContent = running ? "Szünet" : "Folytatás"; setActivity(running ? "Beolvasás folytatása…" : "A beolvasás szünetel."); if (running) trigger(); }});
-  document.getElementById("change-user").addEventListener("click", () => {{ sessionStorage.removeItem(operatorKey); operator = ""; showIdentity(); }});
+  pauseButton.addEventListener("click", () => {{ running = !running; clearTimeout(retryTimer); pauseButton.textContent = running ? "Szünet" : "Folytatás"; pauseButton.setAttribute("aria-pressed", String(!running)); setActivity(running ? "Beolvasás folytatása…" : "A beolvasás szünetel."); if (running) trigger(); }});
   window.addEventListener("beforeunload", () => clearTimeout(retryTimer));
-  if (!canRead) {{ feedbackCard.classList.remove("hidden"); readerCard.classList.remove("hidden"); setStatus("Ez a számla le van zárva; a kamera nem indítható.", "failed"); pauseButton.disabled = true; }}
+  if (!canRead) {{ feedbackCard.classList.remove("hidden"); setStatus("failed"); pauseButton.disabled = true; setActivity("A beolvasás szünetel."); }}
   else if (operator) start(); else showIdentity();
 }})();
 </script></body></html>'''.encode("utf-8")

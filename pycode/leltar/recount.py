@@ -28,13 +28,9 @@ def inventory_row_values(row: dict, kind: str, view: str = "check") -> dict:
         "counted_qty": _display_number(counted),
         "is_counted": is_counted,
         "mismatch": mismatch,
-<<<<<<< Updated upstream
-        "selected": selected and not closed,
-=======
         "selected": selected,
         "closed": closed,
         "auto_closed": auto_closed,
->>>>>>> Stashed changes
         "send_count": int(row.get("recount_send_count", 0) or 0),
         "pending": bool(row.get("recount_pending")) and not closed,
         "recount_qty": _display_number(_number(recount_raw)),
@@ -42,46 +38,20 @@ def inventory_row_values(row: dict, kind: str, view: str = "check") -> dict:
     }
 
 
-<<<<<<< Updated upstream
-def set_recount_selection(session: dict, row_id: str, selected: bool, view: str = "check", kind: str = "front") -> tuple[bool, str]:
-=======
 def set_recount_selection(session: dict, row_id: str, selected: bool, view: str = "check", kind: str = "") -> tuple[bool, str]:
->>>>>>> Stashed changes
     """Persist an administrator's explicit recount selection."""
     row = _find_row(session, row_id)
     if row is None:
         return False, "A kiválasztott tétel nem található."
     if _is_finalized(session):
         return False, "A leltár már le van zárva."
-<<<<<<< Updated upstream
-    if selected and inventory_row_values(row, kind)["closed"]:
-        return False, "Lezárt tétel nem jelölhető ki újraszámolásra."
-    key = "recount_review_selected" if view == "recount" else "recount_selected"
-    row[key] = bool(selected)
-=======
     if selected and inventory_row_values(row, kind, view)["closed"]:
         return False, "A lezĂˇrt tĂ©tel nem kĂĽldhetĹ‘ ĂşjraszĂˇmolĂˇsra."
     row[_selection_key_for_view(view)] = bool(selected)
->>>>>>> Stashed changes
     _touch(session)
     return True, ""
 
 
-<<<<<<< Updated upstream
-def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str) -> tuple[bool, str]:
-    """Set manual closure without reopening matching or finalized rows."""
-    row = _find_row(session, row_id)
-    if row is None:
-        return False, "A kiválasztott tétel nem található."
-    if _is_finalized(session):
-        return False, "A leltár már le van zárva."
-    if not closed and inventory_row_values(row, kind)["auto_closed"]:
-        return False, "Az egyező mennyiségű tétel automatikusan lezárt."
-    row["recount_closed"] = bool(closed)
-    if closed:
-        row["recount_selected"] = False
-        row["recount_review_selected"] = False
-=======
 def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str = "") -> tuple[bool, str]:
     """Persist a manual admin close flag for a recount row."""
     row = _find_row(session, row_id)
@@ -96,7 +66,6 @@ def set_recount_closed(session: dict, row_id: str, closed: bool, kind: str = "")
         row["recount_closed_at"] = datetime.now().isoformat(timespec="seconds")
     else:
         row.pop("recount_closed_at", None)
->>>>>>> Stashed changes
     _touch(session)
     return True, ""
 
@@ -113,16 +82,10 @@ def send_group_to_recount(session: dict, group: str, kind: str, view: str = "che
     for row in session.get("rows", []):
         if not isinstance(row, dict) or row_group(row, kind) != target_group:
             continue
-<<<<<<< Updated upstream
-        values = inventory_row_values(row, kind)
-        selected = bool(row.get("recount_review_selected")) if view == "recount" else values["selected"]
-        if selected and not values["closed"]:
-=======
         values = inventory_row_values(row, kind, view)
         if values["closed"]:
             continue
         if values["selected"]:
->>>>>>> Stashed changes
             matches.append(row)
     if not matches:
         return False, "A kiválasztott csoportban nincs újraszámolásra jelölt tétel.", 0
@@ -138,12 +101,7 @@ def send_group_to_recount(session: dict, group: str, kind: str, view: str = "che
         row["recount_send_count"] = int(row.get("recount_send_count", 0) or 0) + 1
         row["recount_pending"] = True
         row["recount_input_qty"] = ""
-<<<<<<< Updated upstream
-        row["recount_selected"] = False
-        row["recount_review_selected"] = False
-=======
         _clear_recount_selection(row)
->>>>>>> Stashed changes
         row["recount_sent_at"] = stamp
     _touch(session)
     return True, f"{len(matches)} tétel újraszámolásra elküldve: {target_group}.", len(matches)
