@@ -7238,13 +7238,20 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         if self.reject_unauthorized_module():
             return
 
-        if path.startswith(NETTFRONT_INVOICE_CAMERA_PREFIX + "/"):
-            code = path[len(NETTFRONT_INVOICE_CAMERA_PREFIX) + 1 :]
+        is_direct_invoice_scan = (
+            path.startswith(NETTFRONT_INVOICE_SCAN_PREFIX + "/")
+            and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() == "application/json"
+        )
+        if path.startswith(NETTFRONT_INVOICE_CAMERA_PREFIX + "/") or is_direct_invoice_scan:
+            prefix = NETTFRONT_INVOICE_SCAN_PREFIX if is_direct_invoice_scan else NETTFRONT_INVOICE_CAMERA_PREFIX
+            code = path[len(prefix) + 1 :]
             content_length = int(self.headers.get("Content-Length", "0"))
             try:
                 request_payload = json.loads(self.rfile.read(content_length).decode("utf-8") or "{}")
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                self.respond_json(400, {"ok": False, "error": "Hibás kamera-kérés."})
+                if not isinstance(request_payload, dict):
+                    raise ValueError("A JSON-kérésnek objektumnak kell lennie.")
+            except (UnicodeDecodeError, ValueError):
+                self.respond_json(400, {"ok": False, "error": "Hibás beolvasási kérés."})
                 return
             operator = str(request_payload.get("operator", "")).strip()
             quantity = request_payload.get("quantity", "1")
@@ -7256,10 +7263,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_json(404, {"ok": False, "error": "A számla nem található."})
                 return
             if record.get("status") != "opened":
-                self.respond_json(409, {"ok": False, "error": "A számla le van zárva; a kamera nem indítható."})
+                self.respond_json(409, {"ok": False, "error": "A számla le van zárva; a beolvasás nem indítható."})
                 return
             try:
-                camera_result = trigger_camera_read()
+                camera_result = (
+                    {"icn": re.sub(r"\s+", "", str(request_payload.get("icn", ""))), "raw": ""}
+                    if is_direct_invoice_scan else trigger_camera_read()
+                )
             except CameraBusyError as exc:
                 self.respond_json(409, {"ok": False, "error": str(exc), "retry": True})
                 return
@@ -7520,6 +7530,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 )
             except ValueError as exc:
                 self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except RuntimeError as exc:
+                self.respond_json(502, {"ok": False, "error": str(exc), "state": load_part_workstation_state(user_id)})
                 return
             self.respond_json(200, {"ok": True, "state": state})
             return
