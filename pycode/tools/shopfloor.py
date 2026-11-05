@@ -27,6 +27,8 @@ SHOPFLOOR_ASSEMBLY_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_ASSEMBLY_CHECKPOINT_
 SHOPFLOOR_ASSEMBLY_TAB_ID = int(os.getenv("SHOPFLOOR_ASSEMBLY_TAB_ID", "181"))
 SHOPFLOOR_FRONT_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_FRONT_CHECKPOINT_ID", "107"))
 SHOPFLOOR_FRONT_TAB_ID = int(os.getenv("SHOPFLOOR_FRONT_TAB_ID", "182"))
+SHOPFLOOR_PART_WORKSTATION_CHECKPOINT_ID = int(os.getenv("SHOPFLOOR_PART_WORKSTATION_CHECKPOINT_ID", "140"))
+SHOPFLOOR_PART_WORKSTATION_TAB_ID = int(os.getenv("SHOPFLOOR_PART_WORKSTATION_TAB_ID", "237"))
 TOPFLOOR_USERNAME = os.getenv("TOPFLOOR_USERNAME", "elzaras")
 TOPFLOOR_PASSWORD = os.getenv("TOPFLOOR_PASSWORD", "PPddaa1234")
 TOPFLOOR_BOXING_CHECKPOINT_ID = int(os.getenv("TOPFLOOR_BOXING_CHECKPOINT_ID", "124"))
@@ -966,6 +968,8 @@ def _shopfloor_ready_endpoint_config(ready_endpoint: str, use_assembly_validate:
 def _shopfloor_ready_endpoint_credentials(ready_endpoint: str) -> tuple[str, str]:
     """Return the internal Divian credentials for a ready endpoint."""
     endpoint_key = str(ready_endpoint or "").strip().lower()
+    if endpoint_key == "part_workstation":
+        return "alkatresz", SHOPFLOOR_PASSWORD
     if endpoint_key in {
         "topfloor_boxing",
         "topfloor-boxing",

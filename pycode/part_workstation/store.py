@@ -11,6 +11,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from .lookup import lookup_bom
 
 _runtime_dir = Path("runtime") / "alkatresz-munkalap"
 _lock = threading.RLock()
@@ -24,11 +25,12 @@ def configure_part_workstation(runtime_dir: Path) -> None:
 
 
 def empty_state() -> dict:
-    """Return the stable client contract used before an item API is available."""
+    """Return the workstation state before a barcode is scanned."""
     return {
         "barcode": "",
         "scanned_at": "",
         "lookup_status": "waiting_for_scan",
+        "error_message": "",
         "item": {
             "part_number": "",
             "description": "",
@@ -57,15 +59,13 @@ def load_user_state(user_id: str) -> dict:
 
 
 def register_scan(user_id: str, barcode: str) -> dict:
-    """Persist a scan and expose the future item-API integration boundary."""
+    """Resolve and persist the scanned part's bill of materials."""
     clean_barcode = _clean_barcode(barcode)
     if not clean_barcode:
         raise ValueError("A vonalkód nem lehet üres.")
     if len(clean_barcode) > MAX_BARCODE_LENGTH:
         raise ValueError(f"A vonalkód legfeljebb {MAX_BARCODE_LENGTH} karakter lehet.")
 
-    # Future integration point: replace this API-pending payload with the
-    # normalized response of the item/master-data service.
     state = empty_state()
     state.update(
         {
@@ -74,6 +74,14 @@ def register_scan(user_id: str, barcode: str) -> dict:
             "lookup_status": "api_pending",
         }
     )
+    _write_user_state(user_id, state)
+    try:
+        state["bom"] = lookup_bom(clean_barcode)
+    except (RuntimeError, OSError) as exc:
+        state.update(lookup_status="error", error_message=str(exc))
+        _write_user_state(user_id, state)
+        raise RuntimeError(str(exc)) from exc
+    state["lookup_status"] = "ready"
     _write_user_state(user_id, state)
     return state
 
@@ -126,10 +134,11 @@ def _normalized_state(payload: object) -> dict:
     result["scanned_at"] = str(payload.get("scanned_at", "") or "")[:64]
     status = str(payload.get("lookup_status", "") or "")
     result["lookup_status"] = status if status in {"waiting_for_scan", "api_pending", "ready", "error"} else "waiting_for_scan"
+    result["error_message"] = str(payload.get("error_message", "") or "")[:2000]
     source_item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
     for key in result["item"]:
         result["item"][key] = str(source_item.get(key, "") or "")[:500]
     result["model"] = payload.get("model") if isinstance(payload.get("model"), dict) else None
     source_bom = payload.get("bom") if isinstance(payload.get("bom"), list) else []
-    result["bom"] = [row for row in source_bom if isinstance(row, dict)][:100]
+    result["bom"] = [row for row in source_bom if isinstance(row, dict)]
     return result

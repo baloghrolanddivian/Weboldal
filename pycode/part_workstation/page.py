@@ -43,6 +43,7 @@ def render_page(state: dict, user_name: str) -> bytes:
     .scan-input::placeholder {{ color:#7890aa; font-weight:550; letter-spacing:0; }}
     .scan-submit,.reset-button {{ border:0; cursor:pointer; font-weight:850; }}
     .scan-submit {{ align-self:stretch; padding:0 17px; border-radius:11px; color:#062419; background:var(--green); }}
+    button:disabled {{ opacity:.55; cursor:wait; }}
     .user-area {{ min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:10px; }}
     .user-copy {{ min-width:0; text-align:right; }} .user-copy small,.user-copy strong {{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
     .user-copy small {{ color:var(--muted); font-size:11px; }} .user-copy strong {{ font-size:14px; }}
@@ -67,14 +68,15 @@ def render_page(state: dict, user_name: str) -> bytes:
     .datum output {{ display:block; overflow:hidden; color:#eaf2fa; font-size:13px; font-weight:750; white-space:nowrap; text-overflow:ellipsis; }} .datum output.pending {{ color:#7f94aa; font-weight:550; }}
     .bom-panel {{ display:grid; grid-template-rows:49px minmax(0,1fr) 50px; }}
     .bom-count {{ min-width:28px; padding:5px 8px; border-radius:9px; color:#062419; background:var(--green); font-size:12px; font-weight:950; text-align:center; }}
-    .bom-wrap {{ min-height:0; position:relative; overflow:hidden; padding:9px 12px; }}
+    .bom-wrap {{ min-height:0; position:relative; overflow:auto; padding:9px 12px; }}
     .bom-table {{ width:100%; border-collapse:separate; border-spacing:0 5px; table-layout:fixed; }}
     .bom-table th {{ padding:0 10px 5px; color:#7890aa; font-size:9px; letter-spacing:.1em; text-align:left; text-transform:uppercase; }}
-    .bom-table th:nth-child(1) {{ width:46px; }} .bom-table th:nth-child(3) {{ width:90px; text-align:center; }} .bom-table th:nth-child(4) {{ width:78px; }}
+    .bom-table th:nth-child(1) {{ width:38px; }} .bom-table th:nth-child(2) {{ width:30%; }} .bom-table th:nth-child(4) {{ width:90px; text-align:center; }}
     .bom-table td {{ height:43px; padding:7px 10px; border-top:1px solid rgba(148,163,184,.12); border-bottom:1px solid rgba(148,163,184,.12); background:rgba(5,14,25,.34); font-size:12px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }}
     .bom-table td:first-child {{ border-left:1px solid rgba(148,163,184,.12); border-radius:10px 0 0 10px; color:var(--muted); }} .bom-table td:last-child {{ border-right:1px solid rgba(148,163,184,.12); border-radius:0 10px 10px 0; }}
-    .bom-table td:nth-child(3) {{ text-align:center; font-weight:900; }}
+    .bom-table td:nth-child(4) {{ text-align:center; font-weight:900; }}
     .empty-bom {{ position:absolute; inset:38px 12px 10px; display:grid; place-items:center; text-align:center; pointer-events:none; }}
+    .empty-bom[hidden] {{ display:none; }}
     .empty-icon {{ width:62px; height:62px; display:grid; place-items:center; margin:0 auto 10px; border:1px solid rgba(94,182,255,.25); border-radius:18px; color:var(--blue); background:rgba(94,182,255,.06); font-size:28px; }}
     .empty-bom strong {{ display:block; margin-bottom:5px; font-size:17px; }} .empty-bom p {{ max-width:360px; margin:0; color:var(--muted); font-size:12px; line-height:1.45; }}
     .bom-footer {{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 16px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }}
@@ -125,10 +127,10 @@ def render_page(state: dict, user_name: str) -> bytes:
       <article class="panel bom-panel">
         <header class="panel-head"><div class="panel-title"><span class="panel-index">03</span> Darabjegyzék</div><span class="bom-count" id="bomCount">0</span></header>
         <div class="bom-wrap">
-          <table class="bom-table"><thead><tr><th>#</th><th>Megnevezés / cikkszám</th><th>Mennyiség</th><th>Egység</th></tr></thead><tbody id="bomBody"></tbody></table>
+          <table class="bom-table"><thead><tr><th>#</th><th>Cikkszám</th><th>Megnevezés</th><th>Mennyiség</th></tr></thead><tbody id="bomBody"></tbody></table>
           <div class="empty-bom" id="emptyBom"><div><span class="empty-icon">≡</span><strong id="emptyBomTitle">Nincs beolvasott elem</strong><p id="emptyBomText">A scannerrel olvasd be az elem vonalkódját. A hozzá tartozó darabjegyzék itt fog megjelenni.</p></div></div>
         </div>
-        <footer class="bom-footer"><span>A lista az elem API-válaszából töltődik majd.</span><span class="api-state" id="apiState">API: nincs bekötve</span></footer>
+        <footer class="bom-footer"><span>A lista a beolvasott elem darabjegyzékét mutatja.</span><span class="api-state" id="apiState">Beolvasásra vár</span></footer>
       </article>
     </section>
   </main>
@@ -141,6 +143,13 @@ def render_page(state: dict, user_name: str) -> bytes:
     const resetButton = document.getElementById('resetButton');
     const toast = document.getElementById('toast');
     let toastTimer;
+    let busy = false;
+
+    function setBusy(value) {{
+      busy = value;
+      scanForm.querySelector('button').disabled = value;
+      resetButton.disabled = value;
+    }}
 
     function valueOrPending(value, fallback = '—') {{ return value ? String(value) : fallback; }}
     function formatDate(value) {{
@@ -152,25 +161,28 @@ def render_page(state: dict, user_name: str) -> bytes:
     function renderBom(rows) {{
       const body = document.getElementById('bomBody');
       body.replaceChildren();
-      rows.slice(0, 9).forEach((row, index) => {{
+      rows.forEach((row, index) => {{
         const tr = document.createElement('tr');
-        [index + 1, row.description || row.part_number || '—', row.quantity || '—', row.unit || 'db'].forEach(value => {{ const td = document.createElement('td'); td.textContent = value; tr.appendChild(td); }});
+        [index + 1, row.part_number || '—', row.description || '—', row.quantity ?? '—'].forEach(value => {{ const td = document.createElement('td'); td.textContent = value; td.title = String(value); tr.appendChild(td); }});
         body.appendChild(tr);
       }});
       document.getElementById('bomCount').textContent = rows.length;
       document.getElementById('emptyBom').hidden = rows.length > 0;
+      document.querySelector('.bom-wrap').scrollTop = 0;
     }}
     function renderState(state) {{
       const hasScan = Boolean(state.barcode);
       const pending = state.lookup_status === 'api_pending';
+      const ready = state.lookup_status === 'ready';
+      const failed = state.lookup_status === 'error';
       document.getElementById('barcode').textContent = hasScan ? state.barcode : 'Még nincs beolvasott kód';
       document.getElementById('scannedAt').textContent = formatDate(state.scanned_at);
-      document.getElementById('modelStatus').textContent = pending ? 'API-modellre vár' : (hasScan ? 'Modell betöltve' : 'Beolvasásra vár');
-      document.getElementById('scanStatus').textContent = pending ? 'Kód beolvasva' : 'Scanner készen áll';
-      document.getElementById('apiState').textContent = pending ? 'API: kapcsolatra vár' : (state.lookup_status === 'ready' ? 'API: adatok betöltve' : 'API: nincs bekötve');
-      document.getElementById('lookupState').textContent = pending ? 'API-kapcsolatra vár' : (state.lookup_status === 'ready' ? 'Adatok betöltve' : 'Beolvasásra vár');
-      document.getElementById('emptyBomTitle').textContent = pending ? 'A kód sikeresen beolvasva' : 'Nincs beolvasott elem';
-      document.getElementById('emptyBomText').textContent = pending ? 'A darabjegyzék a későbbi API-kapcsolat válaszából automatikusan ide töltődik.' : 'A scannerrel olvasd be az elem vonalkódját. A hozzá tartozó darabjegyzék itt fog megjelenni.';
+      document.getElementById('modelStatus').textContent = state.model ? 'Modell betöltve' : (hasScan ? 'Sematikus előnézet' : 'Beolvasásra vár');
+      document.getElementById('scanStatus').textContent = pending ? 'Darabjegyzék betöltése…' : (failed ? 'Sikertelen lekérés' : 'Scanner készen áll');
+      document.getElementById('apiState').textContent = pending ? 'Adatok betöltése…' : (failed ? 'Lekérési hiba' : (ready ? 'Adatok betöltve' : 'Beolvasásra vár'));
+      document.getElementById('lookupState').textContent = pending ? 'Betöltés…' : (failed ? 'Sikertelen lekérés' : (ready ? 'Darabjegyzék betöltve' : 'Beolvasásra vár'));
+      document.getElementById('emptyBomTitle').textContent = pending ? 'Darabjegyzék betöltése…' : (failed ? 'Sikertelen lekérés' : (ready ? 'Nincs darabjegyzék' : 'Nincs beolvasott elem'));
+      document.getElementById('emptyBomText').textContent = pending ? 'A beolvasott elem tételeinek lekérése folyamatban van.' : (failed ? state.error_message || 'Olvasd be újra a vonalkódot.' : (ready ? 'A beolvasott elemhez nem érkezett darabjegyzéktétel.' : 'A scannerrel olvasd be az elem vonalkódját. A hozzá tartozó darabjegyzék itt fog megjelenni.'));
       document.querySelectorAll('[data-item]').forEach(output => {{
         const value = state.item && state.item[output.dataset.item];
         output.textContent = valueOrPending(value, output.dataset.item === 'description' && pending ? 'API-kapcsolatra vár' : '—');
@@ -182,17 +194,20 @@ def render_page(state: dict, user_name: str) -> bytes:
     async function send(url, payload) {{
       const response = await fetch(url, {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(payload || {{}}) }});
       const data = await response.json().catch(() => ({{ ok:false, error:'Érvénytelen szerverválasz.' }}));
-      if (!response.ok || !data.ok) throw new Error(data.error || 'A művelet nem sikerült.');
+      if (!response.ok || !data.ok) {{ const error = new Error(data.error || 'A művelet nem sikerült.'); error.state = data.state; throw error; }}
       return data.state;
     }}
     scanForm.addEventListener('submit', async event => {{
       event.preventDefault();
+      if (busy) return;
       const barcode = scanInput.value.trim();
       if (!barcode) {{ showToast('Csippants be vagy írj be egy vonalkódot.'); scanInput.focus(); return; }}
-      try {{ renderState(await send('{SCAN_ROUTE}', {{ barcode }})); scanInput.value = ''; }} catch (error) {{ showToast(error.message); }}
+      setBusy(true);
+      renderState({{ barcode, scanned_at:new Date().toISOString(), lookup_status:'api_pending', bom:[] }});
+      try {{ renderState(await send('{SCAN_ROUTE}', {{ barcode }})); scanInput.value = ''; }} catch (error) {{ renderState(error.state || {{ barcode, lookup_status:'error', error_message:error.message, bom:[] }}); showToast(error.message); }} finally {{ setBusy(false); }}
       scanInput.focus();
     }});
-    resetButton.addEventListener('click', async () => {{ try {{ renderState(await send('{RESET_ROUTE}', {{}})); scanInput.value = ''; }} catch (error) {{ showToast(error.message); }} scanInput.focus(); }});
+    resetButton.addEventListener('click', async () => {{ if (busy) return; setBusy(true); try {{ renderState(await send('{RESET_ROUTE}', {{}})); scanInput.value = ''; }} catch (error) {{ showToast(error.message); }} finally {{ setBusy(false); }} scanInput.focus(); }});
     document.addEventListener('pointerdown', event => {{ if (!event.target.closest('button,input')) setTimeout(() => scanInput.focus(), 0); }});
     window.addEventListener('pageshow', () => scanInput.focus());
     renderState(initialState);
