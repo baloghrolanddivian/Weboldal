@@ -1,8 +1,8 @@
 """Model-specific front colour pictures shipped as application assets.
 
 Colour names/codes follow the NettFront translations and invoice labels, including
-the manufacturing SM./fóliás spellings. Matching is explicit: a different model or
-finish must not supply an arbitrary picture for an unknown colour.
+the manufacturing SM./fóliás spellings. The client uses Anna for unknown models;
+known models still require a matching colour/finish from their own catalogue.
 """
 
 from __future__ import annotations
