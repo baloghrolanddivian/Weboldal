@@ -132,13 +132,10 @@ from damaged_items import (
 )
 from part_workstation import (
     ACCESS_USER_IDS as PART_WORKSTATION_ACCESS_USER_IDS,
-    RESET_ROUTE as PART_WORKSTATION_RESET_ROUTE,
     ROUTE as PART_WORKSTATION_ROUTE,
     SCAN_ROUTE as PART_WORKSTATION_SCAN_ROUTE,
-    configure_part_workstation,
-    load_user_state as load_part_workstation_state,
+    empty_state as empty_part_workstation_state,
     register_scan as register_part_workstation_scan,
-    reset_user_state as reset_part_workstation_state,
     render_page as render_part_workstation_page,
 )
 from leltar.group_pages import render_inventory_group_page
@@ -462,7 +459,6 @@ configure_admin_manufacturing(RUNTIME_DIR / "gyartasi-papirok")
 configure_nettfront_invoice(RUNTIME_DIR / "nettfront-szamla")
 configure_inventory_analytics(RUNTIME_DIR / "keszlet-elemzes")
 configure_damaged_items(RUNTIME_DIR / "serult-elemek")
-configure_part_workstation(RUNTIME_DIR / "alkatresz-munkalap")
 configure_foil_rolls(RUNTIME_DIR / "folia-tekercs")
 configure_cutting_inventory(RUNTIME_DIR / "szabaszat-leltar")
 ensure_login_database(LOGIN_DB_PATH)
@@ -6252,8 +6248,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         if path == PART_WORKSTATION_ROUTE:
             user = self.current_user()
             body = render_part_workstation_page(
-                load_part_workstation_state(user.user_id),
+                empty_part_workstation_state(),
                 user.display_name,
+                user_id=user.user_id,
             )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7508,7 +7505,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        if path in {PART_WORKSTATION_SCAN_ROUTE, PART_WORKSTATION_RESET_ROUTE}:
+        if path == PART_WORKSTATION_SCAN_ROUTE:
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length > 4096:
                 self.respond_json(413, {"ok": False, "error": "A kérés túl nagy."})
@@ -7521,18 +7518,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 self.respond_json(400, {"ok": False, "error": "Hibás kérés."})
                 return
-            user_id = self.current_user().user_id
             try:
-                state = (
-                    register_part_workstation_scan(user_id, payload.get("barcode", ""))
-                    if path == PART_WORKSTATION_SCAN_ROUTE
-                    else reset_part_workstation_state(user_id)
-                )
+                state = register_part_workstation_scan(payload.get("barcode", ""))
             except ValueError as exc:
                 self.respond_json(400, {"ok": False, "error": str(exc)})
                 return
-            except RuntimeError as exc:
-                self.respond_json(502, {"ok": False, "error": str(exc), "state": load_part_workstation_state(user_id)})
+            except (RuntimeError, OSError) as exc:
+                self.respond_json(502, {"ok": False, "error": str(exc)})
                 return
             self.respond_json(200, {"ok": True, "state": state})
             return

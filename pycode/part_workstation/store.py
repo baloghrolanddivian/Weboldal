@@ -1,27 +1,15 @@
-"""Per-user runtime state for the scanned-part tablet workstation."""
+"""Request-local scan results for the browser-owned tablet workstation."""
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
 import re
-import tempfile
-import threading
 from datetime import datetime
-from pathlib import Path
+from decimal import Decimal, InvalidOperation
 
-from .lookup import lookup_bom
+from .lookup import lookup_scan
+from .production_xml import empty_xml_metadata, lookup_xml_item, normalized_xml_metadata
 
-_runtime_dir = Path("runtime") / "alkatresz-munkalap"
-_lock = threading.RLock()
 MAX_BARCODE_LENGTH = 160
-
-
-def configure_part_workstation(runtime_dir: Path) -> None:
-    """Set the runtime directory used to keep each user's latest scan."""
-    global _runtime_dir
-    _runtime_dir = Path(runtime_dir)
 
 
 def empty_state() -> dict:
@@ -34,6 +22,13 @@ def empty_state() -> dict:
         "item": {
             "part_number": "",
             "description": "",
+            "cabinet": "",
+            "handing": "",
+            "front": "",
+            "legs": "",
+            "worktop": "",
+            "filler_width": "",
+            "handle_drilling": "",
             "dimensions": "",
             "material": "",
             "color": "",
@@ -42,24 +37,12 @@ def empty_state() -> dict:
         },
         "model": None,
         "bom": [],
+        "production_xml": empty_xml_metadata(),
     }
 
 
-def load_user_state(user_id: str) -> dict:
-    """Load only the state belonging to the given authenticated user."""
-    path = _state_path(user_id)
-    with _lock:
-        if not path.is_file():
-            return empty_state()
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return empty_state()
-    return _normalized_state(payload)
-
-
-def register_scan(user_id: str, barcode: str) -> dict:
-    """Resolve and persist the scanned part's bill of materials."""
+def register_scan(barcode: str) -> dict:
+    """Resolve one scan without reading or writing shared workstation state."""
     clean_barcode = _clean_barcode(barcode)
     if not clean_barcode:
         raise ValueError("A vonalkód nem lehet üres.")
@@ -74,56 +57,20 @@ def register_scan(user_id: str, barcode: str) -> dict:
             "lookup_status": "api_pending",
         }
     )
-    _write_user_state(user_id, state)
-    try:
-        state["bom"] = lookup_bom(clean_barcode)
-    except (RuntimeError, OSError) as exc:
-        state.update(lookup_status="error", error_message=str(exc))
-        _write_user_state(user_id, state)
-        raise RuntimeError(str(exc)) from exc
+    lookup = lookup_scan(clean_barcode)
+    state["bom"] = lookup["bom"]
+    scan = lookup["scan"]
+    state["production_xml"] = lookup_xml_item(
+        scan.get("scan") or clean_barcode,
+        production_number=lookup["production_number"],
+        oln_id=scan.get("olnId"),
+    )
     state["lookup_status"] = "ready"
-    _write_user_state(user_id, state)
-    return state
-
-
-def reset_user_state(user_id: str) -> dict:
-    """Clear one user's workstation without changing any other user's state."""
-    path = _state_path(user_id)
-    with _lock:
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-    return empty_state()
+    return _normalized_state(state)
 
 
 def _clean_barcode(value: object) -> str:
     return re.sub(r"[\x00-\x1f\x7f]", "", str(value or "")).strip()
-
-
-def _state_path(user_id: str) -> Path:
-    identity = str(user_id or "anonymous").encode("utf-8")
-    key = hashlib.sha256(identity).hexdigest()[:24]
-    return _runtime_dir / "users" / f"{key}.json"
-
-
-def _write_user_state(user_id: str, state: dict) -> None:
-    path = _state_path(user_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(_normalized_state(state), ensure_ascii=False, indent=2)
-    with _lock:
-        file_descriptor, temp_name = tempfile.mkstemp(prefix=path.stem + "-", suffix=".tmp", dir=path.parent)
-        try:
-            with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
-                handle.write(body)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temp_name, path)
-        finally:
-            try:
-                Path(temp_name).unlink()
-            except FileNotFoundError:
-                pass
 
 
 def _normalized_state(payload: object) -> dict:
@@ -141,4 +88,34 @@ def _normalized_state(payload: object) -> dict:
     result["model"] = payload.get("model") if isinstance(payload.get("model"), dict) else None
     source_bom = payload.get("bom") if isinstance(payload.get("bom"), list) else []
     result["bom"] = [row for row in source_bom if isinstance(row, dict)]
+    result["production_xml"] = normalized_xml_metadata(payload.get("production_xml"))
+    if result["production_xml"]["lookup_status"] == "ready":
+        fields = result["production_xml"]["fields"]
+        features = result["production_xml"]["features"]
+        result["item"]["part_number"] = fields["pdCode"][:500]
+        result["item"]["description"] = fields["pdvDescription"][:500]
+        result["item"]["cabinet"] = " | ".join(filter(None, (fields["Korpusztipus"], fields["Korp_tip_nev"])))
+        result["item"]["handing"] = features["J/B"] or features["Nyitási irány"]
+        result["item"]["front"] = " | ".join(filter(None, (
+            features["Front színe"] or features["Front szín felső"] or features["Keretléc szín"], features["Front típus"],
+        )))
+        result["item"]["color"] = fields["Korp_Szin"]
+        result["item"]["legs"] = features["Láb típusa"]
+        result["item"]["worktop"] = features["Munkalap szín"]
+        result["item"]["filler_width"] = features["Hézagtakaró szélessége"]
+        result["item"]["handle_drilling"] = features["Fogantyú furat"]
+        dimensions = [_millimeters(features[name]) for name in ("Beép.mag.cm", "Beép.szél.cm", "Beép.mélys.cm")]
+        result["item"]["dimensions"] = " × ".join(value or "—" for value in dimensions) + " mm" if any(dimensions) else ""
     return result
+
+
+def _millimeters(value: str) -> str:
+    """Convert an XML centimeter value without floating point rounding noise."""
+    try:
+        number = Decimal(value.strip().replace(",", ".")) * 10
+    except InvalidOperation:
+        return ""
+    if not number.is_finite():
+        return ""
+    text = format(number, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
