@@ -8,6 +8,7 @@ import json
 
 from .cabinet_images import cabinet_image_catalog
 from .front_images import front_image_catalog
+from .front_colours import nettfront_colour_catalog
 
 ROUTE = "/apps/alkatresz-munkalap"
 SCAN_ROUTE = f"{ROUTE}/beolvasas"
@@ -22,12 +23,15 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     client_state_key = json.dumps(f"part-workstation:v1:{identity_key}")
     cabinet_images = json.dumps(cabinet_image_catalog(), ensure_ascii=True).replace("</", "<\\/")
     front_images = json.dumps(front_image_catalog(), ensure_ascii=True).replace("</", "<\\/")
+    nettfront_colours = json.dumps(nettfront_colour_catalog(), ensure_ascii=True).replace("</", "<\\/")
     page = f"""<!doctype html>
 <html lang="hu">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#041019" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Összeszerelés" />
   <title>Összeszerelés · Divian-HUB</title>
   <link rel="stylesheet" href="/styles.css" />
   <style>
@@ -47,12 +51,19 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     .scanner-state {{ display:flex; align-items:center; justify-content:center; gap:12px; min-width:0; color:var(--muted); font-size:14px; }}
     .scan-pulse {{ width:10px; height:10px; border-radius:50%; background:var(--green); box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 11%,transparent); }}
     .scanner-state[aria-busy="true"] .scan-pulse {{ background:var(--amber); box-shadow:0 0 0 5px color-mix(in srgb,var(--accent-warm) 11%,transparent); }}
-    .reset-button {{ border:0; cursor:pointer; font-weight:850; }}
+    .reset-button {{ flex:none; border:0; cursor:pointer; font-weight:850; white-space:nowrap; }}
     button:disabled {{ opacity:.55; cursor:wait; }}
     .user-area {{ min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:10px; }}
     .user-copy {{ min-width:0; text-align:right; }} .user-copy small,.user-copy strong {{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
     .user-copy small {{ color:var(--muted); font-size:11px; }} .user-copy strong {{ font-size:14px; }}
     .reset-button {{ padding:9px 12px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--panel-soft); }}
+    .fullscreen-button {{ flex:none; width:40px; height:40px; padding:8px; display:grid; place-items:center; }}
+    .fullscreen-button svg {{ width:22px; height:22px; }}
+    .fullscreen-button[aria-pressed="true"] {{ border-color:var(--accent); }}
+    .fullscreen-help {{ max-width:min(480px,calc(100vw - 32px)); border:1px solid var(--border); border-radius:14px; padding:22px; color:var(--ink); background:var(--panel-strong); box-shadow:var(--shadow); }}
+    .fullscreen-help::backdrop {{ background:rgba(0,0,0,.6); }}
+    .fullscreen-help h2 {{ margin:0 0 12px; font-size:20px; }}
+    .fullscreen-help p {{ font-size:15px; line-height:1.5; }}
     .workspace {{ min-height:0; display:grid; grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr); gap:10px; padding:10px; }}
     .panel {{ min-width:0; min-height:0; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:linear-gradient(145deg,var(--panel-strong),var(--panel)); box-shadow:var(--shadow); }}
     .panel-head {{ height:49px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 16px; border-bottom:1px solid var(--line); }}
@@ -74,12 +85,17 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     .datum.wide {{ grid-column:span 2; }} .datum label {{ display:block; margin-bottom:5px; color:var(--muted); font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }}
     .datum output {{ display:block; color:var(--ink); font-size:clamp(20px,1.9vw,26px); font-weight:800; line-height:1.25; overflow-wrap:anywhere; }}
     .datum output.pending {{ color:var(--muted); font-weight:550; }}
+    .front-nettfront {{ font-size:.72em; font-weight:650; color:var(--muted); }}
     .datum.top-datum {{ padding:7px 11px; }}
     .top-datum label {{ margin-bottom:3px; }}
     .top-datum output {{ font-size:clamp(16px,1.7vw,22px); line-height:1.15; }}
     .datum.color-datum {{ padding:7px 11px; }}
     .color-datum label {{ margin-bottom:3px; }}
     .color-datum output {{ line-height:1.15; }}
+    .datum.color-datum.colour-white {{ background:#fff; border-color:#d7dde4; }}
+    .datum.color-datum.colour-white label, .datum.color-datum.colour-white output {{ color:#000; }}
+    .datum.color-datum.colour-anthracite {{ background:#000; border-color:#555; }}
+    .datum.color-datum.colour-anthracite label, .datum.color-datum.colour-anthracite output {{ color:#fff; }}
     .datum.with-image {{ display:grid; grid-template-columns:clamp(36px,4vw,52px) minmax(0,1fr); align-items:center; gap:11px; }}
     .datum-content {{ min-width:0; }}
     .image-slot {{ width:100%; aspect-ratio:1; display:grid; place-items:center; border:1px dashed var(--border); border-radius:8px; background:var(--panel-soft); color:var(--muted); font-size:9px; letter-spacing:.06em; text-transform:uppercase; }}
@@ -124,7 +140,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     <header class="workstation-topbar">
       <div class="brand"><span class="brand-mark">D</span><span><small>Digitális gyártás</small><strong>Összeszerelés</strong></span></div>
       <div class="scanner-state" id="scannerState" role="status" aria-live="polite"><i class="scan-pulse" aria-hidden="true"></i><span id="scannerHint">Csippantsd be a vonalkódot</span></div>
-      <div class="user-area"><span class="user-copy"><small>Saját munkamenet</small><strong>{safe_user}</strong></span><button class="reset-button" id="resetButton" type="button">Új elem</button></div>
+      <div class="user-area"><span class="user-copy"><small>Saját munkamenet</small><strong>{safe_user}</strong></span><button class="reset-button fullscreen-button" id="fullscreenButton" type="button" aria-label="Teljes képernyő" title="Teljes képernyő" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" /></svg></button><button class="reset-button" id="resetButton" type="button">Új elem</button></div>
     </header>
     <section class="workspace" aria-label="Összeszerelés munkaterület">
         <article class="panel info-panel">
@@ -159,6 +175,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     </section>
   </main>
   <div class="toast" id="toast" role="alert"></div>
+  <dialog class="fullscreen-help" id="fullscreenHelp" aria-labelledby="fullscreenHelpTitle"><h2 id="fullscreenHelpTitle">Teljes képernyő</h2><p>A böngésző most nem engedélyezte a teljes képernyőt. Próbáld közvetlenül a modul oldalán megnyomni a teljes képernyő gombot.</p><p>iPad: Safari → Megosztás → Hozzáadás a főképernyőhöz. Ha látható, hagyd bekapcsolva a „Megnyitás webalkalmazásként” lehetőséget, majd a főképernyő ikonjával indítsd el a modult.</p><form method="dialog"><button class="reset-button">Rendben</button></form></dialog>
   <div class="rotate"><div><b>↻</b><strong>Fordítsd fekvő helyzetbe a táblagépet</strong><p>Ez a munkafelület fekvő nézetre és egyetlen, görgetésmentes képernyőre készült.</p></div></div>
   <script>
     const initialState = {initial_state};
@@ -166,11 +183,14 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     const clientStateKey = {client_state_key};
     const cabinetImages = new Map(Object.entries({cabinet_images}));
     const frontImages = {front_images};
+    const nettfrontColours = {nettfront_colours};
     const frontImage = document.getElementById('frontImage');
     const cabinetImage = document.getElementById('cabinetImage');
     const scannerState = document.getElementById('scannerState');
     const scannerHint = document.getElementById('scannerHint');
     const resetButton = document.getElementById('resetButton');
+    const fullscreenButton = document.getElementById('fullscreenButton');
+    const fullscreenHelp = document.getElementById('fullscreenHelp');
     const toast = document.getElementById('toast');
     let toastTimer;
     let busy = false;
@@ -178,6 +198,30 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     let scanOverflow = false;
     let lastScanKeyAt = 0;
     const pendingScans = [];
+
+    function fullscreenElement() {{ return document.fullscreenElement || document.webkitFullscreenElement; }}
+    function updateFullscreenButton() {{
+      const active = Boolean(fullscreenElement());
+      fullscreenButton.setAttribute('aria-pressed', String(active));
+      fullscreenButton.title = active ? 'Kilépés a teljes képernyőből' : 'Teljes képernyő';
+      fullscreenButton.setAttribute('aria-label', fullscreenButton.title);
+    }}
+    fullscreenButton.addEventListener('click', async () => {{
+      try {{
+        if (fullscreenElement()) {{
+          if (document.exitFullscreen) await document.exitFullscreen();
+          else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+        }} else if (document.documentElement.requestFullscreen) {{
+          await document.documentElement.requestFullscreen({{ navigationUI:'hide' }});
+        }} else if (document.documentElement.webkitRequestFullscreen) {{
+          await document.documentElement.webkitRequestFullscreen();
+        }} else fullscreenHelp.showModal();
+      }} catch (error) {{ if (!fullscreenHelp.open) fullscreenHelp.showModal(); }}
+      updateFullscreenButton();
+    }});
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+    updateFullscreenButton();
 
     function cabinetImageUrl(item) {{
       const code = String(item?.part_number || '').trim().toUpperCase();
@@ -198,8 +242,25 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     function frontImageUrl(state) {{
       const features = state.production_xml?.features || {{}};
       const colour = features['Front színe'] || features['Front szín felső'] || features['Keretléc szín'];
-      const colours = frontImages[frontImageKey(features['Front típus'])];
+      const model = frontImageKey(features['Front típus']);
+      const colours = Object.hasOwn(frontImages, model) ? frontImages[model] : frontImages.anna;
       return colours && Object.hasOwn(colours, frontImageKey(colour)) ? colours[frontImageKey(colour)] : '';
+    }}
+    function renderFrontText(state) {{
+      const output = document.querySelector('[data-item="front"]');
+      const features = state.production_xml?.features || {{}};
+      const colour = features['Front színe'] || features['Front szín felső'] || features['Keretléc szín'];
+      const model = features['Front típus'];
+      const names = Object.hasOwn(nettfrontColours, frontImageKey(model)) ? nettfrontColours[frontImageKey(model)] : null;
+      const counterpart = names && Object.hasOwn(names, frontImageKey(colour)) ? names[frontImageKey(colour)] : '';
+      if (!colour || !counterpart) return;
+      const translation = document.createElement('span');
+      translation.className = 'front-nettfront';
+      translation.textContent = '(' + counterpart + ')';
+      translation.title = 'Nettfront: ' + counterpart;
+      output.replaceChildren(document.createTextNode(colour + ' '), translation, document.createTextNode(model ? ' | ' + model : ''));
+      output.classList.remove('pending');
+      output.title = [colour, 'Nettfront: ' + counterpart, model].filter(Boolean).join(' | ');
     }}
     function showAssetImage(image) {{
       const loaded = Boolean(image.getAttribute('src') && image.complete && image.naturalWidth);
@@ -332,6 +393,10 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
         output.title = valueOrPending(value);
         output.classList.toggle('pending', !value);
       }});
+      renderFrontText(state);
+      const colourKey = String(state.item?.color || '').trim().toLowerCase();
+      document.getElementById('colorDatum').classList.toggle('colour-white', colourKey === 'fehér');
+      document.getElementById('colorDatum').classList.toggle('colour-anthracite', colourKey === 'antracit kr.');
       const hasHanding = Boolean(state.item && state.item.handing);
       document.getElementById('handingDatum').hidden = !hasHanding;
       document.getElementById('frontDatum').classList.toggle('wide', !hasHanding);
@@ -362,6 +427,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     }}
     function clearScanBuffer() {{ scanBuffer = ''; scanOverflow = false; lastScanKeyAt = 0; }}
     document.addEventListener('keydown', event => {{
+      if (fullscreenHelp.open) return;
       if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.repeat
         || event.target.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])')) {{ clearScanBuffer(); return; }}
       const now = performance.now();
