@@ -1,0 +1,54 @@
+{
+  "array": {
+    "version": "1.0",
+    "metadata": [
+      {"name": "instruction", "type": 2, "modifiers": 3},
+      {"name": "scan", "type": 2, "modifiers": 0},
+      {"name": "scan_Num", "type": 10, "modifiers": 0},
+      {"name": "olnId", "type": 10, "modifiers": 0},
+      {"name": "prdId", "type": 10, "modifiers": 0}
+    ],
+    "data": [
+      {
+        "instruction": "Darablista megjelenítés",
+        "scan": "CON1416241",
+        "scan_Num": 1416241,
+        "olnId": 1219888,
+        "prdId": 14635
+      }
+    ],
+    "modifierData": {
+      "mapping": ["instruction"],
+      "data": [[{"fgColor": "#404040", "bgColor": "#A9D08E"}]]
+    }
+  },
+  "parameters": {
+    "version": "1.0",
+    "metadata": {
+      "cptId": {"name": "", "type": 10, "modifiers": 0},
+      "message": {"name": "", "type": 2, "modifiers": 0},
+      "messageType": {"name": "", "type": 10, "modifiers": 0},
+      "instruction": {"name": "", "type": 2, "modifiers": 0},
+      "scan_Num": {"name": "", "type": 10, "modifiers": 0},
+      "scan": {"name": "", "type": 2, "modifiers": 0},
+      "conId": {"name": "", "type": 10, "modifiers": 0},
+      "olnId": {"name": "", "type": 10, "modifiers": 0},
+      "olnIdInstance": {"name": "", "type": 10, "modifiers": 0},
+      "prdId": {"name": "", "type": 10, "modifiers": 0}
+    },
+    "data": {
+      "message": "Darablista megjelenítés OK",
+      "messageType": 2,
+      "instruction": "Darablista megjelenítés",
+      "scan_Num": 1416241,
+      "scan": "CON1416241",
+      "conId": 11,
+      "olnId": 1219888,
+      "olnIdInstance": 1,
+      "prdId": 14635,
+      "cptId": 140,
+      "venId": null
+    }
+  },
+  "returnValue": 0
+}
