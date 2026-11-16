@@ -59,13 +59,13 @@ class ProductionXmlTests(unittest.TestCase):
         self.assertEqual(result["production_number"], "14545")
         self.assertEqual(result["fields"], {
             "Barcode": "CON1396379", "Korpusztipus": "2A", "Korp_tip_nev": "2-es alsó",
-            "pdCode": "AF40", "pdvDescription": "Alsó 1+2 fiók 40-es", "Korp_Szin": "Antracit kr.",
+            "pdCode": "AF40", "pdvDescription": "Alsó 1+2 fiók 40-es", "Korp_Szin": "Antracit kr.", "Megjegyzes": "",
         })
         self.assertEqual(result["features"], {
             "Láb típusa": "Műa. áll.100-as", "J/B": "", "Nyitási irány": "", "Munkalap szín": "Nincs",
             "Front típus": "Laura", "Beép.mag.cm": "82.4", "Beép.szél.cm": "40.000000",
             "Beép.mélys.cm": "60.000000", "Front színe": "SM.provance fóliás", "Keretléc szín": "Fehér",
-            "Hézagtakaró szélessége": "", "Front szín felső": "", "Fogantyú furat": "Fúrva",
+            "Hézagtakaró szélessége": "", "Front szín felső": "", "Fogantyú furat": "Fúrva", "Megjegyzés": "",
         })
 
     def test_feature_labels_follow_their_numbered_values_in_any_slot(self) -> None:
@@ -77,6 +77,7 @@ class ProductionXmlTests(unittest.TestCase):
           <FeatureBillTranslation18>Hézagtakaró szélessége</FeatureBillTranslation18><ertek18>82</ertek18>
           <FeatureBillTranslation19>Front szín felső</FeatureBillTranslation19><ertek19>Artizán tölgy</ertek19>
           <FeatureBillTranslation31>Fogantyú furat</FeatureBillTranslation31><ertek31>64 / 96</ertek31>
+          <FeatureBillTranslation32>Megjegyzés</FeatureBillTranslation32><ertek32>Szerelés előtt ellenőrizni</ertek32>
         </CON></EtikettKitchen_korp_tip>"""
         self.xml_path.write_text(xml, encoding="utf-8")
         result = lookup_xml_item("CON1", production_number="14545")
@@ -87,7 +88,18 @@ class ProductionXmlTests(unittest.TestCase):
         self.assertEqual(result["features"]["Hézagtakaró szélessége"], "82")
         self.assertEqual(result["features"]["Front szín felső"], "Artizán tölgy")
         self.assertEqual(result["features"]["Fogantyú furat"], "64 / 96")
+        self.assertEqual(result["features"]["Megjegyzés"], "Szerelés előtt ellenőrizni")
         self.assertEqual(set(result["features"]), set(FEATURE_NAMES))
+
+    def test_notes_are_read_from_the_matched_item_field(self) -> None:
+        for tag in ("Megjegyzes", "Megjegyzés"):
+            with self.subTest(tag=tag):
+                xml = SAMPLE_XML.replace("<pdCode>AF40</pdCode>", f"<pdCode>AF40</pdCode><{tag}>  Egyedi szerelés  </{tag}>")
+                self.xml_path.write_text(xml, encoding="utf-8")
+                result = lookup_xml_item("CON1396379", production_number="14545", oln_id=1207826)
+                self.assertEqual(result["fields"]["Megjegyzes"], "Egyedi szerelés")
+                neighbour = lookup_xml_item("CON13963790", production_number="14545", oln_id=1207826)
+                self.assertEqual(neighbour["fields"]["Megjegyzes"], "")
 
     def test_missing_barcode_or_wrong_order_line_never_borrows_another_item(self) -> None:
         for barcode, oln_id in (("CON139637", None), ("MISSING", None), ("CON1396379", 123)):

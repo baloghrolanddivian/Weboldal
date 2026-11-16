@@ -7,23 +7,27 @@ import html
 import json
 
 from .cabinet_images import cabinet_image_catalog
-from .front_images import front_image_catalog
-from .front_colours import nettfront_colour_catalog
+from .connectors import CONNECTOR_RULES
 
 ROUTE = "/apps/alkatresz-munkalap"
 SCAN_ROUTE = f"{ROUTE}/beolvasas"
+DAMAGE_ROUTE = f"{ROUTE}/serult"
+ADMIN_ROUTE = f"{ROUTE}/admin"
+ADMIN_DATA_ROUTE = f"{ADMIN_ROUTE}/adatok"
+ADMIN_SAVE_ROUTE = f"{ADMIN_ROUTE}/mentes"
+ADMIN_ACCESS_USER_IDS = frozenset({"gyartas-vezerlo"})
 ACCESS_USER_IDS = frozenset({"manufacturer", "gyartas-vezerlo", "hriroda"})
 
 
-def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
+def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: bool = False) -> bytes:
     """Render the complete no-scroll tablet workstation."""
     safe_user = html.escape(str(user_name or "Felhasználó"))
+    admin_button = f'<a class="reset-button admin-link" href="{ADMIN_ROUTE}">Admin</a>' if show_admin else ""
     initial_state = json.dumps(state, ensure_ascii=False).replace("</", "<\\/")
     identity_key = hashlib.sha256(str(user_id or user_name).encode("utf-8")).hexdigest()[:24]
     client_state_key = json.dumps(f"part-workstation:v1:{identity_key}")
     cabinet_images = json.dumps(cabinet_image_catalog(), ensure_ascii=True).replace("</", "<\\/")
-    front_images = json.dumps(front_image_catalog(), ensure_ascii=True).replace("</", "<\\/")
-    nettfront_colours = json.dumps(nettfront_colour_catalog(), ensure_ascii=True).replace("</", "<\\/")
+    connector_rules = json.dumps(CONNECTOR_RULES, ensure_ascii=True).replace("</", "<\\/")
     page = f"""<!doctype html>
 <html lang="hu">
 <head>
@@ -64,59 +68,107 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     .fullscreen-help::backdrop {{ background:rgba(0,0,0,.6); }}
     .fullscreen-help h2 {{ margin:0 0 12px; font-size:20px; }}
     .fullscreen-help p {{ font-size:15px; line-height:1.5; }}
-    .workspace {{ min-height:0; display:grid; grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr); gap:10px; padding:10px; }}
+    .workspace {{ min-height:0; display:grid; grid-template-columns:minmax(0,1fr); gap:10px; padding:10px; }}
     .panel {{ min-width:0; min-height:0; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:linear-gradient(145deg,var(--panel-strong),var(--panel)); box-shadow:var(--shadow); }}
     .panel-head {{ height:49px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 16px; border-bottom:1px solid var(--line); }}
     .panel-title {{ display:flex; align-items:center; gap:9px; font-size:13px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }}
     .panel-index {{ color:var(--highlight-ink); }}
+    .panel-actions {{ display:flex; align-items:center; gap:12px; min-width:0; }}
+    .panel-actions .status {{ max-width:none; }}
+    .bom-toggle {{ min-height:40px; color:var(--highlight-ink); }}
+    .admin-link {{ text-decoration:none; }}
     .status {{ display:inline-flex; align-items:center; gap:7px; max-width:55%; padding:6px 9px; border:1px solid color-mix(in srgb,var(--accent-warm) 35%,var(--border)); border-radius:999px; color:var(--ink); background:color-mix(in srgb,var(--accent-warm) 12%,var(--panel)); font-size:11px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
     .status::before {{ content:""; width:6px; height:6px; flex:0 0 auto; border-radius:50%; background:currentColor; }}
-    .info-panel {{ display:grid; grid-template-rows:49px minmax(0,1fr) 34px; }}
+    .info-panel {{ display:grid; grid-template-rows:49px minmax(0,1fr) minmax(34px,auto); }}
     .info-body {{ min-height:0; display:flex; flex-direction:column; gap:14px; padding:12px; overflow:auto; }}
-    .primary-info {{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:max-content repeat(2,minmax(66px,1fr)) max-content; gap:9px; }}
+    .primary-info {{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:minmax(0,1fr) max-content; gap:9px; }}
     .primary-info > .datum {{ grid-column:span 2; }}
     .primary-info > .datum.wide {{ grid-column:span 4; }}
-    .primary-info > .front-datum {{ grid-column:span 3; }}
-    .primary-info > #handingDatum {{ grid-column:span 1; }}
-    .secondary-info {{ --detail-columns:2; flex:none; display:grid; grid-template-columns:repeat(var(--detail-columns),minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid var(--line); }}
-    .secondary-info .dimensions-datum {{ grid-column:1 / -1; }}
+    .primary-info.has-model > .color-datum {{ grid-column:span 2; }}
+    .primary-info.has-connector > .cabinet-datum {{ grid-column:span 3; }}
+    .primary-info > .connector-datum {{ grid-column:span 1; display:grid; grid-template-rows:max-content minmax(0,1fr); gap:12px; }}
+    .primary-info > .connector-datum[hidden] {{ display:none; }}
+    .connector-datum output {{ font-size:clamp(20px,2.1vw,30px); }}
+    .connector-image-slot {{ position:relative; min-height:0; width:100%; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#fff; }}
+    .connector-image-slot img {{ position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:contain; }}
+    .connector-image-slot span {{ position:absolute; inset:0; display:grid; place-items:center; color:#64748b; font-size:11px; }}
+    .connector-image-slot [hidden] {{ display:none; }}
+    .has-connector .item-identity {{ font-size:clamp(28px,3.6vw,52px); }}
+    .secondary-info {{ --detail-columns:1; flex:none; display:grid; grid-template-columns:1.4fr repeat(var(--detail-columns),minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid var(--line); }}
+    .secondary-info .datum.wide {{ grid-column:auto; }}
     .datum {{ min-width:0; display:flex; flex-direction:column; justify-content:center; padding:11px 13px; border:1px solid var(--border); border-radius:11px; background:var(--panel-soft); }}
     .datum[hidden] {{ display:none; }}
     .datum.wide {{ grid-column:span 2; }} .datum label {{ display:block; margin-bottom:5px; color:var(--muted); font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }}
-    .datum output {{ display:block; color:var(--ink); font-size:clamp(20px,1.9vw,26px); font-weight:800; line-height:1.25; overflow-wrap:anywhere; }}
+    .datum output {{ display:block; color:var(--ink); font-size:clamp(24px,2.8vw,40px); font-weight:800; line-height:1.25; overflow-wrap:anywhere; }}
     .datum output.pending {{ color:var(--muted); font-weight:550; }}
-    .front-nettfront {{ font-size:.72em; font-weight:650; color:var(--muted); }}
-    .datum.top-datum {{ padding:7px 11px; }}
-    .top-datum label {{ margin-bottom:3px; }}
-    .top-datum output {{ font-size:clamp(16px,1.7vw,22px); line-height:1.15; }}
     .datum.color-datum {{ padding:7px 11px; }}
     .color-datum label {{ margin-bottom:3px; }}
     .color-datum output {{ line-height:1.15; }}
+    .datum.model-datum {{ padding:7px 11px; }}
+    .model-datum label {{ margin-bottom:3px; }}
+    .model-datum output {{ line-height:1.15; }}
     .datum.color-datum.colour-white {{ background:#fff; border-color:#d7dde4; }}
     .datum.color-datum.colour-white label, .datum.color-datum.colour-white output {{ color:#000; }}
     .datum.color-datum.colour-anthracite {{ background:#000; border-color:#555; }}
     .datum.color-datum.colour-anthracite label, .datum.color-datum.colour-anthracite output {{ color:#fff; }}
-    .datum.with-image {{ display:grid; grid-template-columns:clamp(36px,4vw,52px) minmax(0,1fr); align-items:center; gap:11px; }}
     .datum-content {{ min-width:0; }}
     .image-slot {{ width:100%; aspect-ratio:1; display:grid; place-items:center; border:1px dashed var(--border); border-radius:8px; background:var(--panel-soft); color:var(--muted); font-size:9px; letter-spacing:.06em; text-transform:uppercase; }}
-    .datum.cabinet-datum, .datum.front-datum {{ display:flex; flex-direction:row; }}
-    .cabinet-datum .datum-content, .front-datum .datum-content {{ flex:1; }}
-    .asset-image-slot {{ position:relative; flex:none; min-height:0; width:auto; height:100%; max-height:160px; aspect-ratio:1; overflow:hidden; }}
+    .datum.cabinet-datum {{ display:flex; flex-direction:row; align-items:center; gap:clamp(16px,2vw,28px); padding:clamp(14px,2vw,28px); }}
+    .cabinet-datum .datum-content {{ flex:1; }}
+    .item-identity {{ font-size:clamp(32px,4.4vw,64px); font-weight:800; line-height:1.2; overflow-wrap:anywhere; }}
+    .item-identity output {{ display:inline; font-size:inherit; line-height:inherit; }}
+    .item-separator {{ color:var(--muted); }}
+    .asset-image-slot {{ position:relative; flex:none; min-height:0; width:auto; height:100%; max-height:400px; max-width:36%; aspect-ratio:1; overflow:hidden; }}
     .asset-image-slot.has-image {{ border-style:solid; background:#fff; }}
     .asset-image-slot img {{ position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:contain; }}
     .asset-image-slot [hidden] {{ display:none; }}
-    .barcode-datum output {{ color:var(--highlight-ink); }}
     .secondary-info .datum {{ padding:8px 11px; border-color:var(--line); background:var(--panel-soft); }}
     .secondary-info .datum label {{ font-size:9px; margin-bottom:3px; letter-spacing:.03em; overflow-wrap:anywhere; }}
-    .secondary-info .datum output {{ font-size:15px; font-weight:650; color:var(--ink); }}
+    .secondary-info .datum output {{ font-size:clamp(17px,1.8vw,24px); font-weight:650; color:var(--ink); }}
+    .secondary-info [data-item="notes"] {{ white-space:pre-wrap; }}
+    .secondary-info #notesDatum {{ border-color:#ef4444; box-shadow:0 0 0 2px #ef4444; }}
     .dimension-order {{ margin-top:3px; color:var(--muted); font-size:10px; }}
-    .info-footer {{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 14px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }}
-    .bom-panel {{ display:grid; grid-template-rows:49px minmax(0,1fr); }}
+    .info-footer {{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 14px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }}
+    .footer-metadata {{ flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px 14px; }}
+    .footer-metadata span {{ min-width:0; overflow-wrap:anywhere; }}
+    .footer-metadata output {{ color:var(--ink); }}
+    #lookupState {{ flex:none; }}
+    .bom-panel {{ position:fixed; inset:82px 10px 10px auto; width:min(540px,calc(100vw - 20px)); max-width:none; height:calc(100dvh - 92px); max-height:none; margin:0; padding:0; color:var(--ink); }}
+    .bom-panel[open] {{ display:grid; grid-template-rows:auto auto minmax(0,1fr) auto; animation:bom-slide-in .2s ease-out; }}
+    .bom-panel::backdrop {{ background:rgba(0,0,0,.25); }}
+    .bom-panel .panel-head {{ height:auto; min-height:54px; }}
+    .bom-heading {{ display:flex; align-items:center; gap:12px; min-width:0; }}
+    .bom-close {{ min-width:42px; min-height:40px; font-size:20px; }}
+    .bom-item {{ padding:12px 16px; border-bottom:1px solid var(--line); }}
+    .bom-item strong {{ display:block; font-size:18px; overflow-wrap:anywhere; }}
+    .bom-item p {{ margin:5px 0 0; color:var(--muted); font-size:13px; overflow-wrap:anywhere; }}
+    .bom-review-message {{ margin:0 0 12px; color:var(--ink); font-size:16px; line-height:1.4; }}
+    .bom-review-footer {{ padding:16px; border-top:1px solid var(--line); }}
+    .bom-confirm {{ width:100%; min-height:52px; border-color:var(--green); color:var(--accent-ink); background:var(--green); font-size:17px; }}
+    .bom-panel [hidden] {{ display:none; }}
+    .bom-panel.bom-review {{ inset:0; width:94vw; height:90dvh; margin:auto; }}
+    .bom-review::backdrop {{ background:rgba(0,0,0,.7); }}
+    .bom-review .bom-table th {{ font-size:12px; }}
+    .bom-review .bom-table td {{ min-height:50px; padding:12px 10px; font-size:clamp(16px,1.8vw,24px); white-space:normal; overflow-wrap:anywhere; }}
+    .bom-review .bom-table th:nth-child(4) {{ width:120px; }}
+    @keyframes bom-slide-in {{ from {{ opacity:0; transform:translateX(40px); }} to {{ opacity:1; transform:translateX(0); }} }}
+    @media (prefers-reduced-motion:reduce) {{ .bom-panel[open] {{ animation:none; }} }}
     .bom-count {{ min-width:28px; padding:5px 8px; border-radius:9px; color:var(--accent-ink); background:var(--green); font-size:12px; font-weight:950; text-align:center; }}
     .bom-wrap {{ min-height:0; position:relative; overflow:auto; padding:9px 12px; }}
     .bom-table {{ width:100%; border-collapse:separate; border-spacing:0 5px; table-layout:fixed; }}
     .bom-table th {{ padding:0 10px 5px; color:var(--muted); font-size:9px; letter-spacing:.1em; text-align:left; text-transform:uppercase; }}
     .bom-table th:nth-child(1) {{ width:38px; }} .bom-table th:nth-child(2) {{ position:relative; width:96px; }} .bom-table th:nth-child(4) {{ width:90px; text-align:center; }}
+    .bom-table th:nth-child(5) {{ width:108px; text-align:center; }}
+    .bom-damage-button {{ min-height:40px; padding:7px 10px; font-size:12px; color:var(--amber); }}
+    .bom-table td:last-child {{ text-align:center; }}
+    .bom-table tr.is-damaged td {{ background:color-mix(in srgb,var(--amber) 12%,var(--panel-soft)); }}
+    .damage-confirm {{ width:min(520px,calc(100vw - 32px)); max-height:85dvh; padding:24px; border:1px solid var(--border); border-radius:18px; color:var(--ink); background:var(--panel-strong); }}
+    .damage-confirm::backdrop {{ background:rgba(0,0,0,.7); }}
+    .damage-confirm h2 {{ margin:0 0 12px; font-size:22px; }}
+    .damage-confirm p {{ overflow-wrap:anywhere; line-height:1.5; }}
+    .damage-confirm-actions {{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px; margin-top:22px; }}
+    .damage-confirm-actions button {{ min-height:44px; }}
+    #damageSubmit {{ border-color:var(--amber); color:var(--amber); }}
     .bom-table td:nth-child(2) {{ border-right:1px solid var(--line); }}
     .bom-column-resizer {{ position:absolute; z-index:2; top:50%; right:-10px; width:20px; height:30px; transform:translateY(-50%); cursor:col-resize; touch-action:none; user-select:none; border-radius:5px; }}
     .bom-column-resizer::after {{ content:""; position:absolute; top:5px; bottom:5px; left:7px; width:6px; border-left:2px solid var(--blue); border-right:2px solid var(--blue); opacity:.65; }}
@@ -132,7 +184,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     .toast {{ position:fixed; z-index:20; left:50%; top:82px; transform:translate(-50%,-16px); padding:10px 14px; border:1px solid rgba(248,113,113,.36); border-radius:11px; color:var(--ink); background:color-mix(in srgb,#ef4444 18%,var(--panel-strong)); opacity:0; pointer-events:none; transition:.2s; }} .toast.show {{ opacity:1; transform:translate(-50%,0); }}
     .rotate {{ display:none; }}
     @media (orientation:portrait) {{ .rotate {{ position:fixed; z-index:100; inset:0; display:grid; place-items:center; padding:34px; text-align:center; background:var(--bg); }} .rotate div {{ max-width:420px; }} .rotate b {{ display:block; margin-bottom:10px; font-size:48px; }} .rotate strong {{ display:block; margin-bottom:7px; font-size:23px; }} .rotate p {{ margin:0; color:var(--muted); }} }}
-    @media (max-height:680px) and (orientation:landscape) {{ .app {{ grid-template-rows:62px minmax(0,1fr); }} .workstation-topbar {{ padding:7px 14px; }} .brand-mark {{ width:38px;height:38px; }} .workspace {{ gap:7px;padding:7px; }} .panel {{ border-radius:14px; }} .panel-head {{ height:43px; }} .info-panel {{ grid-template-rows:43px minmax(0,1fr) 30px; }} .info-body {{ padding:9px; gap:9px; }} .primary-info {{ gap:7px; grid-template-rows:max-content repeat(2,minmax(55px,1fr)) max-content; }} .datum {{ padding:8px 10px; }} .datum.with-image {{ grid-template-columns:34px minmax(0,1fr); gap:8px; }} .secondary-info {{ grid-template-columns:1.4fr repeat(var(--detail-columns),minmax(0,1fr)); padding-top:8px; gap:6px; }} .secondary-info .wide {{ grid-column:auto; }} .secondary-info .datum {{ padding:6px; }} .dimension-order {{ font-size:9px; }} .bom-panel {{ grid-template-rows:43px minmax(0,1fr); }} .bom-table td {{ height:36px; }} }}
+    @media (max-height:680px) and (orientation:landscape) {{ .app {{ grid-template-rows:62px minmax(0,1fr); }} .workstation-topbar {{ padding:7px 14px; }} .brand-mark {{ width:38px;height:38px; }} .workspace {{ gap:7px;padding:7px; }} .panel {{ border-radius:14px; }} .panel-head {{ height:43px; }} .info-panel {{ grid-template-rows:43px minmax(0,1fr) minmax(30px,auto); }} .info-body {{ padding:9px; gap:9px; }} .primary-info {{ gap:7px; grid-template-rows:minmax(0,1fr) max-content; }} .datum {{ padding:8px 10px; }} .secondary-info {{ grid-template-columns:1.4fr repeat(var(--detail-columns),minmax(0,1fr)); padding-top:8px; gap:6px; }} .secondary-info .wide {{ grid-column:auto; }} .secondary-info .datum {{ padding:6px; }} .dimension-order {{ font-size:9px; }} .bom-table td {{ height:36px; }} }}
   </style>
 </head>
 <body class="part-workstation">
@@ -144,37 +196,36 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     </header>
     <section class="workspace" aria-label="Összeszerelés munkaterület">
         <article class="panel info-panel">
-          <header class="panel-head"><div class="panel-title"><span class="panel-index">01</span> Beolvasott elem adatai</div><span class="status" id="scanStatus">Scanner készen áll</span></header>
+          <header class="panel-head"><div class="panel-title"><span class="panel-index">01</span> Beolvasott elem adatai</div><div class="panel-actions"><span class="status" id="scanStatus">Scanner készen áll</span>{admin_button}<button class="reset-button bom-toggle" id="bomToggle" type="button" aria-haspopup="dialog" aria-controls="bomPanel" aria-expanded="false">Darabjegyzék · <span id="bomToggleCount">0</span></button></div></header>
           <div class="info-body">
             <div class="primary-info">
-              <div class="datum top-datum barcode-datum"><label>Vonalkód</label><output id="barcode">Még nincs beolvasott kód</output></div>
-              <div class="datum top-datum"><label>Korpusz</label><output class="pending" data-item="cabinet">—</output></div>
-              <div class="datum with-image cabinet-datum"><div class="image-slot asset-image-slot" id="cabinetImageSlot"><span id="cabinetImagePlaceholder">Kép</span><img id="cabinetImage" alt="" decoding="async" hidden /></div><div class="datum-content"><label>Cikkszám</label><output class="pending" data-item="part_number">—</output></div></div>
-              <div class="datum"><label>Megnevezés</label><output class="pending" data-item="description">—</output></div>
-              <div class="datum wide with-image front-datum" id="frontDatum"><div class="image-slot asset-image-slot" id="frontImageSlot"><span id="frontImagePlaceholder">Kép</span><img id="frontImage" alt="" decoding="async" hidden /></div><div class="datum-content"><label>Frontszín &amp; Típus</label><output class="pending" data-item="front">—</output></div></div>
-              <div class="datum" id="handingDatum" hidden><label>Nyitási irány</label><output data-item="handing">—</output></div>
+              <div class="datum wide cabinet-datum"><div class="image-slot asset-image-slot" id="cabinetImageSlot"><span id="cabinetImagePlaceholder">Kép</span><img id="cabinetImage" alt="" decoding="async" hidden /></div><div class="datum-content"><label>Cikkszám | Megnevezés</label><div class="item-identity"><output class="pending" data-item="part_number">—</output><span class="item-separator" aria-hidden="true"> | </span><output class="pending" data-item="description">—</output></div></div></div>
+              <div class="datum connector-datum" id="connectorDatum" hidden><div><label>Összekötő</label><output id="connectorOrientation">—</output></div><div class="connector-image-slot"><span>Kép betöltése…</span><img id="connectorImage" alt="" decoding="async" hidden /></div></div>
               <div class="datum wide color-datum" id="colorDatum"><label>Korpusz színe</label><output class="pending" data-item="color">—</output></div>
+              <div class="datum model-datum" id="modelDatum" hidden><label>Modell</label><output id="frontModel">—</output></div>
             </div>
             <div class="secondary-info" id="secondaryInfo">
               <div class="datum wide dimensions-datum"><label>Beépítési méret</label><output class="pending" data-item="dimensions">—</output><span class="dimension-order">Magasság × szélesség × mélység</span></div>
               <div class="datum"><label>Láb</label><output class="pending" data-item="legs">—</output></div>
-              <div class="datum"><label>Munkalap</label><output class="pending" data-item="worktop">—</output></div>
+              <div class="datum" id="notesDatum" hidden><label>Megjegyzés</label><output data-item="notes">—</output></div>
               <div class="datum" id="fillerWidthDatum" hidden><label>Hézagtakaró szélessége</label><output data-item="filler_width">—</output></div>
-              <div class="datum" id="handleDrillingDatum" hidden><label>Fogantyú furat</label><output data-item="handle_drilling">—</output></div>
             </div>
           </div>
-          <footer class="info-footer"><span>Beolvasva: <time id="scannedAt">—</time> · prdID: <output id="productionId">—</output></span><span id="lookupState">Beolvasásra vár</span></footer>
+          <footer class="info-footer"><div class="footer-metadata"><span>Beolvasva: <time id="scannedAt">—</time></span><span>prdID: <output id="productionId">—</output></span><span>Vonalkód: <output id="barcode">—</output></span><span>Korpusz: <output class="pending" data-item="cabinet">—</output></span></div><span id="lookupState">Beolvasásra vár</span></footer>
         </article>
-      <article class="panel bom-panel">
-        <header class="panel-head"><div class="panel-title"><span class="panel-index">02</span> Darabjegyzék</div><span class="bom-count" id="bomCount">0</span></header>
-        <div class="bom-wrap">
-          <table class="bom-table"><thead><tr><th>#</th><th id="bomPartHeader">Cikkszám<div class="bom-column-resizer" id="bomColumnResizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Cikkszám oszlop szélessége" aria-valuemin="64" aria-valuenow="96" title="Húzd az oszlopszélesség állításához. Dupla kattintás: alaphelyzet."></div></th><th>Megnevezés</th><th>Mennyiség</th></tr></thead><tbody id="bomBody"></tbody></table>
-          <div class="empty-bom" id="emptyBom"><div><span class="empty-icon">≡</span><strong id="emptyBomTitle">Nincs beolvasott elem</strong><p id="emptyBomText">A scannerrel olvasd be az elem vonalkódját. A hozzá tartozó darabjegyzék itt fog megjelenni.</p></div></div>
-        </div>
-      </article>
     </section>
   </main>
+      <dialog class="panel bom-panel" id="bomPanel" aria-labelledby="bomTitle" aria-describedby="bomItemCode bomItemDescription">
+        <header class="panel-head"><div class="bom-heading"><div class="panel-title" id="bomTitle"><span class="panel-index">02</span> Darabjegyzék</div><span class="bom-count" id="bomCount">0</span></div><button class="reset-button bom-close" id="bomClose" type="button" aria-label="Darabjegyzék bezárása" autofocus>×</button></header>
+        <div class="bom-item"><strong id="bomItemCode">Nincs beolvasott elem</strong><p id="bomItemDescription"></p></div>
+        <div class="bom-wrap">
+          <table class="bom-table"><thead><tr><th>#</th><th id="bomPartHeader">Cikkszám<div class="bom-column-resizer" id="bomColumnResizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Cikkszám oszlop szélessége" aria-valuemin="64" aria-valuenow="96" title="Húzd az oszlopszélesség állításához. Dupla kattintás: alaphelyzet."></div></th><th>Megnevezés</th><th>Mennyiség</th><th>Állapot</th></tr></thead><tbody id="bomBody"></tbody></table>
+          <div class="empty-bom" id="emptyBom"><div><span class="empty-icon">≡</span><strong id="emptyBomTitle">Nincs beolvasott elem</strong><p id="emptyBomText">A scannerrel olvasd be az elem vonalkódját. A hozzá tartozó darabjegyzék itt fog megjelenni.</p></div></div>
+        </div>
+        <footer class="bom-review-footer" id="bomReviewFooter" hidden><p class="bom-review-message" id="bomReviewMessage">Ellenőrizd a beolvasott elem darabjegyzékét, majd erősítsd meg. A következő elem csak ezután olvasható be.</p><button class="reset-button bom-confirm" id="bomConfirm" type="button">Ellenőriztem, a darabjegyzék rendben</button></footer>
+      </dialog>
   <div class="toast" id="toast" role="alert"></div>
+  <dialog class="damage-confirm" id="damageDialog" aria-labelledby="damageTitle" aria-describedby="damageItem damageExplanation"><h2 id="damageTitle">Sérült alkatrész jelölése</h2><p id="damageItem"></p><p id="damageExplanation">Sérültként jelölöd ezt a darabjegyzéktételt? A tétel az Összekészítő sérült alkatrészei közé kerül.</p><div class="damage-confirm-actions"><button class="reset-button" id="damageCancel" type="button" autofocus>Mégse</button><button class="reset-button" id="damageSubmit" type="button">Sérültként jelölés</button></div></dialog>
   <dialog class="fullscreen-help" id="fullscreenHelp" aria-labelledby="fullscreenHelpTitle"><h2 id="fullscreenHelpTitle">Teljes képernyő</h2><p>A böngésző most nem engedélyezte a teljes képernyőt. Próbáld közvetlenül a modul oldalán megnyomni a teljes képernyő gombot.</p><p>iPad: Safari → Megosztás → Hozzáadás a főképernyőhöz. Ha látható, hagyd bekapcsolva a „Megnyitás webalkalmazásként” lehetőséget, majd a főképernyő ikonjával indítsd el a modult.</p><form method="dialog"><button class="reset-button">Rendben</button></form></dialog>
   <div class="rotate"><div><b>↻</b><strong>Fordítsd fekvő helyzetbe a táblagépet</strong><p>Ez a munkafelület fekvő nézetre és egyetlen, görgetésmentes képernyőre készült.</p></div></div>
   <script>
@@ -182,22 +233,129 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     document.querySelector('meta[name="theme-color"]').setAttribute('content', getComputedStyle(document.body).getPropertyValue('--bg').trim());
     const clientStateKey = {client_state_key};
     const cabinetImages = new Map(Object.entries({cabinet_images}));
-    const frontImages = {front_images};
-    const nettfrontColours = {nettfront_colours};
-    const frontImage = document.getElementById('frontImage');
     const cabinetImage = document.getElementById('cabinetImage');
+    const connectorRules = {connector_rules}.map(rule => ({{...rule, match:new RegExp(rule.pattern)}}));
+    const connectorImage = document.getElementById('connectorImage');
     const scannerState = document.getElementById('scannerState');
     const scannerHint = document.getElementById('scannerHint');
     const resetButton = document.getElementById('resetButton');
     const fullscreenButton = document.getElementById('fullscreenButton');
     const fullscreenHelp = document.getElementById('fullscreenHelp');
+    const bomPanel = document.getElementById('bomPanel');
+    const bomToggle = document.getElementById('bomToggle');
+    const bomClose = document.getElementById('bomClose');
+    const bomConfirm = document.getElementById('bomConfirm');
+    const damageDialog = document.getElementById('damageDialog');
+    const damageCancel = document.getElementById('damageCancel');
+    const damageSubmit = document.getElementById('damageSubmit');
     const toast = document.getElementById('toast');
     let toastTimer;
     let busy = false;
     let scanBuffer = '';
     let scanOverflow = false;
     let lastScanKeyAt = 0;
+    let currentState = initialState;
+    let confirmationRequired = false;
+    let selectedDamage = null;
+    let damageBusy = false;
     const pendingScans = [];
+
+    function damageRequestId() {{
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      const hex = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+      return [hex.slice(0,8), hex.slice(8,12), hex.slice(12,16), hex.slice(16,20), hex.slice(20)].join('-');
+    }}
+    function openDamage(index) {{
+      if (busy || damageBusy || currentState.lookup_status !== 'ready') return;
+      const row = currentState.bom[index];
+      if (!row || (currentState.damaged_bom_indexes || []).includes(index)) return;
+      clearScanBuffer();
+      selectedDamage = {{ barcode:currentState.barcode, production_number:currentState.production_number || currentState.production_xml?.production_number,
+        bom_index:index, bom_row:{{...row}}, request_id:damageRequestId() }};
+      document.getElementById('damageItem').textContent = [row.part_number, row.description, String(row.quantity ?? '—') + ' db', currentState.barcode].filter(Boolean).join(' · ');
+      damageDialog.showModal();
+      damageCancel.focus();
+      setBusy(busy);
+    }}
+    function closeDamage() {{
+      if (damageBusy) return;
+      damageDialog.close();
+      selectedDamage = null;
+      clearScanBuffer();
+      setBusy(busy);
+      void processScanQueue();
+    }}
+    damageCancel.addEventListener('click', closeDamage);
+    damageDialog.addEventListener('cancel', event => {{ event.preventDefault(); closeDamage(); }});
+    damageSubmit.addEventListener('click', async () => {{
+      if (!selectedDamage || damageBusy || scanBuffer || scanOverflow) return;
+      const selected = selectedDamage;
+      damageBusy = true;
+      damageSubmit.disabled = true;
+      damageCancel.disabled = true;
+      damageSubmit.textContent = 'Mentés…';
+      try {{
+        const response = await fetch('{DAMAGE_ROUTE}', {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(selected) }});
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || 'A sérült alkatrész mentése nem sikerült.');
+        if (data.report.status === 'open') {{
+          currentState = {{...currentState, damaged_bom_indexes:[...new Set([...(currentState.damaged_bom_indexes || []), selected.bom_index])]}};
+          const wrap = document.querySelector('.bom-wrap');
+          const scrollTop = wrap.scrollTop;
+          renderBom(currentState.bom);
+          wrap.scrollTop = scrollTop;
+          saveClientState(currentState);
+        }}
+        damageBusy = false;
+        closeDamage();
+      }} catch (error) {{ showToast(error.message); }}
+      finally {{
+        damageBusy = false;
+        damageSubmit.disabled = false;
+        damageCancel.disabled = false;
+        damageSubmit.textContent = 'Sérültként jelölés';
+        setBusy(busy);
+      }}
+    }});
+
+    function openBom() {{
+      clearScanBuffer();
+      bomPanel.classList.toggle('bom-review', confirmationRequired);
+      bomClose.hidden = confirmationRequired;
+      document.getElementById('bomReviewFooter').hidden = !confirmationRequired;
+      bomPanel.setAttribute('aria-describedby', 'bomItemCode bomItemDescription' + (confirmationRequired ? ' bomReviewMessage' : ''));
+      if (!bomPanel.open) bomPanel.showModal();
+      bomToggle.setAttribute('aria-expanded', 'true');
+      setPartColumnWidth(bomPartHeader.style.width ? parseFloat(bomPartHeader.style.width) : defaultPartWidth);
+      (confirmationRequired ? bomConfirm : bomClose).focus({{ preventScroll:true }});
+    }}
+    function closeBom() {{
+      if (confirmationRequired) return;
+      if (bomPanel.open) bomPanel.close();
+      bomToggle.setAttribute('aria-expanded', 'false');
+      clearScanBuffer();
+    }}
+    bomToggle.addEventListener('click', openBom);
+    bomClose.addEventListener('click', closeBom);
+    bomPanel.addEventListener('cancel', event => {{
+      event.preventDefault();
+      closeBom();
+    }});
+    bomPanel.addEventListener('click', event => {{
+      if (event.target !== bomPanel) return;
+      const rect = bomPanel.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeBom();
+    }});
+    bomConfirm.addEventListener('click', () => {{
+      if (!confirmationRequired || damageDialog.open || damageBusy || scanBuffer || scanOverflow) return;
+      confirmationRequired = false;
+      currentState = {{ ...currentState, bom_confirmation_required:false }};
+      closeBom();
+      renderState(currentState);
+      void processScanQueue();
+    }});
 
     function fullscreenElement() {{ return document.fullscreenElement || document.webkitFullscreenElement; }}
     function updateFullscreenButton() {{
@@ -236,32 +394,6 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
       }}
       return cabinetImages.get(base) || '';
     }}
-    function frontImageKey(value) {{
-      return String(value || '').trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\\bfolias\\b/g, '').replace(/[^a-z0-9]/g, '');
-    }}
-    function frontImageUrl(state) {{
-      const features = state.production_xml?.features || {{}};
-      const colour = features['Front színe'] || features['Front szín felső'] || features['Keretléc szín'];
-      const model = frontImageKey(features['Front típus']);
-      const colours = Object.hasOwn(frontImages, model) ? frontImages[model] : frontImages.anna;
-      return colours && Object.hasOwn(colours, frontImageKey(colour)) ? colours[frontImageKey(colour)] : '';
-    }}
-    function renderFrontText(state) {{
-      const output = document.querySelector('[data-item="front"]');
-      const features = state.production_xml?.features || {{}};
-      const colour = features['Front színe'] || features['Front szín felső'] || features['Keretléc szín'];
-      const model = features['Front típus'];
-      const names = Object.hasOwn(nettfrontColours, frontImageKey(model)) ? nettfrontColours[frontImageKey(model)] : null;
-      const counterpart = names && Object.hasOwn(names, frontImageKey(colour)) ? names[frontImageKey(colour)] : '';
-      if (!colour || !counterpart) return;
-      const translation = document.createElement('span');
-      translation.className = 'front-nettfront';
-      translation.textContent = '(' + counterpart + ')';
-      translation.title = 'Nettfront: ' + counterpart;
-      output.replaceChildren(document.createTextNode(colour + ' '), translation, document.createTextNode(model ? ' | ' + model : ''));
-      output.classList.remove('pending');
-      output.title = [colour, 'Nettfront: ' + counterpart, model].filter(Boolean).join(' | ');
-    }}
     function showAssetImage(image) {{
       const loaded = Boolean(image.getAttribute('src') && image.complete && image.naturalWidth);
       image.hidden = !loaded;
@@ -277,7 +409,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
       if (url) {{ image.src = url; showAssetImage(image); }}
       else image.removeAttribute('src');
     }}
-    for (const image of [cabinetImage, frontImage]) {{
+    for (const image of [cabinetImage, connectorImage]) {{
       image.addEventListener('load', () => showAssetImage(image));
       image.addEventListener('error', () => {{ image.removeAttribute('src'); showAssetImage(image); }});
     }}
@@ -306,9 +438,10 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
     let columnDrag = null;
 
     function setPartColumnWidth(width) {{
+      if (!bomPanel.open) return;
       const headers = bomTable.tHead.rows[0].cells;
       const maxWidth = Math.max(minPartWidth, Math.floor(bomTable.getBoundingClientRect().width
-        - headers[0].getBoundingClientRect().width - headers[3].getBoundingClientRect().width - 160));
+        - headers[0].getBoundingClientRect().width - headers[3].getBoundingClientRect().width - headers[4].getBoundingClientRect().width - 160));
       const nextWidth = Math.max(minPartWidth, Math.min(maxWidth, Math.round(width)));
       bomPartHeader.style.width = nextWidth + 'px';
       bomColumnResizer.setAttribute('aria-valuemax', maxWidth);
@@ -346,14 +479,14 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
       setPartColumnWidth(nextWidth);
     }});
     setPartColumnWidth(defaultPartWidth);
-    if (window.ResizeObserver) new ResizeObserver(() => setPartColumnWidth(bomPartHeader.getBoundingClientRect().width)).observe(bomTable);
-    else window.addEventListener('resize', () => setPartColumnWidth(bomPartHeader.getBoundingClientRect().width));
+    if (window.ResizeObserver) new ResizeObserver(() => setPartColumnWidth(parseFloat(bomPartHeader.style.width) || defaultPartWidth)).observe(bomTable);
+    else window.addEventListener('resize', () => setPartColumnWidth(parseFloat(bomPartHeader.style.width) || defaultPartWidth));
 
     function setBusy(value) {{
       busy = value;
-      resetButton.disabled = value;
+      resetButton.disabled = value || confirmationRequired || damageDialog.open || damageBusy;
       scannerState.setAttribute('aria-busy', String(value));
-      scannerHint.textContent = value ? 'Darabjegyzék betöltése…' : 'Csippantsd be a vonalkódot';
+      scannerHint.textContent = confirmationRequired ? 'Erősítsd meg a darabjegyzéket' : (value ? 'Darabjegyzék betöltése…' : 'Csippantsd be a vonalkódot');
     }}
 
     function valueOrPending(value, fallback = '—') {{ return value ? String(value) : fallback; }}
@@ -362,29 +495,46 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
       const parsed = new Date(value);
       return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('hu-HU', {{ hour:'2-digit', minute:'2-digit', second:'2-digit' }});
     }}
-    function showToast(message) {{ toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 3200); }}
+    function showToast(message) {{ (damageDialog.open ? damageDialog : (bomPanel.open ? bomPanel : document.body)).appendChild(toast); toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 3200); }}
     function renderBom(rows) {{
       const body = document.getElementById('bomBody');
       body.replaceChildren();
       rows.forEach((row, index) => {{
         const tr = document.createElement('tr');
         [index + 1, row.part_number || '—', row.description || '—', row.quantity ?? '—'].forEach(value => {{ const td = document.createElement('td'); td.textContent = value; td.title = String(value); tr.appendChild(td); }});
+        const damaged = (currentState.damaged_bom_indexes || []).includes(index);
+        tr.classList.toggle('is-damaged', damaged);
+        const action = document.createElement('td');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'reset-button bom-damage-button';
+        button.textContent = damaged ? 'Jelezve' : 'Sérült';
+        button.disabled = damaged || currentState.lookup_status !== 'ready' || !row.part_number || row.quantity == null;
+        button.setAttribute('aria-label', (damaged ? 'Sérültként jelezve: ' : 'Sérültként jelölés: ') + (row.part_number || row.description || 'Tétel'));
+        button.addEventListener('click', () => openDamage(index));
+        action.appendChild(button);
+        tr.appendChild(action);
         body.appendChild(tr);
       }});
       document.getElementById('bomCount').textContent = rows.length;
+      document.getElementById('bomToggleCount').textContent = rows.length;
       document.getElementById('emptyBom').hidden = rows.length > 0;
       document.querySelector('.bom-wrap').scrollTop = 0;
     }}
     function renderState(state) {{
+      currentState = state;
+      confirmationRequired = state.lookup_status === 'ready' && state.bom_confirmation_required === true;
       const hasScan = Boolean(state.barcode);
       const pending = state.lookup_status === 'api_pending';
       const ready = state.lookup_status === 'ready';
       const failed = state.lookup_status === 'error';
-      document.getElementById('barcode').textContent = hasScan ? state.barcode : 'Még nincs beolvasott kód';
+      document.getElementById('barcode').textContent = hasScan ? state.barcode : '—';
       document.getElementById('scannedAt').textContent = formatDate(state.scanned_at);
       document.getElementById('productionId').textContent = valueOrPending(state.production_xml && state.production_xml.production_number);
-      document.getElementById('scanStatus').textContent = pending ? 'Darabjegyzék betöltése…' : (failed ? 'Sikertelen lekérés' : 'Scanner készen áll');
-      document.getElementById('lookupState').textContent = pending ? 'Betöltés…' : (failed ? 'Sikertelen lekérés' : (ready ? 'Darabjegyzék betöltve' : 'Beolvasásra vár'));
+      document.getElementById('scanStatus').textContent = confirmationRequired ? 'Ellenőrzés szükséges' : (pending ? 'Darabjegyzék betöltése…' : (failed ? 'Sikertelen lekérés' : 'Scanner készen áll'));
+      document.getElementById('lookupState').textContent = confirmationRequired ? 'Megerősítésre vár' : (pending ? 'Betöltés…' : (failed ? 'Sikertelen lekérés' : (ready ? 'Darabjegyzék betöltve' : 'Beolvasásra vár')));
+      document.getElementById('bomItemCode').textContent = hasScan ? [state.barcode, state.item?.part_number].filter(Boolean).join(' · ') : 'Nincs beolvasott elem';
+      document.getElementById('bomItemDescription').textContent = state.item?.description || '';
       document.getElementById('emptyBomTitle').textContent = pending ? 'Darabjegyzék betöltése…' : (failed ? 'Sikertelen lekérés' : (ready ? 'Nincs darabjegyzék' : 'Nincs beolvasott elem'));
       document.getElementById('emptyBomText').textContent = pending ? 'A beolvasott elem tételeinek lekérése folyamatban van.' : (failed ? state.error_message || 'Olvasd be újra a vonalkódot.' : (ready ? 'A beolvasott elemhez nem érkezett darabjegyzéktétel.' : 'A scannerrel olvasd be az elem vonalkódját. A hozzá tartozó darabjegyzék itt fog megjelenni.'));
       document.querySelectorAll('[data-item]').forEach(output => {{
@@ -393,23 +543,31 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
         output.title = valueOrPending(value);
         output.classList.toggle('pending', !value);
       }});
-      renderFrontText(state);
       const colourKey = String(state.item?.color || '').trim().toLowerCase();
       document.getElementById('colorDatum').classList.toggle('colour-white', colourKey === 'fehér');
       document.getElementById('colorDatum').classList.toggle('colour-anthracite', colourKey === 'antracit kr.');
-      const hasHanding = Boolean(state.item && state.item.handing);
-      document.getElementById('handingDatum').hidden = !hasHanding;
-      document.getElementById('frontDatum').classList.toggle('wide', !hasHanding);
+      const frontModel = String(state.production_xml?.features?.['Front típus'] || '').trim();
+      document.getElementById('modelDatum').hidden = !frontModel;
+      document.getElementById('frontModel').textContent = frontModel || '—';
+      document.getElementById('frontModel').title = frontModel;
+      document.querySelector('.primary-info').classList.toggle('has-model', Boolean(frontModel));
+      const hasNotes = Boolean(String(state.item?.notes || '').trim());
+      document.getElementById('notesDatum').hidden = !hasNotes;
       const hasFillerWidth = Boolean(state.item && state.item.filler_width);
       document.getElementById('fillerWidthDatum').hidden = !hasFillerWidth;
       document.getElementById('secondaryInfo').classList.toggle('has-filler', hasFillerWidth);
-      const hasHandleDrilling = Boolean(state.item && state.item.handle_drilling);
-      document.getElementById('handleDrillingDatum').hidden = !hasHandleDrilling;
-      document.getElementById('secondaryInfo').style.setProperty('--detail-columns', 2 + Number(hasFillerWidth) + Number(hasHandleDrilling));
+      document.getElementById('secondaryInfo').style.setProperty('--detail-columns', 1 + Number(hasNotes) + Number(hasFillerWidth));
       renderAssetImage(cabinetImage, cabinetImageUrl(state.item), [state.item?.part_number, state.item?.handing].filter(Boolean).join(' · '));
-      renderAssetImage(frontImage, frontImageUrl(state), state.item?.front || '');
+      const partCode = String(state.item?.part_number || '').trim().toUpperCase();
+      const connector = connectorRules.find(rule => rule.match.test(partCode));
+      document.getElementById('connectorDatum').hidden = !connector;
+      document.querySelector('.primary-info').classList.toggle('has-connector', Boolean(connector));
+      document.getElementById('connectorOrientation').textContent = connector?.orientation || '—';
+      renderAssetImage(connectorImage, connector?.image_url || '', connector ? connector.orientation + ' összekötő' : '');
       renderBom(Array.isArray(state.bom) ? state.bom : []);
       saveClientState(state);
+      setBusy(busy);
+      if (confirmationRequired) openBom();
     }}
     async function send(url, payload) {{
       const response = await fetch(url, {{ method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(payload || {{}}) }});
@@ -418,12 +576,17 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
       return data.state;
     }}
     async function processScanQueue() {{
-      if (busy || !pendingScans.length) return;
+      if (busy || confirmationRequired || damageDialog.open || damageBusy || !pendingScans.length) return;
       const barcode = pendingScans.shift();
+      closeBom();
       setBusy(true);
       const scannedAt = new Date().toISOString();
       renderState({{ barcode, scanned_at:scannedAt, lookup_status:'api_pending', bom:[] }});
-      try {{ renderState(await send('{SCAN_ROUTE}', {{ barcode }})); }} catch (error) {{ renderState({{ barcode, scanned_at:scannedAt, lookup_status:'error', error_message:error.message, item:{{}}, bom:[] }}); showToast(error.message); }} finally {{ setBusy(false); void processScanQueue(); }}
+      try {{
+        const state = await send('{SCAN_ROUTE}', {{ barcode }});
+        state.bom_confirmation_required = state.lookup_status === 'ready' && Math.random() < 1 / 50;
+        renderState(state);
+      }} catch (error) {{ renderState({{ barcode, scanned_at:scannedAt, lookup_status:'error', error_message:error.message, item:{{}}, bom:[] }}); showToast(error.message); }} finally {{ setBusy(false); void processScanQueue(); }}
     }}
     function clearScanBuffer() {{ scanBuffer = ''; scanOverflow = false; lastScanKeyAt = 0; }}
     document.addEventListener('keydown', event => {{
@@ -439,7 +602,11 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
         const overflow = scanOverflow;
         clearScanBuffer();
         if (overflow) {{ showToast('A vonalkód legfeljebb 160 karakter lehet.'); return; }}
-        if (barcode) {{ pendingScans.push(barcode); void processScanQueue(); }}
+        if (barcode) {{
+          if (damageDialog.open || damageBusy) {{ showToast('Előbb zárd le a sérült alkatrész jelölését, majd olvasd be újra az elemet.'); return; }}
+          if (confirmationRequired) {{ showToast('Előbb erősítsd meg a darabjegyzéket, majd olvasd be újra az elemet.'); return; }}
+          pendingScans.push(barcode); void processScanQueue();
+        }}
       }} else if (event.key === 'Backspace' && scanBuffer) {{
         event.preventDefault(); scanBuffer = scanBuffer.slice(0, -1); lastScanKeyAt = now;
       }} else if (event.key === 'Escape') clearScanBuffer();
@@ -451,7 +618,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "") -> bytes:
         lastScanKeyAt = now;
       }} else if (event.key !== 'Shift') clearScanBuffer();
     }}, true);
-    resetButton.addEventListener('click', () => {{ if (busy) return; clearScanBuffer(); pendingScans.length = 0; renderState(initialState); }});
+    resetButton.addEventListener('click', () => {{ if (busy || confirmationRequired || damageDialog.open || damageBusy) return; closeBom(); clearScanBuffer(); pendingScans.length = 0; renderState(initialState); }});
     document.addEventListener('pointerdown', clearScanBuffer);
     window.addEventListener('blur', clearScanBuffer);
     document.addEventListener('visibilitychange', () => {{ if (document.hidden) clearScanBuffer(); }});

@@ -36,6 +36,7 @@ from .common import (
     production_folder,
 )
 from .config import REPO_ROOT, bundle_disk_cache_dir, operation_runtime_dir, runtime_dir
+from ..assembly_damage import damage_special_view
 from ..routes import (
     MANUFACTURING_ADMIN_REVISION_ROUTE,
     MANUFACTURING_DATA_ROUTE,
@@ -1564,6 +1565,7 @@ def _manufacturing_view_bundle(
                             "sections": korpusz_alkatresz_sections,
                         },
                         all_red_view,
+                        damage_special_view(),
                     ],
                     "hideBarcodeColumn": True,
                 }
@@ -1707,6 +1709,7 @@ def _manufacturing_view_bundle(
                     "sections": korpusz_alkatresz_sections,
                 },
                 all_red_view,
+                damage_special_view(),
             ],
             "hideBarcodeColumn": True,
         }
@@ -1971,6 +1974,16 @@ def manufacturing_module_payload(
             "folder": str(production_folder(selected_number)) if selected_number else "",
             "documents": [],
         }
+
+    if selected_operation == "korpusz_osszekeszites" and not bundle.get("documents"):
+        # The queue remains usable when its production XML is no longer available.
+        document = _manufacturing_placeholder_document(selected_operation, "Korpusz összekészítés")
+        document["specialViews"] = [
+            {"key": "korpusz-osszekeszito", "label": "Összekészítő", "sections": [], "count": 0},
+            {"key": "all-productions-red", "label": "Összes gyártás összes piros eleme", "sections": [], "count": 0},
+            damage_special_view(),
+        ]
+        bundle["documents"].append(document)
 
     if selected_operation != "topfloor":
         _manufacturing_apply_row_data_overrides(bundle, selected_number)
