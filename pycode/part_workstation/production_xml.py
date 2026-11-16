@@ -9,11 +9,11 @@ from manufacturing.base.common import production_folder
 
 
 XML_FILENAME = "EtikettKitchen_korp_tip.xml"
-ITEM_FIELDS = ("Barcode", "Korpusztipus", "Korp_tip_nev", "pdCode", "pdvDescription", "Korp_Szin")
+ITEM_FIELDS = ("Barcode", "Korpusztipus", "Korp_tip_nev", "pdCode", "pdvDescription", "Korp_Szin", "Megjegyzes")
 FEATURE_NAMES = (
     "Láb típusa", "J/B", "Nyitási irány", "Munkalap szín", "Front típus", "Beép.mag.cm",
     "Beép.szél.cm", "Beép.mélys.cm", "Front színe", "Front szín felső", "Keretléc szín", "Hézagtakaró szélessége",
-    "Fogantyú furat",
+    "Fogantyú furat", "Megjegyzés",
 )
 
 
@@ -69,6 +69,7 @@ def lookup_xml_item(barcode: str, *, production_number: str, oln_id: object = No
     result["fields"] = {name: fields.get(name, "") for name in ITEM_FIELDS}
     # The current export spells this tag Korp_szin; expose the requested name.
     result["fields"]["Korp_Szin"] = fields.get("Korp_Szin", fields.get("Korp_szin", ""))
+    result["fields"]["Megjegyzes"] = fields.get("Megjegyzes") or fields.get("Megjegyzés", "")
     for tag, label in fields.items():
         match = re.fullmatch(r"FeatureBillTranslation(\d+)", tag)
         if match and label in FEATURE_NAMES:
