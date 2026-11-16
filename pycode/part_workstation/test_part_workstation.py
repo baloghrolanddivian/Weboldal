@@ -176,6 +176,18 @@ class PartWorkstationScanTests(unittest.TestCase):
         self.assertEqual(third_item["handing"], "")
         self.assertEqual(third_item["front"], "Fehér | Laura")
 
+    def test_notes_use_xml_values_without_carrying_over_between_scans(self) -> None:
+        metadata = empty_xml_metadata()
+        metadata["lookup_status"] = "ready"
+        self.xml_lookup.return_value = metadata
+        metadata["fields"]["Megjegyzes"] = "  Egyedi szerelés  "
+        self.assertEqual(register_scan("FIRST")["item"]["notes"], "Egyedi szerelés")
+        metadata["features"]["Megjegyzés"] = "  Szerelés előtt ellenőrizni  "
+        self.assertEqual(register_scan("SECOND")["item"]["notes"], "Szerelés előtt ellenőrizni")
+        metadata["fields"]["Megjegyzes"] = ""
+        metadata["features"]["Megjegyzés"] = " \n "
+        self.assertEqual(register_scan("THIRD")["item"]["notes"], "")
+
     def test_missing_and_invalid_dimensions_never_become_invented_measurements(self) -> None:
         metadata = empty_xml_metadata()
         metadata["lookup_status"] = "ready"

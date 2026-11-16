@@ -7,6 +7,8 @@ import json
 import urllib.parse
 from datetime import date
 
+from .damage_ui import DAMAGE_VIEW_STYLE, damage_view_script
+
 
 def _json_script_payload(payload: object) -> str:
     """Serialize JSON safely for embedding inside a script tag."""
@@ -2757,6 +2759,7 @@ def render_manufacturing_page(
         min-height: 14px;
       }}
     }}
+    {DAMAGE_VIEW_STYLE}
   </style>
 </head>
 <body>
@@ -3440,7 +3443,7 @@ def render_manufacturing_page(
         if (String(document?.key || "") !== "korpusz_osszekeszites") return [];
         return specialViewsForDocument(document).filter((view) => {{
           const key = String(view?.key || "");
-          return key === "korpusz-osszekeszito" || key === "korpusz-alkatresz-kesz" || key === "all-productions-red";
+          return key === "korpusz-osszekeszito" || key === "korpusz-alkatresz-kesz" || key === "all-productions-red" || key === "assembly-damaged";
         }});
       }};
       const korpuszXmlBackedViewKeys = new Set(["korpusz-osszekeszito", "korpusz-alkatresz-kesz"]);
@@ -3571,6 +3574,7 @@ def render_manufacturing_page(
       const canReportReadyForCurrentView = (document) => {{
         const documentKey = String(document?.key || "");
         if (!reportReadyRoute) return false;
+        if (currentViewKey === "assembly-damaged") return false;
         if (documentKey === "korpusz_osszekeszites") return currentSubcategoryKey === "green";
         if (documentKey === "front_osszekeszites") return currentViewKey === "green";
         return false;
@@ -4676,7 +4680,7 @@ def render_manufacturing_page(
           sectionTabsNode.innerHTML = mainKorpuszViews.map((item) => `
             <button class="mfg-section-tab${{item.key === currentViewKey ? " is-active" : ""}}${{tabStateClassForRows(Array.isArray(item?.sections) ? item.sections.flatMap((section) => Array.isArray(section.rows) ? section.rows : []) : [], korpuszViewEmptyIsDone(item))}}" type="button" data-view-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
-              <small>${{specialViewUsesRedFilter(item)
+              <small>${{item.key === "assembly-damaged" ? Number(item.count || 0) : specialViewUsesRedFilter(item)
                 ? (Array.isArray(item?.sections) ? item.sections : []).reduce((total, section) => total + (Array.isArray(section?.rows) ? section.rows : []).reduce((sum, row) => {{
                     if (Array.isArray(row?.childUnitStateKeys)) return sum + row.childUnitStateKeys.filter((key) => selectionState[String(key || "")] === "red").length;
                     return sum + (rowStateValue(row) === "red" ? Math.max(1, Number(row?.quantity || 0) || 1) : 0);
@@ -4685,6 +4689,12 @@ def render_manufacturing_page(
             </button>
           `).join("");
           subsectionTabsNode.style.display = "";
+          if (currentViewKey === "assembly-damaged") {{
+            currentSubcategoryKey = "all";
+            subsectionTabsNode.innerHTML = "";
+            subsectionTabsNode.style.display = "none";
+            return;
+          }}
           subsectionTabsNode.innerHTML = korpuszSubTabs.map((item) => `
             <button class="mfg-subsection-tab${{item.key === currentSubcategoryKey ? " is-active" : (layoutMode === "double" && item.key !== "all" && item.key === pairedSectionKey({{ sections: currentKorpuszSections }}, currentSubcategoryKey) ? " is-secondary" : "")}}${{item.stateClass || ""}}" type="button" data-subcategory-key="${{escapeHtml(item.key)}}" title="${{escapeHtml(item.label)}}">
               <strong>${{escapeHtml(item.label)}}</strong>
@@ -4767,9 +4777,12 @@ def render_manufacturing_page(
         `).join("");
       }};
 
+      {damage_view_script()}
+
       const renderRows = (groups) => {{
         const document = currentDocument();
         const currentSpecialView = specialViewForKey(document, currentViewKey);
+        if (currentViewKey === "assembly-damaged") {{ renderAssemblyDamageView(groups); return; }}
         const isOverviewMode = currentViewKey === "all" || currentViewKey === "plain" || currentViewKey === "green" || currentViewKey === "red" || currentViewKey === "mixed" || Boolean(currentSpecialView);
         const isPantoloDocument = String(document?.key || "") === "pantolas";
         const isSplitMode = layoutMode === "double" && groups.length > 1 && (

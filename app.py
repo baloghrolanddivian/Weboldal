@@ -71,6 +71,8 @@ from manufacturing import (
     sync_front_missing_state,
     sync_korpusz_missing_state,
 )
+from manufacturing.assembly_damage import damage_special_view, complete_damage_report
+from manufacturing.routes import MANUFACTURING_DAMAGE_ROUTE, MANUFACTURING_DAMAGE_COMPLETE_ROUTE
 from manufacturing.admin import (
     MANUFACTURING_DATA_ROUTE as ADMIN_MANUFACTURING_DATA_ROUTE,
     MANUFACTURING_ROW_DATA_ROUTE as ADMIN_MANUFACTURING_ROW_DATA_ROUTE,
@@ -132,11 +134,21 @@ from damaged_items import (
 )
 from part_workstation import (
     ACCESS_USER_IDS as PART_WORKSTATION_ACCESS_USER_IDS,
+    ADMIN_ACCESS_USER_IDS as PART_WORKSTATION_ADMIN_ACCESS_USER_IDS,
+    ADMIN_DATA_ROUTE as PART_WORKSTATION_ADMIN_DATA_ROUTE,
+    ADMIN_ROUTE as PART_WORKSTATION_ADMIN_ROUTE,
+    ADMIN_SAVE_ROUTE as PART_WORKSTATION_ADMIN_SAVE_ROUTE,
+    DAMAGE_ROUTE as PART_WORKSTATION_DAMAGE_ROUTE,
+    ProductionConflict as PartWorkstationProductionConflict,
     ROUTE as PART_WORKSTATION_ROUTE,
     SCAN_ROUTE as PART_WORKSTATION_SCAN_ROUTE,
     empty_state as empty_part_workstation_state,
+    load_production_notes as load_part_workstation_production_notes,
     register_scan as register_part_workstation_scan,
+    report_bom_damage as report_part_workstation_bom_damage,
     render_page as render_part_workstation_page,
+    render_admin_page as render_part_workstation_admin_page,
+    save_production_notes as save_part_workstation_production_notes,
 )
 from leltar.group_pages import render_inventory_group_page
 from leltar.cutting_inventory import (
@@ -586,6 +598,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (HR_CONFIRM_ROUTE, HR_ACCESS_USER_IDS),
     (MANUFACTURING_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_DATA_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_DAMAGE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_ADMIN_REVISION_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_STATE_ROUTE, STANDARD_ACCESS_USER_IDS),
@@ -617,6 +630,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (SEMIFINISHED_FRONT_INVENTORY_LEGACY_WORKER_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_STATE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
     (SEMIFINISHED_FRONT_INVENTORY_PRESENCE_ROUTE, PRODUCTION_INVENTORY_ACCESS_USER_IDS),
+    (PART_WORKSTATION_ADMIN_ROUTE, PART_WORKSTATION_ADMIN_ACCESS_USER_IDS),
     (PART_WORKSTATION_ROUTE, PART_WORKSTATION_ACCESS_USER_IDS),
     (DAMAGED_ITEMS_ADMIN_ROUTE, DAMAGED_ITEMS_ADMIN_ACCESS_USER_IDS),
     (DAMAGED_ITEMS_WORKER_ROUTE, DAMAGED_ITEMS_WORKER_ACCESS_USER_IDS),
@@ -6104,6 +6118,13 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         if self.reject_unauthorized_module():
             return
 
+        if path == MANUFACTURING_DAMAGE_ROUTE:
+            try:
+                self.respond_json(200, {"ok": True, "view": damage_special_view()})
+            except (OSError, ValueError):
+                self.respond_json(500, {"ok": False, "error": "A sérült alkatrészek listája nem olvasható."})
+            return
+
         if path == MANUFACTURING_ADMIN_REVISION_ROUTE:
             revision = load_admin_manufacturing_change_revision(admin_manufacturing_runtime_dir())
             self.respond_json(200, {"ok": True, "revision": revision})
@@ -6245,12 +6266,39 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
 
 
+        if path == PART_WORKSTATION_ADMIN_DATA_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                production = load_part_workstation_production_notes(query.get("production_id", [""])[0])
+            except FileNotFoundError:
+                self.respond_json(404, {"ok": False, "error": "A gyártási fájl nem található."})
+                return
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except OSError:
+                self.respond_json(502, {"ok": False, "error": "A gyártási fájl nem olvasható."})
+                return
+            self.respond_json(200, {"ok": True, "production": production})
+            return
+
+        if path == PART_WORKSTATION_ADMIN_ROUTE:
+            body = render_part_workstation_admin_page(self.current_user().display_name)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == PART_WORKSTATION_ROUTE:
             user = self.current_user()
             body = render_part_workstation_page(
                 empty_part_workstation_state(),
                 user.display_name,
                 user_id=user.user_id,
+                show_admin=_can_access_path(user, PART_WORKSTATION_ADMIN_ROUTE),
             )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -7503,6 +7551,64 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Location", NETTFRONT_INVOICE_ADMIN_ROUTE)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+
+        if path in {PART_WORKSTATION_DAMAGE_ROUTE, MANUFACTURING_DAMAGE_COMPLETE_ROUTE}:
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                self.respond_json(415, {"ok": False, "error": "JSON kérés szükséges."})
+                return
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < content_length <= 8192:
+                    raise ValueError("Érvénytelen kérésméret.")
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("Hibás kérés.")
+                user = self.current_user()
+                if path == PART_WORKSTATION_DAMAGE_ROUTE:
+                    report = report_part_workstation_bom_damage(payload, reported_by=user.display_name)
+                    self.respond_json(200, {"ok": True, "report": report})
+                else:
+                    complete_damage_report(payload.get("report_id"), completed_by=user.display_name)
+                    self.respond_json(200, {"ok": True, "view": damage_special_view()})
+            except (UnicodeDecodeError, ValueError) as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            except (RuntimeError, OSError):
+                self.respond_json(502, {"ok": False, "error": "A sérült alkatrész mentése nem sikerült. Próbáld újra."})
+            return
+
+        if path == PART_WORKSTATION_ADMIN_SAVE_ROUTE:
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                self.respond_json(415, {"ok": False, "error": "JSON kérés szükséges."})
+                return
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self.respond_json(400, {"ok": False, "error": "Hibás kéréshossz."})
+                return
+            if not 0 < content_length <= 4 * 1024 * 1024:
+                self.respond_json(413, {"ok": False, "error": "Érvénytelen kérésméret."})
+                return
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("Hibás kérés.")
+                production = save_part_workstation_production_notes(
+                    payload.get("production_id"), payload.get("revision"), payload.get("changes"),
+                )
+            except PartWorkstationProductionConflict as exc:
+                self.respond_json(409, {"ok": False, "error": str(exc)})
+                return
+            except FileNotFoundError:
+                self.respond_json(404, {"ok": False, "error": "A gyártási fájl nem található."})
+                return
+            except (UnicodeDecodeError, ValueError) as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            except OSError:
+                self.respond_json(502, {"ok": False, "error": "A gyártási fájl mentése nem sikerült. A módosítások nem kerültek mentésre."})
+                return
+            self.respond_json(200, {"ok": True, "production": production})
             return
 
         if path == PART_WORKSTATION_SCAN_ROUTE:

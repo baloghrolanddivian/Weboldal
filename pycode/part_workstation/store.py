@@ -6,6 +6,8 @@ import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+from manufacturing.assembly_damage import damaged_bom_indexes
+
 from .lookup import lookup_scan
 from .production_xml import empty_xml_metadata, lookup_xml_item, normalized_xml_metadata
 
@@ -16,6 +18,8 @@ def empty_state() -> dict:
     """Return the workstation state before a barcode is scanned."""
     return {
         "barcode": "",
+        "production_number": "",
+        "damaged_bom_indexes": [],
         "scanned_at": "",
         "lookup_status": "waiting_for_scan",
         "error_message": "",
@@ -27,6 +31,7 @@ def empty_state() -> dict:
             "front": "",
             "legs": "",
             "worktop": "",
+            "notes": "",
             "filler_width": "",
             "handle_drilling": "",
             "dimensions": "",
@@ -60,6 +65,8 @@ def register_scan(barcode: str) -> dict:
     lookup = lookup_scan(clean_barcode)
     state["bom"] = lookup["bom"]
     scan = lookup["scan"]
+    state["production_number"] = lookup["production_number"]
+    state["damaged_bom_indexes"] = damaged_bom_indexes(lookup["production_number"], scan.get("scan") or clean_barcode, lookup["bom"])
     state["production_xml"] = lookup_xml_item(
         scan.get("scan") or clean_barcode,
         production_number=lookup["production_number"],
@@ -78,6 +85,8 @@ def _normalized_state(payload: object) -> dict:
     if not isinstance(payload, dict):
         return result
     result["barcode"] = _clean_barcode(payload.get("barcode", ""))[:MAX_BARCODE_LENGTH]
+    result["production_number"] = str(payload.get("production_number") or "")
+    result["damaged_bom_indexes"] = payload.get("damaged_bom_indexes", [])
     result["scanned_at"] = str(payload.get("scanned_at", "") or "")[:64]
     status = str(payload.get("lookup_status", "") or "")
     result["lookup_status"] = status if status in {"waiting_for_scan", "api_pending", "ready", "error"} else "waiting_for_scan"
@@ -102,6 +111,7 @@ def _normalized_state(payload: object) -> dict:
         result["item"]["color"] = fields["Korp_Szin"]
         result["item"]["legs"] = features["Láb típusa"]
         result["item"]["worktop"] = features["Munkalap szín"]
+        result["item"]["notes"] = (features["Megjegyzés"].strip() or fields["Megjegyzes"].strip())[:500]
         result["item"]["filler_width"] = features["Hézagtakaró szélessége"]
         result["item"]["handle_drilling"] = features["Fogantyú furat"]
         dimensions = [_millimeters(features[name]) for name in ("Beép.mag.cm", "Beép.szél.cm", "Beép.mélys.cm")]
