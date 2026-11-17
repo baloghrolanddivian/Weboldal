@@ -50,6 +50,8 @@ def render_admin_page(user_name: str) -> bytes:
     .notes-table th { padding:12px; border-bottom:1px solid var(--border); color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
     .notes-table th:first-child { width:190px; }
     .notes-table th:nth-child(2) { width:210px; }
+    .notes-table th:nth-child(3) { width:100px; }
+    .notes-table th:nth-child(4) { width:150px; }
     .notes-table td { padding:12px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
     .notes-table td:first-child { font-weight:750; }
     .notes-table textarea { width:100%; min-width:240px; min-height:70px; padding:10px 12px; resize:vertical; border:1px solid var(--border); border-radius:9px; color:var(--text); background:var(--bg); line-height:1.45; }
@@ -63,15 +65,15 @@ def render_admin_page(user_name: str) -> bytes:
 </head>
 <body class="assembly-admin">
   <main class="notes-admin">
-    <header class="notes-header"><div><small>Összeszerelés · Admin · __USER__</small><h1>Megjegyzések kezelése</h1><p>Nyisd meg a gyártást, majd szerkeszd az elemek megjegyzéseit.</p></div><a class="notes-button" href="__MODULE_ROUTE__">Vissza az összeszereléshez</a></header>
+    <header class="notes-header"><div><small>Összeszerelés · Admin · __USER__</small><h1>Megjegyzések kezelése</h1><p>Keress a legutóbbi gyártásokban, vagy nyiss meg egy gyártást, majd szerkeszd az elemek megjegyzéseit.</p></div><a class="notes-button" href="__MODULE_ROUTE__">Vissza az összeszereléshez</a></header>
     <section class="notes-controls" aria-label="Gyártás megnyitása">
-      <form id="productionForm"><label>Gyártási azonosító (prdID)<input id="productionInput" name="production_id" inputmode="numeric" pattern="[0-9]+" maxlength="20" required autocomplete="off" /></label><button class="notes-button primary" id="loadButton" type="submit">Gyártás megnyitása</button></form>
-      <p id="notesStatus" role="status" aria-live="polite">Adj meg egy gyártási azonosítót.</p>
+      <form id="productionForm"><label>Gyártási azonosító (prdID)<input id="productionInput" name="production_id" inputmode="numeric" pattern="[0-9]+" maxlength="20" required autocomplete="off" /></label><button class="notes-button primary" id="loadButton" type="submit">Gyártás megnyitása</button><button class="notes-button" id="recentButton" type="button">Legutóbbi 12 gyártás</button></form>
+      <p id="notesStatus" role="status" aria-live="polite">Legutóbbi gyártások betöltése…</p>
     </section>
     <section class="notes-board" id="notesBoard" aria-label="Gyártási megjegyzések" hidden>
       <div class="notes-toolbar"><div><h2 id="productionTitle"></h2><p><span id="itemCount">0</span> elem · <span id="changedCount">0</span> módosítás</p></div><div class="notes-actions"><button class="notes-button" id="discardButton" type="button" disabled>Változtatások elvetése</button><button class="notes-button primary" id="saveButton" type="button" disabled>Módosítások mentése</button></div></div>
-      <div class="notes-filters"><label class="notes-search">CONID keresése<input id="conSearchInput" type="search" placeholder="CON azonosító vagy részlet" maxlength="160" autocomplete="off" aria-controls="notesBody" /></label><label class="notes-egk"><input id="egkOnly" type="checkbox" aria-controls="notesBody" />Csak EGK cikkszám</label><button class="notes-button" id="clearFiltersButton" type="button" hidden>Szűrők törlése</button><span id="filteredCount" role="status" aria-live="polite"></span></div>
-      <div class="notes-table-wrap"><table class="notes-table"><thead><tr><th scope="col">CONID</th><th scope="col">Cikkszám</th><th scope="col">Megjegyzés</th></tr></thead><tbody id="notesBody"></tbody></table></div>
+      <div class="notes-filters"><label class="notes-search">CONID keresése<input id="conSearchInput" type="search" placeholder="CON azonosító vagy részlet" maxlength="160" autocomplete="off" aria-controls="notesBody" /></label><label class="notes-search">Rendelésszám (ordOrderNo)<input id="orderSearchInput" type="search" placeholder="Rendelésszám vagy részlet" maxlength="160" autocomplete="off" aria-controls="notesBody" /></label><label class="notes-egk"><input id="egkOnly" type="checkbox" aria-controls="notesBody" />Csak EGK cikkszám</label><button class="notes-button" id="clearFiltersButton" type="button" hidden>Szűrők törlése</button><span id="filteredCount" role="status" aria-live="polite"></span></div>
+      <div class="notes-table-wrap"><table class="notes-table"><thead><tr><th scope="col">CONID</th><th scope="col">Cikkszám</th><th scope="col">Gyártás</th><th scope="col">Rendelésszám</th><th scope="col">Megjegyzés</th></tr></thead><tbody id="notesBody"></tbody></table></div>
       <p id="notesEmpty" hidden>A gyártásban nincs megjeleníthető elem.</p>
       <p id="notesNoMatches" hidden>Nincs a szűrőknek megfelelő elem.</p>
     </section>
@@ -80,11 +82,13 @@ def render_admin_page(user_name: str) -> bytes:
     const productionForm = document.getElementById('productionForm');
     const productionInput = document.getElementById('productionInput');
     const loadButton = document.getElementById('loadButton');
+    const recentButton = document.getElementById('recentButton');
     const saveButton = document.getElementById('saveButton');
     const discardButton = document.getElementById('discardButton');
     const notesBody = document.getElementById('notesBody');
     const notesStatus = document.getElementById('notesStatus');
     const conSearchInput = document.getElementById('conSearchInput');
+    const orderSearchInput = document.getElementById('orderSearchInput');
     const egkOnly = document.getElementById('egkOnly');
     const clearFiltersButton = document.getElementById('clearFiltersButton');
     let production = null;
@@ -98,10 +102,12 @@ def render_admin_page(user_name: str) -> bytes:
     function updateControls() {
       document.getElementById('changedCount').textContent = changes.size;
       loadButton.disabled = busy;
+      recentButton.disabled = busy;
       productionInput.disabled = busy;
       saveButton.disabled = busy || !changes.size;
       discardButton.disabled = busy || !changes.size;
       conSearchInput.disabled = busy;
+      orderSearchInput.disabled = busy;
       egkOnly.disabled = busy;
       clearFiltersButton.disabled = busy;
       notesBody.querySelectorAll('textarea').forEach(input => { input.disabled = busy; });
@@ -109,42 +115,54 @@ def render_admin_page(user_name: str) -> bytes:
     }
     function applyFilters() {
       const query = conSearchInput.value.trim().toUpperCase();
+      const orderQuery = orderSearchInput.value.trim().toUpperCase();
       let visible = 0;
       for (const row of notesBody.rows) {
         row.hidden = !row.dataset.conId.toUpperCase().includes(query)
+          || !row.dataset.orderNo.toUpperCase().includes(orderQuery)
           || (egkOnly.checked && row.dataset.partNumber.trim().toUpperCase() !== 'EGK');
         if (!row.hidden) visible++;
       }
       const total = production?.items.length || 0;
       document.getElementById('filteredCount').textContent = visible + ' / ' + total + ' elem';
       document.getElementById('notesNoMatches').hidden = !total || visible > 0;
-      clearFiltersButton.hidden = !conSearchInput.value && !egkOnly.checked;
+      clearFiltersButton.hidden = !conSearchInput.value && !orderSearchInput.value && !egkOnly.checked;
     }
     conSearchInput.addEventListener('input', applyFilters);
+    orderSearchInput.addEventListener('input', applyFilters);
     egkOnly.addEventListener('change', applyFilters);
     clearFiltersButton.addEventListener('click', () => {
       conSearchInput.value = '';
+      orderSearchInput.value = '';
       egkOnly.checked = false;
       applyFilters();
       conSearchInput.focus();
     });
-    function renderProduction(data) {
-      if (production?.production_id !== data.production_id) {
+    function itemKey(item, data = production) {
+      return data?.recent ? item.production_id + ':' + item.row_id : item.row_id;
+    }
+    function renderProduction(data, preserveChanges = false) {
+      if (production?.production_id !== data.production_id || Boolean(production?.recent) !== Boolean(data.recent)) {
         conSearchInput.value = '';
+        orderSearchInput.value = '';
         egkOnly.checked = false;
       }
       production = data;
-      changes.clear();
+      if (!preserveChanges) changes.clear();
       notesBody.replaceChildren();
       document.getElementById('notesBoard').hidden = false;
-      document.getElementById('productionTitle').textContent = 'Gyártás: ' + data.production_id;
+      document.getElementById('productionTitle').textContent = data.recent
+        ? 'Legutóbbi gyártások: ' + (data.productions.map(item => item.production_id).join(', ') || 'nincs elérhető gyártás')
+        : 'Gyártás: ' + data.production_id;
       document.getElementById('itemCount').textContent = data.items.length;
       document.getElementById('notesEmpty').hidden = data.items.length > 0;
       data.items.forEach(item => {
         const row = document.createElement('tr');
         row.dataset.conId = String(item.con_id || '');
         row.dataset.partNumber = String(item.part_number || '');
-        for (const value of [item.con_id, item.part_number]) {
+        row.dataset.orderNo = String(item.ordOrderNo || '');
+        const key = itemKey(item, data);
+        for (const value of [item.con_id, item.part_number, item.production_id || data.production_id, item.ordOrderNo]) {
           const cell = document.createElement('td');
           cell.textContent = value || '—';
           row.appendChild(cell);
@@ -153,17 +171,18 @@ def render_admin_page(user_name: str) -> bytes:
         const input = document.createElement('textarea');
         input.rows = 2;
         input.maxLength = 500;
-        input.value = item.notes;
+        input.value = changes.has(key) ? changes.get(key) : item.notes;
         input.classList.toggle('has-note', Boolean(input.value.trim()));
         input.dataset.rowId = item.row_id;
-        input.setAttribute('aria-label', 'Megjegyzés: ' + (item.con_id || item.part_number || 'Elem ' + item.row_id));
+        input.setAttribute('aria-label', 'Megjegyzés: ' + (item.production_id || data.production_id) + ' · ' + (item.con_id || item.part_number || 'Elem ' + item.row_id));
         input.addEventListener('input', () => {
           input.classList.toggle('has-note', Boolean(input.value.trim()));
-          if (input.value === item.notes) changes.delete(item.row_id);
-          else changes.set(item.row_id, input.value);
-          row.classList.toggle('is-edited', changes.has(item.row_id));
+          if (input.value === item.notes) changes.delete(key);
+          else changes.set(key, input.value);
+          row.classList.toggle('is-edited', changes.has(key));
           updateControls();
         });
+        row.classList.toggle('is-edited', changes.has(key));
         cell.appendChild(input);
         row.appendChild(cell);
         notesBody.appendChild(row);
@@ -177,32 +196,56 @@ def render_admin_page(user_name: str) -> bytes:
       if (!response.ok || !data.ok) throw new Error(data.error || 'A művelet nem sikerült.');
       return data.production;
     }
-    productionForm.addEventListener('submit', async event => {
-      event.preventDefault();
+    async function loadProduction(number = '') {
       if (busy) return;
-      if (changes.size && !window.confirm('A nem mentett megjegyzések elvesznek. Megnyitod a gyártást?')) return;
-      const number = productionInput.value.trim();
-      if (!/^[0-9]{1,20}$/.test(number)) { status('Érvénytelen gyártási azonosító.', true); return; }
+      if (changes.size && !window.confirm('A nem mentett megjegyzések elvesznek. Megnyitod a gyártásokat?')) return;
+      if (number && !/^[0-9]{1,20}$/.test(number)) { status('Érvénytelen gyártási azonosító.', true); return; }
       busy = true;
       updateControls();
       status('Gyártás betöltése…');
       try {
-        renderProduction(await request('__DATA_ROUTE__?production_id=' + encodeURIComponent(number)));
-        status('A gyártás betöltve. A megjegyzés nélküli sorok is szerkeszthetők.');
+        renderProduction(await request('__DATA_ROUTE__' + (number ? '?production_id=' + encodeURIComponent(number) : '')));
+        const warnings = production.warnings?.length ? ' Nem olvasható gyártások: ' + production.warnings.map(item => item.production_id).join(', ') + '.' : '';
+        status((production.recent ? production.productions.length + ' gyártás betöltve (legfeljebb 12, 14657-től).' : 'A gyártás betöltve.') + ' A megjegyzés nélküli sorok is szerkeszthetők.' + warnings, Boolean(warnings));
       } catch (error) { status(error.message, true); }
       finally { busy = false; updateControls(); }
+    }
+    productionForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const number = productionInput.value.trim();
+      if (!number) { status('Érvénytelen gyártási azonosító.', true); return; }
+      void loadProduction(number);
     });
+    recentButton.addEventListener('click', () => { void loadProduction(); });
     saveButton.addEventListener('click', async () => {
       if (busy || !production || !changes.size) return;
-      const payload = { production_id:production.production_id, revision:production.revision,
-        changes:[...changes].map(([row_id, notes]) => ({ row_id, notes })) };
+      const groups = new Map();
+      for (const item of production.items) {
+        const key = itemKey(item);
+        if (!changes.has(key)) continue;
+        const id = item.production_id || production.production_id;
+        if (!groups.has(id)) groups.set(id, { production_id:id,
+          revision:production.recent ? production.productions.find(value => value.production_id === id).revision : production.revision, changes:[] });
+        groups.get(id).changes.push({ row_id:item.row_id, notes:changes.get(key) });
+      }
       busy = true;
       updateControls();
       status('Megjegyzések mentése…');
+      let saved = 0;
       try {
-        renderProduction(await request('__SAVE_ROUTE__', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(payload) }));
+        for (const payload of groups.values()) {
+          const updated = await request('__SAVE_ROUTE__', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(payload) });
+          saved++;
+          if (production.recent) {
+            for (const item of production.items) if (item.production_id === updated.production_id) changes.delete(itemKey(item));
+            renderProduction({ ...production,
+              productions:production.productions.map(value => value.production_id === updated.production_id ? { production_id:updated.production_id, revision:updated.revision } : value),
+              items:production.productions.flatMap(value => value.production_id === updated.production_id ? updated.items : production.items.filter(item => item.production_id === value.production_id)),
+            }, true);
+          } else renderProduction(updated);
+        }
         status('A megjegyzések mentve a gyártás eredeti fájljába.');
-      } catch (error) { status(error.message, true); }
+      } catch (error) { status((saved ? saved + ' gyártás mentve. ' : '') + error.message, true); }
       finally { busy = false; updateControls(); }
     });
     discardButton.addEventListener('click', () => {
@@ -215,6 +258,7 @@ def render_admin_page(user_name: str) -> bytes:
       event.preventDefault();
       event.returnValue = '';
     });
+    void loadProduction();
   </script>
 </body>
 </html>"""
