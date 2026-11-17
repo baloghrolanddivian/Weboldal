@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 import os
 from pathlib import Path
 import re
@@ -14,7 +15,10 @@ from xml.parsers.expat import ExpatError
 from . import production_xml
 
 MAX_NOTE_LENGTH = 500
+RECENT_PRODUCTION_LIMIT = 12
+RECENT_PRODUCTION_FIRST_ID = 14657
 _FILE_LOCK = threading.RLock()
+_NOTE_CACHE: dict[Path, tuple[tuple[int, int, int], dict]] = {}
 
 
 class ProductionConflict(ValueError):
@@ -66,9 +70,11 @@ def _payload(number: str, source: bytes, document: minidom.Document) -> dict:
     for index, record in enumerate(_records(document)):
         fields = {_name(child): _text(child) for child in _children(record)}
         items.append({
+            "production_id": number,
             "row_id": str(index),
             "con_id": fields.get("Barcode") or fields.get("conID") or fields.get("CONID", ""),
             "part_number": fields.get("pdCode", ""),
+            "ordOrderNo": fields.get("ordOrderNo", ""),
             "notes": _note(fields),
         })
     return {"production_id": number, "revision": hashlib.sha256(source).hexdigest(), "items": items}
@@ -78,9 +84,59 @@ def load_production_notes(production_id: object) -> dict:
     """List all CON records, including records with no note or a repeated barcode."""
     number, path = _production_path(production_id)
     with _FILE_LOCK:
-        source = path.read_bytes()
-        with _parse(source) as document:
-            return _payload(number, source, document)
+        return _load_notes(number, path, cache=path in _NOTE_CACHE)
+
+
+def _signature(path: Path) -> tuple[int, int, int]:
+    stat = path.stat()
+    return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size
+
+
+def _load_notes(number: str, path: Path, *, cache: bool) -> dict:
+    """Cache only detached admin summaries; scanners never use this cache."""
+    signature = _signature(path)
+    entry = _NOTE_CACHE.get(path)
+    if entry is not None and entry[0] == signature:
+        return deepcopy(entry[1])
+    _NOTE_CACHE.pop(path, None)
+    source = path.read_bytes()
+    with _parse(source) as document:
+        payload = _payload(number, source, document)
+    if cache and _signature(path) == signature:
+        _NOTE_CACHE[path] = signature, payload
+    return deepcopy(payload)
+
+
+def load_recent_production_notes() -> dict:
+    """Load the latest twelve XML-bearing productions from 14657 onwards."""
+    root = production_xml.production_folder(str(RECENT_PRODUCTION_FIRST_ID)).parent
+    with _FILE_LOCK:
+        folders = sorted(
+            (folder for folder in root.iterdir()
+             if re.fullmatch(r"[0-9]{1,20}", folder.name)
+             and int(folder.name) >= RECENT_PRODUCTION_FIRST_ID and folder.is_dir()),
+            key=lambda folder: int(folder.name), reverse=True,
+        )
+        productions, items, warnings = [], [], []
+        selected = set()
+        for folder in folders:
+            path = folder / production_xml.XML_FILENAME
+            try:
+                data = _load_notes(folder.name, path, cache=True)
+            except FileNotFoundError:
+                continue
+            except (OSError, ValueError):
+                warnings.append({"production_id": folder.name, "error": "A gyártási XML nem olvasható."})
+                continue
+            selected.add(path)
+            productions.append({"production_id": data["production_id"], "revision": data["revision"]})
+            items.extend(data["items"])
+            if len(productions) == RECENT_PRODUCTION_LIMIT:
+                break
+        for path in set(_NOTE_CACHE) - selected:
+            del _NOTE_CACHE[path]
+        return {"production_id": "", "revision": "", "recent": True,
+                "productions": productions, "items": items, "warnings": warnings}
 
 
 def _set_text(node: Node, value: str) -> None:
@@ -174,4 +230,6 @@ def save_production_notes(production_id: object, revision: object, changes: obje
                 _set_note(records[int(row_id)], note)
             updated = document.toxml(encoding=document.encoding or "utf-8", standalone=document.standalone)
             _replace_source(path, original, updated)
-            return _payload(number, updated, document)
+            payload = _payload(number, updated, document)
+            _NOTE_CACHE.pop(path, None)
+            return payload

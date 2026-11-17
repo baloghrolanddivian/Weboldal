@@ -17,20 +17,33 @@ SETUP = """<script>
 window.calls = [];
 window.confirm = () => false;
 window.fixture = { production_id:'14545', revision:'original', items:[
-  { row_id:'0', con_id:'CON1', part_number:'ITEM-A', notes:'' },
-  { row_id:'1', con_id:'CON1', part_number:'EGK', notes:'Existing note' },
-  { row_id:'2', con_id:'CON2', part_number:'EGK-OTHER', notes:'<img src=x onerror=alert(1)>' }
+  { row_id:'0', con_id:'CON1', part_number:'ITEM-A', ordOrderNo:'143810', notes:'' },
+  { row_id:'1', con_id:'CON1', part_number:'EGK', ordOrderNo:'143810', notes:'Existing note' },
+  { row_id:'2', con_id:'CON2', part_number:'EGK-OTHER', ordOrderNo:'143940', notes:'<img src=x onerror=alert(1)>' }
 ] };
+window.recentFixture = { production_id:'', revision:'', recent:true, productions:[
+  {production_id:'14683',revision:'recent-14683'}, {production_id:'14657',revision:'recent-14657'}
+], items:[
+  {production_id:'14683',row_id:'0',con_id:'CON-RECENT',part_number:'EGK',ordOrderNo:'143810',notes:''},
+  {production_id:'14657',row_id:'0',con_id:'CON-RECENT',part_number:'ITEM-B',ordOrderNo:'143940',notes:''}
+], warnings:[] };
 window.fetch = async (url, options) => {
   window.calls.push({ url, options });
   if (url.includes('production_id=999')) return { ok:false, json:async () => ({ ok:false, error:'Production not found' }) };
   if (options?.method === 'POST') {
-    if (window.failSave) return { ok:false, json:async () => ({ ok:false, error:'File changed' }) };
     const payload = JSON.parse(options.body);
     window.lastPayload = payload;
+    if (window.failSave || window.failProduction === payload.production_id) return { ok:false, json:async () => ({ ok:false, error:'File changed' }) };
+    if(payload.production_id !== '14545'){
+      const info=window.recentFixture.productions.find(item=>item.production_id===payload.production_id);
+      for(const change of payload.changes)window.recentFixture.items.find(item=>item.production_id===payload.production_id&&item.row_id===change.row_id).notes=change.notes;
+      info.revision='updated-'+payload.production_id;
+      return {ok:true,json:async()=>({ok:true,production:{...info,items:structuredClone(window.recentFixture.items.filter(item=>item.production_id===payload.production_id))}})};
+    }
     for (const change of payload.changes) window.fixture.items.find(item => item.row_id === change.row_id).notes = change.notes;
     window.fixture.revision = 'updated';
   }
+  if(options?.method !== 'POST' && !url.includes('production_id='))return {ok:true,json:async()=>({ok:true,production:structuredClone(window.recentFixture)})};
   return { ok:true, json:async () => ({ ok:true, production:structuredClone(window.fixture) }) };
 };
 </script>"""
@@ -52,17 +65,53 @@ CHECKS = """<script>
     conSearchInput.value = value;
     conSearchInput.dispatchEvent(new Event('input', { bubbles:true }));
   };
+  const searchOrder = value => {
+    orderSearchInput.value = value;
+    orderSearchInput.dispatchEvent(new Event('input', { bubbles:true }));
+  };
   const visibleRows = () => [...notesBody.rows].filter(row => !row.hidden);
   try {
     check(document.body.getBoundingClientRect().top === 0, 'Admin body has a collapsed top margin');
     check(document.body.getBoundingClientRect().height >= innerHeight, 'Admin background stops before the viewport bottom');
     const expectedAccent = document.body.classList.contains('admin-theme') ? '#ff7138' : '#9dfff1';
     check(getComputedStyle(document.body).getPropertyValue('--accent').trim() === expectedAccent, 'Signed-in user theme was lost');
-    check(document.getElementById('notesBoard').hidden && saveButton.disabled, 'Editor should start empty');
+    await tick();
+    check(production.recent && production.productions.length === 2 && notesBody.rows.length === 2, 'Recent productions did not load by default');
+    check(calls.length === 1 && !calls[0].url.includes('production_id='), 'Default cache load was not requested');
+    check(saveButton.disabled, 'Fresh cache should not contain unsaved changes');
+    check(notesBody.rows[0].cells[2].textContent === '14683' && notesBody.rows[1].cells[2].textContent === '14657', 'Recent rows lack production identity');
+    edit(0,'First production note');
+    edit(1,'Second production note');
+    check(changes.size === 2, 'Same row ID across productions collided');
+    const beforeOrderSearch=calls.length;
+    searchOrder(' 1438 ');
+    search('recent');
+    check(visibleRows().length === 1 && visibleRows()[0].cells[3].textContent === '143810', 'Order filter did not combine with CONID across cached productions');
+    check(calls.length === beforeOrderSearch, 'Order filtering should use cached rows');
+    window.failProduction='14657';
+    saveButton.click();
+    await tick();
+    check(changes.size === 1 && notesStatus.textContent.startsWith('1 gyártás mentve.'), 'Partial save did not retain unsaved production edits');
+    check(notesBody.rows[0].querySelector('textarea').value === 'First production note' && notesBody.rows[1].querySelector('textarea').value === 'Second production note', 'Partial save lost notes');
+    check(production.productions[0].revision === 'updated-14683' && production.productions[1].revision === 'recent-14657', 'Revisions were mixed between files');
+    window.failProduction='';
+    const beforeRetry=calls.length;
+    saveButton.click();
+    await tick();
+    check(calls.length === beforeRetry+1 && lastPayload.production_id === '14657' && lastPayload.revision === 'recent-14657', 'Retry saved the wrong file or repeated a completed production');
+    check(changes.size === 0 && orderSearchInput.value === ' 1438 ' && visibleRows().length === 1, 'Saving cleared the active order filter');
+    clearFiltersButton.click();
+    searchOrder('143940');
+    check(visibleRows().length === 1 && visibleRows()[0].cells[2].textContent === '14657', 'Order filter cannot find an older cached production');
+    egkOnly.checked=true;egkOnly.dispatchEvent(new Event('change',{bubbles:true}));
+    check(visibleRows().length===0, 'EGK and order filters did not combine');
+    recentButton.click();await tick();
+    check(orderSearchInput.value==='143940' && egkOnly.checked, 'Refreshing the same recent view should retain filters');
     productionInput.value = '14545';
     submit();
     await tick();
     check(notesBody.rows.length === 3, 'Not all production items are shown');
+    check(!orderSearchInput.value && !egkOnly.checked, 'Switching to a manual production kept unrelated filters');
     check(notesBody.rows[0].querySelector('textarea').value === '', 'Missing note is not editable');
     check(notesBody.rows[1].cells[0].textContent === 'CON1' && notesBody.rows[1].cells[1].textContent === 'EGK', 'Columns or duplicate CON identity incorrect');
     check(!notesBody.querySelector('img'), 'Note text was interpreted as HTML');
