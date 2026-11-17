@@ -89,7 +89,7 @@ CHECKS = """
     check(!bomPanel.open && getComputedStyle(bomPanel).display === 'none', 'BOM must start hidden');
     check(document.getElementById('notesDatum').hidden, 'Empty note must start hidden');
     check(document.getElementById('connectorDatum').hidden, 'Connector must start hidden');
-    check(document.getElementById('modelDatum').hidden, 'Missing model must start hidden');
+    check(document.getElementById('frontDatum').hidden, 'Missing front details must start hidden');
     check(document.querySelector('.info-panel').getBoundingClientRect().width > innerWidth * 0.95, 'Details do not fill the freed space');
     window.sample = 1 / 50;
     scan('NORMAL');
@@ -103,7 +103,7 @@ CHECKS = """
     const identity = document.querySelector('.cabinet-datum');
     check(identity.contains(document.querySelector('[data-item="part_number"]'))
       && identity.contains(document.querySelector('[data-item="description"]')), 'Item identity is not combined');
-    check(!document.getElementById('frontDatum') && !document.querySelector('[data-item="front"]'), 'Front box is still visible');
+    check(document.querySelector('#frontDatum label').textContent === 'Front', 'Front box has the wrong label');
     check(identity.getBoundingClientRect().width > innerWidth * 0.9, 'Combined identity does not fill the available width');
     check(identity.getBoundingClientRect().height > document.querySelector('.primary-info').clientHeight * 0.65, 'Combined identity does not fill the freed height');
     const footer = document.querySelector('.info-footer');
@@ -119,13 +119,15 @@ CHECKS = """
     const secondary = [...document.querySelectorAll('.secondary-info > .datum')].filter(node => !node.hidden);
     check(secondary.every(node => node.offsetTop === secondary[0].offsetTop), 'Secondary details should use the available width');
     const originalItem = currentState;
-    const modelItem = { ...originalItem, production_xml:{ ...originalItem.production_xml, features:{ 'Front típus':'Laura' } } };
+    const modelItem = { ...originalItem, production_xml:{ ...originalItem.production_xml, features:{ 'Front típus':'Laura', 'Front színe':'SM.provance fóliás' } } };
     renderState(modelItem);
-    const modelCard = document.getElementById('modelDatum');
-    check(!modelCard.hidden && document.getElementById('frontModel').textContent === 'Laura', 'Front type is not displayed as Modell');
+    const modelCard = document.getElementById('frontDatum');
+    check(!modelCard.hidden && document.getElementById('frontModel').textContent === 'Laura', 'Front type is not shown');
+    check(document.getElementById('frontColour').textContent === 'SM.provance fóliás'
+      && document.getElementById('frontNettfront').textContent === '(Nettfront: Cedar Green)', 'Front colour or Nettfront counterpart is missing');
     const colourBox = document.getElementById('colorDatum').getBoundingClientRect();
     const modelBox = modelCard.getBoundingClientRect();
-    check(Math.abs(colourBox.top - modelBox.top) < 1 && colourBox.right <= modelBox.left, 'Modell is not beside Korpusz színe');
+    check(Math.abs(colourBox.top - modelBox.top) < 1 && colourBox.right <= modelBox.left, 'Front is not beside Korpusz színe');
     for (const [code, orientation, picture] of [
       ['AMO60', 'Függőleges', 'vertical.png'], ['ASZB90_B', 'Függőleges', 'vertical.png'],
       ['ASZH_CUSTOM', 'Függőleges', 'vertical.png'], ['ASM60', 'Függőleges', 'vertical.png'],
@@ -154,9 +156,25 @@ CHECKS = """
       check(Math.abs(box.top - connectorBox.top) < 1 && box.right <= connectorBox.left, 'Connector is not beside the identity block');
       check(details.scrollWidth <= details.clientWidth + 1 && details.scrollHeight <= details.clientHeight + 1, 'Connector layout requires scrolling');
     }
-    renderState({ ...originalItem, production_xml:{ features:{ 'Front típus':'   ' } } });
-    check(modelCard.hidden && document.getElementById('frontModel').textContent === '—', 'Empty model retained the previous item model');
-    check(document.getElementById('colorDatum').getBoundingClientRect().width > innerWidth * 0.9, 'Colour did not expand after hiding model');
+    for (const [features, colour, counterpart] of [
+      [{ 'Front típus':'Laura', 'Front színe':'Matt provance fóliás' }, 'Matt provance fóliás', 'Matt Provance'],
+      [{ 'Front típus':'Laura', 'Front színe':' ', 'Front szín felső':'SM.kasmír fóliás' }, 'SM.kasmír fóliás', 'Dune Beige'],
+      [{ 'Front típus':'ANT', 'Keretléc szín':'Mf. beige' }, 'Mf. beige', 'Mf. Krém'],
+      [{ 'Front típus':'Unknown', 'Front színe':'SM.fehér fóliás' }, 'SM.fehér fóliás', ''],
+      [{ 'Front típus':'Laura', 'Front színe':'Unknown finish' }, 'Unknown finish', ''],
+      [{ 'Front színe':'Fehér' }, 'Fehér', ''],
+      [{ 'Front típus':'Laura' }, '', '']
+    ]) {
+      renderState({ ...originalItem, production_xml:{ features } });
+      check(!modelCard.hidden && document.getElementById('frontColour').textContent === colour, 'Missing or stale front colour');
+      check(document.getElementById('frontNettfront').hidden === !counterpart, 'Unknown front retained a Nettfront name');
+      check(document.getElementById('frontNettfront').textContent === (counterpart ? '(Nettfront: ' + counterpart + ')' : ''), 'Incorrect Nettfront finish');
+      check(document.getElementById('frontModel').hidden === !features['Front típus'], 'Missing front type is not handled independently');
+    }
+    renderState({ ...originalItem, production_xml:{ features:{ 'Front típus':'   ', 'Front színe':' ' } } });
+    check(modelCard.hidden && document.getElementById('frontModel').textContent === '—'
+      && !document.getElementById('frontNettfront').textContent, 'Empty front retained previous item details');
+    check(document.getElementById('colorDatum').getBoundingClientRect().width > innerWidth * 0.9, 'Colour did not expand after hiding Front');
     renderState(originalItem);
     bomToggle.click();
     check(bomPanel.open && !bomPanel.classList.contains('bom-review'), 'Manual drawer failed');

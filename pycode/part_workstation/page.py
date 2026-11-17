@@ -8,6 +8,7 @@ import json
 
 from .cabinet_images import cabinet_image_catalog
 from .connectors import CONNECTOR_RULES
+from .front_colours import nettfront_colour_catalog
 
 ROUTE = "/apps/alkatresz-munkalap"
 SCAN_ROUTE = f"{ROUTE}/beolvasas"
@@ -28,6 +29,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     client_state_key = json.dumps(f"part-workstation:v1:{identity_key}")
     cabinet_images = json.dumps(cabinet_image_catalog(), ensure_ascii=True).replace("</", "<\\/")
     connector_rules = json.dumps(CONNECTOR_RULES, ensure_ascii=True).replace("</", "<\\/")
+    nettfront_colours = json.dumps(nettfront_colour_catalog(), ensure_ascii=True).replace("</", "<\\/")
     page = f"""<!doctype html>
 <html lang="hu">
 <head>
@@ -84,7 +86,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     .primary-info {{ flex:1; min-height:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:minmax(0,1fr) max-content; gap:9px; }}
     .primary-info > .datum {{ grid-column:span 2; }}
     .primary-info > .datum.wide {{ grid-column:span 4; }}
-    .primary-info.has-model > .color-datum {{ grid-column:span 2; }}
+    .primary-info.has-front > .color-datum {{ grid-column:span 2; }}
     .primary-info.has-connector > .cabinet-datum {{ grid-column:span 3; }}
     .primary-info > .connector-datum {{ grid-column:span 1; display:grid; grid-template-rows:max-content minmax(0,1fr); gap:12px; }}
     .primary-info > .connector-datum[hidden] {{ display:none; }}
@@ -104,9 +106,12 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     .datum.color-datum {{ padding:7px 11px; }}
     .color-datum label {{ margin-bottom:3px; }}
     .color-datum output {{ line-height:1.15; }}
-    .datum.model-datum {{ padding:7px 11px; }}
-    .model-datum label {{ margin-bottom:3px; }}
-    .model-datum output {{ line-height:1.15; }}
+    .datum.front-datum {{ padding:7px 11px; }}
+    .front-datum label {{ margin-bottom:3px; }}
+    .front-datum output {{ font-size:clamp(20px,2.1vw,30px); line-height:1.2; }}
+    .front-colour-line {{ margin-top:4px; font-size:clamp(14px,1.5vw,21px); font-weight:650; line-height:1.3; overflow-wrap:anywhere; }}
+    .front-nettfront {{ color:var(--muted); font-size:.9em; font-weight:550; }}
+    .front-datum [hidden] {{ display:none; }}
     .datum.color-datum.colour-white {{ background:#fff; border-color:#d7dde4; }}
     .datum.color-datum.colour-white label, .datum.color-datum.colour-white output {{ color:#000; }}
     .datum.color-datum.colour-anthracite {{ background:#000; border-color:#555; }}
@@ -202,7 +207,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
               <div class="datum wide cabinet-datum"><div class="image-slot asset-image-slot" id="cabinetImageSlot"><span id="cabinetImagePlaceholder">Kép</span><img id="cabinetImage" alt="" decoding="async" hidden /></div><div class="datum-content"><label>Cikkszám | Megnevezés</label><div class="item-identity"><output class="pending" data-item="part_number">—</output><span class="item-separator" aria-hidden="true"> | </span><output class="pending" data-item="description">—</output></div></div></div>
               <div class="datum connector-datum" id="connectorDatum" hidden><div><label>Összekötő</label><output id="connectorOrientation">—</output></div><div class="connector-image-slot"><span>Kép betöltése…</span><img id="connectorImage" alt="" decoding="async" hidden /></div></div>
               <div class="datum wide color-datum" id="colorDatum"><label>Korpusz színe</label><output class="pending" data-item="color">—</output></div>
-              <div class="datum model-datum" id="modelDatum" hidden><label>Modell</label><output id="frontModel">—</output></div>
+              <div class="datum front-datum" id="frontDatum" hidden><label>Front</label><output id="frontModel">—</output><div class="front-colour-line" id="frontColourLine" hidden><span id="frontColour"></span> <span class="front-nettfront" id="frontNettfront" hidden></span></div></div>
             </div>
             <div class="secondary-info" id="secondaryInfo">
               <div class="datum wide dimensions-datum"><label>Beépítési méret</label><output class="pending" data-item="dimensions">—</output><span class="dimension-order">Magasság × szélesség × mélység</span></div>
@@ -236,6 +241,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     const cabinetImage = document.getElementById('cabinetImage');
     const connectorRules = {connector_rules}.map(rule => ({{...rule, match:new RegExp(rule.pattern)}}));
     const connectorImage = document.getElementById('connectorImage');
+    const nettfrontColours = {nettfront_colours};
     const scannerState = document.getElementById('scannerState');
     const scannerHint = document.getElementById('scannerHint');
     const resetButton = document.getElementById('resetButton');
@@ -394,6 +400,29 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
       }}
       return cabinetImages.get(base) || '';
     }}
+    function frontColourKey(value) {{
+      return String(value || '').trim().toLowerCase().normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').replace(/\\bfolias\\b/g, '').replace(/[^a-z0-9]/g, '');
+    }}
+    function renderFront(state) {{
+      const features = state.production_xml?.features || {{}};
+      const model = String(features['Front típus'] || '').trim();
+      const colour = ['Front színe', 'Front szín felső', 'Keretléc szín']
+        .map(key => String(features[key] || '').trim()).find(Boolean) || '';
+      const modelKey = frontColourKey(model);
+      const names = Object.hasOwn(nettfrontColours, modelKey) ? nettfrontColours[modelKey] : null;
+      const colourKey = frontColourKey(colour);
+      const counterpart = names && Object.hasOwn(names, colourKey) ? names[colourKey] : '';
+      const card = document.getElementById('frontDatum');
+      card.hidden = !model && !colour;
+      card.title = [model, colour, counterpart ? 'Nettfront: ' + counterpart : ''].filter(Boolean).join(' | ');
+      document.getElementById('frontModel').textContent = model || '—';
+      document.getElementById('frontModel').hidden = !model;
+      document.getElementById('frontColourLine').hidden = !colour;
+      document.getElementById('frontColour').textContent = colour;
+      document.getElementById('frontNettfront').textContent = counterpart ? '(Nettfront: ' + counterpart + ')' : '';
+      document.getElementById('frontNettfront').hidden = !counterpart;
+      document.querySelector('.primary-info').classList.toggle('has-front', Boolean(model || colour));
+    }}
     function showAssetImage(image) {{
       const loaded = Boolean(image.getAttribute('src') && image.complete && image.naturalWidth);
       image.hidden = !loaded;
@@ -546,11 +575,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
       const colourKey = String(state.item?.color || '').trim().toLowerCase();
       document.getElementById('colorDatum').classList.toggle('colour-white', colourKey === 'fehér');
       document.getElementById('colorDatum').classList.toggle('colour-anthracite', colourKey === 'antracit kr.');
-      const frontModel = String(state.production_xml?.features?.['Front típus'] || '').trim();
-      document.getElementById('modelDatum').hidden = !frontModel;
-      document.getElementById('frontModel').textContent = frontModel || '—';
-      document.getElementById('frontModel').title = frontModel;
-      document.querySelector('.primary-info').classList.toggle('has-model', Boolean(frontModel));
+      renderFront(state);
       const hasNotes = Boolean(String(state.item?.notes || '').trim());
       document.getElementById('notesDatum').hidden = !hasNotes;
       const hasFillerWidth = Boolean(state.item && state.item.filler_width);
