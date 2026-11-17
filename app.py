@@ -144,6 +144,7 @@ from part_workstation import (
     SCAN_ROUTE as PART_WORKSTATION_SCAN_ROUTE,
     empty_state as empty_part_workstation_state,
     load_production_notes as load_part_workstation_production_notes,
+    load_recent_production_notes as load_part_workstation_recent_production_notes,
     register_scan as register_part_workstation_scan,
     report_bom_damage as report_part_workstation_bom_damage,
     render_page as render_part_workstation_page,
@@ -6267,9 +6268,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
 
         if path == PART_WORKSTATION_ADMIN_DATA_ROUTE:
-            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
             try:
-                production = load_part_workstation_production_notes(query.get("production_id", [""])[0])
+                if "production_id" in query:
+                    production = load_part_workstation_production_notes(query["production_id"][0])
+                else:
+                    production = load_part_workstation_recent_production_notes()
             except FileNotFoundError:
                 self.respond_json(404, {"ok": False, "error": "A gyártási fájl nem található."})
                 return
