@@ -441,7 +441,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     updateFullscreenButton();
 
     function cabinetImageUrl(item) {{
-      const code = String(item?.part_number || '').trim().toUpperCase();
+      const code = String(item?.part_number || '').trim().toUpperCase().replace(/_N$/, '');
       const side = new Map([['jobb','J'],['bal','B'],['j','J'],['b','B']]).get(String(item?.handing || '').trim().toLowerCase());
       let base = code;
       if (side) {{

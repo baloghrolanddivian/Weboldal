@@ -122,6 +122,13 @@ CHECKS = """
     const secondary = [...document.querySelectorAll('.secondary-info > .datum')].filter(node => !node.hidden);
     check(secondary.every(node => node.offsetTop === secondary[0].offsetTop), 'Secondary details should use the available width');
     const originalItem = currentState;
+    check(cabinetImageUrl({ part_number:'AF40_N' }) === cabinetImages.get('AF40'), 'Trailing _N did not resolve the base cabinet image');
+    check(cabinetImageUrl({ part_number:' aafe40_b_n ', handing:'Jobb' }) === cabinetImages.get('AAFE40_J'), 'Trailing _N broke handed cabinet image matching');
+    check(!cabinetImageUrl({ part_number:'AF40_N_OTHER' }), 'Cabinet matching removed an internal _N');
+    renderState({ ...originalItem, item:{ ...originalItem.item, part_number:'AF40_N' } });
+    check(document.querySelector('[data-item="part_number"]').textContent === 'AF40_N'
+      && cabinetImage.getAttribute('src') === cabinetImages.get('AF40'), 'Cabinet image suffix handling changed the displayed item code');
+    renderState(originalItem);
     const fullNote = 'Szerelési megjegyzés.\\n' + 'A csatlakozást ellenőrizni kell. '.repeat(100) + '<img src=x onerror=alert(1)>\\nUtolsó sor.';
     renderState({ ...originalItem, item:{ ...originalItem.item, notes:fullNote } });
     const notePreview = document.querySelector('[data-item="notes"]');
