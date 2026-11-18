@@ -130,8 +130,19 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     .secondary-info .datum {{ padding:8px 11px; border-color:var(--line); background:var(--panel-soft); }}
     .secondary-info .datum label {{ font-size:9px; margin-bottom:3px; letter-spacing:.03em; overflow-wrap:anywhere; }}
     .secondary-info .datum output {{ font-size:clamp(17px,1.8vw,24px); font-weight:650; color:var(--ink); }}
-    .secondary-info [data-item="notes"] {{ white-space:pre-wrap; }}
-    .secondary-info #notesDatum {{ border-color:#ef4444; box-shadow:0 0 0 2px #ef4444; }}
+    .secondary-info [data-item="notes"] {{ display:block; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--ink); font-size:clamp(17px,1.8vw,24px); font-weight:650; line-height:1.25; }}
+    .secondary-info #notesDatum {{ border-color:#ef4444; box-shadow:0 0 0 2px #ef4444; text-align:left; cursor:pointer; }}
+    #notesDatum:focus-visible {{ outline:2px solid var(--accent); outline-offset:5px; }}
+    .notes-label {{ margin-bottom:3px; color:var(--muted); font-size:9px; font-weight:850; letter-spacing:.03em; text-transform:uppercase; }}
+    .notes-hint {{ margin-top:3px; color:var(--muted); font-size:10px; }}
+    .notes-dialog {{ width:min(760px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); padding:0; border:1px solid #ef4444; border-radius:18px; color:var(--ink); background:var(--panel-strong); box-shadow:var(--shadow); overflow:hidden; }}
+    .notes-dialog[open] {{ display:grid; grid-template-rows:auto auto minmax(0,1fr); }}
+    .notes-dialog::backdrop {{ background:rgba(0,0,0,.65); }}
+    .notes-dialog-head {{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; border-bottom:1px solid var(--line); }}
+    .notes-dialog h2 {{ margin:0; font-size:22px; }}
+    .notes-dialog-head button {{ min-height:44px; }}
+    .notes-context {{ margin:0; padding:12px 18px 0; color:var(--muted); font-size:13px; overflow-wrap:anywhere; }}
+    .notes-full-text {{ min-height:0; max-height:60dvh; margin:0; padding:18px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:clamp(18px,2vw,24px); line-height:1.5; user-select:text; }}
     .dimension-order {{ margin-top:3px; color:var(--muted); font-size:10px; }}
     .info-footer {{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 14px; border-top:1px solid var(--line); color:var(--muted); font-size:10px; }}
     .footer-metadata {{ flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px 14px; }}
@@ -212,7 +223,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
             <div class="secondary-info" id="secondaryInfo">
               <div class="datum wide dimensions-datum"><label>Beépítési méret</label><output class="pending" data-item="dimensions">—</output><span class="dimension-order">Magasság × szélesség × mélység</span></div>
               <div class="datum"><label>Láb</label><output class="pending" data-item="legs">—</output></div>
-              <div class="datum" id="notesDatum" hidden><label>Megjegyzés</label><output data-item="notes">—</output></div>
+              <button class="datum" id="notesDatum" type="button" aria-haspopup="dialog" aria-controls="notesDialog" aria-expanded="false" hidden><span class="notes-label">Megjegyzés</span><span data-item="notes">—</span><span class="notes-hint">Koppints a teljes szöveghez</span></button>
               <div class="datum" id="fillerWidthDatum" hidden><label>Hézagtakaró szélessége</label><output data-item="filler_width">—</output></div>
             </div>
           </div>
@@ -230,6 +241,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
         <footer class="bom-review-footer" id="bomReviewFooter" hidden><p class="bom-review-message" id="bomReviewMessage">Ellenőrizd a beolvasott elem darabjegyzékét, majd erősítsd meg. A következő elem csak ezután olvasható be.</p><button class="reset-button bom-confirm" id="bomConfirm" type="button">Ellenőriztem, a darabjegyzék rendben</button></footer>
       </dialog>
   <div class="toast" id="toast" role="alert"></div>
+  <dialog class="notes-dialog" id="notesDialog" aria-labelledby="notesDialogTitle" aria-describedby="notesFullText"><header class="notes-dialog-head"><h2 id="notesDialogTitle">Megjegyzés</h2><button class="reset-button" id="notesClose" type="button" aria-label="Megjegyzés bezárása" autofocus>Bezárás</button></header><p class="notes-context" id="notesContext"></p><div class="notes-full-text" id="notesFullText" tabindex="0"></div></dialog>
   <dialog class="damage-confirm" id="damageDialog" aria-labelledby="damageTitle" aria-describedby="damageItem damageExplanation"><h2 id="damageTitle">Sérült alkatrész jelölése</h2><p id="damageItem"></p><p id="damageExplanation">Sérültként jelölöd ezt a darabjegyzéktételt? A tétel az Összekészítő sérült alkatrészei közé kerül.</p><div class="damage-confirm-actions"><button class="reset-button" id="damageCancel" type="button" autofocus>Mégse</button><button class="reset-button" id="damageSubmit" type="button">Sérültként jelölés</button></div></dialog>
   <dialog class="fullscreen-help" id="fullscreenHelp" aria-labelledby="fullscreenHelpTitle"><h2 id="fullscreenHelpTitle">Teljes képernyő</h2><p>A böngésző most nem engedélyezte a teljes képernyőt. Próbáld közvetlenül a modul oldalán megnyomni a teljes képernyő gombot.</p><p>iPad: Safari → Megosztás → Hozzáadás a főképernyőhöz. Ha látható, hagyd bekapcsolva a „Megnyitás webalkalmazásként” lehetőséget, majd a főképernyő ikonjával indítsd el a modult.</p><form method="dialog"><button class="reset-button">Rendben</button></form></dialog>
   <div class="rotate"><div><b>↻</b><strong>Fordítsd fekvő helyzetbe a táblagépet</strong><p>Ez a munkafelület fekvő nézetre és egyetlen, görgetésmentes képernyőre készült.</p></div></div>
@@ -251,6 +263,8 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     const bomToggle = document.getElementById('bomToggle');
     const bomClose = document.getElementById('bomClose');
     const bomConfirm = document.getElementById('bomConfirm');
+    const notesDatum = document.getElementById('notesDatum');
+    const notesDialog = document.getElementById('notesDialog');
     const damageDialog = document.getElementById('damageDialog');
     const damageCancel = document.getElementById('damageCancel');
     const damageSubmit = document.getElementById('damageSubmit');
@@ -265,6 +279,37 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     let selectedDamage = null;
     let damageBusy = false;
     const pendingScans = [];
+
+    notesDatum.addEventListener('click', () => {{
+      const note = String(currentState.item?.notes || '');
+      if (busy || !note.trim()) return;
+      clearScanBuffer();
+      document.getElementById('notesFullText').textContent = note;
+      document.getElementById('notesContext').textContent = [currentState.barcode, currentState.item?.part_number].filter(Boolean).join(' · ');
+      notesDialog.showModal();
+      document.getElementById('notesFullText').scrollTop = 0;
+      notesDatum.setAttribute('aria-expanded', 'true');
+      setBusy(busy);
+    }});
+    function finishClosingNotes() {{
+      if (notesDatum.getAttribute('aria-expanded') !== 'true') return;
+      notesDatum.setAttribute('aria-expanded', 'false');
+      clearScanBuffer();
+      setBusy(busy);
+      void processScanQueue();
+    }}
+    function closeNotes() {{
+      notesDialog.close();
+      finishClosingNotes();
+    }}
+    document.getElementById('notesClose').addEventListener('click', closeNotes);
+    notesDialog.addEventListener('cancel', event => {{ event.preventDefault(); closeNotes(); }});
+    notesDialog.addEventListener('close', () => {{ if (!notesDialog.open) finishClosingNotes(); }});
+    notesDialog.addEventListener('click', event => {{
+      if (event.target !== notesDialog) return;
+      const rect = notesDialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeNotes();
+    }});
 
     function damageRequestId() {{
       const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -336,6 +381,14 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
       bomToggle.setAttribute('aria-expanded', 'true');
       setPartColumnWidth(bomPartHeader.style.width ? parseFloat(bomPartHeader.style.width) : defaultPartWidth);
       (confirmationRequired ? bomConfirm : bomClose).focus({{ preventScroll:true }});
+      if (confirmationRequired) {{
+        const resetScroll = () => {{
+          bomPanel.scrollTop = 0;
+          bomPanel.querySelector('.bom-wrap').scrollTop = 0;
+        }};
+        resetScroll();
+        requestAnimationFrame(() => {{ if (bomPanel.open && confirmationRequired) resetScroll(); }});
+      }}
     }}
     function closeBom() {{
       if (confirmationRequired) return;
@@ -355,7 +408,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeBom();
     }});
     bomConfirm.addEventListener('click', () => {{
-      if (!confirmationRequired || damageDialog.open || damageBusy || scanBuffer || scanOverflow) return;
+      if (!confirmationRequired || notesDialog.open || damageDialog.open || damageBusy || scanBuffer || scanOverflow) return;
       confirmationRequired = false;
       currentState = {{ ...currentState, bom_confirmation_required:false }};
       closeBom();
@@ -513,9 +566,9 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
 
     function setBusy(value) {{
       busy = value;
-      resetButton.disabled = value || confirmationRequired || damageDialog.open || damageBusy;
+      resetButton.disabled = value || confirmationRequired || notesDialog.open || damageDialog.open || damageBusy;
       scannerState.setAttribute('aria-busy', String(value));
-      scannerHint.textContent = confirmationRequired ? 'Erősítsd meg a darabjegyzéket' : (value ? 'Darabjegyzék betöltése…' : 'Csippantsd be a vonalkódot');
+      scannerHint.textContent = notesDialog.open ? 'Megjegyzés megnyitva' : (confirmationRequired ? 'Erősítsd meg a darabjegyzéket' : (value ? 'Darabjegyzék betöltése…' : 'Csippantsd be a vonalkódot'));
     }}
 
     function valueOrPending(value, fallback = '—') {{ return value ? String(value) : fallback; }}
@@ -601,7 +654,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
       return data.state;
     }}
     async function processScanQueue() {{
-      if (busy || confirmationRequired || damageDialog.open || damageBusy || !pendingScans.length) return;
+      if (busy || confirmationRequired || notesDialog.open || damageDialog.open || damageBusy || !pendingScans.length) return;
       const barcode = pendingScans.shift();
       closeBom();
       setBusy(true);
@@ -615,7 +668,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     }}
     function clearScanBuffer() {{ scanBuffer = ''; scanOverflow = false; lastScanKeyAt = 0; }}
     document.addEventListener('keydown', event => {{
-      if (fullscreenHelp.open) return;
+      if (fullscreenHelp.open || notesDialog.open) return;
       if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.repeat
         || event.target.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])')) {{ clearScanBuffer(); return; }}
       const now = performance.now();
@@ -643,7 +696,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
         lastScanKeyAt = now;
       }} else if (event.key !== 'Shift') clearScanBuffer();
     }}, true);
-    resetButton.addEventListener('click', () => {{ if (busy || confirmationRequired || damageDialog.open || damageBusy) return; closeBom(); clearScanBuffer(); pendingScans.length = 0; renderState(initialState); }});
+    resetButton.addEventListener('click', () => {{ if (busy || confirmationRequired || notesDialog.open || damageDialog.open || damageBusy) return; closeBom(); clearScanBuffer(); pendingScans.length = 0; renderState(initialState); }});
     document.addEventListener('pointerdown', clearScanBuffer);
     window.addEventListener('blur', clearScanBuffer);
     document.addEventListener('visibilitychange', () => {{ if (document.hidden) clearScanBuffer(); }});

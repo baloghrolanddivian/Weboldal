@@ -53,7 +53,9 @@ window.fetch = async (url, options) => {
       notes:barcode === 'NORMAL' ? 'Szerelés előtt ellenőrizni' : '' },
     bom:barcode === 'EMPTY' ? [] : [
       { part_number:'PART-1', description:'Zero quantity', quantity:0 },
-      { part_number:'PART-2', description:'Fractional quantity', quantity:0.055 }
+      { part_number:'PART-2', description:'Fractional quantity', quantity:0.055 },
+      ...(['REVIEW', 'RESTORE'].includes(barcode)
+        ? Array.from({ length:60 }, (_, index) => ({ part_number:'SCROLL-' + index, description:'Scroll test item', quantity:1 })) : [])
     ]
   }}) };
 };
@@ -77,6 +79,7 @@ CHECKS = """
     if (sessionStorage.getItem('browserTestStage') === 'restore') {
       check(bomPanel.open && confirmationRequired, 'Refresh bypassed required confirmation');
       check(currentState.barcode === 'RESTORE', 'Refresh restored the wrong item');
+      check(document.querySelector('.bom-wrap').scrollTop === 0, 'Restored randomized review retained its old scroll position');
       check(window.randomCalls === 0, 'Refresh rerolled sampling');
       bomConfirm.click();
       check(!bomPanel.open && !resetButton.disabled, 'Confirmation did not unlock after refresh');
@@ -119,6 +122,37 @@ CHECKS = """
     const secondary = [...document.querySelectorAll('.secondary-info > .datum')].filter(node => !node.hidden);
     check(secondary.every(node => node.offsetTop === secondary[0].offsetTop), 'Secondary details should use the available width');
     const originalItem = currentState;
+    const fullNote = 'Szerelési megjegyzés.\\n' + 'A csatlakozást ellenőrizni kell. '.repeat(100) + '<img src=x onerror=alert(1)>\\nUtolsó sor.';
+    renderState({ ...originalItem, item:{ ...originalItem.item, notes:fullNote } });
+    const notePreview = document.querySelector('[data-item="notes"]');
+    check(notePreview.textContent === fullNote && notePreview.scrollWidth > notePreview.clientWidth
+      && getComputedStyle(notePreview).textOverflow === 'ellipsis', 'Long note is not visually shortened without losing its full text');
+    check(details.scrollWidth <= details.clientWidth + 1 && details.scrollHeight <= details.clientHeight + 1, 'Long note enlarged the workstation layout');
+    const noteButton = document.getElementById('notesDatum');
+    noteButton.focus();
+    noteButton.click();
+    const noteDialog = document.getElementById('notesDialog');
+    const noteText = document.getElementById('notesFullText');
+    check(noteDialog.open && noteText.textContent === fullNote && !noteText.querySelector('img'), 'Note popup lost text or interpreted it as HTML');
+    check(noteText.scrollHeight > noteText.clientHeight && resetButton.disabled, 'Long note is not scrollable or scanning is not paused');
+    const noteRect = noteDialog.getBoundingClientRect();
+    check(noteRect.top >= 0 && noteRect.bottom <= innerHeight && noteRect.width <= innerWidth, 'Note popup extends outside the screen');
+    noteText.click();
+    check(noteDialog.open, 'Interacting with the note closed its popup');
+    scan('NOTE-BLOCKED');
+    check(requests.length === 1 && currentState.barcode === 'NORMAL', 'Scanning replaced the item while reading its note');
+    document.getElementById('notesClose').click();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    check(!noteDialog.open && !resetButton.disabled && noteButton.getAttribute('aria-expanded') === 'false', 'Note close button did not restore scanning');
+    noteButton.click();
+    noteDialog.dispatchEvent(new Event('cancel', { cancelable:true }));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    check(!noteDialog.open && !resetButton.disabled, 'Escape did not close the note popup');
+    noteButton.click();
+    noteDialog.dispatchEvent(new MouseEvent('click', { bubbles:true, clientX:0, clientY:0 }));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    check(!noteDialog.open && !resetButton.disabled, 'Clicking outside did not close the note popup');
+    renderState(originalItem);
     const modelItem = { ...originalItem, production_xml:{ ...originalItem.production_xml, features:{ 'Front típus':'Laura', 'Front színe':'SM.provance fóliás' } } };
     renderState(modelItem);
     const modelCard = document.getElementById('frontDatum');
@@ -217,6 +251,12 @@ CHECKS = """
     await tick();
     check(bomPanel.open && confirmationRequired && bomPanel.classList.contains('bom-review'), 'Sampled scan did not open large review');
     check(bomPanel.getBoundingClientRect().width > innerWidth * 0.9, 'Review is too small');
+    const reviewScroll = document.querySelector('.bom-wrap');
+    reviewScroll.scrollTop = 400;
+    check(reviewScroll.scrollTop > 0, 'Review fixture must be long enough to scroll');
+    openBom();
+    await new Promise(resolve => setTimeout(resolve, 40));
+    check(reviewScroll.scrollTop === 0 && bomPanel.scrollTop === 0, 'Randomized review did not reset to the top when opened again');
     check(currentState.barcode === 'REVIEW' && requests.length === 3, 'Queue replaced the item before confirmation');
     check(document.getElementById('bomItemCode').textContent.includes('REVIEW'), 'Review item identity missing');
     check(resetButton.disabled && bomClose.hidden && !document.getElementById('bomReviewFooter').hidden, 'Review controls are incorrect');
@@ -246,6 +286,7 @@ CHECKS = """
     scan('RESTORE');
     await tick();
     check(JSON.parse(sessionStorage.getItem(clientStateKey)).bom_confirmation_required, 'Required review was not persisted');
+    document.querySelector('.bom-wrap').scrollTop = 400;
     sessionStorage.setItem('browserTestStage', 'restore');
     location.reload();
   } catch (error) {

@@ -188,6 +188,16 @@ class PartWorkstationScanTests(unittest.TestCase):
         metadata["features"]["Megjegyzés"] = " \n "
         self.assertEqual(register_scan("THIRD")["item"]["notes"], "")
 
+    def test_long_notes_are_returned_in_full_for_the_popup(self) -> None:
+        metadata = empty_xml_metadata()
+        metadata["lookup_status"] = "ready"
+        self.xml_lookup.return_value = metadata
+        full_note = "Szerelési megjegyzés.\n" + "Ellenőrizd a csatlakozást. " * 80
+        metadata["fields"]["Megjegyzes"] = full_note
+        self.assertEqual(register_scan("FIRST")["item"]["notes"], full_note.strip())
+        metadata["features"]["Megjegyzés"] = full_note + "Utolsó sor."
+        self.assertEqual(register_scan("SECOND")["item"]["notes"], full_note + "Utolsó sor.")
+
     def test_missing_and_invalid_dimensions_never_become_invented_measurements(self) -> None:
         metadata = empty_xml_metadata()
         metadata["lookup_status"] = "ready"
