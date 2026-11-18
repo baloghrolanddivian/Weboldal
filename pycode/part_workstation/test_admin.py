@@ -16,6 +16,7 @@ from .admin_page import render_admin_page
 from .admin_store import ProductionConflict, load_production_notes, save_production_notes
 from .page import ADMIN_ACCESS_USER_IDS, ADMIN_DATA_ROUTE, ADMIN_ROUTE, ADMIN_SAVE_ROUTE, ACCESS_USER_IDS, ROUTE, render_page
 from .page import DAMAGE_ROUTE
+from .presence import ADMIN_SCANS_ROUTE
 from manufacturing.routes import MANUFACTURING_DAMAGE_ROUTE, MANUFACTURING_DAMAGE_COMPLETE_ROUTE
 from .production_xml import XML_FILENAME, lookup_xml_item
 from .store import empty_state
@@ -153,7 +154,7 @@ class AdminAccessTests(unittest.TestCase):
     def test_only_controller_and_admin_can_access_admin_routes(self) -> None:
         for user_id, is_admin, allowed in (("manufacturer", False, False), ("hriroda", False, False), ("gyartas-vezerlo", False, True), ("admin", True, True)):
             user = SimpleNamespace(user_id=user_id, is_admin=is_admin)
-            for path in (ADMIN_ROUTE, ADMIN_DATA_ROUTE, ADMIN_SAVE_ROUTE):
+            for path in (ADMIN_ROUTE, ADMIN_DATA_ROUTE, ADMIN_SAVE_ROUTE, ADMIN_SCANS_ROUTE):
                 with self.subTest(user=user_id, path=path):
                     self.assertEqual(self.router["_can_access_path"](user, path), allowed)
 
@@ -175,7 +176,7 @@ class AdminAccessTests(unittest.TestCase):
 
     def test_direct_admin_requests_are_rejected_before_reading_or_writing(self) -> None:
         for user_id in ("manufacturer", "hriroda"):
-            for method, path in (("do_GET", ADMIN_ROUTE), ("do_GET", ADMIN_DATA_ROUTE + "?production_id=14545"), ("do_POST", ADMIN_SAVE_ROUTE)):
+            for method, path in (("do_GET", ADMIN_ROUTE), ("do_GET", ADMIN_DATA_ROUTE + "?production_id=14545"), ("do_POST", ADMIN_SAVE_ROUTE), ("do_GET", ADMIN_SCANS_ROUTE)):
                 with self.subTest(user=user_id, method=method, path=path):
                     handler = self.router["InvoiceHandler"]()
                     handler.path = path

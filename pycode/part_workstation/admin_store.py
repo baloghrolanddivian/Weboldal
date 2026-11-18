@@ -65,6 +65,16 @@ def _note(fields: dict[str, str]) -> str:
     return feature_note or fields.get("Megjegyzes") or fields.get("Megjegyzés", "")
 
 
+def _edit_revision(document: minidom.Document) -> str:
+    # Scan history must not invalidate an administrator's pending note edits.
+    with document.cloneNode(True) as copy:
+        for record in _records(copy):
+            for child in list(_children(record)):
+                if _name(child) == "Scanned":
+                    record.removeChild(child).unlink()
+        return hashlib.sha256(copy.toxml(encoding="utf-8")).hexdigest()
+
+
 def _payload(number: str, source: bytes, document: minidom.Document) -> dict:
     items = []
     for index, record in enumerate(_records(document)):
@@ -73,11 +83,13 @@ def _payload(number: str, source: bytes, document: minidom.Document) -> dict:
             "production_id": number,
             "row_id": str(index),
             "con_id": fields.get("Barcode") or fields.get("conID") or fields.get("CONID", ""),
+            "oln_id": fields.get("olnID", ""),
+            "scanned": fields.get("Scanned", "").lower() in {"true", "1", "yes"},
             "part_number": fields.get("pdCode", ""),
             "ordOrderNo": fields.get("ordOrderNo", ""),
             "notes": _note(fields),
         })
-    return {"production_id": number, "revision": hashlib.sha256(source).hexdigest(), "items": items}
+    return {"production_id": number, "revision": _edit_revision(document), "items": items}
 
 
 def load_production_notes(production_id: object) -> dict:
@@ -220,9 +232,9 @@ def save_production_notes(production_id: object, revision: object, changes: obje
         edits[row_id] = note.strip()
     with _FILE_LOCK:
         original = path.read_bytes()
-        if hashlib.sha256(original).hexdigest() != revision:
-            raise ProductionConflict("A gyártási fájl időközben megváltozott. Nyisd meg újra a gyártást a mentés előtt.")
         with _parse(original) as document:
+            if _edit_revision(document) != revision:
+                raise ProductionConflict("A gyártási fájl időközben megváltozott. Nyisd meg újra a gyártást a mentés előtt.")
             records = _records(document)
             if any(int(row_id) >= len(records) for row_id in edits):
                 raise ValueError("A módosított tétel nem található a gyártásban.")
@@ -233,3 +245,32 @@ def save_production_notes(production_id: object, revision: object, changes: obje
             payload = _payload(number, updated, document)
             _NOTE_CACHE.pop(path, None)
             return payload
+
+
+def mark_item_scanned(production_id: object, con_id: str, oln_id: str) -> dict:
+    """Resolve the exact source record and preserve history in the production XML."""
+    number, path = _production_path(production_id)
+    if not isinstance(con_id, str) or not con_id or not isinstance(oln_id, str):
+        raise ValueError("Hiányzó tételazonosító.")
+    with _FILE_LOCK:
+        original = path.read_bytes()
+        with _parse(original) as document:
+            matches = []
+            for index, record in enumerate(_records(document)):
+                fields = {_name(child): _text(child) for child in _children(record)}
+                if fields.get("Barcode") == con_id and fields.get("olnID", "") == oln_id:
+                    matches.append((index, record))
+            if len(matches) != 1:
+                raise ValueError("A beolvasott XML-tétel nem azonosítható egyértelműen.")
+            index, record = matches[0]
+            scanned = [child for child in _children(record) if _name(child) == "Scanned"]
+            if not scanned or any(_text(child).lower() != "true" for child in scanned):
+                if scanned:
+                    for child in scanned:
+                        _set_text(child, "true")
+                else:
+                    _append_field(record, "Scanned", "true")
+                updated = document.toxml(encoding=document.encoding or "utf-8", standalone=document.standalone)
+                _replace_source(path, original, updated)
+                _NOTE_CACHE.pop(path, None)
+            return {"production_id": number, "row_id": str(index), "con_id": con_id, "oln_id": oln_id}
