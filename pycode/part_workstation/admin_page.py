@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 
 from .page import ADMIN_DATA_ROUTE, ADMIN_SAVE_ROUTE, ROUTE
+from .presence import ADMIN_SCANS_ROUTE
 
 
 def render_admin_page(user_name: str) -> bytes:
@@ -57,6 +58,13 @@ def render_admin_page(user_name: str) -> bytes:
     .notes-table textarea { width:100%; min-width:240px; min-height:70px; padding:10px 12px; resize:vertical; border:1px solid var(--border); border-radius:9px; color:var(--text); background:var(--bg); line-height:1.45; }
     .notes-table textarea.has-note { border-color:#ef4444; box-shadow:0 0 0 2px #ef4444; }
     .notes-table tr.is-edited textarea { border-color:var(--accent); }
+    .notes-table tr.is-scanned > td { opacity:.48; background:rgba(0,0,0,.18); }
+    .notes-table tr.is-scanned:focus-within > td,.notes-table tr.is-scanned:hover > td { opacity:1; }
+    .notes-table tr.is-active > td { opacity:1; background:var(--panel-soft); box-shadow:inset 0 2px var(--accent),inset 0 -2px var(--accent); }
+    .notes-table tr.is-active > td:first-child { box-shadow:inset 2px 0 var(--accent),inset 0 2px var(--accent),inset 0 -2px var(--accent); }
+    .notes-table tr.is-active > td:last-child { box-shadow:inset -2px 0 var(--accent),inset 0 2px var(--accent),inset 0 -2px var(--accent); }
+    .scan-badge { display:block; margin-top:6px; font-size:12px; font-weight:500; color:var(--accent); }
+    .scan-legend { margin:0 0 16px; color:var(--muted); font-size:13px; }
     .notes-table textarea:focus-visible,input:focus-visible,.notes-button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     #notesEmpty,#notesNoMatches { color:var(--muted); }
     [hidden] { display:none !important; }
@@ -73,6 +81,7 @@ def render_admin_page(user_name: str) -> bytes:
     <section class="notes-board" id="notesBoard" aria-label="Gyártási megjegyzések" hidden>
       <div class="notes-toolbar"><div><h2 id="productionTitle"></h2><p><span id="itemCount">0</span> elem · <span id="changedCount">0</span> módosítás</p></div><div class="notes-actions"><button class="notes-button" id="discardButton" type="button" disabled>Változtatások elvetése</button><button class="notes-button primary" id="saveButton" type="button" disabled>Módosítások mentése</button></div></div>
       <div class="notes-filters"><label class="notes-search">CONID keresése<input id="conSearchInput" type="search" placeholder="CON azonosító vagy részlet" maxlength="160" autocomplete="off" aria-controls="notesBody" /></label><label class="notes-search">Rendelésszám (ordOrderNo)<input id="orderSearchInput" type="search" placeholder="Rendelésszám vagy részlet" maxlength="160" autocomplete="off" aria-controls="notesBody" /></label><label class="notes-egk"><input id="egkOnly" type="checkbox" aria-controls="notesBody" />Csak EGK cikkszám</label><button class="notes-button" id="clearFiltersButton" type="button" hidden>Szűrők törlése</button><span id="filteredCount" role="status" aria-live="polite"></span></div>
+      <p class="scan-legend">Kiemelt keret: jelenleg megnyitva · Sötétített sor: korábban beolvasva · <span id="scanConnection" role="status">Élő kapcsolat indítása…</span></p>
       <div class="notes-table-wrap"><table class="notes-table"><thead><tr><th scope="col">CONID</th><th scope="col">Cikkszám</th><th scope="col">Gyártás</th><th scope="col">Rendelésszám</th><th scope="col">Megjegyzés</th></tr></thead><tbody id="notesBody"></tbody></table></div>
       <p id="notesEmpty" hidden>A gyártásban nincs megjeleníthető elem.</p>
       <p id="notesNoMatches" hidden>Nincs a szűrőknek megfelelő elem.</p>
@@ -94,6 +103,38 @@ def render_admin_page(user_name: str) -> bytes:
     let production = null;
     let busy = false;
     const changes = new Map();
+    let scanSnapshot = {active:[], scanned:[]};
+    function scanKey(item) { return JSON.stringify([String(item.production_id || ''), String(item.con_id || ''), String(item.oln_id || '')]); }
+    function applyScanPresence() {
+      const active = new Map();
+      const scanned = new Set(scanSnapshot.scanned.map(scanKey));
+      for (const item of scanSnapshot.active) {
+        const key = scanKey(item);
+        if (!active.has(key)) active.set(key, []);
+        active.get(key).push(item.user_name);
+        scanned.add(key);
+      }
+      for (const row of notesBody.rows) {
+        const users = active.get(row.dataset.scanKey) || [];
+        if (scanned.has(row.dataset.scanKey)) row.dataset.scanned = 'true';
+        row.classList.toggle('is-active', users.length > 0);
+        row.classList.toggle('is-scanned', !users.length && row.dataset.scanned === 'true');
+        const badge = row.querySelector('.scan-badge');
+        badge.hidden = !users.length && row.dataset.scanned !== 'true';
+        badge.textContent = users.length ? 'Megnyitva: ' + [...new Set(users)].join(', ') + ' (' + users.length + ' munkamenet)' : (row.dataset.scanned === 'true' ? 'Beolvasva' : '');
+      }
+    }
+    const scanEvents = new EventSource('__SCANS_ROUTE__');
+    scanEvents.onmessage = event => {
+      try {
+        const data = JSON.parse(event.data);
+        if (!Array.isArray(data.active) || !Array.isArray(data.scanned)) return;
+        scanSnapshot = data;
+        applyScanPresence();
+        document.getElementById('scanConnection').textContent = 'Élő kapcsolat';
+      } catch (error) { /* Reconnection delivers another complete snapshot. */ }
+    };
+    scanEvents.onerror = () => { document.getElementById('scanConnection').textContent = 'Élő kapcsolat megszakadt, újracsatlakozás…'; };
 
     function status(message, error = false) {
       notesStatus.textContent = message;
@@ -161,6 +202,8 @@ def render_admin_page(user_name: str) -> bytes:
         row.dataset.conId = String(item.con_id || '');
         row.dataset.partNumber = String(item.part_number || '');
         row.dataset.orderNo = String(item.ordOrderNo || '');
+        row.dataset.scanKey = scanKey({...item, production_id:item.production_id || data.production_id});
+        row.dataset.scanned = String(item.scanned === true);
         const key = itemKey(item, data);
         for (const value of [item.con_id, item.part_number, item.production_id || data.production_id, item.ordOrderNo]) {
           const cell = document.createElement('td');
@@ -169,6 +212,10 @@ def render_admin_page(user_name: str) -> bytes:
         }
         const cell = document.createElement('td');
         const input = document.createElement('textarea');
+        const badge = document.createElement('span');
+        badge.className = 'scan-badge';
+        badge.hidden = true;
+        row.cells[0].appendChild(badge);
         input.rows = 2;
         input.maxLength = 500;
         input.value = changes.has(key) ? changes.get(key) : item.notes;
@@ -188,6 +235,7 @@ def render_admin_page(user_name: str) -> bytes:
         notesBody.appendChild(row);
       });
       applyFilters();
+      applyScanPresence();
       updateControls();
     }
     async function request(url, options) {
@@ -262,5 +310,5 @@ def render_admin_page(user_name: str) -> bytes:
   </script>
 </body>
 </html>"""
-    page = page.replace("__MODULE_ROUTE__", ROUTE).replace("__DATA_ROUTE__", ADMIN_DATA_ROUTE).replace("__SAVE_ROUTE__", ADMIN_SAVE_ROUTE)
+    page = page.replace("__MODULE_ROUTE__", ROUTE).replace("__DATA_ROUTE__", ADMIN_DATA_ROUTE).replace("__SAVE_ROUTE__", ADMIN_SAVE_ROUTE).replace("__SCANS_ROUTE__", ADMIN_SCANS_ROUTE)
     return page.replace("__USER__", html.escape(str(user_name or "Admin"))).encode("utf-8")

@@ -9,6 +9,7 @@ import json
 from .cabinet_images import cabinet_image_catalog
 from .connectors import CONNECTOR_RULES
 from .front_colours import nettfront_colour_catalog
+from .presence import PRESENCE_ROUTE
 
 ROUTE = "/apps/alkatresz-munkalap"
 SCAN_ROUTE = f"{ROUTE}/beolvasas"
@@ -275,6 +276,11 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     let scanOverflow = false;
     let lastScanKeyAt = 0;
     let currentState = initialState;
+    // Every page gets its own ID, including duplicated tabs signed in as one user.
+    const scanSessionId = damageRequestId();
+    let presenceSequence = 0;
+    let presencePending = false;
+    let presenceFailed = false;
     let confirmationRequired = false;
     let selectedDamage = null;
     let damageBusy = false;
@@ -441,7 +447,7 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
     updateFullscreenButton();
 
     function cabinetImageUrl(item) {{
-      const code = String(item?.part_number || '').trim().toUpperCase();
+      const code = String(item?.part_number || '').trim().toUpperCase().replace(/_N$/, '');
       const side = new Map([['jobb','J'],['bal','B'],['j','J'],['b','B']]).get(String(item?.handing || '').trim().toLowerCase());
       let base = code;
       if (side) {{
@@ -661,10 +667,11 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
       const scannedAt = new Date().toISOString();
       renderState({{ barcode, scanned_at:scannedAt, lookup_status:'api_pending', bom:[] }});
       try {{
-        const state = await send('{SCAN_ROUTE}', {{ barcode }});
+        const state = await send('{SCAN_ROUTE}', {{ barcode, session_id:scanSessionId, sequence:++presenceSequence }});
         state.bom_confirmation_required = state.lookup_status === 'ready' && Math.random() < 1 / 50;
         renderState(state);
-      }} catch (error) {{ renderState({{ barcode, scanned_at:scannedAt, lookup_status:'error', error_message:error.message, item:{{}}, bom:[] }}); showToast(error.message); }} finally {{ setBusy(false); void processScanQueue(); }}
+        if (!state.scan_identity) showToast('A beolvasási állapot nem rögzíthető: a gyártási XML-tétel nem érhető el.');
+      }} catch (error) {{ releasePresence(); renderState({{ barcode, scanned_at:scannedAt, lookup_status:'error', error_message:error.message, item:{{}}, bom:[] }}); showToast(error.message); }} finally {{ setBusy(false); void processScanQueue(); }}
     }}
     function clearScanBuffer() {{ scanBuffer = ''; scanOverflow = false; lastScanKeyAt = 0; }}
     document.addEventListener('keydown', event => {{
@@ -696,11 +703,41 @@ def render_page(state: dict, user_name: str, *, user_id: str = "", show_admin: b
         lastScanKeyAt = now;
       }} else if (event.key !== 'Shift') clearScanBuffer();
     }}, true);
-    resetButton.addEventListener('click', () => {{ if (busy || confirmationRequired || notesDialog.open || damageDialog.open || damageBusy) return; closeBom(); clearScanBuffer(); pendingScans.length = 0; renderState(initialState); }});
+    function presencePayload(action) {{ return {{ action, session_id:scanSessionId, sequence:presenceSequence, identity:currentState.scan_identity }}; }}
+    async function refreshPresence(open = false) {{
+      if (busy || presencePending || !currentState.scan_identity || currentState.lookup_status !== 'ready') return;
+      presencePending = true;
+      const sequence = presenceSequence;
+      try {{
+        if (open) ++presenceSequence;
+        const state = await send('{PRESENCE_ROUTE}', presencePayload(open ? 'open' : 'heartbeat'));
+        if (!open && !state.present && sequence === presenceSequence && !busy) {{
+          ++presenceSequence;
+          await send('{PRESENCE_ROUTE}', presencePayload('open'));
+        }}
+        presenceFailed = false;
+      }} catch (error) {{
+        if (!presenceFailed) showToast('Az élő beolvasási jelzés frissítése nem sikerült. Újracsatlakozás folyamatban.');
+        presenceFailed = true;
+      }} finally {{ presencePending = false; }}
+    }}
+    function releasePresence() {{
+      ++presenceSequence;
+      const payload = JSON.stringify(presencePayload('clear'));
+      let queued = false;
+      try {{ queued = navigator.sendBeacon?.('{PRESENCE_ROUTE}', new Blob([payload], {{type:'application/json'}})); }} catch (error) {{ /* Fall back when beacons are unavailable. */ }}
+      if (!queued) void fetch('{PRESENCE_ROUTE}', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:payload, keepalive:true}}).catch(() => {{}});
+    }}
+    resetButton.addEventListener('click', () => {{ if (busy || confirmationRequired || notesDialog.open || damageDialog.open || damageBusy) return; releasePresence(); closeBom(); clearScanBuffer(); pendingScans.length = 0; renderState(initialState); }});
     document.addEventListener('pointerdown', clearScanBuffer);
     window.addEventListener('blur', clearScanBuffer);
     document.addEventListener('visibilitychange', () => {{ if (document.hidden) clearScanBuffer(); }});
     renderState(restoreClientState() || initialState);
+    void refreshPresence(true);
+    setInterval(() => void refreshPresence(), 15000);
+    window.addEventListener('pagehide', releasePresence);
+    window.addEventListener('pageshow', event => {{ if (event.persisted) void refreshPresence(true); }});
+    window.addEventListener('online', () => void refreshPresence());
   </script>
 </body>
 </html>"""

@@ -33,20 +33,30 @@ BROWSER = browser_executable()
 SETUP = """
 <script>
 window.requests = [];
+window.scanPayloads = [];
 window.damageRequests = [];
+window.presenceRequests = [];
+Object.defineProperty(navigator,'sendBeacon', {value:(url,body)=> {window.releaseUrl=url;window.releaseBody=body;return true;}});
 window.randomCalls = 0;
 Math.random = () => { window.randomCalls++; return window.sample ?? 0.5; };
 window.fetch = async (url, options) => {
+  if (url.endsWith('/jelenlet')) {
+    window.presenceRequests.push(JSON.parse(options.body));
+    return {ok:true,json:async()=>({ok:true,state:{present:true}})};
+  }
   if (url.endsWith('/serult')) {
     window.damageRequests.push(JSON.parse(options.body));
     if (window.failDamage) return { ok:false, json:async () => ({ ok:false, error:'Damage save failed' }) };
     return { ok:true, json:async () => ({ ok:true, report:{ status:'open' } }) };
   }
-  const { barcode } = JSON.parse(options.body);
+  const { barcode, session_id, sequence } = JSON.parse(options.body);
+  window.scanPayloads.push(JSON.parse(options.body));
+  if (!session_id || !Number.isInteger(sequence)) throw new Error('Missing scan session identity');
   window.requests.push(barcode);
   if (window.failNext) { window.failNext = false; throw new Error('Lookup failed'); }
   return { ok:true, json:async () => ({ ok:true, state:{
     barcode, production_number:'14545', scanned_at:'2026-11-13T10:00:00Z', lookup_status:'ready',
+    scan_identity:{production_id:'14545',con_id:barcode,oln_id:'123'},
     item:{ part_number:'TEST-PART', description:'Test cabinet', cabinet:'2A',
       front:'Test front', color:'Fehér', dimensions:'824 × 400 × 600 mm',
       handing:'Jobb', legs:'100 mm', worktop:'Nincs', filler_width:'82', handle_drilling:'64 / 96',
@@ -79,6 +89,8 @@ CHECKS = """
     if (sessionStorage.getItem('browserTestStage') === 'restore') {
       check(bomPanel.open && confirmationRequired, 'Refresh bypassed required confirmation');
       check(currentState.barcode === 'RESTORE', 'Refresh restored the wrong item');
+      await tick();
+      check(presenceRequests.some(item=>item.action==='open' && item.identity.con_id==='RESTORE'), 'Refresh did not reclaim scanner presence');
       check(document.querySelector('.bom-wrap').scrollTop === 0, 'Restored randomized review retained its old scroll position');
       check(window.randomCalls === 0, 'Refresh rerolled sampling');
       bomConfirm.click();
@@ -122,6 +134,13 @@ CHECKS = """
     const secondary = [...document.querySelectorAll('.secondary-info > .datum')].filter(node => !node.hidden);
     check(secondary.every(node => node.offsetTop === secondary[0].offsetTop), 'Secondary details should use the available width');
     const originalItem = currentState;
+    check(cabinetImageUrl({ part_number:'AF40_N' }) === cabinetImages.get('AF40'), 'Trailing _N did not resolve the base cabinet image');
+    check(cabinetImageUrl({ part_number:' aafe40_b_n ', handing:'Jobb' }) === cabinetImages.get('AAFE40_J'), 'Trailing _N broke handed cabinet image matching');
+    check(!cabinetImageUrl({ part_number:'AF40_N_OTHER' }), 'Cabinet matching removed an internal _N');
+    renderState({ ...originalItem, item:{ ...originalItem.item, part_number:'AF40_N' } });
+    check(document.querySelector('[data-item="part_number"]').textContent === 'AF40_N'
+      && cabinetImage.getAttribute('src') === cabinetImages.get('AF40'), 'Cabinet image suffix handling changed the displayed item code');
+    renderState(originalItem);
     const fullNote = 'Szerelési megjegyzés.\\n' + 'A csatlakozást ellenőrizni kell. '.repeat(100) + '<img src=x onerror=alert(1)>\\nUtolsó sor.';
     renderState({ ...originalItem, item:{ ...originalItem.item, notes:fullNote } });
     const notePreview = document.querySelector('[data-item="notes"]');
@@ -244,6 +263,10 @@ CHECKS = """
     scan('ERROR');
     await tick();
     check(!bomPanel.open && currentState.lookup_status === 'error', 'Failed lookup opened review');
+    check(window.releaseUrl.endsWith('/jelenlet'), 'Failed lookup did not release live presence');
+    const released = JSON.parse(await window.releaseBody.text());
+    check(released.action==='clear' && released.sequence>scanPayloads.at(-1).sequence, 'Presence release can be overwritten by a late lookup');
+    check(new Set(scanPayloads.map(item=>item.session_id)).size===1 && scanPayloads[1].sequence>scanPayloads[0].sequence, 'Scanner session identity or ordering changed between scans');
     check(window.randomCalls === 1, 'Failed lookup must not sample');
     window.sample = 0.019999;
     scan('REVIEW');

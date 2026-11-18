@@ -145,11 +145,17 @@ from part_workstation import (
     empty_state as empty_part_workstation_state,
     load_production_notes as load_part_workstation_production_notes,
     load_recent_production_notes as load_part_workstation_recent_production_notes,
-    register_scan as register_part_workstation_scan,
     report_bom_damage as report_part_workstation_bom_damage,
     render_page as render_part_workstation_page,
     render_admin_page as render_part_workstation_admin_page,
     save_production_notes as save_part_workstation_production_notes,
+)
+from part_workstation.presence import (
+    ADMIN_SCANS_ROUTE as PART_WORKSTATION_ADMIN_SCANS_ROUTE,
+    PRESENCE_ROUTE as PART_WORKSTATION_PRESENCE_ROUTE,
+    presence as part_workstation_presence,
+    register_live_scan,
+    update_presence as update_part_workstation_presence,
 )
 from leltar.group_pages import render_inventory_group_page
 from leltar.cutting_inventory import (
@@ -6267,6 +6273,10 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
 
 
+        if path == PART_WORKSTATION_ADMIN_SCANS_ROUTE:
+            self.respond_part_workstation_scans()
+            return
+
         if path == PART_WORKSTATION_ADMIN_DATA_ROUTE:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
             try:
@@ -6960,6 +6970,23 @@ class InvoiceHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def respond_part_workstation_scans(self):
+        """Push complete presence snapshots, including after reconnects."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        revision = -1
+        try:
+            while True:
+                snapshot = part_workstation_presence.wait(revision)
+                revision = snapshot["revision"]
+                self.wfile.write(("data: " + json.dumps(snapshot, ensure_ascii=True) + "\n\n").encode("utf-8"))
+                self.wfile.flush()
+        except (OSError, TimeoutError):
+            return
+
     def respond_dev_reload_stream(self):
         """Stream development reload events over server-sent events."""
         payload = json.dumps({"token": dev_reload_token(DEV_RELOAD_TOKEN_ENV)}).encode("utf-8")
@@ -7615,7 +7642,7 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.respond_json(200, {"ok": True, "production": production})
             return
 
-        if path == PART_WORKSTATION_SCAN_ROUTE:
+        if path in {PART_WORKSTATION_SCAN_ROUTE, PART_WORKSTATION_PRESENCE_ROUTE}:
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length > 4096:
                 self.respond_json(413, {"ok": False, "error": "A kérés túl nagy."})
@@ -7629,7 +7656,12 @@ class InvoiceHandler(BaseHTTPRequestHandler):
                 self.respond_json(400, {"ok": False, "error": "Hibás kérés."})
                 return
             try:
-                state = register_part_workstation_scan(payload.get("barcode", ""))
+                user = self.current_user()
+                if path == PART_WORKSTATION_PRESENCE_ROUTE:
+                    state = update_part_workstation_presence(payload, user_id=user.user_id, user_name=user.display_name)
+                else:
+                    state = register_live_scan(payload.get("barcode", ""), session_id=payload.get("session_id"),
+                                               sequence=payload.get("sequence"), user_id=user.user_id, user_name=user.display_name)
             except ValueError as exc:
                 self.respond_json(400, {"ok": False, "error": str(exc)})
                 return
