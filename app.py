@@ -151,12 +151,17 @@ from part_workstation import (
     render_admin_page as render_part_workstation_admin_page,
     save_production_notes as save_part_workstation_production_notes,
 )
+from cutting_plan import (
+    ROUTE as CUTTING_PLAN_ROUTE,
+    render_page as render_cutting_plan_page,
+)
 from leltar.group_pages import render_inventory_group_page
 from leltar.cutting_inventory import (
     apply_active_action as apply_cutting_inventory_action,
     apply_catalog_action as apply_cutting_inventory_catalog_action,
     close_inventory as close_cutting_inventory,
     configure_cutting_inventory,
+    load_catalog as load_cutting_inventory_catalog,
     render_admin_page as render_cutting_inventory_admin_page,
     render_worker_page as render_cutting_inventory_worker_page,
     start_inventory as start_cutting_inventory,
@@ -590,6 +595,7 @@ SEMIFINISHED_FRONT_INVENTORY_SUMMARY_META_PATH = SEMIFINISHED_FRONT_INVENTORY_RU
 
 
 AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
+    (CUTTING_PLAN_ROUTE, STANDARD_ACCESS_USER_IDS),
     (NETTFRONT_INVOICE_ADMIN_ROUTE, NETTFRONT_INVOICE_ADMIN_ACCESS_USER_IDS),
     (NETTFRONT_INVOICE_CHECK_ROUTE, NETTFRONT_INVOICE_CHECK_ACCESS_USER_IDS),
     (NETTFRONT_INVOICE_ROUTE, NETTFRONT_INVOICE_ACCESS_USER_IDS),
@@ -6183,6 +6189,19 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
         if path == NETTFRONT_ORDER_ROUTE:
             body = render_nettfront_order_form()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == CUTTING_PLAN_ROUTE:
+            body = render_cutting_plan_page(
+                SEMIFINISHED_INVENTORY_SESSION_PATH,
+                load_cutting_inventory_catalog(),
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
