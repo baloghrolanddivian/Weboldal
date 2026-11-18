@@ -93,7 +93,8 @@ def _normalized_state(payload: object) -> dict:
     result["error_message"] = str(payload.get("error_message", "") or "")[:2000]
     source_item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
     for key in result["item"]:
-        result["item"][key] = str(source_item.get(key, "") or "")[:500]
+        value = str(source_item.get(key, "") or "")
+        result["item"][key] = value if key == "notes" else value[:500]
     result["model"] = payload.get("model") if isinstance(payload.get("model"), dict) else None
     source_bom = payload.get("bom") if isinstance(payload.get("bom"), list) else []
     result["bom"] = [row for row in source_bom if isinstance(row, dict)]
@@ -111,7 +112,7 @@ def _normalized_state(payload: object) -> dict:
         result["item"]["color"] = fields["Korp_Szin"]
         result["item"]["legs"] = features["Láb típusa"]
         result["item"]["worktop"] = features["Munkalap szín"]
-        result["item"]["notes"] = (features["Megjegyzés"].strip() or fields["Megjegyzes"].strip())[:500]
+        result["item"]["notes"] = features["Megjegyzés"].strip() or fields["Megjegyzes"].strip()
         result["item"]["filler_width"] = features["Hézagtakaró szélessége"]
         result["item"]["handle_drilling"] = features["Fogantyú furat"]
         dimensions = [_millimeters(features[name]) for name in ("Beép.mag.cm", "Beép.szél.cm", "Beép.mélys.cm")]
