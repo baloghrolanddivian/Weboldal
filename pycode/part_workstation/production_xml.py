@@ -21,6 +21,7 @@ def empty_xml_metadata() -> dict:
     """Return the metadata contract without assigning UI meaning to its values."""
     return {
         "production_number": "",
+        "oln_id": "",
         "source_file": XML_FILENAME,
         "lookup_status": "waiting_for_scan",
         "error_message": "",
@@ -66,6 +67,7 @@ def lookup_xml_item(barcode: str, *, production_number: str, oln_id: object = No
         return result
 
     fields = matches[0]
+    result["oln_id"] = fields.get("olnID", "")
     result["fields"] = {name: fields.get(name, "") for name in ITEM_FIELDS}
     # The current export spells this tag Korp_szin; expose the requested name.
     result["fields"]["Korp_Szin"] = fields.get("Korp_Szin", fields.get("Korp_szin", ""))
@@ -93,6 +95,7 @@ def normalized_xml_metadata(payload: object) -> dict:
     if not isinstance(payload, dict):
         return result
     result["production_number"] = str(payload.get("production_number", "") or "")
+    result["oln_id"] = str(payload.get("oln_id", "") or "")
     status = str(payload.get("lookup_status", "") or "")
     if status in {"waiting_for_scan", "ready", "not_found", "ambiguous", "unavailable", "error"}:
         result["lookup_status"] = status

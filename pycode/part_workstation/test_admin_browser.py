@@ -15,6 +15,7 @@ from .test_page_browser import BROWSER
 
 SETUP = """<script>
 window.calls = [];
+window.EventSource = class { constructor(url) { window.scanStream = this; window.scanStreamUrl = url; } };
 window.confirm = () => false;
 window.fixture = { production_id:'14545', revision:'original', items:[
   { row_id:'0', con_id:'CON1', part_number:'ITEM-A', ordOrderNo:'143810', notes:'' },
@@ -82,6 +83,23 @@ CHECKS = """<script>
     check(notesBody.rows[0].cells[2].textContent === '14683' && notesBody.rows[1].cells[2].textContent === '14657', 'Recent rows lack production identity');
     edit(0,'First production note');
     edit(1,'Second production note');
+    const firstRow = notesBody.rows[0];
+    const firstInput = firstRow.querySelector('textarea');
+    firstInput.focus();firstInput.setSelectionRange(2,5);
+    const firstScan = {production_id:'14683',con_id:'CON-RECENT',oln_id:'',user_name:'Worker'};
+    const secondScan = {production_id:'14657',con_id:notesBody.rows[1].dataset.conId,oln_id:'',user_name:'Worker'};
+    const pushScans = (active,scanned=[]) => scanStream.onmessage({data:JSON.stringify({active,scanned})});
+    check(scanStreamUrl.endsWith('/admin/beolvasasok'), 'Live stream uses the wrong access route');
+    pushScans([firstScan,secondScan]);
+    check([...notesBody.rows].every(row=>row.classList.contains('is-active')), 'Concurrent scanner tabs were not highlighted');
+    pushScans([secondScan],[firstScan,secondScan]);
+    check(firstRow.classList.contains('is-scanned') && !firstRow.classList.contains('is-active'), 'Previous scan did not dim immediately');
+    check(notesBody.rows[1].classList.contains('is-active'), 'Other scanner lost its outline');
+    check(firstRow===notesBody.rows[0] && document.activeElement===firstInput && firstInput.selectionStart===2 && changes.size===2, 'Live update disrupted an unsaved note edit');
+    pushScans([firstScan,firstScan],[firstScan,secondScan]);
+    check(firstRow.classList.contains('is-active') && firstRow.querySelector('.scan-badge').textContent.includes('2 munkamenet'), 'Same-item sessions were not counted');
+    pushScans([],[firstScan,secondScan]);
+    check([...notesBody.rows].every(row=>row.classList.contains('is-scanned')), 'Released items did not retain scanned history');
     check(changes.size === 2, 'Same row ID across productions collided');
     const beforeOrderSearch=calls.length;
     searchOrder(' 1438 ');
