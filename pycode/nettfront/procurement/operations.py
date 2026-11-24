@@ -138,7 +138,7 @@ def remove_procurement_job_row(job_id: str, form_data: dict[str, str]) -> tuple[
     return 200, render_nettfront_procurement_result(job_id, metadata, message=message, success=True)
 
 
-def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:
+def launch_procurement_job(job_id: str, start_row=None) -> tuple[int, bytes] | None:
     """Launch procurement job processing.
 
     This function is part of the pydoc-documented NettFront procurement workflow."""
@@ -155,7 +155,7 @@ def launch_procurement_job(job_id: str) -> tuple[int, bytes] | None:
         return 400, body
 
     try:
-        success, messages = launch_procurement_helper(job_dir)
+        success, messages = launch_procurement_helper(job_dir, start_row=start_row)
         body = render_nettfront_procurement_result(job_id, metadata, message=" ".join(messages), success=success)
         return 200, body
     except Exception as exc:

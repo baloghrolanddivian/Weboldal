@@ -8,6 +8,7 @@ import urllib.parse
 from datetime import date
 
 from .damage_ui import DAMAGE_VIEW_STYLE, damage_view_script
+from .part_history_ui import part_history_script
 
 
 def _json_script_payload(payload: object) -> str:
@@ -4778,6 +4779,7 @@ def render_manufacturing_page(
       }};
 
       {damage_view_script()}
+      {part_history_script()}
 
       const renderRows = (groups) => {{
         const document = currentDocument();

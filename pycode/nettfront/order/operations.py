@@ -181,7 +181,7 @@ def approve_order_job(job_id: str, form_data: dict[str, str]) -> tuple[int, byte
     )
 
 
-def launch_order_job(job_id: str) -> tuple[int, bytes] | None:
+def launch_order_job(job_id: str, start_row=None) -> tuple[int, bytes] | None:
     """Launch order job processing.
 
     This function is part of the pydoc-documented NettFront order suggestion workflow."""
@@ -197,7 +197,7 @@ def launch_order_job(job_id: str) -> tuple[int, bytes] | None:
         )
 
     try:
-        success, messages = launch_procurement_helper(job_dir)
+        success, messages = launch_procurement_helper(job_dir, start_row=start_row)
         message = " ".join(messages) if messages else "A bevételezési segéd elindult."
         body = render_nettfront_order_result(job_id, metadata, message=message, success=success)
     except Exception as exc:

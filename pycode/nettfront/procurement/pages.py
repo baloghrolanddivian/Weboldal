@@ -10,6 +10,7 @@ import io
 
 from .config import procurement_runtime_dir, render_layout
 from .import_helper import get_procurement_helper_state
+from .resume_ui import resume_controls
 from .jobs import read_procurement_job
 from .routes import (
     NETTFRONT_PROCUREMENT_LAUNCH_PREFIX,
@@ -292,7 +293,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
                   </form>
                 """
             preview_row_parts.append(
-                f"<tr{row_class}><td>{html.escape(code)}</td><td>{html.escape(quantity)}</td><td class=\"procurement-preview-action\">{remove_html}</td></tr>"
+                f"<tr{row_class}><td>{row_index + 1}</td><td>{html.escape(code)}</td><td>{html.escape(quantity)}</td><td class=\"procurement-preview-action\">{remove_html}</td></tr>"
             )
         preview_rows_html = "".join(preview_row_parts)
         preview_html = f"""
@@ -300,6 +301,7 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
             <table class="procurement-preview-table">
               <thead>
                 <tr>
+                  <th>Sorszám</th>
                   <th>Cikkszám</th>
                   <th>Mennyiség</th>
                   <th class="procurement-preview-action" aria-label="Művelet"></th>
@@ -316,8 +318,9 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
     helper_status_copy = "A Beszerzés elkészült. Indítsd a segédet, majd Shift + Space-re elindul az import."
     action_html = f"""
       <form class="launch-form" method="post" action="{NETTFRONT_PROCUREMENT_LAUNCH_PREFIX}/{job_id}">
+        {resume_controls(job_dir)}
         <div class="procurement-launch-row">
-          <button class="button button-primary" type="submit">Beszerzés indítása</button>
+          <button class="button button-primary" type="submit">Beszerzés indítása / folytatása</button>
           <a class="button button-secondary" href="{NETTFRONT_PROCUREMENT_ROUTE}">Új feldolgozás</a>
         </div>
       </form>
@@ -371,7 +374,8 @@ def render_nettfront_procurement_result(job_id: str, metadata: dict, message: st
               <strong id="procurement-warning-title">Figyelem</strong>
               <p>
                 A beszerzést a gép billentyűkkel fogja kezelni az InSight-ban. Csak akkor indítsd el,
-                ha biztosan tudod mit csinálsz. Nyiss egy üres beszerzést az InSight-ban, majd nyomd meg a
+                ha biztosan tudod mit csinálsz. Első indításkor nyiss üres beszerzést az InSight-ban;
+                folytatáskor a meglévő beszerzést nyisd meg. Ezután nyomd meg a
                 <strong>Shift + Space</strong> billentyűkombinációt. Ha baj van, a <strong>Leállítás</strong>
                 gomb azonnal megszakítja a segédet.
               </p>

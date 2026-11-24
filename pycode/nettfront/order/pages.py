@@ -18,6 +18,7 @@ from .jobs import (
 )
 from .engine import calc_total_m2_from_rows
 from .import_helper import get_procurement_helper_state
+from nettfront.procurement.resume_ui import resume_controls, numbered_import_list
 from .routes import (
     NETTFRONT_ORDER_APPROVE_PREFIX,
     NETTFRONT_ORDER_DOWNLOAD_PREFIX,
@@ -593,7 +594,8 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
         else:
             helper_action_html = f"""
               <form method="post" action="{NETTFRONT_ORDER_LAUNCH_PREFIX}/{job_id}">
-                <button class="button button-primary" type="submit">Bevételezés indítása</button>
+                {resume_controls(job_dir)}
+                <button class="button button-primary" type="submit">Bevételezés indítása / folytatása</button>
               </form>
             """
             helper_hint_html = '<p class="order-helper-copy">A kész rendelés bevételezhető. Indítsd a segédet, majd a bevételezési ablakban Shift + Space indítja az importot. Kilépés: ESC.</p>'
@@ -631,6 +633,7 @@ def render_nettfront_order_result(job_id: str, metadata: dict, message: str = ""
             <a class="button button-secondary" href="{NETTFRONT_ORDER_ROUTE}">Új feltöltés</a>
           </div>
           {helper_hint_html}
+          {numbered_import_list(job_dir) if approved_ready and import_ready else ''}
         </section>
 
         <section class="order-table-card" id="order-table-card">

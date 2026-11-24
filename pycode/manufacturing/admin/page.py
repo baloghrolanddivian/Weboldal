@@ -10,6 +10,7 @@ import urllib.parse
 from datetime import date
 
 from ..damage_ui import DAMAGE_VIEW_STYLE, damage_view_script
+from ..part_history_ui import part_history_script
 
 
 def _json_script_payload(payload: object) -> str:
@@ -4762,6 +4763,7 @@ def render_manufacturing_page(
       }};
 
       {damage_view_script()}
+      {part_history_script()}
 
       const renderRows = (groups) => {{
         const document = currentDocument();
@@ -5107,14 +5109,14 @@ def render_manufacturing_page(
                   const unitPartialMarkup = showPartialColumn ? `<div class="mfg-row-partial-empty"></div>` : "";
                   const lastUnitClass = unitIndex === pantoloQuantity(row) - 1 ? " is-last-unit" : "";
                   return `
-                    <div class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{pantoloGroupOpening ? " is-opening" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}">
+                    <div class="mfg-row${{rowClass}}${{expanderClass}} is-pantolo-unit${{lastUnitClass}}${{pantoloGroupOpening ? " is-opening" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{unitState ? ` is-${{unitState}}` : ""}}" data-history-row-id="${{escapeHtml(row.row_id)}}" tabindex="0">
                       ${{groupedQuantityCellsMarkup(unitRow, pantoloQuantityText(unitRow), `<span class="mfg-pantolo-expand is-empty" aria-hidden="true"></span>`, unitPartialMarkup)}}
                     </div>
                   `;
                 }}).join("")
               : "";
             return `
-              <div class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" data-row-edit data-row-edit-key="${{escapeHtml(rowStorageKey(row))}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-row-section-key="${{escapeHtml(String(group?.key || ""))}}">
+              <div class="mfg-row${{rowClass}}${{expanderClass}}${{pantoloIsGroup ? " is-pantolo-group" : ""}}${{pantoloGroupExpanded ? " is-expanded" : ""}}${{showPartialColumn ? " is-with-partial" : ""}}${{row.isMuted ? " is-muted" : ""}}${{row.isGlass ? " is-glass" : ""}}${{row.isPullOut ? " is-pullout" : ""}}${{row.modelTone ? ` is-model-${{escapeHtml(String(row.modelTone))}}` : ""}}${{rowStateClass}}" data-history-row-id="${{escapeHtml(row.row_id)}}" tabindex="0" data-row-edit data-row-edit-key="${{escapeHtml(rowStorageKey(row))}}" data-row-production="${{escapeHtml(rowProductionNumber(row))}}" data-row-section-key="${{escapeHtml(String(group?.key || ""))}}">
                 ${{
                   columnLayout === "cnc-lower"
                     ? `

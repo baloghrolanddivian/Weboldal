@@ -8,6 +8,8 @@ This module is included in the pydoc surface for the NettFront procurement workf
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,6 +18,33 @@ from pathlib import Path
 HELPER_PID_FILE = "nettfront-helper.pid"
 AHK_SCRIPT_FILE = "nettfront-import.ahk"
 POWERSHELL_SCRIPT_FILE = "nettfront-import.ps1"
+RESUME_FILE = "nettfront-import-resume.json"
+
+
+def get_import_resume(job_dir: Path | None) -> dict:
+    """Read the selected start row without changing the order or its artifacts."""
+    if job_dir is None or not (job_dir / "rendeles_sima.csv").is_file():
+        return {"start_row": 1, "row_count": 0}
+    content = (job_dir / "rendeles_sima.csv").read_bytes()
+    count = sum(bool(line.strip()) for line in content.decode("utf-8-sig").splitlines())
+    digest = hashlib.sha256(content).hexdigest()
+    try:
+        saved = json.loads((job_dir / RESUME_FILE).read_text(encoding="utf-8"))
+        start = saved.get("start_row", 1)
+        if saved.get("csv_sha256") != digest or type(start) is not int or not 1 <= start <= count:
+            start = 1
+    except (OSError, ValueError, AttributeError):
+        start = 1
+    return {"start_row": start, "row_count": count, "csv_sha256": digest}
+
+
+def validate_start_row(value, row_count: int) -> int:
+    if isinstance(value, bool) or not str(value).isascii() or not str(value).isdigit():
+        raise ValueError("A kezdő sorszám pozitív egész szám legyen.")
+    start = int(value)
+    if not 1 <= start <= row_count:
+        raise ValueError(f"A kezdő sorszám 1 és {row_count} közötti szám legyen.")
+    return start
 
 
 def _helper_pid_path(job_dir: Path) -> Path:
@@ -164,7 +193,7 @@ def _find_autohotkey_executable() -> Path | None:
     return None
 
 
-def _build_runtime_ahk_script(csv_path: Path) -> str:
+def _build_runtime_ahk_script(csv_path: Path, start_row: int = 1) -> str:
     """Build runtime ahk script data.
 
     This function is part of the pydoc-documented NettFront procurement workflow."""
@@ -176,6 +205,7 @@ Persistent
 sleeptime := 300
 doublesleeptime := 3000
 csvPath := "{csv_literal}"
+startRow := {start_row}
 isRunning := false
 
 Esc::
@@ -185,7 +215,7 @@ Esc::
 
 +Space::
 {{
-    global csvPath, sleeptime, doublesleeptime, isRunning
+    global csvPath, startRow, sleeptime, doublesleeptime, isRunning
     if (isRunning)
         return
     isRunning := true
@@ -197,10 +227,14 @@ Esc::
     }}
 
     lines := StrSplit(content, "`n", "`r")
+    rowNumber := 0
     for _, line in lines
     {{
         line := Trim(line)
         if (line = "")
+            continue
+        rowNumber++
+        if (rowNumber < startRow)
             continue
         if GetKeyState("Esc", "P")
             ExitApp
@@ -251,7 +285,7 @@ Esc::
 """
 
 
-def _build_runtime_powershell_script(csv_path: Path) -> str:
+def _build_runtime_powershell_script(csv_path: Path, start_row: int = 1) -> str:
     """Build runtime powershell script data.
 
     This function is part of the pydoc-documented NettFront procurement workflow."""
@@ -268,6 +302,7 @@ public static class DivianKeyboardState {{
 "@
 
 $csvPath = '{csv_literal}'
+$startRow = {start_row}
 $stepDelayMs = 350
 $insertDelayMs = 2800
 $saveDelayMs = 1500
@@ -332,6 +367,7 @@ $rows = @(Get-Content -LiteralPath $csvPath -Encoding UTF8 | Where-Object {{ $_.
 Write-ImportLog "START rows=$($rows.Count)"
 foreach ($row in $rows) {{
     $rowNumber++
+    if ($rowNumber -lt $startRow) {{ continue }}
     if (Test-StopRequested) {{
         exit
     }}
@@ -398,7 +434,7 @@ Write-ImportLog "FINISHED rows=$($rows.Count)"
 """
 
 
-def launch_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
+def launch_procurement_helper(job_dir: Path, start_row=None) -> tuple[bool, list[str]]:
     """Launch procurement helper processing.
 
     This function is part of the pydoc-documented NettFront procurement workflow."""
@@ -406,6 +442,12 @@ def launch_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
     csv_path = job_dir / "rendeles_sima.csv"
     if not csv_path.exists():
         return False, ["A Beszerzes fajl nem talalhato."]
+
+    resume = get_import_resume(job_dir)
+    try:
+        start_row = validate_start_row(resume["start_row"] if start_row is None else start_row, resume["row_count"])
+    except ValueError as exc:
+        return False, [str(exc)]
 
     if os.name != "nt":
         return False, ["Az automatikus import jelenleg Windows alatt erheto el."]
@@ -415,8 +457,14 @@ def launch_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
         return True, ["Az import-seged mar fut. Shift + Space: inditas, ESC: leallitas."]
 
     _clear_helper_state(job_dir)
-    _helper_ahk_path(job_dir).write_text(_build_runtime_ahk_script(csv_path), encoding="utf-8")
-    _helper_powershell_path(job_dir).write_text(_build_runtime_powershell_script(csv_path), encoding="utf-8")
+    _helper_ahk_path(job_dir).write_text(_build_runtime_ahk_script(csv_path, start_row), encoding="utf-8")
+    _helper_powershell_path(job_dir).write_text(_build_runtime_powershell_script(csv_path, start_row), encoding="utf-8")
+
+    # Persist only the selection; never trim or regenerate the approved order.
+    resume_path = job_dir / RESUME_FILE
+    temporary = resume_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps({**resume, "start_row": start_row}), encoding="utf-8")
+    temporary.replace(resume_path)
 
     autohotkey = _find_autohotkey_executable()
     if autohotkey is not None:
@@ -441,4 +489,4 @@ def launch_procurement_helper(job_dir: Path) -> tuple[bool, list[str]]:
         )
 
     _write_helper_pid(job_dir, process.pid)
-    return True, ["Az import-seged elindult. Shift + Space: inditas, ESC: leallitas."]
+    return True, [f"A bevételezési segéd a(z) {start_row}. sortól indul. Shift + Space: indítás, ESC: leállítás. A teljes rendelés megmaradt."]

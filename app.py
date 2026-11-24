@@ -155,6 +155,18 @@ from cutting_plan import (
     ROUTE as CUTTING_PLAN_ROUTE,
     render_page as render_cutting_plan_page,
 )
+from cutting_plan.store import PlanConflict, list_days as list_cutting_days, load_day as load_cutting_day, save_day as save_cutting_day, save_progress as save_cutting_progress
+from cutting_plan.worker_page import ROUTE as CUTTING_WORKER_ROUTE, render_page as render_cutting_worker_page
+from cutting_plan.wrapping_page import ROUTE as CUTTING_WRAPPING_ROUTE, render_page as render_cutting_wrapping_page
+from cutting_plan.putaway_page import ROUTE as CUTTING_PUTAWAY_ROUTE, render_page as render_cutting_putaway_page
+from cutting_plan.history_page import ROUTES as CUTTING_HISTORY_ROUTES, render_page as render_cutting_history_page
+from cutting_plan.history_store import list_history as list_cutting_history
+from cutting_plan.part_history import ROUTE as MANUFACTURING_PART_HISTORY_ROUTE, part_history as load_manufacturing_part_history
+from cutting_plan.pallet_store import load_pallets as load_cutting_pallets, save_pallet as save_cutting_pallet, delete_pallet as delete_cutting_pallet, list_ready_pallets as list_cutting_ready_pallets
+from cutting_plan.pallet_store import save_wrapping as save_cutting_wrapping
+from cutting_plan.pallet_store import list_putaway_pallets as list_cutting_putaway_pallets, save_putaway as save_cutting_putaway
+from cutting_plan.pallet_print import ROUTE as CUTTING_PALLET_PRINT_ROUTE, render_page as render_cutting_pallet_print_page
+from cutting_plan.pallet_printer import print_pallet as print_cutting_pallet
 from leltar.group_pages import render_inventory_group_page
 from leltar.cutting_inventory import (
     apply_active_action as apply_cutting_inventory_action,
@@ -605,6 +617,7 @@ AUTH_ROUTE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     (HR_CONFIRM_ROUTE, HR_ACCESS_USER_IDS),
     (MANUFACTURING_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_DATA_ROUTE, STANDARD_ACCESS_USER_IDS),
+    (MANUFACTURING_PART_HISTORY_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_DAMAGE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_ISSUED_EDIT_COMPLETE_ROUTE, STANDARD_ACCESS_USER_IDS),
     (MANUFACTURING_ADMIN_REVISION_ROUTE, STANDARD_ACCESS_USER_IDS),
@@ -6197,6 +6210,94 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if path == CUTTING_PLAN_ROUTE + "/raklaptervezo":
+            self.send_response(303)
+            self.send_header("Location", CUTTING_WRAPPING_ROUTE)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        if path == CUTTING_PLAN_ROUTE + "/tortenet":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                self.respond_json(200, {"ok": True, **list_cutting_history(RUNTIME_DIR / "szabasterv", query.get("stage", [""])[0])})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if path == CUTTING_PLAN_ROUTE + "/elpakolasra-var":
+            self.respond_json(200, {"ok": True, **list_cutting_putaway_pallets(RUNTIME_DIR / "szabasterv")})
+            return
+
+        if path == CUTTING_PLAN_ROUTE + "/foliazasra-var":
+            try:
+                result = list_cutting_ready_pallets(RUNTIME_DIR / "szabasterv")
+                self.respond_json(200, {"ok": True, **result})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if path == CUTTING_PALLET_PRINT_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                body = render_cutting_pallet_print_page(
+                    RUNTIME_DIR / "szabasterv", query.get("day", [""])[0], query.get("pallet_id", [""])[0],
+                    paper=query.get("paper", ["a4"])[0], label_format=query.get("format", ["a5"])[0],
+                )
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path == CUTTING_PLAN_ROUTE + "/raklapok":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                state = load_cutting_pallets(RUNTIME_DIR / "szabasterv", query.get("day", [""])[0])
+                self.respond_json(200, {"ok": True, "state": state, "sent_today": list_cutting_ready_pallets(RUNTIME_DIR / "szabasterv")})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if path == CUTTING_PLAN_ROUTE + "/napok":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                root = RUNTIME_DIR / "szabasterv"
+                day = query.get("day", [""])[0]
+                payload = {"ok": True, "days": list_cutting_days(root)}
+                if day:
+                    payload["record"] = load_cutting_day(root, day)
+                self.respond_json(200, payload)
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if path in CUTTING_HISTORY_ROUTES:
+            body = render_cutting_history_page(CUTTING_HISTORY_ROUTES[path])
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if path in {CUTTING_WORKER_ROUTE, CUTTING_WRAPPING_ROUTE, CUTTING_PUTAWAY_ROUTE}:
+            render = {CUTTING_WORKER_ROUTE: render_cutting_worker_page, CUTTING_WRAPPING_ROUTE: render_cutting_wrapping_page, CUTTING_PUTAWAY_ROUTE: render_cutting_putaway_page}[path]
+            body = render()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == CUTTING_PLAN_ROUTE:
             body = render_cutting_plan_page(
                 SEMIFINISHED_INVENTORY_SESSION_PATH,
@@ -6223,6 +6324,16 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if path == MANUFACTURING_PART_HISTORY_ROUTE:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                history = load_manufacturing_part_history(
+                    RUNTIME_DIR / "szabasterv", query.get("colour", [""])[0], query.get("size", [""])[0])
+                self.respond_json(200, {"ok": True, "history": history})
+            except ValueError as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
             return
 
         if path in {MANUFACTURING_DATA_ROUTE, ADMIN_MANUFACTURING_DATA_ROUTE}:
@@ -7304,6 +7415,56 @@ class InvoiceHandler(BaseHTTPRequestHandler):
             return
 
         if self.reject_unauthorized_module():
+            return
+
+        if path in {CUTTING_PLAN_ROUTE + "/napok", CUTTING_PLAN_ROUTE + "/teljesites", CUTTING_PLAN_ROUTE + "/raklapok", CUTTING_PLAN_ROUTE + "/foliazas", CUTTING_PLAN_ROUTE + "/elpakolas"}:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 2 * 1024 * 1024:
+                    self.respond_json(413, {"ok": False, "error": "A napi terv túl nagy vagy üres."})
+                    return
+                raw_payload = self.rfile.read(length)
+                if self.headers.get("X-Requested-With") != "Divian-HUB":
+                    self.respond_json(403, {"ok": False, "error": "A mentést a modul oldaláról indítsd."})
+                    return
+                payload = json.loads(raw_payload.decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("Hibás napi terv.")
+                root = RUNTIME_DIR / "szabasterv"
+                if path.endswith("/elpakolas"):
+                    self.respond_json(200, {"ok": True, "putaway": save_cutting_putaway(root, payload.get("id"), payload.get("items"))})
+                    return
+                if path.endswith("/foliazas"):
+                    result = save_cutting_wrapping(root, payload.get("id"), payload.get("revision"), payload.get("pallet_revision"), payload.get("items"), payload.get("complete", False), payload.get("quantities"))
+                    self.respond_json(200, {"ok": True, "wrapping": result})
+                    return
+                if path.endswith("/raklapok"):
+                    day = payload.get("day")
+                    print_result = None
+                    if payload.get("action") == "delete":
+                        delete_cutting_pallet(root, day, payload.get("id"), payload.get("revision"))
+                        pallet_id = None
+                    elif payload.get("action") == "save":
+                        pallet_id = save_cutting_pallet(root, day, payload.get("id"), payload.get("name"), payload.get("status"), payload.get("allocations"), payload.get("revision"))
+                        if payload.get("status") == "ready" and payload.get("print") is True:
+                            print_result = print_cutting_pallet(root, day, pallet_id)
+                    elif payload.get("action") == "print":
+                        pallet_id = payload.get("id")
+                        print_result = print_cutting_pallet(root, day, pallet_id, retry=True)
+                    else:
+                        raise ValueError("Ismeretlen raklapművelet.")
+                    self.respond_json(200, {"ok": True, "id": pallet_id, "state": load_cutting_pallets(root, day), "sent_today": list_cutting_ready_pallets(root), "print": print_result})
+                    return
+                if path.endswith("/teljesites"):
+                    progress = save_cutting_progress(root, payload.get("day"), payload.get("plan_id"), payload.get("row_group"), payload.get("row_id"), payload.get("actual"), payload.get("done"), payload.get("revision"), payload.get("plan_revision"))
+                    self.respond_json(200, {"ok": True, "progress": progress})
+                    return
+                record = save_cutting_day(root, payload.get("day"), payload.get("plans"), payload.get("revision"))
+                self.respond_json(200, {"ok": True, "record": record, "days": list_cutting_days(root)})
+            except PlanConflict as exc:
+                self.respond_json(409, {"ok": False, "error": str(exc)})
+            except (ValueError, UnicodeDecodeError) as exc:
+                self.respond_json(400, {"ok": False, "error": str(exc)})
             return
 
         is_direct_invoice_scan = (
@@ -9620,7 +9781,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
         if path.startswith(NETTFRONT_ORDER_LAUNCH_PREFIX + "/"):
             job_id = path[len(NETTFRONT_ORDER_LAUNCH_PREFIX) + 1 :]
-            result = launch_order_job(job_id)
+            raw_body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            fields = urllib.parse.parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+            result = launch_order_job(job_id, start_row=fields.get("start_row", [None])[0])
             if result is None:
                 self.send_error(404)
                 return
@@ -9700,7 +9863,9 @@ class InvoiceHandler(BaseHTTPRequestHandler):
 
         if path.startswith(NETTFRONT_PROCUREMENT_LAUNCH_PREFIX + "/"):
             job_id = path[len(NETTFRONT_PROCUREMENT_LAUNCH_PREFIX) + 1 :]
-            result = launch_procurement_job(job_id)
+            raw_body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            fields = urllib.parse.parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+            result = launch_procurement_job(job_id, start_row=fields.get("start_row", [None])[0])
             if result is None:
                 self.send_error(404)
                 return
