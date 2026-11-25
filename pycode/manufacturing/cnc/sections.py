@@ -365,49 +365,9 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         parts = [int(part.strip()) for part in re.split(r"[xX]", str(size_label or "")) if part.strip().isdigit()]
         return tuple(parts or [9999, 9999, 9999])
 
-    def canonical_side_type(value: object) -> str:
-        """Normalize lower-cabinet side type text to canonical labels."""
-        text = clean_text(value)
-        folded_text = re.sub(r"\s+", " ", folded(text)).strip()
-        if not folded_text:
-            return ""
-        if "ar golyos" in folded_text:
-            return "AR golyós tel."
-        if "aaf fiokos ajtos" in folded_text:
-            return "AAF fiókos ajtós"
-        if "af 1+2" in folded_text or "af 1 + 2" in folded_text:
-            return "AF 1+2 fiókos"
-        if "pultos" in folded_text:
-            return "Pultos nor. al."
-        if "as vt" in folded_text:
-            return "AS VT"
-        if "as magic" in folded_text:
-            return "AS MAGIC"
-        if re.search(r"\batf\b", folded_text):
-            return "ATF"
-        if "aszb" in folded_text and "szemetes" in folded_text:
-            return "ASZB kihúzható szemetes"
-        if "aszhs" in folded_text:
-            return "ASZHS"
-        if "aszb" in folded_text:
-            return "ASZB kihúzható szemetes"
-        if re.search(r"\bakl\b", folded_text):
-            return "AKL"
-        if "jolly" in folded_text:
-            return "Jolly"
-        if re.search(r"\bkira\b", folded_text):
-            return "Kira"
-        if re.search(r"\bar\b", folded_text):
-            return "AR"
-        if "nyitott" in folded_text:
-            return "Nyitott"
-        if "normal" in folded_text:
-            return "Normáls alsó"
-        return text
-
     def normalize_side_type(value: object) -> str:
         """Normalize side-type text used by CNC grouping rules."""
-        return re.sub(r"\s+", " ", folded(canonical_side_type(value))).strip()
+        return re.sub(r"\s+", " ", folded(clean_text(value))).strip()
 
     def cnc_display_name(name: object) -> str:
         """Normalize CNC row names for consistent grouping and display."""
@@ -480,6 +440,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "Kira",
             "Nyitott",
             "ATF",
+            "ATF Pultos",
             "ASZHS/ASZB",
             "ASZHS",
             "ASZB kihúzható szemetes",
@@ -488,7 +449,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             "AF 1+2 fiókos",
         }
         if remainder in known_side_types:
-            return drawer_drill, canonical_side_type(remainder), "", ""
+            return drawer_drill, clean_text(remainder), "", ""
         tokens = [clean_text(token) for token in remainder.split() if clean_text(token)]
         hardware_type = ""
         parsed_edge = ""
@@ -502,7 +463,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
             trailing_tokens = tokens[edge_index + 1 :]
             if trailing_tokens:
                 hardware_type = clean_text(" ".join(trailing_tokens))
-            return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
+            return drawer_drill, clean_text(remainder), parsed_edge, hardware_type
         if drawer_drill == "AVZ" and len(tokens) == 1 and tokens[0] in {"N", "KESB", "GTEL", "B", "J"}:
             return drawer_drill, "", "", tokens[0]
         if len(tokens) >= 2 and edge_pattern.fullmatch(tokens[-2]) and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"}:
@@ -515,7 +476,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         elif len(tokens) >= 1 and tokens[-1] in {"N", "KESB", "GTEL", "B", "TE", "RI", "JO"} and drawer_drill:
             hardware_type = tokens[-1]
             remainder = clean_text(" ".join(tokens[:-1]))
-        return drawer_drill, canonical_side_type(remainder), parsed_edge, hardware_type
+        return drawer_drill, clean_text(remainder), parsed_edge, hardware_type
 
     def split_lower_color_and_side_v2(color: object, side_type: object) -> tuple[str, str]:
         """Split lower-row color text from side and hardware hints."""
@@ -526,7 +487,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
 
         # Keep already parsed side types intact.
         if side_text and side_text not in {"-", ""}:
-            return color_text, canonical_side_type(side_text)
+            return color_text, clean_text(side_text)
 
         # Some legacy rows append side-type code to color, e.g. "Antracit kr. K60R".
         # Move trailing code-like token into the side-type column.
@@ -842,7 +803,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
                 direct_hardware_type = clean_text(raw_row.get("hardware_type"))
                 if direct_drawer_drill or direct_side_type or direct_hardware_type:
                     drawer_drill = direct_drawer_drill
-                    side_type = canonical_side_type(direct_side_type)
+                    side_type = clean_text(direct_side_type)
                     hardware_type = direct_hardware_type
                 color, side_type = split_lower_color_and_side_v2(color, side_type)
 
@@ -1425,6 +1386,7 @@ def _manufacturing_cnc_sections(bundle: dict, production_number: str) -> tuple[l
         "as vt": 1,
         "as magic": 2,
         "atf": 3,
+        "atf pultos": 3,
         "aszb kihuzhato szemetes": 4,
         "aszhs": 4,
         "akl": 5,
